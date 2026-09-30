@@ -112,7 +112,7 @@ Each check is a pattern over source or config, not a proof, so its findings carr
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
 | Kubernetes cluster | `--k8s-context`, optionally with `--k8s-namespace` or `--k8s-all-namespaces` | Trivy (`trivy k8s`) |
-| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone. The container images it references are discovered but not scanned ([#1311](https://github.com/jimmy058910/jmo-security-repo/issues/1311)) |
+| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone. Each container image its Dockerfiles (`FROM`), docker-compose files and Kubernetes manifests name is then an image target of its own, pulled from its registry mid-scan and scanned as `--image` scans it, into `individual-images/<group>_<repo>__<image>/`. A build argument (`FROM $BASE`), a build stage and `scratch` are skipped, and an image the scan already scans is scanned once. One no registry serves is a `failed` image row |
 
 Targets combine in one run: `jmo scan --repo . --image myapp:latest` scans both, each with its own tools.
 

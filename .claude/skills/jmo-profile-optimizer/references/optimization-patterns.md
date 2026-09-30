@@ -508,10 +508,12 @@ per_tool:
     timeout: 1800
 ```
 
-**Container discovery.** The GitLab path also discovers container images
-referenced by Dockerfiles, `docker-compose.yml`, and Kubernetes manifests, but
-it has never scanned one: every call raised before it started (#1311). Budget
-GitLab scan time by repository count until that is fixed or removed.
+**Container discovery.** The GitLab path also scans each container image its
+Dockerfiles, `docker-compose.yml` and Kubernetes manifests name, as an image
+target of its own, one after another inside that GitLab target's job (#1311).
+Each is pulled from its registry mid-scan, so budget GitLab scan time by
+repository count plus the images each names: an image target's timings are in
+its own `individual-images/<group>_<repo>__<image>/scan-timings.json`.
 
 > Whether any of these settings actually helps is not measurable from
 > `timings.json` — it records report-phase parsing only. Verify a timeout change

@@ -76,6 +76,10 @@ class TargetRecord:
     # them under: a resumed scan skips the target but still reports its rows.
     name: str = ""
     rows: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # The GitLab target whose repository named this image (#1311): such an
+    # image is found mid-scan, not registered up front, so a resumed scan
+    # finds it here. Empty for a target the scan was asked for.
+    found_in: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -85,6 +89,7 @@ class TargetRecord:
             "tools": {name: tr.to_dict() for name, tr in self.tools.items()},
             "name": self.name,
             "rows": self.rows,
+            "found_in": self.found_in,
         }
 
     @classmethod
@@ -99,6 +104,7 @@ class TargetRecord:
             tools=tools,
             name=data.get("name", ""),
             rows=data.get("rows") or {},
+            found_in=data.get("found_in", ""),
         )
 
 
@@ -132,14 +138,16 @@ class ScanSession:
         return len(self.completed_targets)
 
     def register_target(
-        self, target_type: str, target_id: str, tools: list[str]
+        self, target_type: str, target_id: str, tools: list[str], found_in: str = ""
     ) -> None:
-        """Register a target for scanning."""
+        """Register a target for scanning; `found_in` names the GitLab target
+        whose repository named it, for an image found mid-scan."""
         tool_records = {name: ToolRecord(name=name) for name in tools}
         self.targets[target_id] = TargetRecord(
             target_type=target_type,
             target_id=target_id,
             tools=tool_records,
+            found_in=found_in,
         )
 
     def mark_target_complete(
@@ -166,6 +174,15 @@ class ScanSession:
             if tool_name in target.tools:
                 target.tools[tool_name].status = status[row.state]
                 target.tools[tool_name].error = row.label if row.reason else ""
+
+    def found_images(self) -> list[str]:
+        """The completed images a GitLab target named (#1311): a resumed scan
+        reports and does not rescan them, and no target list names them."""
+        return [
+            tid
+            for tid, t in self.targets.items()
+            if t.found_in and t.completed and t.target_type == "image"
+        ]
 
     def is_target_completed(self, target_id: str) -> bool:
         """Check if a specific target has been completed."""

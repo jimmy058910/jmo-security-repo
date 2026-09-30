@@ -175,6 +175,24 @@ class TestScanSession:
         assert kept == ("terraform:main.tf", rows)
         assert session.completed_rows("never-registered") is None
 
+    def test_an_image_a_gitlab_target_named_survives_a_round_trip(self):
+        """Found mid-scan, so no target list names it: a resumed scan has only
+        the session to learn it from (#1311). One still pending, or one the
+        user asked for, is not among them."""
+        session = ScanSession(session_id="t", config_hash="h", started_at=0.0, pid=1)
+        session.register_target("gitlab", "group/app", ["trivy"])
+        session.register_target("image", "nginx:latest", ["trivy"])
+        session.register_target("image", "alpine:3.19", ["trivy"], found_in="group/app")
+        session.register_target("image", "redis:7", ["trivy"], found_in="group/app")
+        for target_id in ("group/app", "nginx:latest", "alpine:3.19"):
+            session.mark_target_complete(target_id, _rows(trivy=True))
+
+        restored = ScanSession.from_dict(session.to_dict())
+
+        assert restored.found_images() == ["alpine:3.19"]
+        assert restored.targets["alpine:3.19"].found_in == "group/app"
+        assert restored.targets["nginx:latest"].found_in == ""
+
     def test_mark_target_complete_records_a_skip_as_skipped(self):
         """A skipped tool is neither completed nor failed, and says why."""
         session = ScanSession(

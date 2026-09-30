@@ -800,7 +800,7 @@ The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 - **GitLab Repos** now run full repository scanner instead of TruffleHog-only
 - **Web URLs** now include Nuclei (API security scanner) in addition to ZAP
-- GitLab repos also auto-discover and scan container images found in Dockerfiles, docker-compose.yml, and K8s manifests
+- GitLab repos also scan each container image their Dockerfiles, docker-compose files and K8s manifests name, as an image target of its own (results in `individual-images/<group>_<repo>__<image>/`). The image is pulled from its registry mid-scan, so one the scanner cannot pull is a failed image target, as it would be with `--image`
 - Tool selection is automatic based on target type. Use `--tools` to override defaults.
 
 ### Troubleshooting Multi-Target Scans

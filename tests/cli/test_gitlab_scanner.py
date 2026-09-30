@@ -6,6 +6,7 @@ Updated to mock scan_repository() and subprocess.run() instead of ToolRunner.
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
-from scripts.cli.scan_jobs.gitlab_scanner import scan_gitlab_repo
+from scripts.cli.scan_jobs.gitlab_scanner import DiscoveredImages, scan_gitlab_repo
 from scripts.core.scan_timings import Reason, State, ToolRun
 
 
@@ -642,11 +643,8 @@ spec:
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images"
             ) as mock_discover,
-            patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"),
         ):
-            with patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.shutil.rmtree"
-            ) as mock_rmtree:
+            with patch("shutil.rmtree") as mock_rmtree:
                 mock_subprocess.return_value = MagicMock(returncode=0)
                 mock_scan_repo.return_value = (
                     "myrepo",
@@ -675,11 +673,11 @@ spec:
                 assert full_path == "mygroup/myrepo"
                 assert statuses["trufflehog"].state is State.RAN
 
-    def test_scan_gitlab_custom_tool_exists_func(self, tmp_path):
-        """Test using custom tool_exists_func"""
+    def test_scan_gitlab_custom_find_tool_func(self, tmp_path):
+        """The resolver reaches the repository scan, as it reaches each image's"""
 
-        def mock_tool_exists(tool: str) -> bool:
-            return tool == "trufflehog"
+        def mock_find_tool(tool: str) -> str | None:
+            return "/usr/bin/trufflehog" if tool == "trufflehog" else None
 
         with (
             patch(
@@ -691,7 +689,6 @@ spec:
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images"
             ) as mock_discover,
-            patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"),
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
             mock_scan_repo.return_value = (
@@ -715,10 +712,10 @@ spec:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
-            assert mock_scan_repo.called
+            assert mock_scan_repo.call_args.kwargs["find_tool_func"] is mock_find_tool
 
     def test_scan_gitlab_http_url(self, tmp_path):
         """Test GitLab clone URL construction with HTTP (not HTTPS)"""
@@ -740,7 +737,6 @@ spec:
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images"
             ) as mock_discover,
-            patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"),
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
             mock_scan_repo.return_value = ("myrepo", _rows(trufflehog=True))
@@ -780,45 +776,93 @@ spec:
             ) as mock_discover,
             patch("scripts.cli.scan_jobs.gitlab_scanner.scan_image") as mock_scan_image,
         ):
-            with patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"):
-                mock_subprocess.return_value = MagicMock(returncode=0)
-                mock_scan_repo.return_value = (
-                    "myrepo",
-                    _rows(trufflehog=True),
-                )
-                mock_discover.return_value = {
-                    "nginx:latest",
-                    "postgres:14",
-                }
-                mock_scan_image.side_effect = [
-                    ("nginx:latest", _rows(trivy=True, syft=True)),
-                    RuntimeError("Image scan failed"),
-                ]
+            mock_subprocess.return_value = MagicMock(returncode=0)
+            mock_scan_repo.return_value = (
+                "myrepo",
+                _rows(trufflehog=True),
+            )
+            mock_discover.return_value = {
+                "nginx:latest",
+                "postgres:14",
+            }
+            mock_scan_image.side_effect = [
+                ("nginx:latest", _rows(trivy=True, syft=True)),
+                RuntimeError("Image scan failed"),
+            ]
 
-                gitlab_info = {
-                    "full_path": "mygroup/myrepo",
+            gitlab_info = {
+                "full_path": "mygroup/myrepo",
+                "url": "https://gitlab.com",
+                "token": "glpat-test",
+                "repo": "myrepo",
+                "group": "mygroup",
+            }
+            images = DiscoveredImages()
+            full_path, statuses = scan_gitlab_repo(
+                gitlab_info=gitlab_info,
+                results_dir=tmp_path,
+                tools=["trufflehog", "trivy", "syft"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=images,
+            )
+
+            # The repository's rows are its own; each image has rows of its
+            # own, and the one whose scan raised is failed on every tool that
+            # reads an image, with the reason, rather than dropped.
+            assert statuses == _rows(trufflehog=True)
+            assert mock_scan_image.call_count == 2
+            found = dict(images.found_in("mygroup/myrepo"))
+            assert found["nginx:latest"] == _rows(trivy=True, syft=True)
+            failed = found["postgres:14"]
+            assert failed["trivy"].label == "failed:scanner error"
+            assert failed["syft"].label == "failed:scanner error"
+            assert "Image scan failed" in (failed["trivy"].detail or "")
+            assert failed["trufflehog"].state is State.SKIPPED
+
+    def test_the_images_folder_exists_before_an_image_is_scanned(self, tmp_path):
+        """`individual-images` beside `individual-gitlab`, created before
+        scan_image resolves it: the orchestrator creates it up front only for
+        `--image` targets, and on Windows a directory another job creates
+        during `resolve()` failed scan_image's traversal check."""
+        seen: list[tuple[Path, bool]] = []
+
+        def scan_image(**kwargs):
+            seen.append((kwargs["results_dir"], kwargs["results_dir"].is_dir()))
+            return kwargs["image"], _rows(trivy=True)
+
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                return_value=("app", _rows(trivy=True)),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images",
+                return_value={"alpine:3.19"},
+            ),
+            patch("scripts.cli.scan_jobs.gitlab_scanner.scan_image", scan_image),
+        ):
+            scan_gitlab_repo(
+                gitlab_info={
+                    "full_path": "group/app",
                     "url": "https://gitlab.com",
-                    "token": "glpat-test",
-                    "repo": "myrepo",
-                    "group": "mygroup",
-                }
-                full_path, statuses = scan_gitlab_repo(
-                    gitlab_info=gitlab_info,
-                    results_dir=tmp_path,
-                    tools=["trufflehog", "trivy", "syft"],
-                    timeout=600,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                )
+                    "token": "t",
+                },
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+            )
 
-                # TODO(issue-#1311): the image scans are attempted
-                # (and, unmocked, every call raises TypeError), but nothing of
-                # theirs is merged into this target's rows: one row per
-                # requested tool, keyed by the tool, and the "image:<ref>:<tool>"
-                # keys this asserted were never produced outside this mock.
-                assert statuses == _rows(trufflehog=True)
-                assert mock_scan_image.call_count == 2
+        assert seen == [(tmp_path / "individual-images", True)]
 
 
 class TestAbandonedGitlabTargetsStillGetTimings:
@@ -996,6 +1040,67 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         assert doc["outcome"] != OUTCOME_FAILED_BEFORE_TOOLS
         assert doc["outcome"] == "completed"
         assert doc["error"] is None
+
+
+class TestDiscoveryNamesOnlyImagesJmoCanPull:
+    """#1311: a discovered reference is handed to trivy and syft, first on
+    their command line. What reaches them must be an image reference taken
+    from the repository's content, never a flag, a build argument or a stage."""
+
+    @staticmethod
+    def _discover(tmp_path: Path, files: dict[str, str]) -> set[str]:
+        from scripts.cli.scan_jobs.gitlab_scanner import _discover_container_images
+
+        for name, body in files.items():
+            path = tmp_path / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body.encode("utf-8"))
+        return _discover_container_images(tmp_path)
+
+    def test_a_platform_flag_is_not_the_image(self, tmp_path):
+        """`FROM --platform=...` is the common multi-architecture form. The
+        flag was taken as the image and would reach the tools as a flag."""
+        images = self._discover(
+            tmp_path, {"Dockerfile": "FROM --platform=linux/amd64 alpine:3.19\n"}
+        )
+        assert images == {"alpine:3.19"}
+
+    def test_a_build_argument_is_skipped_and_the_file_named(self, tmp_path, caplog):
+        """`FROM $BASE` names no image until the build supplies BASE."""
+        dockerfile = "ARG BASE=alpine\nFROM $BASE\nFROM ${BASE}:3.19\nFROM nginx:1.27\n"
+        with caplog.at_level(
+            logging.INFO, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"build/Dockerfile": dockerfile})
+
+        assert images == {"nginx:1.27"}
+        said = [
+            r.getMessage()
+            for r in caplog.records
+            if r.levelno == logging.INFO and "build/Dockerfile" in r.getMessage()
+        ]
+        assert len(said) == 2, [r.getMessage() for r in caplog.records]
+        assert "$BASE" in said[0] or "$BASE" in said[1], said
+
+    def test_a_value_that_is_not_an_image_reference_never_reaches_a_tool(
+        self, tmp_path
+    ):
+        """syft takes `--file=<path>` and writes there: a compose file in the
+        cloned repository must not choose where JMo writes."""
+        compose = "services:\n  web:\n    image: --file=/tmp/owned.json\n"
+        images = self._discover(tmp_path, {"docker-compose.yml": compose})
+        assert images == set()
+
+    def test_a_later_stage_named_by_an_earlier_one_is_not_an_image(self, tmp_path):
+        """`FROM build` after `FROM node:20 AS build` names the stage, which
+        no registry holds."""
+        dockerfile = "FROM node:20 AS build\nRUN make\nFROM build\n"
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == set()
+
+    def test_a_builder_stage_and_scratch_discover_nothing(self, tmp_path):
+        """The gate's negative project, and today's two skips kept."""
+        dockerfile = "FROM golang:alpine AS builder\nRUN go build\nFROM scratch\n"
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == set()
 
 
 if __name__ == "__main__":

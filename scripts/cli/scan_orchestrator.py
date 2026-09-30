@@ -1084,6 +1084,7 @@ class ScanOrchestrator:
             scan_repository,
             scan_url,
         )
+        from scripts.cli.scan_jobs.gitlab_scanner import DiscoveredImages
         from scripts.cli.scan_jobs.iac_scanner import iac_target_name
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
         from scripts.cli.scan_jobs.url_scanner import url_folder_name
@@ -1114,6 +1115,22 @@ class ScanOrchestrator:
 
                 _save(session, session_path)
 
+        # The images a GitLab target names are image targets of their own
+        # (#1311), each scanned once in the scan: never one it already scans
+        # with `--image`, nor one a scan it resumes has scanned. They are found
+        # mid-scan, so the session learns them as they come back, each
+        # checkpointed before the target that named it: a resumed scan that
+        # skips that target still has them.
+        found_earlier = session.found_images() if session is not None else []
+        discovered = DiscoveredImages([*targets.images, *found_earlier])
+
+        def _record_found(gitlab_id: str) -> None:
+            for image, image_rows in discovered.found_in(gitlab_id):
+                all_results.append(("image", image, image_rows))
+                if session is not None:
+                    session.register_target("image", image, tools, found_in=gitlab_id)
+                _checkpoint(image, image, image_rows)
+
         # A tool someone named that no target in this scan reads runs nowhere.
         # Its rows say `skipped` on every target; this line says it once. Only
         # for a tool someone named: the matrix default puts zap and nuclei in
@@ -1142,6 +1159,9 @@ class ScanOrchestrator:
                 )
 
         skipped_count = 0
+        for image in found_earlier:
+            skipped_count += 1
+            _resumed("image", image)
         repo_names = targets.repo_names or repo_result_names(targets.repos)
         # Each target's folder, unique within its type (#1312). Assigned over
         # every target, completed or not, so a resumed scan assigns the same.
@@ -1255,6 +1275,7 @@ class ScanOrchestrator:
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    images=discovered,
                 )
                 futures.append(("gitlab", gl_id, future))
 
@@ -1302,6 +1323,8 @@ class ScanOrchestrator:
                 try:
                     name, rows, elapsed = future.result()
                     all_results.append((target_type, name, rows))
+                    if target_type == "gitlab":
+                        _record_found(target_id)
 
                     # Checkpoint after each completed target
                     _checkpoint(target_id, name, rows)
