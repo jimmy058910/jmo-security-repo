@@ -39,6 +39,7 @@ from scripts.core.scan_timings import (
     write_scan_timings,
 )
 from scripts.core.secure_temp import secure_temp_dir
+from scripts.core.tool_descriptors import DOCKERFILE_PATTERNS, is_dockerfile
 from scripts.core.validation import (
     sanitize_subprocess_output,
     validate_container_image,
@@ -48,7 +49,7 @@ from ..path_sanitizers import _sanitize_path_component
 from ..scan_orchestrator import unique_names
 from .image_scanner import scan_image
 from .repository_scanner import scan_repository
-from .tool_loop import rows_without_running
+from .tool_loop import collect_files, rows_without_running
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +70,14 @@ class DiscoveredImages:
     method goes through a lock.
     """
 
-    def __init__(self, scanned: Mapping[str, str] | None = None) -> None:
-        """`scanned`: each reference this scan already scans as an image
-        target, and the target it is scanned for (`--image`, a GitLab path)."""
+    def __init__(
+        self, images_dir: Path, scanned: Mapping[str, str] | None = None
+    ) -> None:
+        """`images_dir`: the scan's `individual-images`, where each claimed
+        image's folder goes. `scanned`: each reference this scan already scans
+        as an image target, and the target it is scanned for (`--image`, a
+        GitLab path)."""
+        self.images_dir = images_dir
         self._lock = threading.Lock()
         self._claimed: dict[str, str] = dict(scanned or {})
         self._found: dict[str, list[tuple[str, TargetRows]]] = {}
@@ -118,13 +124,33 @@ def _record_abandoned_target(
     On the four failure paths no tool reached `ToolRunner`, and an absent
     timings file is indistinguishable from a target nobody asked for. Every
     requested tool that reads a repository gets `failed:target not scanned`,
-    with the reason as its detail.
+    with the reason as its detail. A failure after the repository's scan does
+    not come here: its outputs are written, and its rows are its own.
     """
-    rows = rows_without_running(tools, "gitlab", Reason.BEFORE_TOOLS, detail=reason)
-    out_dir = _gitlab_out_dir(results_dir, full_path)
-    # These paths return before any tool has written output, so the target's
-    # directory does not exist yet. `write_scan_timings` deliberately does not
-    # create one -- an absent destination there must mean "nothing written".
+    return _abandon(
+        _gitlab_out_dir(results_dir, full_path),
+        full_path,
+        "gitlab",
+        tools,
+        started,
+        reason,
+    )
+
+
+def _abandon(
+    out_dir: Path,
+    target: str,
+    target_type: str,
+    tools: list[str],
+    started: float,
+    reason: str,
+) -> TargetRows:
+    """A target no tool was run on: `failed:target not scanned` rows, and its
+    timings document saying why, in the folder the report reads."""
+    rows = rows_without_running(tools, target_type, Reason.BEFORE_TOOLS, detail=reason)
+    # No tool has written output, so the target's directory does not exist
+    # yet. `write_scan_timings` deliberately does not create one -- an absent
+    # destination there must mean "nothing written".
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
@@ -134,8 +160,8 @@ def _record_abandoned_target(
     write_scan_timings(
         out_dir,
         rows,
-        target=full_path,
-        target_type="gitlab",
+        target=target,
+        target_type=target_type,
         wall_seconds=time.perf_counter() - started,
         outcome=OUTCOME_FAILED_BEFORE_TOOLS,
         error=reason,
@@ -143,29 +169,17 @@ def _record_abandoned_target(
     return rows
 
 
-def _scannable(image: str, source: Path, repo_path: Path) -> bool:
-    """Whether a reference a repository file names is an image JMo scans.
-
-    It reaches trivy and syft as their first argument, so a value that is not
-    an image reference is refused, not passed on: `--file=<path>` is a syft
-    flag, and the repository is not JMo's to trust. A build argument or a
-    variable (`$BASE`, `${TAG}`) names no image until a build supplies it.
-    """
-    where = source.relative_to(repo_path).as_posix()
-    if "$" in image:
-        logger.info(
-            "%s: %s is set by a build argument or variable, so it is not scanned",
-            where,
-            image,
-        )
+def _templated(image: str, source: Path, repo_path: Path) -> bool:
+    """Whether a reference is set by a build argument or a variable (`$BASE`,
+    `${TAG}`): it names no image until a build supplies it, so it is skipped,
+    and the file is named."""
+    if "$" not in image:
         return False
-    if not validate_container_image(image):
-        logger.warning(
-            "%s: %r is not a container image reference, so it is not scanned",
-            where,
-            image,
-        )
-        return False
+    logger.info(
+        "%s: %s is set by a build argument or variable, so it is not scanned",
+        source.relative_to(repo_path).as_posix(),
+        image,
+    )
     return True
 
 
@@ -182,14 +196,26 @@ def _discover_container_images(repo_path: Path) -> set[str]:
         repo_path: Path to cloned repository
 
     Returns:
-        Set of discovered image names (e.g., 'nginx:latest', 'python:3.11-slim')
+        Set of discovered image names (e.g., 'nginx:latest', 'python:3.11-slim'),
+        as the repository spells them: the job refuses one that is not an
+        image reference before any tool sees it.
     """
     images: set[str] = set()
 
     # Pattern 1: Dockerfile FROM lines
     # FROM nginx:latest
     # FROM --platform=linux/amd64 python:3.11-slim AS builder
-    for dockerfile in repo_path.rglob("*Dockerfile*"):
+    # The files hadolint's row reads, by the one definition of a Dockerfile,
+    # through the same walk: `*Dockerfile*` read `pkg/dockerfile_utils.py`
+    # (`from os import path`) and a `Dockerfile.md` ("From the root..."), and
+    # each named an image to pull from Docker Hub (measured: `os`, `the`), and
+    # a vendored tree's Dockerfile too.
+    dockerfiles = [
+        Path(found)
+        for found in collect_files(repo_path, DOCKERFILE_PATTERNS, "image discovery")
+        if is_dockerfile(Path(found).name)
+    ]
+    for dockerfile in dockerfiles:
         try:
             content = dockerfile.read_text(encoding="utf-8", errors="ignore")
             stages: set[str] = set()
@@ -206,7 +232,7 @@ def _discover_container_images(repo_path: Path) -> set[str]:
                     continue
                 if image.lower() in ("scratch", *stages):
                     continue
-                if _scannable(image, dockerfile, repo_path):
+                if not _templated(image, dockerfile, repo_path):
                     images.add(image)
         except Exception as e:
             logger.debug(
@@ -234,7 +260,7 @@ def _discover_container_images(repo_path: Path) -> set[str]:
                             if (
                                 image
                                 and image.lower() != "scratch"
-                                and _scannable(image, compose_file, repo_path)
+                                and not _templated(image, compose_file, repo_path)
                             ):
                                 images.add(image)
         except Exception as e:
@@ -268,7 +294,7 @@ def _discover_container_images(repo_path: Path) -> set[str]:
                                     if (
                                         image
                                         and image.lower() != "scratch"
-                                        and _scannable(image, k8s_file, repo_path)
+                                        and not _templated(image, k8s_file, repo_path)
                                     ):
                                         images.add(image)
         except Exception as e:
@@ -278,6 +304,127 @@ def _discover_container_images(repo_path: Path) -> set[str]:
             continue  # Skip files that can't be parsed
 
     return images
+
+
+def _scan_named_images(
+    clone_path: Path,
+    full_path: str,
+    gitlab_folder: str,
+    images: DiscoveredImages,
+    *,
+    tools: list[str],
+    timeout: int,
+    retries: int | RetryConfig,
+    per_tool_config: dict,
+    allow_missing_tools: bool,
+    find_tool_func: Callable[[str], str | None] | None,
+    write_stub_func: Callable[[str, Path], None] | None,
+) -> None:
+    """Scan each image the repository names as an image target of its own,
+    as `--image` would: every requested tool, and a tool that reads no image
+    skipped (#1311). A reference this scan already scans (an `--image`,
+    another GitLab target) is not scanned twice.
+
+    Past the repository's scan, whatever fails here is the images' own. The
+    repository's outputs are already where the report reads them, so its rows
+    stand; a failure here used to relabel it `failed-before-tools`. And every
+    image this job claimed gets rows, since no other target will scan it.
+    """
+    mine: list[str] = []
+    try:
+        for image in sorted(_discover_container_images(clone_path)):
+            covering = images.claim(image, full_path)
+            if covering is None:
+                mine.append(image)
+            else:
+                logger.info(
+                    "%s names %s, which this scan already scans for %s: "
+                    "not scanned again",
+                    full_path,
+                    image,
+                    covering,
+                )
+        # Each folder is unique in the scan: its GitLab target's folder is,
+        # and two references in one repository can sanitize alike (#1312).
+        folders = unique_names(
+            [f"{gitlab_folder}__{_sanitize_path_component(i)}" for i in mine]
+        )
+        for image, folder in zip(mine, folders, strict=True):
+            started = time.perf_counter()
+            if not validate_container_image(image):
+                # It never reaches a tool's command line, where it would be
+                # their first argument (`--file=<path>` is a syft flag, and the
+                # repository is not JMo's to trust), and it is not dropped: a
+                # private registry with a port lands here too.
+                logger.warning(
+                    "%s names %r, which is not a container image reference "
+                    "JMo passes to a scanner: recorded as a failed image target",
+                    full_path,
+                    image,
+                )
+                rows = _abandon(
+                    images.images_dir / folder,
+                    image,
+                    "image",
+                    tools,
+                    started,
+                    f"not a container image reference JMo passes to a scanner: {image}",
+                )
+            else:
+                try:
+                    # Created before scan_image resolves it. The orchestrator
+                    # makes it up front only for `--image` targets, and on
+                    # Windows a directory another job creates during
+                    # `resolve()` can come back `\\?\`-prefixed, which
+                    # scan_image's traversal check refuses (measured: 823 of
+                    # 1500 racing resolves disagreed). Inside the `try`: an
+                    # image this job claimed gets its rows whatever fails.
+                    images.images_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    _image, rows = scan_image(
+                        image=image,
+                        results_dir=images.images_dir,
+                        tools=tools,
+                        timeout=timeout,
+                        retries=retries,
+                        per_tool_config=per_tool_config,
+                        allow_missing_tools=allow_missing_tools,
+                        find_tool_func=find_tool_func,
+                        write_stub_func=write_stub_func,
+                        result_name=folder,
+                    )
+                except Exception as e:
+                    # Still a row per tool, as the orchestrator gives a target
+                    # whose job raised, so the image is counted as having
+                    # produced nothing rather than vanishing.
+                    logger.error(
+                        f"Container image scan failed for {image} (named in {full_path}): {type(e).__name__}: {e}",
+                        exc_info=True,
+                    )
+                    rows = rows_without_running(
+                        tools,
+                        "image",
+                        Reason.SCANNER_ERROR,
+                        detail=f"{type(e).__name__}: {e}",
+                    )
+            images.add(full_path, image, rows)
+    except Exception as e:
+        logger.error(
+            f"Container image discovery failed for {full_path}: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        recorded = {image for image, _rows in images.found_in(full_path)}
+        for image in mine:
+            if image not in recorded:
+                images.add(
+                    full_path,
+                    image,
+                    rows_without_running(
+                        tools,
+                        "image",
+                        Reason.SCANNER_ERROR,
+                        detail=f"{type(e).__name__}: {e}",
+                    ),
+                )
 
 
 def scan_gitlab_repo(
@@ -298,8 +445,7 @@ def scan_gitlab_repo(
 
     Args:
         gitlab_info: Dict with keys: full_path, url, token, repo, group
-        results_dir: `<results>/individual-gitlab`; the images it names go to
-            the sibling `individual-images`
+        results_dir: `<results>/individual-gitlab`
         tools: List of tools to run, on the repository and on each image
         timeout: Default timeout in seconds
         retries: Number of retries for flaky tools
@@ -307,10 +453,11 @@ def scan_gitlab_repo(
         allow_missing_tools: If True, write empty stubs for missing tools
         find_tool_func: Optional tool resolver (for testing)
         write_stub_func: Optional function to write stub files (for testing)
-        images: The scan's discovered images: this job claims each one it
-            names and records its rows there, for the orchestrator to report
-            as an image target (#1311); one another target already claimed is
-            not scanned again. Without one, each is still scanned.
+        images: The scan's discovered images, and where they go: this job
+            claims each one it names and records its rows there, for the
+            orchestrator to report as an image target (#1311); one another
+            target already claimed is not scanned again. Without one, the
+            repository alone is scanned.
 
     Returns:
         (full_path, rows by tool) for the repository
@@ -425,77 +572,20 @@ def scan_gitlab_repo(
                 label=full_path,
             )
 
-            # Each image the repository names is an image target of its own,
-            # scanned as `--image` would scan it: every requested tool, and a
-            # tool that reads no image skipped (#1311). A reference this scan
-            # already scans (an `--image`, another GitLab target) is not
-            # scanned twice.
-            discovered = images if images is not None else DiscoveredImages()
-            mine: list[str] = []
-            for image in sorted(_discover_container_images(clone_path)):
-                covering = discovered.claim(image, full_path)
-                if covering is None:
-                    mine.append(image)
-                else:
-                    logger.info(
-                        "%s names %s, which this scan already scans for %s: "
-                        "not scanned again",
-                        full_path,
-                        image,
-                        covering,
-                    )
-            # `<root>/individual-images`: this job is handed
-            # `<root>/individual-gitlab`, guarded as repository_scanner guards
-            # it. Each folder is unique in the scan: its GitLab target's
-            # folder is, and two references in one repository can sanitize
-            # alike (#1312).
-            root = (
-                results_dir.parent
-                if results_dir.name.startswith("individual-")
-                else results_dir
-            )
-            folders = unique_names(
-                [f"{safe_name}__{_sanitize_path_component(i)}" for i in mine]
-            )
-            images_dir = root / "individual-images"
-            for image, folder in zip(mine, folders, strict=True):
-                try:
-                    # Created before scan_image resolves it. The orchestrator
-                    # makes it up front only for `--image` targets, and on
-                    # Windows a directory another job creates during
-                    # `resolve()` can come back `\\?\`-prefixed, which
-                    # scan_image's traversal check refuses (measured: 823 of
-                    # 1500 racing resolves disagreed). Inside the `try`: an
-                    # image this job claimed gets its rows whatever fails.
-                    images_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-                    _image, image_rows = scan_image(
-                        image=image,
-                        results_dir=images_dir,
-                        tools=tools,
-                        timeout=timeout,
-                        retries=retries,
-                        per_tool_config=per_tool_config,
-                        allow_missing_tools=allow_missing_tools,
-                        find_tool_func=find_tool_func,
-                        write_stub_func=write_stub_func,
-                        result_name=folder,
-                    )
-                except Exception as e:
-                    # Still a row per tool, as the orchestrator gives a target
-                    # whose job raised, so the image is counted as having
-                    # produced nothing rather than vanishing.
-                    logger.error(
-                        f"Container image scan failed for {image} (named in {full_path}): {type(e).__name__}: {e}",
-                        exc_info=True,
-                    )
-                    image_rows = rows_without_running(
-                        tools,
-                        "image",
-                        Reason.SCANNER_ERROR,
-                        detail=f"{type(e).__name__}: {e}",
-                    )
-                discovered.add(full_path, image, image_rows)
-
+            if images is not None:
+                _scan_named_images(
+                    clone_path,
+                    full_path,
+                    safe_name,
+                    images,
+                    tools=tools,
+                    timeout=timeout,
+                    retries=retries,
+                    per_tool_config=per_tool_config,
+                    allow_missing_tools=allow_missing_tools,
+                    find_tool_func=find_tool_func,
+                    write_stub_func=write_stub_func,
+                )
             return full_path, statuses
 
         except subprocess.TimeoutExpired:

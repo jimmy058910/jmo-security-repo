@@ -832,6 +832,26 @@ def _osv_reads(name: str) -> bool:
     return osv_database.ecosystem_of(name) is not None
 
 
+# What a Dockerfile is, the one definition hadolint's row and the images a
+# GitLab target names both read (#1311): the patterns find the candidates,
+# `is_dockerfile` decides.
+DOCKERFILE_PATTERNS = ("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile")
+_DOCUMENT_SUFFIXES = frozenset({"md", "txt", "rst", "adoc", "html"})
+
+
+def is_dockerfile(name: str) -> bool:
+    """`Dockerfile`, `Dockerfile.<variant>` or `<variant>.Dockerfile`, case
+    included: the walk's glob ignores case on Windows, where it matched a
+    `dockerfile.py`. A document about one (`Dockerfile.md`) is not one:
+    hadolint linted its prose as a Dockerfile, and discovery read a `From the
+    root...` line as an image to pull (measured)."""
+    if name == "Dockerfile" or name.endswith(".Dockerfile"):
+        return True
+    if not name.startswith("Dockerfile."):
+        return False
+    return name.rsplit(".", 1)[1].lower() not in _DOCUMENT_SUFFIXES
+
+
 def _osv_databases(ctx: ScanContext) -> Shortfall | None:
     """Each lockfile's ecosystem must have an offline database, or osv-scanner
     does not read it. Decided here because osv-scanner's answer cannot be
@@ -1102,7 +1122,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 re.compile(r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)")
             ),
             exclusion_style=ExclusionStyle.WALK,
-            file_patterns=("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"),
+            file_patterns=DOCKERFILE_PATTERNS,
+            accepts_name=is_dockerfile,
             no_files_reason=Reason.NO_DOCKERFILES,
             stub=[],
         ),

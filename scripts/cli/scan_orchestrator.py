@@ -1088,6 +1088,7 @@ class ScanOrchestrator:
         from scripts.cli.scan_jobs.iac_scanner import iac_target_name
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
         from scripts.cli.scan_jobs.url_scanner import url_folder_name
+        from scripts.cli.scan_session import found_image_id
 
         all_results: list[tuple[str, str, dict[str, ToolRun]]] = []
         futures = []
@@ -1119,20 +1120,27 @@ class ScanOrchestrator:
         # (#1311), each scanned once in the scan: never one it already scans
         # with `--image`, nor one a scan it resumes has scanned, and not again
         # when the one scan of it fails. They are found mid-scan, so the
-        # session learns them as they come back, each checkpointed before the
-        # target that named it: a resumed scan that skips that target still
-        # has them.
+        # session learns them as they come back, each under its own typed id
+        # and checkpointed before the target that named it: a resumed scan
+        # that skips that target still has them.
         found_earlier = session.found_images() if session is not None else {}
         discovered = DiscoveredImages(
-            {**dict.fromkeys(targets.images, "--image"), **found_earlier}
+            self.config.results_dir / "individual-images",
+            {
+                **dict.fromkeys(targets.images, "--image"),
+                **dict(found_earlier.values()),
+            },
         )
 
         def _record_found(gitlab_id: str) -> None:
             for image, image_rows in discovered.found_in(gitlab_id):
                 all_results.append(("image", image, image_rows))
+                image_id = found_image_id(image)
                 if session is not None:
-                    session.register_target("image", image, tools, found_in=gitlab_id)
-                _checkpoint(image, image, image_rows)
+                    session.register_target(
+                        "image", image_id, tools, found_in=gitlab_id
+                    )
+                _checkpoint(image_id, image, image_rows)
 
         # A tool someone named that no target in this scan reads runs nowhere.
         # Its rows say `skipped` on every target; this line says it once. Only
@@ -1162,9 +1170,9 @@ class ScanOrchestrator:
                 )
 
         skipped_count = 0
-        for image in found_earlier:
+        for image_id in found_earlier:
             skipped_count += 1
-            _resumed("image", image)
+            _resumed("image", image_id)
         repo_names = targets.repo_names or repo_result_names(targets.repos)
         # Each target's folder, unique within its type (#1312). Assigned over
         # every target, completed or not, so a resumed scan assigns the same.

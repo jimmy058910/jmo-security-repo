@@ -3486,7 +3486,10 @@ def cmd_scan(args) -> int:
     scan_metadata = {
         "tools": tools,
         "timestamp": datetime.now(UTC).isoformat(),
-        "target_count": total_targets,
+        # The targets the scan recorded, not the ones asked for: an image a
+        # GitLab target names is found mid-scan (#1311), and the report counts
+        # the folders it reads, so the count before the scan disagreed with it.
+        "target_count": len(scan_results),
         # The report phase stores this in history. It has no clock of its own
         # that means anything here: its `elapsed` measures the ~30 seconds of
         # aggregation, not the ~20 minutes of scanning, and a wrong number reads

@@ -764,6 +764,50 @@ class TestAGitLabTargetScansTheImagesItNames:
             "individual-gitlab/group_results": ("gitlab", "group/results")
         }
 
+    def test_every_target_is_counted_and_a_refused_reference_is_one(
+        self, env, monkeypatch
+    ):
+        """`.scan_metadata.json` counted the targets asked for, before any
+        image was found, while the report counts the folders it reads: the
+        two disagreed for every GitLab scan that names an image. A reference
+        no tool is given (a registry with a port, which the validator has no
+        pattern for) is a target too, failed, never on a command line."""
+        refused = "registry.corp:5000/team/app:1"
+        commands: list[list[str]] = []
+
+        class _Recording(_WritingRunner):
+            def run_all_parallel(self) -> list[ToolResult]:
+                commands.extend(list(d.command) for d in self._definitions)
+                return super().run_all_parallel()
+
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.image_scanner.ToolRunner", _Recording
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            _clone_holding(
+                {
+                    "Dockerfile": b"FROM alpine:3.19\n",
+                    "web.Dockerfile": f"FROM {refused}\n".encode(),
+                }
+            ),
+        )
+
+        # 1: the refused reference is a target that produced nothing.
+        assert env.run(*GITLAB, "--tools", "trivy") == 1
+
+        assert _tool_runs(env.results) == [
+            ("gitlab", "group/app", "trivy"),
+            ("image", "alpine:3.19", "trivy"),
+            ("image", refused, "trivy"),
+        ]
+        assert not [c for c in commands if any(refused in part for part in c)]
+        meta = json.loads((env.results / ".scan_metadata.json").read_bytes())
+        report = json.loads((env.results / "summaries" / "findings.json").read_bytes())
+        assert meta["target_count"] == 3
+        assert report["meta"]["target_count"] == 3
+        assert reconcile(env.results).ok
+
     def test_two_images_that_sanitize_alike_keep_their_own_results(
         self, env, monkeypatch
     ):
@@ -931,40 +975,62 @@ class TestTheScanRecordsAndResumesTheImagesItFound:
     beforehand. It must still be one target in the results, checkpointed,
     and reported, not rescanned, by a resumed scan."""
 
+    @pytest.mark.parametrize(
+        ("gitlab", "image"),
+        [
+            ("group/app", "alpine:3.19"),
+            # The session keys a target by its id, and a project whose
+            # Dockerfile names its own path untagged gave the image the
+            # GitLab target's id: one record, and a resumed scan reported the
+            # repository's rows (trufflehog `ran`) as the image's.
+            ("acme/api", "acme/api"),
+        ],
+        ids=["distinct", "image-named-like-its-project"],
+    )
     def test_a_found_image_is_checkpointed_and_a_resume_reports_it(
-        self, env, monkeypatch
+        self, env, monkeypatch, gitlab, image
     ):
         from scripts.cli.scan_orchestrator import (
             ScanConfig,
             ScanOrchestrator,
             ScanTargets,
         )
-        from scripts.cli.scan_session import ScanSession, load_session
+        from scripts.cli.scan_session import (
+            ScanSession,
+            found_image_id,
+            load_session,
+        )
 
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
-            _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
+            _clone_holding({"Dockerfile": f"FROM {image}\n".encode()}),
         )
-        tools = ["trivy", "syft"]
+        # trufflehog reads a repository and no image: its two rows differ,
+        # so one target's rows reported as the other's cannot pass.
+        tools = ["trivy", "syft", "trufflehog"]
         orchestrator = ScanOrchestrator(
             ScanConfig(results_dir=env.results, tools=tools)
         )
-        targets = ScanTargets(gitlab_repos=[_gitlab_target("group/app")])
+        targets = ScanTargets(gitlab_repos=[_gitlab_target(gitlab)])
         path = env.results.parent / "session.json"
         session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
-        session.register_target("gitlab", "group/app", tools)
+        session.register_target("gitlab", gitlab, tools)
         orchestrator.setup_results_directories(targets)
 
         first = orchestrator.scan_all(targets, {}, session=session, session_path=path)
 
         saved = load_session(path)
         assert saved is not None
-        record = saved.targets["alpine:3.19"]
+        repository = saved.targets[gitlab]
+        assert (repository.target_type, repository.completed) == ("gitlab", True)
+        record = saved.targets[found_image_id(image)]
         assert (record.target_type, record.completed, record.found_in) == (
             "image",
             True,
-            "group/app",
+            gitlab,
         )
+        assert record.rows["trufflehog"]["state"] == "skipped"
+        assert repository.rows["trufflehog"]["state"] == "ran"
 
         def must_not_run(*args, **kwargs):
             raise AssertionError("a completed GitLab target was scanned again")
@@ -983,8 +1049,8 @@ class TestTheScanRecordsAndResumesTheImagesItFound:
 
         assert labels(resumed) == labels(first)
         assert {(t, name) for t, name, _rows in resumed} == {
-            ("gitlab", "group/app"),
-            ("image", "alpine:3.19"),
+            ("gitlab", gitlab),
+            ("image", image),
         }
 
 

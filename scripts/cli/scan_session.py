@@ -37,6 +37,19 @@ logger = logging.getLogger(__name__)
 SESSION_VERSION = 1
 
 
+def found_image_id(reference: str) -> str:
+    """The session id of an image a GitLab target named (#1311).
+
+    Typed, because the session keys a target by its id alone: a project
+    `acme/api` whose Dockerfile says `FROM acme/api` gave the image the
+    project's id, one record for two targets, and a resumed scan reported
+    the repository's rows as the image's. No other id contains `: `: an
+    image reference and a GitLab path hold no space, and a repository's
+    folder name holds no colon.
+    """
+    return f"image: {reference}"
+
+
 @dataclass
 class ToolRecord:
     """Status of a single tool within a target scan."""
@@ -175,12 +188,12 @@ class ScanSession:
                 target.tools[tool_name].status = status[row.state]
                 target.tools[tool_name].error = row.label if row.reason else ""
 
-    def found_images(self) -> dict[str, str]:
-        """Each completed image a GitLab target named (#1311), and that
-        target: a resumed scan reports and does not rescan them, and no target
-        list names them."""
+    def found_images(self) -> dict[str, tuple[str, str]]:
+        """Each completed image a GitLab target named (#1311), by its session
+        id: its reference and that target. A resumed scan reports and does not
+        rescan them, and no target list names them."""
         return {
-            tid: t.found_in
+            tid: (t.name or tid, t.found_in)
             for tid, t in self.targets.items()
             if t.found_in and t.completed and t.target_type == "image"
         }

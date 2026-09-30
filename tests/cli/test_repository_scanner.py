@@ -1011,6 +1011,70 @@ class TestARepositorysOwnPathIsNeverExcluded:
         assert any(arg.endswith("Dockerfile") for arg in defs["hadolint"].command)
 
 
+class TestADockerfileIsOneThing:
+    """hadolint's row and GitLab image discovery read one set of files, the
+    one `is_dockerfile` defines. hadolint linted `Dockerfile.md` as a
+    Dockerfile: one `DL1000 unexpected 'r'` finding per prose file in the
+    report (measured through `jmo scan --repo <fixture> --tools hadolint`)."""
+
+    @pytest.mark.parametrize(
+        ("name", "is_one"),
+        [
+            ("Dockerfile", True),
+            ("Dockerfile.dev", True),
+            ("Dockerfile.alpine", True),
+            ("api.Dockerfile", True),
+            ("Dockerfile.md", False),
+            ("Dockerfile.txt", False),
+            ("Dockerfile.rst", False),
+            ("Dockerfile.adoc", False),
+            ("Dockerfile.html", False),
+            ("Dockerfile.MD", False),
+            ("dockerfile", False),
+            ("dockerfile_utils.py", False),
+            ("Dockerfiles", False),
+        ],
+    )
+    def test_the_definition(self, name, is_one):
+        from scripts.core.tool_descriptors import is_dockerfile
+
+        assert is_dockerfile(name) is is_one
+        # The row decides by it: one definition, not a second copy.
+        assert DESCRIPTORS["hadolint"].accepts_name is is_dockerfile
+
+    def test_hadolint_reads_the_dockerfiles_and_not_a_document_about_one(
+        self, tmp_path
+    ):
+        repo = _repo(
+            tmp_path,
+            "app",
+            {
+                "Dockerfile": "FROM alpine\n",
+                "Dockerfile.dev": "FROM alpine\n",
+                "api.Dockerfile": "FROM alpine\n",
+                "Dockerfile.md": "From the root of the repo, run make.\n",
+                "sub/dockerfile": "FROM alpine\n",
+            },
+        )
+
+        _, rows, defs = _scan(repo, tmp_path / "out", ["hadolint"])
+
+        assert rows["hadolint"].state is State.RAN, rows["hadolint"].label
+        read = sorted(
+            Path(arg).relative_to(repo).as_posix()
+            for arg in defs["hadolint"].command
+            if Path(arg).is_absolute() and repo in Path(arg).parents
+        )
+        assert read == ["Dockerfile", "Dockerfile.dev", "api.Dockerfile"]
+
+    def test_a_document_alone_is_no_dockerfile(self, tmp_path):
+        repo = _repo(tmp_path, "app", {"Dockerfile.md": "From the root of the repo.\n"})
+
+        _, rows, _defs = _scan(repo, tmp_path / "out", ["hadolint"])
+
+        assert rows["hadolint"].label == "skipped:no Dockerfiles"
+
+
 def test_trufflehog_anchors_on_the_absolute_root_for_a_relative_target(
     tmp_path, monkeypatch
 ):

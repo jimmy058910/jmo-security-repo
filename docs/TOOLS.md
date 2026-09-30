@@ -38,7 +38,7 @@ Being in the matrix makes a tool eligible. Two things then decide whether it run
 
 | Tool | Content it needs | Files it looks for |
 |------|------------------|--------------------|
-| Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile` |
+| Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile`, spelled with that case, but not a document about one (`Dockerfile.md`, `.txt`, `.rst`, `.adoc`, `.html`). GitLab targets find the images they name in the same files |
 | ShellCheck | Shell scripts | `*.sh`, `*.bash`, `*.ksh` |
 | zizmor | GitHub Actions | `.github/workflows/*.yml` and `*.yaml` (the repository's own, not a subdirectory's), `action.yml` or `action.yaml` anywhere, `.github/dependabot.yml` or `.yaml` |
 | OSV-Scanner | Lockfiles | anywhere: `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `requirements*.txt`, `poetry.lock`, `Pipfile.lock`, `pdm.lock`, `uv.lock`, `pylock.toml`, `go.mod`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `gradle.lockfile`, `pom.xml`, `packages.lock.json`, `packages.config`, `pubspec.lock`, `mix.lock`, `renv.lock` |
@@ -112,7 +112,7 @@ Each check is a pattern over source or config, not a proof, so its findings carr
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
 | Kubernetes cluster | `--k8s-context`, optionally with `--k8s-namespace` or `--k8s-all-namespaces` | Trivy (`trivy k8s`) |
-| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone. Each container image its Dockerfiles (`FROM`), docker-compose files and Kubernetes manifests name is then an image target of its own, pulled from its registry mid-scan and scanned as `--image` scans it, into `individual-images/<group>_<repo>__<image>/`. A build argument (`FROM $BASE`), a build stage and `scratch` are skipped, and an image the scan already scans is scanned once. One no registry serves is a `failed` image row |
+| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone. Each container image its Dockerfiles (`FROM`), docker-compose files and Kubernetes manifests name is then an image target of its own, pulled from its registry mid-scan and scanned as `--image` scans it, into `individual-images/<group>_<repo>__<image>/`. A build argument (`FROM $BASE`), a build stage and `scratch` are skipped, and an image the scan already scans is scanned once. One no registry serves is a `failed` image row, and so is one JMo does not hand a scanner because it is not an image reference it accepts (a registry with a port, for now) |
 
 Targets combine in one run: `jmo scan --repo . --image myapp:latest` scans both, each with its own tools.
 
