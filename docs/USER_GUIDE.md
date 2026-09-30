@@ -1172,10 +1172,22 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - retries: global retry count for flaky tool invocations (0 by default)
 - per_tool: per‑tool overrides (`flags`, `timeout`, and tool-specific keys)
   - A flag that decides where a tool writes or in what format is JMo's, and is dropped with a
-    warning: `-o`, `--output`, `-f`, `--format` and their kin for every tool, and Gitleaks'
-    `--report-format`, `--report-path`/`-r`, `--report-template`, `--exit-code`, `--redact` and
-    `--config`/`-c` (a repository's own `.gitleaks.toml` is read instead; see
-    [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml))
+    warning naming it. Which flags those are is each tool's own: trivy's and hadolint's `-f`,
+    grype's and syft's `-o` and `--file`, semgrep's `-o`, `--text` and `--sarif`, nuclei's
+    `-jsonl`, Gitleaks' `--report-format`, `--report-path`/`-r`, `--report-template`,
+    `--exit-code`, `--redact` and `--config`/`-c` (a repository's own `.gitleaks.toml` is read
+    instead; see
+    [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml)),
+    and TruffleHog's `--json`, `--no-update` and `--no-verification`, which JMo already passes
+    it (`verify: true` turns verification on). A flag another tool spells the same way is left
+    alone: grype's `-f` is `--fail-on`, semgrep's `-f` is `--config`
+  - Each is dropped in every spelling the tool's own parser reads: a value attached (`-ftable`),
+    after other short flags (`-qftable` is trivy's `-q -f table`), one dash or two for nuclei and
+    OSV-Scanner (`-format table`), and an abbreviation for Checkov and ShellCheck (`--outp`)
+  - On Windows, Checkov and ZAP run through a `.cmd`/`.bat` launcher, whose arguments cmd.exe
+    reads again: a flag holding any of `& | ^ < > %` is dropped with a warning. Give a list
+    comma-separated instead (`--skip-check CKV_AWS_1,CKV_AWS_2`); see
+    [Known limitations](KNOWN_LIMITATIONS.md#on-windows-a-checkov-or-zap-flag-cannot-hold-cmdexes-metacharacters)
   - TruffleHog and Gitleaks run twice on a repository with history. `flags` reach the
     working-tree run and `history_flags` the git-history run, since each mode rejects flags the
     other needs (TruffleHog's `--since-commit` and `--branch` are history's). `history: false`

@@ -229,6 +229,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="yara_runner",
         description="Scan a tree with libyara and write JSON the yara adapter parses.",
+        # `--outp x` would otherwise be `--output x`, and a user's flags come
+        # after JMo's: the report would move (#1335).
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--rules", required=True, help="Rule file or directory of rules"

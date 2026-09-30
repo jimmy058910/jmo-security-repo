@@ -11,22 +11,28 @@ scan exited 0. Measured: **2 findings to 0, rc=0, nothing on any stream.**
 Second concern here: these helpers existed as five identical copies, one per
 scanner, and only `repository_scanner`'s `get_tool_timeout` applied the
 slow-tool floor. Consolidating them is what makes a single guard possible.
+
+Third (#1335): which spellings of a flag reach a tool is its own parser's
+grammar, not one shared list. A shared set refused real flags (grype's `-f` is
+`--fail-on`) and missed short flags chained in a cluster (`-qftable`).
 """
 
 from __future__ import annotations
 
 import ast
+import importlib
 import logging
 from pathlib import Path
 
 import pytest
 
+from scripts.cli.scan_jobs import tool_loop
 from scripts.cli.scan_utils import (
-    RESERVED_OUTPUT_FLAGS,
     TOOL_TIMEOUT_DEFAULTS,
     tool_flags,
     tool_timeout,
 )
+from scripts.core.tool_descriptors import DESCRIPTORS, FlagGrammar, ScanContext
 
 SCAN_JOBS = Path(__file__).resolve().parents[2] / "scripts" / "cli" / "scan_jobs"
 
@@ -90,8 +96,10 @@ class TestReservedFlagsAreRefused:
         Policing it -- or `--exclude`, which tools legitimately repeat -- would
         break working configs to fix a problem that does not exist.
         """
-        assert "--scanners" not in RESERVED_OUTPUT_FLAGS
-        assert "--exclude" not in RESERVED_OUTPUT_FLAGS
+        assert "--scanners" not in DESCRIPTORS["trivy"].reserved_flags
+        assert not [
+            n for n, d in DESCRIPTORS.items() if "--exclude" in d.reserved_flags
+        ]
         cfg = {"trivy": {"flags": ["--scanners", "vuln", "--scanners", "secret"]}}
         assert tool_flags(cfg, "trivy") == [
             "--scanners",
@@ -119,6 +127,487 @@ class TestReservedFlagsAreRefused:
     def test_degenerate_config_is_not_a_crash(self, junk):
         assert tool_flags({"trivy": junk}, "trivy") == []
         assert tool_flags({}, "trivy") == []
+
+
+# --- each tool's own grammar (#1335) -------------------------------------------
+#
+# Each spelling was run against the tool itself (trivy 0.74.0, grype
+# 0.118.0, syft 1.51.1, gitleaks 8.30.1, trufflehog 3.97.1, semgrep 1.175.0,
+# checkov 3.3.16, hadolint 2.15.1, shellcheck 0.11.0, zizmor 1.30.1,
+# osv-scanner 2.6.0, nuclei 3.11.1) and judged by what it wrote, except a few
+# output flags taken from the tool's own help: osv-scanner's `--serve`, zap's
+# `-quickout`, semgrep's `--json` and `--gitlab-*`. A refused
+# spelling lost the findings or moved the report: trivy `-ftable` took 42
+# findings to 0 with rc 0, grype `-otable` 7 to 0, and gitleaks `-vr<path>`
+# wrote its unredacted report into the scanned repository. A kept one is a
+# real flag of that tool (grype's `-f` is `--fail-on`, shellcheck's `-o` is
+# `--enable`, zizmor's `-o` is `--offline`), or a spelling the tool itself
+# rejects out loud (osv-scanner `-ftable`: "flag provided but not defined").
+# Spelled out rather than derived from the descriptors: a guard reading its
+# expectation from what it guards cannot fail when that changes.
+
+REFUSED = [
+    # pflag: a short flag's value attached, or chained after no-value flags.
+    ("trivy", "-ftable"),
+    ("trivy", "-f table"),
+    ("trivy", "-f=table"),
+    ("trivy", "--format=table"),
+    ("trivy", "--format table"),
+    ("trivy", "-fsarif"),
+    ("trivy", "-ftemplate"),
+    ("trivy", "-qftable"),
+    ("trivy", "-dftable"),
+    ("trivy", "-vftable"),
+    ("trivy", "-dqftable"),
+    ("trivy", "-qf table"),
+    ("trivy", "-otable.txt"),
+    ("trivy", "-o table.txt"),
+    ("trivy", "-o=table.txt"),
+    ("trivy", "--output=table.txt"),
+    # grype and syft: `-o` appends an output, so even `-ojson` breaks them;
+    # `--file` redirects it and leaves stdout empty.
+    ("grype", "-ojson"),
+    ("grype", "-otable"),
+    ("grype", "-o table"),
+    ("grype", "-o=table"),
+    ("grype", "--output=table"),
+    ("grype", "-otemplate"),
+    ("grype", "-qotable"),
+    ("grype", "-votable"),
+    ("grype", "-qo table"),
+    ("grype", "--file x.json"),
+    ("grype", "--file=x.json"),
+    ("syft", "-ojson"),
+    ("syft", "-otable"),
+    ("syft", "-o table"),
+    ("syft", "-o=table"),
+    ("syft", "--output=table"),
+    ("syft", "-qotable"),
+    ("syft", "-qo table"),
+    ("syft", "-ojson=other.json"),
+    ("syft", "-o json=other.json"),
+    ("syft", "--file other.json"),
+    ("syft", "--file=x.json"),
+    ("gitleaks", "-fjson"),
+    ("gitleaks", "-f=json"),
+    ("gitleaks", "--report-format=json"),
+    ("gitleaks", "-vfjson"),
+    ("gitleaks", "-vf json"),
+    ("gitleaks", "-vrREPORT.sarif"),
+    ("gitleaks", "-vr REPORT.sarif"),
+    ("gitleaks", "--report-path=x.sarif"),
+    ("gitleaks", "-cmine.toml"),
+    ("gitleaks", "-vcmine.toml"),
+    ("gitleaks", "-vc mine.toml"),
+    ("gitleaks", "--redact"),
+    ("gitleaks", "--redact=50"),
+    ("gitleaks", "--exit-code=1"),
+    # kingpin: what JMo already passes cannot be given twice ("flag 'json'
+    # cannot be repeated", no output), and `--no-X` is X given again.
+    ("trufflehog", "--no-verification"),
+    ("trufflehog", "--no-no-verification"),
+    ("trufflehog", "--no-update"),
+    ("trufflehog", "-j"),
+    ("trufflehog", "--json"),
+    ("trufflehog", "--no-json"),
+    ("trufflehog", "--json=false"),
+    ("trufflehog", "--json-legacy"),
+    ("trufflehog", "--sarif"),
+    ("trufflehog", "--github-actions"),
+    # Cmdliner: rc 2 and no output file, or a text report in JMo's JSON file.
+    ("semgrep", "-oother.json"),
+    ("semgrep", "-o other.json"),
+    ("semgrep", "-o=other.json"),
+    ("semgrep", "--output=other.json"),
+    ("semgrep", "-qoother.json"),
+    ("semgrep", "--json"),
+    ("semgrep", "--text"),
+    ("semgrep", "--sarif"),
+    ("semgrep", "--emacs"),
+    ("semgrep", "--vim"),
+    ("semgrep", "--junit-xml"),
+    ("semgrep", "--gitlab-sast"),
+    ("semgrep", "--gitlab-secrets"),
+    # argparse (configargparse): chains, and reads a long option's prefix.
+    ("checkov", "-ocli"),
+    ("checkov", "-o cli"),
+    ("checkov", "-o=cli"),
+    ("checkov", "--output=cli"),
+    ("checkov", "-osarif"),
+    ("checkov", "-ojson"),
+    ("checkov", "-socli"),
+    ("checkov", "-so cli"),
+    ("checkov", "--outp cli"),
+    ("checkov", "--outpu=cli"),
+    # optparse-applicative: a second `-f json` prints the report twice.
+    ("hadolint", "-fjson"),
+    ("hadolint", "-ftty"),
+    ("hadolint", "-f tty"),
+    ("hadolint", "-f=tty"),
+    ("hadolint", "--format=tty"),
+    ("hadolint", "--format tty"),
+    ("hadolint", "-fsarif"),
+    ("hadolint", "-Vftty"),
+    ("hadolint", "-Vf tty"),
+    # Haskell's GetOpt: chains, and reads any unique prefix (`--fo=tty`).
+    ("shellcheck", "-ftty"),
+    ("shellcheck", "-f tty"),
+    ("shellcheck", "-f=tty"),
+    ("shellcheck", "--format=tty"),
+    ("shellcheck", "--format tty"),
+    ("shellcheck", "-fjson1"),
+    ("shellcheck", "-xftty"),
+    ("shellcheck", "-xf tty"),
+    ("shellcheck", "--form=tty"),
+    ("shellcheck", "--fo=tty"),
+    ("shellcheck", "--f=tty"),
+    ("zizmor", "--format=plain"),
+    ("zizmor", "--format plain"),
+    ("zizmor", "--format=json"),
+    # Go's flag package: one dash or two, never chained.
+    ("osv-scanner", "-f table"),
+    ("osv-scanner", "-f=table"),
+    ("osv-scanner", "--format=table"),
+    ("osv-scanner", "--format table"),
+    ("osv-scanner", "-format table"),
+    ("osv-scanner", "-format=table"),
+    ("osv-scanner", "--output-file other.sarif"),
+    ("osv-scanner", "--output-file=other.sarif"),
+    ("osv-scanner", "-output-file other.sarif"),
+    ("osv-scanner", "--output other.sarif"),
+    ("osv-scanner", "--output=other.sarif"),
+    ("osv-scanner", "--download-offline-databases"),
+    ("osv-scanner", "--serve"),
+    ("nuclei", "-o x.txt"),
+    ("nuclei", "-o=x.txt"),
+    ("nuclei", "-output x.txt"),
+    ("nuclei", "-output=x.txt"),
+    ("nuclei", "--output x.txt"),
+    ("nuclei", "--output=x.txt"),
+    ("nuclei", "-jsonl=false"),
+    ("nuclei", "-j=false"),
+    ("nuclei", "--jsonl=false"),
+    ("zap", "-quickout other.html"),
+    # JMo's own runners: a second --target re-points the scan (argparse is
+    # last-one-wins), and argparse's default reads a long option's prefix.
+    ("yara", "--output x.json"),
+    ("yara", "--target elsewhere"),
+    ("yara", "--o x.json"),
+    ("yara", "--ou x.json"),
+    ("yara", "--outp x.json"),
+    ("jmo-native", "--output x.sarif"),
+    ("jmo-native", "--target elsewhere"),
+    ("jmo-native", "--outp x.sarif"),
+]
+
+KEPT = [
+    # Real flags a shared `-o`/`-f` refused.
+    ("grype", "-f high"),
+    ("grype", "-fhigh"),
+    ("grype", "--fail-on high"),
+    ("semgrep", "-f rules.yaml"),
+    ("semgrep", "-frules.yaml"),
+    ("semgrep", "--config rules.yaml"),
+    ("checkov", "-f main.tf"),
+    ("shellcheck", "-o all"),
+    ("shellcheck", "-oall"),
+    ("zizmor", "-o"),
+    ("zizmor", "-qo"),
+    # A value-taking or unknown letter ends the walk: the rest is its value.
+    ("trivy", "-sHIGH"),
+    ("trivy", "-sCRITICAL,HIGH -q"),
+    ("trivy", "-cconfig.yaml"),
+    ("trivy", "-ttpl.tpl"),
+    ("trivy", "-q"),
+    ("grype", "-cconfig.yaml"),
+    ("grype", "-sall-layers"),
+    ("grype", "-ttpl.tmpl"),
+    ("grype", "-vv"),
+    ("syft", "-cconfig.yaml"),
+    ("gitleaks", "-linfo"),
+    ("gitleaks", "-lwarn"),
+    ("gitleaks", "-l warn"),
+    ("gitleaks", "-v"),
+    ("gitleaks", "--max-target-megabytes 5"),
+    ("checkov", "-cCKV_AWS_1"),
+    ("checkov", "-s"),
+    ("checkov", "-qocli"),
+    ("checkov", "--compact"),
+    ("checkov", "--quiet"),
+    ("checkov", "--soft-fail"),
+    # Longer than `--output`, so not a prefix of it: another option.
+    ("checkov", "--output-file-path ofp"),
+    ("checkov", "--output-f=ofp"),
+    ("hadolint", "-cfoo.yaml"),
+    ("hadolint", "-tnone"),
+    ("hadolint", "-t none"),
+    ("hadolint", "--no-fail"),
+    ("shellcheck", "-Sstyle"),
+    ("shellcheck", "--color=always"),
+    # A tool that takes no prefix rejects this itself, out loud.
+    ("semgrep", "--outp other.json"),
+    ("hadolint", "--form tty"),
+    ("zizmor", "--form=plain"),
+    ("semgrep", "--json-output=other.json"),
+    ("semgrep", "--sarif-output=s.sarif"),
+    ("trufflehog", "--results=unverified"),
+    ("trufflehog", "--results=verified,unverified,unknown"),
+    ("trufflehog", "--no-color"),
+    ("zizmor", "--offline"),
+    ("zizmor", "-q"),
+    ("zizmor", "-p"),
+    ("zizmor", "--no-exit-codes"),
+    ("zizmor", "--persona=auditor"),
+    ("zizmor", "--min-severity=high"),
+    # Go's flag package rejects an attached value itself (rc 127).
+    ("osv-scanner", "-fjson"),
+    ("osv-scanner", "-ftable"),
+    ("osv-scanner", "-oother.sarif"),
+    ("osv-scanner", "--all-packages"),
+    ("osv-scanner", "--verbosity error"),
+    # nuclei's single-dash names only start like a reserved one.
+    ("nuclei", "-omit-raw"),
+    ("nuclei", "-or"),
+    ("nuclei", "-ot"),
+    ("nuclei", "-fr"),
+    ("nuclei", "-je x.json"),
+    ("nuclei", "-se x.sarif"),
+    ("nuclei", "-ox.txt"),
+    ("nuclei", "-silent=false"),
+    ("nuclei", "-severity critical,high,medium"),
+    ("zap", "-config api.disablekey=true"),
+    ("yara", "--exclude-dir build"),
+    ("yara", "--timeout 5"),
+    ("jmo-native", "--exclude-dir build"),
+]
+
+
+def _ids(cases: list[tuple[str, str]]) -> list[str]:
+    return [f"{tool}: {flags}" for tool, flags in cases]
+
+
+class TestEachToolsOwnGrammar:
+    @pytest.mark.parametrize(("tool", "flags"), REFUSED, ids=_ids(REFUSED))
+    def test_a_spelling_the_tool_reads_as_its_output_flag_is_refused(self, tool, flags):
+        assert tool_flags({tool: {"flags": flags.split()}}, tool) == []
+
+    @pytest.mark.parametrize(("tool", "flags"), KEPT, ids=_ids(KEPT))
+    def test_a_real_flag_is_kept(self, tool, flags):
+        assert tool_flags({tool: {"flags": flags.split()}}, tool) == flags.split()
+
+    def test_every_row_declares_its_parser(self):
+        """Spelled out, so a new row has to say which parser it has."""
+        assert {name: d.flag_grammar for name, d in DESCRIPTORS.items()} == {
+            "trufflehog": FlagGrammar.KINGPIN,
+            "gitleaks": FlagGrammar.PFLAG,
+            "semgrep": FlagGrammar.CMDLINER,
+            "syft": FlagGrammar.PFLAG,
+            "trivy": FlagGrammar.PFLAG,
+            "checkov": FlagGrammar.ARGPARSE,
+            "hadolint": FlagGrammar.OPTPARSE_APPLICATIVE,
+            "shellcheck": FlagGrammar.GETOPT,
+            "zizmor": FlagGrammar.CLAP,
+            "jmo-native": FlagGrammar.ARGPARSE,
+            "yara": FlagGrammar.ARGPARSE,
+            "grype": FlagGrammar.PFLAG,
+            "osv-scanner": FlagGrammar.GO_FLAG,
+            "zap": FlagGrammar.ZAP,
+            "nuclei": FlagGrammar.GO_FLAG,
+        }
+
+    def test_what_each_parser_does_with_a_spelling(self):
+        """Measured per parser: `-jx ex.txt` is trufflehog's `-j -x ex.txt`
+        and zizmor's `-qcfile` its `-q -c file`; Go's flag package rejects
+        `-ftable` and reads `-format` as `--format`; checkov takes
+        `--output-f=` for `--output-file-path` and shellcheck `--fo=` for
+        `--format=`, where semgrep, hadolint and zizmor reject `--outp` and
+        `--form`; kingpin reads `--no-json` as `--json` given again."""
+        assert {g for g in FlagGrammar if g.clusters} == {
+            FlagGrammar.PFLAG,
+            FlagGrammar.KINGPIN,
+            FlagGrammar.CMDLINER,
+            FlagGrammar.GETOPT,
+            FlagGrammar.OPTPARSE_APPLICATIVE,
+            FlagGrammar.ARGPARSE,
+            FlagGrammar.CLAP,
+        }
+        assert {g for g in FlagGrammar if g.abbreviates} == {
+            FlagGrammar.GETOPT,
+            FlagGrammar.ARGPARSE,
+        }
+        assert {g for g in FlagGrammar if g.either_dash} == {FlagGrammar.GO_FLAG}
+        assert {g for g in FlagGrammar if g.negates} == {FlagGrammar.KINGPIN}
+
+    def test_no_row_reserves_a_flag_only_another_tool_has(self):
+        """The shared set's defect: one list for every tool refused grype's
+        `--fail-on` as `-f`. Each row's own list is its own spellings."""
+        assert "-f" not in DESCRIPTORS["grype"].reserved_flags
+        assert "-f" not in DESCRIPTORS["semgrep"].reserved_flags
+        assert "-f" not in DESCRIPTORS["checkov"].reserved_flags
+        assert "-o" not in DESCRIPTORS["shellcheck"].reserved_flags
+        assert "-o" not in DESCRIPTORS["zizmor"].reserved_flags
+
+
+class TestTheClusterWalk:
+    """A chaining parser reads `-qftable` as `-q -f table`: the walk passes
+    over no-value flags until it reaches a reserved one (refused) or one
+    that takes a value (the rest of the token is that value: kept)."""
+
+    def test_a_value_taking_letter_ends_the_walk(self):
+        # trivy's `-s` takes a value: `-sqf` is severity `qf`, not `-q -f`.
+        assert tool_flags({"trivy": {"flags": ["-sqf"]}}, "trivy") == ["-sqf"]
+
+    def test_an_attached_value_leaves_the_next_token(self):
+        cfg = {"trivy": {"flags": ["-qftable", "--no-progress"]}}
+        assert tool_flags(cfg, "trivy") == ["--no-progress"]
+        kept = {"trivy": {"flags": ["-qftable", "stays"]}}
+        assert tool_flags(kept, "trivy") == ["stays"]
+
+    def test_a_reserved_letter_ending_the_token_takes_the_next_one(self):
+        cfg = {"trivy": {"flags": ["-qf", "table", "--no-progress"]}}
+        assert tool_flags(cfg, "trivy") == ["--no-progress"]
+
+    def test_a_parser_that_does_not_chain_gets_no_walk(self):
+        """nuclei's `-or` is `-omit-raw`, not `-o r`: the walk would refuse
+        it, which is why the rule is the parser's and not every tool's."""
+        assert tool_flags({"nuclei": {"flags": ["-or"]}}, "nuclei") == ["-or"]
+
+
+class TestEachRefusalIsNamed:
+    def test_the_warning_names_the_spelling_and_the_flag_it_sets(self, caplog):
+        cfg = {"trivy": {"flags": ["-qftable", "--no-progress", "-o", "x.txt"]}}
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_utils"):
+            assert tool_flags(cfg, "trivy") == ["--no-progress"]
+
+        messages = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert len(messages) == 2, messages
+        assert "`-qftable`" in messages[0] and "`-f`" in messages[0], messages
+        assert "`-o x.txt`" in messages[1] and "`-o`" in messages[1], messages
+        assert all("per_tool.trivy.flags" in m for m in messages), messages
+
+    def test_an_abbreviation_is_named_by_the_flag_it_abbreviates(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_utils"):
+            tool_flags({"checkov": {"flags": ["--outp", "cli"]}}, "checkov")
+        (message,) = [r.getMessage() for r in caplog.records]
+        assert "`--outp cli`" in message and "`--output`" in message, message
+
+
+class TestJmosOwnRunnersTakeNoAbbreviation:
+    """argparse reads any unambiguous prefix of a long option by default, so
+    `--outp x` would have moved yara's report. Stopped in the runner itself
+    (`allow_abbrev=False`), not only in the flag filter."""
+
+    @pytest.mark.parametrize(
+        ("module", "required"),
+        [
+            ("yara_runner", ["--rules", "r", "--target", "t", "--output", "o"]),
+            ("native_checks", ["--target", "t", "--output", "o"]),
+        ],
+        ids=["yara", "jmo-native"],
+    )
+    @pytest.mark.parametrize("abbreviation", ["--outp", "--targ", "--o"])
+    def test_a_prefix_of_a_long_option_is_an_error(
+        self, module, required, abbreviation
+    ):
+        parse = importlib.import_module(f"scripts.core.{module}")._parse_args
+        parse(required)  # the control: the full spelling parses
+        with pytest.raises(SystemExit):
+            parse([*required, abbreviation, "x"])
+
+
+# A `.cmd` launcher: cmd.exe re-reads its whole command line, so none of
+# these survives in an argument (`.claude/rules/windows-encoding.rules.md`).
+CMD_METACHARACTERS = "&|^<>%"
+CHECKOV_CMD = "C:/Users/u/.jmo/tools/venvs/checkov/Scripts/checkov.cmd"
+
+
+class TestALauncherGetsNoCmdMetacharacter:
+    """On Windows checkov resolves to `checkov.cmd` and zap to `zap.bat`, and
+    `CreateProcess` runs either through `cmd.exe /c`, which re-parses the
+    command line: `--skip-check A|B` pipes into a command named `B`. No
+    quoting survives it, so such a flag is refused. Decided by the resolved
+    executable, not the tool's name."""
+
+    def test_a_value_holding_one_is_dropped_with_its_flag(self, caplog):
+        cfg = {"checkov": {"flags": ["--skip-check", "A|B", "--quiet"]}}
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_utils"):
+            kept = tool_flags(cfg, "checkov", executable=CHECKOV_CMD)
+
+        assert kept == ["--quiet"]
+        (message,) = [r.getMessage() for r in caplog.records]
+        assert "`--skip-check A|B`" in message, message
+        assert "cmd.exe" in message and "checkov.cmd" in message, message
+        # checkov's own alternative for a list.
+        assert "A,B" in message, message
+
+    @pytest.mark.parametrize("char", list(CMD_METACHARACTERS))
+    def test_each_metacharacter_is_refused(self, char):
+        value = f"--skip-check=CKV_AWS_1{char}CKV_AWS_2"
+        cfg = {"checkov": {"flags": [value, "--quiet"]}}
+        assert tool_flags(cfg, "checkov", executable=CHECKOV_CMD) == ["--quiet"]
+
+    @pytest.mark.parametrize("launcher", ["zap.bat", "CHECKOV.CMD"])
+    def test_a_bat_or_an_upper_case_suffix_is_a_launcher_too(self, launcher):
+        cfg = {"checkov": {"flags": ["--skip-check", "A|B"]}}
+        assert tool_flags(cfg, "checkov", executable=f"C:/x/{launcher}") == []
+
+    @pytest.mark.parametrize(
+        "executable",
+        [None, "/usr/local/bin/checkov", "C:/x/checkov.exe"],
+        ids=["unknown", "posix", "exe"],
+    )
+    def test_an_executable_that_is_not_a_launcher_keeps_it(self, executable):
+        """The control: without it, "refuse every `|`" passes the tests above."""
+        cfg = {"checkov": {"flags": ["--skip-check", "A|B"]}}
+        assert tool_flags(cfg, "checkov", executable=executable) == [
+            "--skip-check",
+            "A|B",
+        ]
+
+    @pytest.mark.parametrize(
+        ("resolved", "flags"),
+        [
+            (CHECKOV_CMD, ("--quiet",)),
+            ("/usr/local/bin/checkov", ("--skip-check", "A|B", "--quiet")),
+        ],
+        ids=["cmd", "posix"],
+    )
+    def test_the_scan_loop_hands_over_the_resolved_executable(
+        self, tmp_path, monkeypatch, resolved, flags
+    ):
+        seen: list[tuple[str, ...]] = []
+
+        def recording_builder(ctx: ScanContext) -> list:
+            seen.append(ctx.flags)
+            return []
+
+        monkeypatch.setitem(
+            DESCRIPTORS["checkov"].invocations, "repo", recording_builder
+        )
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "main.tf").write_bytes(b'resource "aws_s3_bucket" "b" {}\n')
+        out = tmp_path / "out"
+        out.mkdir()
+
+        tool_loop.run_tools(
+            tools=["checkov"],
+            target_type="repo",
+            target=repo,
+            target_label="t",
+            out_dir=out,
+            timeout=60,
+            retries=0,
+            per_tool_config={"checkov": {"flags": ["--skip-check", "A|B", "--quiet"]}},
+            allow_missing_tools=False,
+            runner_cls=lambda **kw: type("R", (), {"run_all_parallel": lambda s: []})(),
+            find_tool_func=lambda name: resolved,
+            repo_root=repo,
+        )
+
+        assert seen == [flags]
 
 
 class TestTimeoutFloorReachesEveryTargetType:

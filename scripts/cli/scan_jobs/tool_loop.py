@@ -602,8 +602,11 @@ def run_tools(
             target=target,
             out_dir=out_dir,
             binary=binary,
-            flags=tuple(tool_flags(per_tool_config, tool)),
-            history_flags=tuple(tool_flags(per_tool_config, tool, "history_flags")),
+            # The resolved executable: a `.cmd` launcher's argv is re-parsed.
+            flags=tuple(tool_flags(per_tool_config, tool, executable=binary)),
+            history_flags=tuple(
+                tool_flags(per_tool_config, tool, "history_flags", executable=binary)
+            ),
             tool_config=tool_config if isinstance(tool_config, dict) else {},
             exclusion_args=tree_excl,
             history_exclusion_args=history_excl,

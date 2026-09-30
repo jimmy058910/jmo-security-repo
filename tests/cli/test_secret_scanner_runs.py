@@ -17,10 +17,11 @@ when a repository has history, reading it. Three things still assumed one.
 - The reconciler checked ``<tool>.json`` alone, so a ``ran`` row whose
   ``<tool>.git.json`` was missing or did not parse passed.
 
-**The flags JMo must own (#1325)**: gitleaks spells its report flags
-differently from the scanners that set ``RESERVED_OUTPUT_FLAGS``, so
-``per_tool.gitleaks.flags`` could reformat or redirect its output (measured:
-``--report-format json`` lost every finding with the row ``ran``).
+**The flags JMo must own (#1325, #1335)**: gitleaks spells its report flags
+its own way, so ``per_tool.gitleaks.flags`` could reformat or redirect its
+output (measured: ``--report-format json`` lost every finding with the row
+``ran``), and trufflehog's parser refuses a flag JMo already passes when it
+is given again.
 
 **One flag list for two modes (#1327)**: each mode rejects flags the other
 needs (measured: trufflehog filesystem refuses ``--since-commit``, gitleaks git
@@ -322,14 +323,16 @@ def _by_mode(seen: list[list[str]]) -> dict[str, list[str]]:
 
 
 class TestGitleaksOutputFlagsAreJmos:
-    """#1325: `RESERVED_OUTPUT_FLAGS` keeps a user's flags from choosing where
-    a tool writes and in what format (#822), and gitleaks spells those flags
-    its own way. Measured through `jmo scan`: `--report-format json` gave 0
+    """#1325: a tool's reserved flags keep a user's flags from choosing where
+    it writes and in what format (#822), and gitleaks spells those flags its
+    own way. Measured through `jmo scan`: `--report-format json` gave 0
     findings with the row `ran`, `--report-path` and `-r` left both runs
     writing one stray file, and `--exit-code 1` failed the row while its
     findings still reached the report. `--redact` makes every secret's
     snippet `REDACTED`, which the pairing digests (#1323); `--config` would
-    replace the config that carries JMo's exclusions."""
+    replace the config that carries JMo's exclusions. #1335: its parser
+    chains short flags, so `-vfjson` is `-v -f json` and `-vrREPORT.sarif`
+    wrote the unredacted report into the scanned repository (measured)."""
 
     # How many times JMo passes each itself; the rest it never passes.
     OWN = {"--report-format": 1, "--report-path": 1, "--exit-code": 1, "--config": 1}
@@ -351,6 +354,11 @@ class TestGitleaksOutputFlagsAreJmos:
             ["-cmine.toml"],
             ["-relsewhere.json"],
             ["-fjson"],
+            # ...and after its no-value `-v` (#1335).
+            ["-vfjson"],
+            ["-vf", "json"],
+            ["-vrREPORT.sarif"],
+            ["-vcmine.toml"],
         ],
         ids=lambda flags: flags[0],
     )
@@ -376,6 +384,41 @@ class TestGitleaksOutputFlagsAreJmos:
         # A flag JMo does not own still reaches the run it was given for.
         assert "--max-target-megabytes" in command, command
         assert scan.row("gitleaks")["state"] == "ran"
+
+
+class TestTrufflehogFlagsJmoPassesAreJmos:
+    """#1335: trufflehog's parser (kingpin) refuses any flag given twice, and
+    JMo passes `--json`, `--no-update` and `--no-verification` to both runs.
+    Measured through `jmo scan` on a fixture: `--no-verification` in its
+    flags made it exit 1 with "flag 'no-verification' cannot be repeated"
+    and no output. `--no-json` is `--json` given again."""
+
+    # How many times JMo passes each itself, in each run.
+    OWN = {"--json": 1, "--no-update": 1, "--no-verification": 1}
+
+    @pytest.mark.parametrize("key", ["flags", "history_flags"])
+    @pytest.mark.parametrize(
+        "flag", ["--no-verification", "--no-update", "--json", "-j", "--no-json"]
+    )
+    def test_a_flag_it_would_refuse_twice_is_dropped(
+        self, scan, monkeypatch, flag, key
+    ):
+        seen: list[list[str]] = []
+        monkeypatch.setattr(
+            "scripts.core.tool_runner._run_bounded",
+            _process({"filesystem": 0, "git": 0}, seen),
+        )
+        scan.configure({"trufflehog": {key: [flag, "--concurrency=2"]}})
+
+        assert scan.run("--tools", "trufflehog") == 0
+
+        command = _by_mode(seen)["filesystem" if key == "flags" else "git"]
+        assert command.count(flag) == self.OWN.get(flag, 0), command
+        for own, times in self.OWN.items():
+            assert command.count(own) == times, command
+        # A flag JMo does not own still reaches the run it was given for.
+        assert "--concurrency=2" in command, command
+        assert scan.row("trufflehog")["state"] == "ran"
 
 
 class TestEachModeHasItsOwnFlags:
