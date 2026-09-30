@@ -412,6 +412,23 @@ def test_a_failed_history_run_fails_the_row_and_keeps_the_tree_findings(
     assert json.loads((out / "trufflehog.json").read_bytes()) == {"from": "filesystem"}
 
 
+def test_the_row_counts_the_findings_the_tree_kept(tmp_path) -> None:
+    """#1369, the same shape as osv-scanner's broken lockfile: the tree's
+    findings reach the report, so the target is partial, not empty."""
+
+    def make(definitions) -> list[ToolResult]:
+        results = _results(fail_git=True)(definitions)
+        for r in results:
+            if r.status == "success":
+                r.stdout = json.dumps(_trufflehog_fs_record(SECRET)) + "\n"
+        return results
+
+    _, rows, _, _ = _definitions(tmp_path, "trufflehog", runner_results=make)
+
+    row = rows["trufflehog"]
+    assert (row.state.value, row.kept_findings) == ("failed", 1)
+
+
 # --- the output file's name -----------------------------------------------------
 
 

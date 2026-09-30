@@ -545,6 +545,132 @@ class TestScanExitCodeReflectsTargetOutcome:
         assert "trivy" in err
 
 
+def _kept(tool: str = "trufflehog", kept: int = 1) -> ToolRun:
+    """A failed row whose runs that worked still produced findings: a secret
+    scanner's tree beside its failed git-history run (#1369)."""
+    return ToolRun(
+        tool,
+        State.FAILED,
+        Reason.EXIT_CODE,
+        attempts=2,
+        invocations=2,
+        detail="git: exit 2",
+        kept_findings=kept,
+    )
+
+
+class TestAFailedRowThatKeptFindings:
+    """#1369: osv-scanner's row is `failed` when one lockfile cannot be read,
+    and the other lockfiles' findings still reach the report. The target was
+    reported as having contributed NO findings and the scan was not stored in
+    history, while its report held 292 findings."""
+
+    def test_the_target_is_partial_not_empty(self):
+        assert classify_target_outcome({"trufflehog": _kept()}) == TARGET_PARTIAL
+        # Beside a tool that ran, or one that failed outright, still partial.
+        assert (
+            classify_target_outcome({"trufflehog": _kept(), **rows(trivy="ran")})
+            == TARGET_PARTIAL
+        )
+        assert (
+            classify_target_outcome(
+                {"trufflehog": _kept(), **rows(trivy="failed:timed out")}
+            )
+            == TARGET_PARTIAL
+        )
+        # The control: the same row with nothing kept contributed nothing.
+        assert classify_target_outcome({"trufflehog": _kept(kept=0)}) == TARGET_FAILED
+
+    def test_the_row_carries_what_it_kept_across_the_handoff(self):
+        """`.scan_metadata.json` is how the report phase learns it."""
+        row = _kept(kept=292)
+        assert ToolRun.from_dict(row.to_dict()) == row
+        assert row.to_dict()["kept_findings"] == 292
+        # A row written before the field existed kept nothing.
+        older = {k: v for k, v in row.to_dict().items() if k != "kept_findings"}
+        assert ToolRun.from_dict(older).kept_findings == 0
+
+    def test_only_a_failed_row_keeps_findings(self):
+        """A row that ran contributed everything it found; a skipped one ran
+        nothing. Either carrying a count would be read as partial."""
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.RAN, kept_findings=3)
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.SKIPPED, Reason.NOT_INSTALLED, kept_findings=3)
+
+    def test_the_target_exits_zero_and_says_what_failed_and_what_was_kept(
+        self, scan_env, capsys
+    ):
+        """A partial target exits 0 and says so, as one whose other tool ran
+        does: only a target that produced *nothing* fails the run. The issue's
+        case exited 1 because it was read as producing nothing."""
+        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
+            mock_scan.return_value = ("proj", {"trufflehog": _kept(kept=3)})
+            rc = jmo.cmd_scan(scan_env)
+
+        err = capsys.readouterr().err
+        assert rc == 0
+        progress = [ln for ln in err.splitlines() if "[1/1]" in ln]
+        assert len(progress) == 1, f"expected one progress line: {progress}"
+        line = progress[0]
+        assert '"level": "WARN"' in line, line
+        assert "\\u26a0" in line, "a partial target should carry the warning glyph"
+        assert "MISSING" in line, line
+        assert "git: exit 2" in line, "the line does not say what failed: " + line
+        assert "3 finding(s)" in line, "the line does not say what was kept: " + line
+        assert "contributed NO findings" not in err
+        assert "produced no findings" not in err
+
+    def test_the_same_row_with_nothing_kept_still_fails_the_run(self, scan_env, capsys):
+        """The rule's other half, for this row's shape: nothing reached the
+        report, so the target contributed nothing."""
+        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
+            mock_scan.return_value = ("proj", {"trufflehog": _kept(kept=0)})
+            rc = jmo.cmd_scan(scan_env)
+
+        err = capsys.readouterr().err
+        assert rc == 1
+        assert "contributed NO findings" in err
+        assert "produced no findings" in err
+
+    def test_the_scan_is_stored_with_that_row_failed(self, scan_env, tmp_path):
+        """Not stored, the next scan's diff compares against an older one;
+        stored, the row says the tool failed, so nothing reads it as clean."""
+        db = tmp_path / "history.db"
+        args = TestScanStoresHistory._args(scan_env, tmp_path, db)
+
+        def scan(repo, out_root, *a, **k):
+            # What the tree's run wrote: one finding, a placeholder value.
+            out = Path(out_root) / "proj"
+            out.mkdir(parents=True, exist_ok=True)
+            record = {
+                "SourceMetadata": {
+                    "Data": {"Filesystem": {"file": "keys/live.pem", "line": 1}}
+                },
+                "DetectorName": "PrivateKey",
+                "Verified": False,
+                "Raw": "not-a-secret-7f3a9c",
+            }
+            (out / "trufflehog.json").write_bytes(json.dumps(record).encode() + b"\n")
+            return "proj", {"trufflehog": _kept()}
+
+        with patch("scripts.cli.scan_jobs.scan_repository", side_effect=scan):
+            rc = jmo.cmd_scan(args)
+
+        assert rc == 0
+        assert db.exists(), "the scan was not stored in history"
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            scans = con.execute("SELECT tools, total_findings FROM scans").fetchall()
+            runs = con.execute(
+                "SELECT target, tool, state, reason FROM scan_tool_runs"
+            ).fetchall()
+        finally:
+            con.close()
+        assert [(json.loads(t), n) for t, n in scans] == [(["trufflehog"], 1)]
+        assert runs == [("proj", "trufflehog", "failed", "unaccepted exit code")]
+
+
 class TestPreflightNoLongerDropsTools:
     """Phase 3: a missing tool reaches the scan and gets a row. It used to be
     removed before any target, so on a host it had no row anywhere."""

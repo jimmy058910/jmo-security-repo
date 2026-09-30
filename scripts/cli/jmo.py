@@ -2847,12 +2847,16 @@ class ProgressTracker:
                     f"{', '.join(summary.skipped)}",
                 )
             elif outcome == TARGET_PARTIAL:
+                # A failed tool that kept findings is named with what it kept
+                # and what failed: that target was "contributed NO findings"
+                # while its report held them (#1369).
                 _log(
                     self.args,
                     "WARN",
                     f"{message} - findings MISSING from "
                     f"{len(failed_tools)} failed tool(s): "
-                    f"{', '.join(failed_tools)}",
+                    f"{', '.join(failed_tools)}"
+                    + "".join(f"; {kept}" for kept in summary.kept),
                 )
             elif missing_tools:
                 # The tools that ran all succeeded, so this is not a warning

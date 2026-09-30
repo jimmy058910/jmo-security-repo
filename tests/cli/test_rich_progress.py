@@ -526,6 +526,32 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         assert "findings MISSING from 1 failed tool(s)" in msg
         assert "semgrep" in msg
 
+    def test_a_failed_tool_that_kept_findings_says_what_failed_and_what_was_kept(
+        self, monkeypatch
+    ):
+        """#1369: its other runs' findings reached the report, so the target
+        is partial, and this line was "contributed NO findings"."""
+        from scripts.core.scan_timings import Reason, State, ToolRun
+
+        statuses = {
+            "osv-scanner": ToolRun(
+                "osv-scanner",
+                State.FAILED,
+                Reason.EXIT_CODE,
+                detail="sub/package-lock.json: Return code 127 not in (0, 1)",
+                kept_findings=292,
+            )
+        }
+
+        logged = self._logged(monkeypatch, statuses)
+
+        assert len(logged) == 1, f"expected exactly one line: {logged}"
+        level, msg = logged[0]
+        assert level == "WARN"
+        assert "contributed NO findings" not in msg
+        assert "sub/package-lock.json" in msg, msg
+        assert "292 finding(s)" in msg, msg
+
 
 def _rows(**labels: str):
     """`ran`, or `<state>:<reason value>`, by tool."""

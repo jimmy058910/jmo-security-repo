@@ -326,6 +326,11 @@ def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
 
     A skipped tool gets no vote. Counting it as a failure would make a target
     where one tool ran cleanly and two were not installed a partial failure.
+
+    A failed row whose runs that worked still found something (its
+    ``kept_findings``) contributed those findings, so its target is partial:
+    counted as nothing, a target whose report held 292 findings read as having
+    contributed none (#1369).
     """
     if not rows:
         return TARGET_FAILED
@@ -338,7 +343,8 @@ def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
         return TARGET_NOT_ATTEMPTED
     if not failed:
         return TARGET_OK
-    return TARGET_PARTIAL if ran else TARGET_FAILED
+    kept = any(r.kept_findings for r in in_scope)
+    return TARGET_PARTIAL if ran or kept else TARGET_FAILED
 
 
 @dataclass(frozen=True)
@@ -349,6 +355,8 @@ class TargetSummary:
     failed: list[str]  # tools that failed
     not_installed: list[str]  # skipped because not installed
     skipped: list[str]  # "tool (reason)" for every other in-scope skip
+    # What a failed tool still contributed, and what failed (#1369).
+    kept: list[str]
 
 
 def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
@@ -357,6 +365,12 @@ def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
     return TargetSummary(
         outcome=classify_target_outcome(rows),
         failed=sorted(r.tool for r in rows.values() if r.state is State.FAILED),
+        kept=sorted(
+            f"{r.tool} kept {r.kept_findings} finding(s) from what it did read "
+            f"(failed: {r.detail or r.reason})"
+            for r in rows.values()
+            if r.kept_findings
+        ),
         not_installed=sorted(
             r.tool
             for r in rows.values()

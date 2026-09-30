@@ -36,7 +36,8 @@ SCAN_TIMINGS_FILENAME = "scan-timings.json"
 # does not understand instead of misreading it. Version 3 (v2.0.0 Phase 3): a
 # row for every requested tool, including the ones that never ran, keyed
 # `tool/state/reason/seconds/...` rather than ToolRunner's result fields.
-SCAN_TIMINGS_SCHEMA_VERSION = 3
+# Version 4: a row's `kept_findings` (#1369).
+SCAN_TIMINGS_SCHEMA_VERSION = 4
 
 # `outcome` values: did the target get as far as running tools at all.
 OUTCOME_COMPLETED = "completed"
@@ -135,6 +136,12 @@ class ToolRun:
     code) and goes to `scan-timings.json` only; `scan_tool_runs` keeps the
     closed `reason`. Nothing the tool printed is kept: on a secret scanner,
     stdout *is* the secrets.
+
+    `kept_findings` is what a failed row's runs that worked still found, and
+    so reached the report: osv-scanner's readable lockfiles beside one it
+    could not read, a secret scanner's tree beside its failed git-history run
+    (#1369). Such a row contributed findings, so its target is partial rather
+    than empty. Only a failed row carries it.
     """
 
     tool: str
@@ -145,6 +152,7 @@ class ToolRun:
     attempts: int = 0
     invocations: int = 0
     detail: str | None = None
+    kept_findings: int = 0
 
     def __post_init__(self) -> None:
         if self.state is State.RAN:
@@ -155,6 +163,8 @@ class ToolRun:
                 raise ValueError(f"{self.tool}: {self.reason!r} is not a skip reason")
         elif self.reason not in FAIL_REASONS:
             raise ValueError(f"{self.tool}: {self.reason!r} is not a failure reason")
+        if self.kept_findings and self.state is not State.FAILED:
+            raise ValueError(f"{self.tool}: only a failed row keeps findings")
 
     @property
     def label(self) -> str:
@@ -173,6 +183,7 @@ class ToolRun:
             "attempts": self.attempts,
             "invocations": self.invocations,
             "detail": self.detail,
+            "kept_findings": self.kept_findings,
         }
 
     @classmethod
@@ -188,6 +199,7 @@ class ToolRun:
             attempts=int(data.get("attempts") or 0),
             invocations=int(data.get("invocations") or 0),
             detail=data.get("detail"),
+            kept_findings=int(data.get("kept_findings") or 0),
         )
 
 

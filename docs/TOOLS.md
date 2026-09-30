@@ -65,9 +65,11 @@ Every requested tool leaves one row per target, in `scan-timings.json`, in `.sca
 |-----|---------|
 | `ran` | It ran and its output is beside the row. |
 | `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no workflow zizmor could read`, `no lockfile`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
-| `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
+| `failed:<reason>` | It applied and failed: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
 
 `failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep reports that count, and it is how a run that scanned nothing stops passing for a clean one.
+
+A failed row can still have contributed findings: OSV-Scanner beside a lockfile it could not read, or whose ecosystem has no database, and TruffleHog or Gitleaks whose git-history run failed while the working tree's worked. The row's `kept_findings` counts what its runs that worked found, and those findings are in the report. The target is then partial, like one where another tool ran: its line names what failed and what was kept, the scan is stored in history with the row failed, and the target alone does not make the scan exit 1. Only a target that contributed nothing at all does.
 
 ZAP and Nuclei are DAST scanners: they find vulnerabilities by exercising a **running application** over HTTP, so they run only on `--url` and `--urls-file` targets and never on a repository, where their row reads `skipped:needs --url`. Point them at a deployed or local instance:
 

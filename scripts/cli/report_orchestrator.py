@@ -235,6 +235,9 @@ def cmd_report(args, _log_fn) -> int:
             # The tools that ran on at least one target (#787). `tools` is the
             # request, which since v2.0.0 keeps a tool that is not installed
             # (its row says `failed:not installed`); the rows say what ran.
+            # A failed row that kept findings counts too: they are in this
+            # report, so the scan is not the empty one history refuses, and
+            # its row, stored as failed, says the rest is missing (#1369).
             runs = scan_meta.get("tool_runs")
             if isinstance(runs, list):
                 tools_from_scan = list(
@@ -242,7 +245,7 @@ def cmd_report(args, _log_fn) -> int:
                         r["tool"]
                         for r in runs
                         if isinstance(r, dict)
-                        and r.get("state") == "ran"
+                        and (r.get("state") == "ran" or r.get("kept_findings"))
                         and "tool" in r
                     )
                 )

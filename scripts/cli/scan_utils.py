@@ -223,8 +223,14 @@ def check_version_drift_before_scan(
 STDERR_TAIL_CHARS = 500
 
 
-def report_tool_failure(result: ToolResult, reason: str) -> None:
+def report_tool_failure(
+    result: ToolResult, reason: str, others_ran: bool = False
+) -> None:
     """State, on a durable stream, that a tool delivered no findings.
+
+    ``others_ran``: another run of the same tool worked (G1's tree beside its
+    git history, osv-scanner's lockfiles run one by one), so its findings are
+    in the scan and this line speaks for this run alone (#1369).
 
     Every scan job's results loop used to set ``statuses[tool] = False`` and
     discard ``result.error_message``. The only remaining trace was a ``x`` in
@@ -259,9 +265,12 @@ def report_tool_failure(result: ToolResult, reason: str) -> None:
         detail = f"{detail}; stderr: {tail}"
 
     logger.error(
-        "%s: %s - it did NOT contribute findings to this scan (%s)",
+        "%s: %s - %s (%s)",
         result.tool,
         reason,
+        "what this run would have found is MISSING from this scan"
+        if others_ran
+        else "it did NOT contribute findings to this scan",
         detail,
     )
 

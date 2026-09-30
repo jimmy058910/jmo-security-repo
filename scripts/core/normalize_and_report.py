@@ -354,6 +354,22 @@ def tool_of_output(path: Path) -> str:
     return path.name.split(".", 1)[0]
 
 
+def count_findings(path: Path) -> int:
+    """How many findings the report reads from one tool output: through the
+    adapter `gather_results` gives it, so the scan phase and the report agree
+    on what a failed row still contributed (#1369). 0 when no adapter reads
+    it or it does not parse; the report phase says why."""
+    adapter_name = get_plugin_loader()._tool_to_adapter_name(tool_of_output(path))
+    plugin_class = get_plugin_registry().get(adapter_name)
+    if plugin_class is None:
+        return 0
+    try:
+        return len(plugin_class().parse(path))
+    except Exception as e:  # Acceptable: as in `_safe_load_plugin`
+        logger.debug("count_findings: %s did not parse: %s", path, e)
+        return 0
+
+
 def _commit_date(finding: dict[str, Any]) -> tuple[datetime, str]:
     """A history record's sort key: its commit's time, then the commit.
 

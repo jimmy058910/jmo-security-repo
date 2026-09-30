@@ -304,6 +304,7 @@ def _failure(
     result: ToolResult,
     out_dir: Path,
     stub: Callable[[str, Path], None],
+    others_ran: bool = False,
 ) -> tuple[Reason, str]:
     """One failed invocation's reason and words, said on a durable stream.
 
@@ -334,7 +335,7 @@ def _failure(
         reason, words = Reason.EXIT_CODE, "it failed"
     else:
         reason, words = Reason.COULD_NOT_RUN, "it failed"
-    report_tool_failure(result, words)
+    report_tool_failure(result, words, others_ran)
     return reason, words
 
 
@@ -403,7 +404,8 @@ def _row_from_results(
                 order.index(r.output_file) if r.output_file in order else len(order)
             )
         )
-        causes = [_failure(tool, r, out_dir, stub) for r in failed]
+        others_ran = len(failed) < len(results)
+        causes = [_failure(tool, r, out_dir, stub, others_ran) for r in failed]
         parts: list[str] = []
         for r, (_reason, words) in zip(failed, causes, strict=True):
             label = labels.get(r.output_file, "") if r.output_file else ""
@@ -460,6 +462,21 @@ def _row_from_results(
         invocations=invocations,
         detail=f"not audited: {', '.join(unread)}" if unread else None,
     )
+
+
+def _kept_findings(results: Iterable[ToolResult]) -> int:
+    """The findings a failed row's runs that worked still wrote, which reach
+    the report (#1369). This scan's runs only: a file an earlier scan left is
+    not a finding of this one."""
+    written = [r.output_file for r in results if r.status == "success"]
+    if not any(written):
+        return 0
+    # Imported here: the report phase's module (compliance mapping, the
+    # reporters) is otherwise not loaded by the scan loop, and only a failed
+    # row with a run that worked needs it.
+    from ...core.normalize_and_report import count_findings
+
+    return sum(count_findings(path) for path in written if path)
 
 
 def _warn_unread(tool: str, unread: Mapping[str, str]) -> None:
@@ -784,6 +801,8 @@ def run_tools(
                 reason=shortfall.reason,
                 detail="; ".join(filter(None, (shortfall.detail, said))),
             )
+        if row.state is State.FAILED:
+            row = replace(row, kept_findings=_kept_findings(by_tool.get(tool, [])))
         rows[tool] = row
 
     rows = {tool: rows[tool] for tool in ordered}

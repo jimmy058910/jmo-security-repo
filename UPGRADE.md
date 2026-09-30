@@ -83,16 +83,17 @@ Bandit remains this repository's own pre-commit hook and lint step; only bandit 
 
 A name that is not in the matrix is a usage error, exit code 2, naming it. That includes the 17 removed tools, whose error says so. In v1.x, `--tools bandit` scanned with nothing and exited 1, and a typo selected nothing without a word.
 
-### Every tool gets a row: `scan-timings.json` v3
+### Every tool gets a row: `scan-timings.json` v4
 
-Each target's `scan-timings.json` is at `schema_version` 3. It has one row for **every requested tool**, including the ones that did not run. Each row is `ran`, `skipped:<reason>` or `failed:<reason>`, so a tool that was not installed, had nothing to read, or read zero files says so. v2 listed only the tools that ran, and those tools' fields changed:
+Each target's `scan-timings.json` is at `schema_version` 4. It has one row for **every requested tool**, including the ones that did not run. Each row is `ran`, `skipped:<reason>` or `failed:<reason>`, so a tool that was not installed, had nothing to read, or read zero files says so. v2 listed only the tools that ran, and those tools' fields changed:
 
-| v2 | v3 |
+| v2 | v4 |
 |----|----|
 | `status`, `timed_out`, `error_message` | `state` (`ran` / `skipped` / `failed`), `reason` (for example `timed out`, `not installed`, `no Dockerfiles`), `detail` |
 | `duration` | `seconds` |
 | `returncode` (`-1` for any failure) | `exit_code` (a failed run's own code, or `null` when there was none) |
 | `output_file` | removed: the output is `<tool>.json` beside the document |
+| (none) | `kept_findings`: on a failed row, what its runs that worked still found ([What a scan records](docs/TOOLS.md#what-a-scan-records)) |
 
 `.scan_metadata.json` loses `stubbed_tools` and gains `tool_runs`, the same rows for every target.
 

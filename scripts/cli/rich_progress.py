@@ -301,7 +301,8 @@ class RichScanProgressTracker:
             self.log(
                 "WARN",
                 f"{target_type}: {target_name} - findings MISSING from "
-                f"{len(failed_tools)} failed tool(s): {', '.join(failed_tools)}",
+                f"{len(failed_tools)} failed tool(s): {', '.join(failed_tools)}"
+                + "".join(f"; {kept}" for kept in summary.kept),
             )
         elif missing_tools:
             self.log(

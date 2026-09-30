@@ -60,6 +60,8 @@ EXPECTED_ROW_KEYS = {
     "attempts",
     "invocations",
     "detail",
+    # Schema 4 (#1369): what a failed row's runs that worked still found.
+    "kept_findings",
 }
 
 
@@ -102,10 +104,11 @@ def test_row_keys_are_pinned(tmp_path: Path) -> None:
 
 def test_schema_version_is_pinned_to_a_literal() -> None:
     """The version is only useful if it moves when the shape does. Version 3
-    (v2.0.0 Phase 3) replaced ToolRunner's result fields with the row."""
-    assert SCAN_TIMINGS_SCHEMA_VERSION == 3
+    (v2.0.0 Phase 3) replaced ToolRunner's result fields with the row; 4 added
+    the row's `kept_findings`."""
+    assert SCAN_TIMINGS_SCHEMA_VERSION == 4
     assert len(EXPECTED_TOP_LEVEL_KEYS) == 8
-    assert len(EXPECTED_ROW_KEYS) == 8
+    assert len(EXPECTED_ROW_KEYS) == 9
 
 
 def test_a_row_round_trips(tmp_path: Path) -> None:
