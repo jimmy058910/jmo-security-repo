@@ -141,7 +141,8 @@ class ToolRun:
     so reached the report: osv-scanner's readable lockfiles beside one it
     could not read, a secret scanner's tree beside its failed git-history run
     (#1369). Such a row contributed findings, so its target is partial rather
-    than empty. Only a failed row carries it.
+    than empty. Only a failed row carries it. It is the adapter's count,
+    before the report de-duplicates, so the report can hold fewer.
     """
 
     tool: str

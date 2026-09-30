@@ -365,9 +365,11 @@ def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
     return TargetSummary(
         outcome=classify_target_outcome(rows),
         failed=sorted(r.tool for r in rows.values() if r.state is State.FAILED),
+        # The adapter's count, before the report de-duplicates: the report can
+        # hold fewer (304 counted, 292 reported on NodeGoat).
         kept=sorted(
-            f"{r.tool} kept {r.kept_findings} finding(s) from what it did read "
-            f"(failed: {r.detail or r.reason})"
+            f"{r.tool} kept {r.kept_findings} finding(s) from its runs that "
+            f"worked, counted before de-duplication (failed: {r.detail or r.reason})"
             for r in rows.values()
             if r.kept_findings
         ),

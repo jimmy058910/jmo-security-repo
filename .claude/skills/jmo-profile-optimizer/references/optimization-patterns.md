@@ -220,11 +220,11 @@ guards it:
 
 | Key | Meaning |
 |---|---|
-| `schema_version` | `3` (`SCAN_TIMINGS_SCHEMA_VERSION`). Refuse a shape you do not recognise rather than misreading it. |
+| `schema_version` | `4` (`SCAN_TIMINGS_SCHEMA_VERSION`). Refuse a shape you do not recognise rather than misreading it. |
 | `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s` / `gitlab`. |
 | `wall_seconds` | Elapsed time of the whole parallel tool batch. |
 | `outcome` / `error` | `completed`, or `failed-before-tools` with a one-line `error` (a failed clone, a missing credential, a tree with no files to scan). A failed target still has a row per tool, each `failed` with that reason, or `skipped` when the tool does not read that kind of target. |
-| `tools[]` | One row per requested tool: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`, `detail`. |
+| `tools[]` | One row per requested tool: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`, `detail`, `kept_findings`. On a `failed` row, `kept_findings` counts what its runs that worked still reported (before de-duplication): a failed row with `kept_findings > 0` contributed findings, so it is not a "no output" case. |
 
 `state` is `ran`, `skipped` or `failed`. `reason` is `null` for `ran` and one of
 a closed set otherwise (`Reason` in `scan_timings.py`):
@@ -280,7 +280,7 @@ def summarize_scan_timings(results_dir: Path) -> dict:
 
     for path in sorted(results_dir.glob("individual-*/*/scan-timings.json")):
         doc = json.loads(path.read_bytes())
-        if doc.get("schema_version") != 3:
+        if doc.get("schema_version") != 4:
             raise ValueError(f"{path}: unrecognised schema_version {doc.get('schema_version')!r}")
         if doc.get("outcome") != "completed":
             failed_targets.append((doc.get("target"), doc.get("error")))

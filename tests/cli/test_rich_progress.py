@@ -551,6 +551,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         assert "contributed NO findings" not in msg
         assert "sub/package-lock.json" in msg, msg
         assert "292 finding(s)" in msg, msg
+        assert "before de-duplication" in msg, msg
 
 
 def _rows(**labels: str):

@@ -93,7 +93,7 @@ Each target's `scan-timings.json` is at `schema_version` 4. It has one row for *
 | `duration` | `seconds` |
 | `returncode` (`-1` for any failure) | `exit_code` (a failed run's own code, or `null` when there was none) |
 | `output_file` | removed: the output is `<tool>.json` beside the document |
-| (none) | `kept_findings`: on a failed row, what its runs that worked still found ([What a scan records](docs/TOOLS.md#what-a-scan-records)) |
+| (none) | `kept_findings`: on a failed row, what its runs that worked still found, counted before de-duplication ([What a scan records](docs/TOOLS.md#what-a-scan-records)) |
 
 `.scan_metadata.json` loses `stubbed_tools` and gains `tool_runs`, the same rows for every target.
 

@@ -843,6 +843,30 @@ def test_a_file_no_adapter_reads_adds_no_findings(tmp_path) -> None:
     assert count_findings(tmp_path / "no-such-tool.json") == 0
 
 
+def test_an_adapter_lookup_that_raises_does_not_end_the_scan(
+    tmp_path, monkeypatch
+) -> None:
+    """Counting runs inside the target's scan. Python 3.12 raises
+    PermissionError from the adapter discovery's `Path.exists()` on an
+    unreadable directory (a UID-mismatched bind mount); the row is still
+    written, counting nothing."""
+    from scripts.core import normalize_and_report
+
+    class Unreadable:
+        def get(self, name):
+            raise PermissionError(13, "Permission denied", "adapters")
+
+    monkeypatch.setattr(normalize_and_report, "get_plugin_registry", Unreadable)
+    _cache(tmp_path, monkeypatch, "npm")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    row = _split(tmp_path / "repo", out, _writing(_sarif(2)))
+
+    assert row.label == "failed:unaccepted exit code"
+    assert row.kept_findings == 0
+
+
 def test_an_earlier_scans_report_is_not_kept(tmp_path, monkeypatch, caplog) -> None:
     """Only this scan's runs that succeeded count. A report on disk from an
     earlier scan is not a finding of this one."""

@@ -226,11 +226,12 @@ STDERR_TAIL_CHARS = 500
 def report_tool_failure(
     result: ToolResult, reason: str, others_ran: bool = False
 ) -> None:
-    """State, on a durable stream, that a tool delivered no findings.
+    """State, on a durable stream, that one run of a tool failed.
 
-    ``others_ran``: another run of the same tool worked (G1's tree beside its
-    git history, osv-scanner's lockfiles run one by one), so its findings are
-    in the scan and this line speaks for this run alone (#1369).
+    The line says the tool contributed no findings, unless ``others_ran``:
+    another run of the same tool worked (G1's tree beside its git history,
+    osv-scanner's lockfiles run one by one), so its findings are in the scan
+    and the line says only that this run's are missing (#1369).
 
     Every scan job's results loop used to set ``statuses[tool] = False`` and
     discard ``result.error_message``. The only remaining trace was a ``x`` in

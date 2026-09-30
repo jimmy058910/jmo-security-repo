@@ -618,6 +618,8 @@ class TestAFailedRowThatKeptFindings:
         assert "MISSING" in line, line
         assert "git: exit 2" in line, "the line does not say what failed: " + line
         assert "3 finding(s)" in line, "the line does not say what was kept: " + line
+        # The adapter's count: the report de-duplicates, so it can hold fewer.
+        assert "before de-duplication" in line, line
         assert "contributed NO findings" not in err
         assert "produced no findings" not in err
 

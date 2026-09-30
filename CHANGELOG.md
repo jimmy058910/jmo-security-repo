@@ -179,7 +179,7 @@ All notable changes to JMo Security will be documented in this file.
   1.1.0-shaped database: 2,492 scans and 215,761 findings in, all 215,761 findings out.
 - **Breaking. Every requested tool gets one row per target.** Each row is `ran`,
   `skipped:<reason>` or `failed:<reason>`, with its seconds, exit code and attempts. The
-  rows are in each target's `scan-timings.json` (schema 3), in `.scan_metadata.json`'s
+  rows are in each target's `scan-timings.json` (schema 4, whose `kept_findings` counts what a failed row's runs that worked still reported), in `.scan_metadata.json`'s
   `tool_runs` (replacing `stubbed_tools`), and in a new history table, `scan_tool_runs`,
   which `jmo history show` prints. A tool used to vanish from every artifact when it had
   nothing to read: on a repository without Dockerfiles or shell scripts, hadolint and
