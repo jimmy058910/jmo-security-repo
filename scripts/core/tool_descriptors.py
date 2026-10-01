@@ -193,9 +193,11 @@ class Reserved(StrEnum):
     )
     # JMo passes it, and the parser refuses it twice or the user's replaces it.
     PASSED = "JMo already passes it, and a second one fails the run or replaces JMo's"
+    # True of every such flag: checkov's --soft-fail and hadolint's --no-fail
+    # exit 0 (measured), so "fails a run that worked" was not.
     EXIT_CODE = (
-        "it sets the tool's exit code, and a code the row does not accept fails "
-        "a run that worked. JMo's own --fail-on (jmo ci, jmo report) sets the "
+        "it changes the exit code JMo reads to tell a run that worked from one "
+        "that did not. JMo's own --fail-on (jmo ci, jmo report) sets the "
         "failure threshold"
     )
     TARGET = "it would point the scan at another target"

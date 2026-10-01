@@ -1173,7 +1173,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - per_tool: per‑tool overrides (`flags`, `timeout`, and tool-specific keys)
   - A flag JMo must control is dropped with a warning that names it and says why. Which flags
     those are is each tool's own (every one is listed in its row's `reserved_flags`, in
-    `scripts/core/tool_descriptors.py`). They come in four kinds, for example:
+    `scripts/core/tool_descriptors.py`). They come in five kinds, for example:
     - Where it writes or in what format: trivy's and hadolint's `-f`, grype's and syft's `-o`
       and `--file`, semgrep's `-o`, `--text` and `--sarif`, nuclei's `-jsonl`, Gitleaks'
       `--report-format`, `--report-path`/`-r` and `--redact`
@@ -1182,11 +1182,13 @@ This reverts to Phase 1 deduplication only (same tool, same location).
       (`verify: true` turns verification on) and `--exclude-paths`, and Gitleaks'
       `--config`/`-c` (a repository's own `.gitleaks.toml` is read instead; see
       [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml))
-    - Its exit code, since a code the tool's row does not accept fails a run that worked:
+    - Its exit code, which JMo reads to tell a run that worked from one that did not:
       grype's `-f`/`--fail-on`, trivy's and Gitleaks' `--exit-code`, TruffleHog's `--fail`,
-      Checkov's `--soft-fail`. JMo's own `--fail-on` (`jmo ci`, `jmo report`) sets the
-      failure threshold
+      Checkov's `--soft-fail` and hadolint's `--no-fail` (both exit 0 whatever they find).
+      JMo's own `--fail-on` (`jmo ci`, `jmo report`) sets the failure threshold
     - Where JMo's own runners scan: yara's and jmo-native's `--target`
+    - A download during the scan, which a scan never makes: OSV-Scanner's
+      `--download-offline-databases` (`jmo tools update` fetches its databases)
   - A flag another tool spells the same way is left alone: semgrep's `-f` is `--config`, and
     shellcheck's `-o` is `--enable`
   - Each is dropped in every spelling the tool's own parser reads: a value attached (`-ftable`),

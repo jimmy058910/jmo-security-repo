@@ -22,6 +22,7 @@ from __future__ import annotations
 import ast
 import importlib
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -32,9 +33,15 @@ from scripts.cli.scan_utils import (
     tool_flags,
     tool_timeout,
 )
-from scripts.core.tool_descriptors import DESCRIPTORS, FlagGrammar, ScanContext
+from scripts.core.tool_descriptors import (
+    DESCRIPTORS,
+    FlagGrammar,
+    Reserved,
+    ScanContext,
+)
 
-SCAN_JOBS = Path(__file__).resolve().parents[2] / "scripts" / "cli" / "scan_jobs"
+ROOT = Path(__file__).resolve().parents[2]
+SCAN_JOBS = ROOT / "scripts" / "cli" / "scan_jobs"
 
 
 class TestReservedFlagsAreRefused:
@@ -607,6 +614,72 @@ class TestEachRefusalSaysWhy:
             assert tool_flags({tool: {"flags": flags.split()}}, tool) == []
         (message,) = [r.getMessage() for r in caplog.records]
         assert why in message, message
+
+    @pytest.mark.parametrize(
+        ("tool", "flag"),
+        [
+            ("checkov", "--soft-fail"),
+            ("hadolint", "--no-fail"),
+            ("semgrep", "--error"),
+            ("grype", "--fail-on"),
+        ],
+    )
+    def test_the_exit_code_reason_is_true_of_every_flag_it_covers(
+        self, caplog, tool, flag
+    ):
+        """It said a code the row does not accept fails a run that worked,
+        which is false for most of them: checkov's `--soft-fail` exits 0 with
+        33 findings and hadolint's `--no-fail` exits 0 (measured). The WARNING
+        is the user's only explanation of why their flag went, so it must be
+        true of each: the flag changes the exit code JMo reads to tell a run
+        that worked from one that did not."""
+        assert DESCRIPTORS[tool].reserved_flags[flag] is Reserved.EXIT_CODE
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_utils"):
+            tool_flags({tool: {"flags": [flag]}}, tool)
+        (message,) = [r.getMessage() for r in caplog.records]
+        assert "exit code JMo reads" in message, message
+        assert "fails a run that worked" not in message, message
+        assert "--fail-on" in message, message
+
+
+class TestTheGuideExplainsEveryKind:
+    """docs/USER_GUIDE.md explains the refusal by kind. It said "four kinds"
+    and named none of osv-scanner's `--download-offline-databases`, so a user
+    whose flag was dropped for downloading found no explanation there."""
+
+    @staticmethod
+    def _section() -> str:
+        guide = (ROOT / "docs" / "USER_GUIDE.md").read_bytes().decode("utf-8")
+        start = guide.index("A flag JMo must control is dropped")
+        return guide[start : guide.index("A flag another tool spells the same way")]
+
+    @staticmethod
+    def _kinds() -> dict[Reserved, set[str]]:
+        kinds: dict[Reserved, set[str]] = {}
+        for d in DESCRIPTORS.values():
+            for flag, why in d.reserved_flags.items():
+                kinds.setdefault(why, set()).add(flag)
+        # TruffleHog's `--no-verification` is a flag JMo passes, with its own
+        # pointer: the guide gives it under that kind.
+        kinds[Reserved.PASSED] |= kinds.pop(Reserved.VERIFY)
+        return kinds
+
+    def test_each_kind_names_one_of_its_flags(self):
+        section = self._section()
+        kinds = self._kinds()
+        assert set(kinds) == set(Reserved) - {Reserved.VERIFY}, kinds
+        unnamed = [
+            why.name
+            for why, flags in kinds.items()
+            if not any(f"`{flag}`" in section for flag in flags)
+        ]
+        assert not unnamed, unnamed
+
+    def test_a_count_of_kinds_is_the_number_there_are(self):
+        stated = re.search(r"come in (\w+) kinds", self._section())
+        assert stated is not None
+        words = {4: "four", 5: "five", 6: "six", 7: "seven"}
+        assert stated.group(1) == words[len(self._kinds())], stated.group(0)
 
 
 class TestTheClusterWalk:
