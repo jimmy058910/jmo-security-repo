@@ -612,6 +612,36 @@ def test_a_named_warning_names_its_own_file(tmp_path, caplog) -> None:
     assert "does not match expected validation schema" in warned[0]
 
 
+def test_a_named_warning_names_its_file_when_the_path_holds_a_space(
+    tmp_path, caplog
+) -> None:
+    """The file pattern stopped at whitespace, so the warning for
+    `my dir/action.yml` went unnamed, and beside a file that did not parse
+    both were said not to parse (1.30.1's own stderr, measured)."""
+    repo, out = _repo_and_out(
+        tmp_path,
+        {
+            ".github/workflows/good.yml": WORKFLOW,
+            ".github/workflows/bad.yml": b"name: [unclosed\n  : :\n",
+            "my dir/action.yml": b"name: x\nfoo: bar\n",
+        },
+    )
+    stderr = (
+        PARSE_WARNING
+        + ACTION_WARNING.replace("sub/action.yml", "my dir/action.yml")
+        + _completed(".github\\workflows\\good.yml")
+    )
+
+    with caplog.at_level(logging.WARNING):
+        _run_with(repo, out, _success(stderr))
+
+    warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    (spaced,) = [m for m in warned if "my dir/action.yml" in m]
+    assert "does not match expected validation schema" in spaced, spaced
+    (bad,) = [m for m in warned if "bad.yml" in m]
+    assert "did not find expected" in bad, bad
+
+
 def test_a_clean_run_says_nothing_about_inputs(tmp_path, caplog) -> None:
     repo, out = _repo_and_out(tmp_path, {".github/workflows/ci.yml": WORKFLOW})
 

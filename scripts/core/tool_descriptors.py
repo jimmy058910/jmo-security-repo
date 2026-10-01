@@ -908,9 +908,10 @@ _ZIZMOR_WARNING = re.compile(
     r"^\s*WARN collect_inputs: [\w:]+: (?P<message>.+?)\s*$", re.MULTILINE
 )
 # A warning that names its file (a YAML file of the wrong kind); one for a file
-# that does not parse does not.
+# that does not parse does not. The path may hold a space (`my dir/action.yml`):
+# it runs to the first `: `, after an optional ` as <kind>`.
 _ZIZMOR_NAMED = re.compile(
-    r"failed to (?:parse|validate) file://(?P<file>\S+?)(?: as \w+)?: (?P<why>.+)"
+    r"failed to (?:parse|validate) file://(?P<file>.+?)(?: as \w+)?: (?P<why>.+)"
 )
 # One line per input it audited, the path as the platform spells it.
 _ZIZMOR_DONE = re.compile(
