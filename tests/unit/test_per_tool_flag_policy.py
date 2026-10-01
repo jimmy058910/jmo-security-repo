@@ -817,6 +817,22 @@ class TestALauncherGetsNoCmdMetacharacter:
         cfg = {"checkov": {"flags": ["-c", "A|B", "CKV_2"]}}
         assert tool_flags(cfg, "checkov", executable=CHECKOV_CMD) == ["CKV_2"]
 
+    @pytest.mark.parametrize(
+        ("flags", "expected"),
+        [
+            (["-ca", "C:/certs/a&b.pem"], []),
+            (["-ca", "%USERPROFILE%/ca.pem", "--compact"], ["--compact"]),
+            (["-qc", "A|B", "--compact"], ["--compact"]),
+        ],
+        ids=["ca-ampersand", "ca-percent", "qc-pipe"],
+    )
+    def test_a_refused_bare_value_takes_its_flag_with_it(self, flags, expected):
+        """A single-dash multi-character option (checkov's `-ca`) is still a
+        flag whose value was refused: leaving it dangling is an argparse
+        error, where dropping both let the tool run without it."""
+        cfg = {"checkov": {"flags": flags}}
+        assert tool_flags(cfg, "checkov", executable=CHECKOV_CMD) == expected
+
     def test_a_single_dash_name_takes_its_value_where_nothing_chains(self):
         """zap's parser reads `-quickurl` as one name, not `-q` with a value:
         the URL after it is its value, and goes with it."""

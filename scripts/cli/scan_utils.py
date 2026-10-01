@@ -422,11 +422,13 @@ def _without_cmd_metacharacters(
     where no quoting survives (see `_CMD_METACHARS`), and a line break ends
     its command line, dropping every argument after it, JMo's own included.
 
-    A bare token is paired with the flag before it, which cannot be told from
+    A bare token is paired with any flag before it, which cannot be told from
     a no-value flag followed by a positional: `["--quiet", "A|B"]` drops both.
     Accepted, since a per_tool entry is flags and their values, and the
-    WARNING names every token it drops. A flag whose value is attached
-    (`-cA|B`, `--x=A|B`) takes no next token: that one is the user's own."""
+    WARNING names every token it drops; a flag left dangling would instead
+    swallow the next argument or fail the parse (checkov's `-ca`). A flag
+    whose value is attached (`-cA|B`, `--x=A|B`) takes no next token: that
+    one is the user's own."""
     descriptor = DESCRIPTORS.get(tool)
     clusters = descriptor is None or descriptor.flag_grammar.clusters
     kept: list[str] = []
@@ -439,7 +441,7 @@ def _without_cmd_metacharacters(
             continue
         dropped = [token]
         if not token.startswith("-"):
-            if kept and _bare_flag(kept[-1], clusters):
+            if kept and kept[-1].startswith("-") and "=" not in kept[-1]:
                 dropped.insert(0, kept.pop())
         elif _bare_flag(token, clusters) and _value_follows(flags, i):
             dropped.append(flags[i + 1])
