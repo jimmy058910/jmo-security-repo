@@ -224,7 +224,7 @@ guards it:
 | `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s` / `gitlab`. |
 | `wall_seconds` | Elapsed time of the whole parallel tool batch. |
 | `outcome` / `error` | `completed`, or `failed-before-tools` with a one-line `error` (a failed clone, a missing credential, a tree with no files to scan). A failed target still has a row per tool, each `failed` with that reason, or `skipped` when the tool does not read that kind of target. |
-| `tools[]` | One row per requested tool: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`, `detail`, `kept_findings`. On a `failed` row, `kept_findings` counts what its runs that worked still reported (before de-duplication): a failed row with `kept_findings > 0` contributed findings, so it is not a "no output" case. |
+| `tools[]` | One row per requested tool: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`, `detail`, `kept_findings`. On a `failed` row, `kept_findings` counts what its runs that worked still reported (before de-duplication): `null` means no run of the row worked, and `0` means a run worked and found nothing (the target is partial, not a "no output" case). |
 
 `state` is `ran`, `skipped` or `failed`. `reason` is `null` for `ran` and one of
 a closed set otherwise (`Reason` in `scan_timings.py`):
