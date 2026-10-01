@@ -255,10 +255,19 @@ def test_it_hands_zizmor_the_repositorys_own_files_relative_to_its_root(
         repo, out, results_tree=(tmp_path / "repo" / "results").resolve()
     )
 
-    fixed, inputs = definition.command[:5], definition.command[5:]
+    fixed, inputs = definition.command[:6], definition.command[6:]
     # At 1.30.1 `--format sarif` exits 0 with findings anyway, so
     # `--no-exit-codes` guards a future release; pinned here so it stays.
-    assert fixed == ["/bin/zizmor", "--format", "sarif", "--offline", "--no-exit-codes"]
+    # `--color=never`: under `CI=true` zizmor colours its log, and the warnings
+    # JMo reads from it then match nothing.
+    assert fixed == [
+        "/bin/zizmor",
+        "--format",
+        "sarif",
+        "--offline",
+        "--color=never",
+        "--no-exit-codes",
+    ]
     assert sorted(inputs) == sorted(rel for rel, kept in PLANTED.items() if kept)
     # Repository-relative and `/`-separated: the URIs zizmor writes are these
     # strings, and an absolute one puts the checkout's location in every id.
@@ -306,9 +315,9 @@ def test_a_link_out_of_the_repository_is_handed_over_by_its_own_path(
 
     _, (definition,) = _recorded(repo, out)
 
-    assert definition.command[5:] == [".github/workflows/ci.yml"]
+    assert definition.command[6:] == [".github/workflows/ci.yml"]
     assert definition.cwd == repo.resolve()
-    assert (definition.cwd / definition.command[5]).is_file()
+    assert (definition.cwd / definition.command[6]).is_file()
 
 
 def test_the_results_directory_is_not_read_even_when_it_is_all_there_is(
@@ -700,13 +709,15 @@ def test_a_config_is_not_announced_for_a_scan_that_skips(tmp_path, caplog) -> No
 
 
 @pytest.mark.requires_tools
-def test_real_zizmor_edges_through_the_scan_loop(tmp_path, caplog) -> None:
+def test_real_zizmor_edges_through_the_scan_loop(tmp_path, caplog, monkeypatch) -> None:
     """Against the binary, through the scan loop: the two edges measured on
-    1.30.1 (#1362), and the config announcement (#1363)."""
+    1.30.1 (#1362), and the config announcement (#1363). Run as CI runs it:
+    `CI=true` makes zizmor colour its log, which JMo parses."""
     from scripts.core.tool_runner import ToolRunner
 
     if shutil.which("zizmor") is None:
         pytest.skip("zizmor is not on PATH")
+    monkeypatch.setenv("CI", "true")
 
     def scan(files: dict[str, bytes], name: str):
         repo = tmp_path / name

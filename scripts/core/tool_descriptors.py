@@ -957,6 +957,9 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
                 # --offline, not --no-online-audits: zizmor reads GH_TOKEN,
                 # and a scan makes no network call.
                 "--offline",
+                # zizmor colours its log under CI (`CI=true`), and JMo parses
+                # that log.
+                "--color=never",
                 "--no-exit-codes",
                 *ctx.flags,
                 *inputs,
@@ -1450,12 +1453,13 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_style=ExclusionStyle.WALK,
             flag_grammar=FlagGrammar.CLAP,
             # clap refuses a flag given twice, and JMo passes `--format`,
-            # `--offline` (its `-o`) and `--no-exit-codes`: any of them again
-            # is rc 2, "cannot be used multiple times" (measured, 1.30.1).
+            # `--offline` (its `-o`), `--color` and `--no-exit-codes`: any of
+            # them again is rc 2, "cannot be used multiple times" (measured,
+            # 1.30.1; `--color` is the same clap rule).
             # `--strict-collection` fails the run on an input it cannot read.
             reserved_flags=_reserve(
                 OUTPUT=("--format",),
-                PASSED=("-o", "--offline", "--no-exit-codes"),
+                PASSED=("-o", "--offline", "--color", "--no-exit-codes"),
                 EXIT_CODE=("--strict-collection",),
             ),
             short_switches=frozenset({"-h", "-o", "-p", "-q", "-v", "-V"}),
