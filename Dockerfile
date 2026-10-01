@@ -5,7 +5,7 @@
 #
 # Stage 1: Builder - Download and extract tools
 #
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:26.04 AS builder
 
 ARG TARGETARCH
 
@@ -140,7 +140,7 @@ RUN OSV_SCANNER_VERSION="2.6.0" && \
 #
 # Stage 2: Runtime - Complete runtime environment with ALL tools
 #
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu:26.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite"
 LABEL org.opencontainers.image.description="Terminal-first security audit toolkit: every TOOL_MATRIX scanner plus the OPA policy engine"
