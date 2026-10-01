@@ -43,9 +43,9 @@ def found_image_id(reference: str) -> str:
     Typed, because the session keys a target by its id alone: a project
     `acme/api` whose Dockerfile says `FROM acme/api` gave the image the
     project's id, one record for two targets, and a resumed scan reported
-    the repository's rows as the image's. No other id contains `: `: an
-    image reference and a GitLab path hold no space, and a repository's
-    folder name holds no colon.
+    the repository's rows as the image's. An image reference and a GitLab
+    path hold no space, so neither starts `image: `. A repository's id is its
+    folder name, which on POSIX could; no real checkout is named so.
     """
     return f"image: {reference}"
 
