@@ -794,6 +794,35 @@ class TestALauncherGetsNoCmdMetacharacter:
         cfg = {"checkov": {"flags": [value, "--quiet"]}}
         assert tool_flags(cfg, "checkov", executable=CHECKOV_CMD) == ["--quiet"]
 
+    @pytest.mark.parametrize("brk", ["\n", "\r\n", "\r"], ids=["lf", "crlf", "cr"])
+    def test_a_line_break_is_refused_on_one_line(self, caplog, brk):
+        """cmd.exe ends the command line at a line break: every argument
+        after it is dropped, JMo's own included (measured with a stand-in
+        launcher). The WARNING stays one line."""
+        cfg = {"checkov": {"flags": ["--skip-check", f"A{brk}B", "--quiet"]}}
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_utils"):
+            kept = tool_flags(cfg, "checkov", executable=CHECKOV_CMD)
+
+        assert kept == ["--quiet"]
+        (message,) = [r.getMessage() for r in caplog.records]
+        assert "\n" not in message and "\r" not in message, message
+        assert "--skip-check A" in message, message
+
+    def test_an_attached_value_takes_no_next_token(self):
+        """`-cA|B` carries its value, so the bare token after it is the
+        user's own next argument, kept. It was dropped with it."""
+        cfg = {"checkov": {"flags": ["-cA|B", "CKV_2"]}}
+        assert tool_flags(cfg, "checkov", executable=CHECKOV_CMD) == ["CKV_2"]
+        # The control: a flag alone still takes its value with it.
+        cfg = {"checkov": {"flags": ["-c", "A|B", "CKV_2"]}}
+        assert tool_flags(cfg, "checkov", executable=CHECKOV_CMD) == ["CKV_2"]
+
+    def test_a_single_dash_name_takes_its_value_where_nothing_chains(self):
+        """zap's parser reads `-quickurl` as one name, not `-q` with a value:
+        the URL after it is its value, and goes with it."""
+        cfg = {"zap": {"flags": ["-quickurl", "http://127.0.0.1/?a=1&b=2", "-silent"]}}
+        assert tool_flags(cfg, "zap", executable="C:/zap/zap.bat") == ["-silent"]
+
     @pytest.mark.parametrize("launcher", ["zap.bat", "CHECKOV.CMD"])
     def test_a_bat_or_an_upper_case_suffix_is_a_launcher_too(self, launcher):
         cfg = {"checkov": {"flags": ["--skip-check", "A|B"]}}

@@ -362,6 +362,12 @@ def tool_flags(
     bare word as a scan target -- strictly worse than the collision being
     fixed. A value inside the token (`--format=json`, `-ftable`) leaves the
     next token alone. Each drop is logged at WARNING, by name.
+
+    Each token is read on its own, not as the value of the flag before it:
+    trivy's parser reads `--severity -f` as a severity of `-f`, while this
+    drops `-f` and leaves `--severity` to take JMo's next argument as its
+    value. Accepted: a value spelled like a reserved flag is rare, and that
+    run then fails loudly rather than reporting nothing.
     """
     tool_cfg = per_tool_config.get(tool, {})
     if not isinstance(tool_cfg, dict):
@@ -410,43 +416,56 @@ def _value_follows(flags: list[str], i: int) -> bool:
 def _without_cmd_metacharacters(
     flags: list[str], where: str, tool: str, launcher: str
 ) -> list[str]:
-    """`flags` minus any holding one of `_CMD_METACHARS`, each with its flag
-    or value: `--skip-check` without its `A|B` would read the next token as
-    its value. The launcher's argv is re-parsed by cmd.exe, where no quoting
-    survives (see `_CMD_METACHARS`).
+    """`flags` minus any holding one of `_CMD_METACHARS` or a line break,
+    each with its flag or value: `--skip-check` without its `A|B` would read
+    the next token as its value. The launcher's argv is re-parsed by cmd.exe,
+    where no quoting survives (see `_CMD_METACHARS`), and a line break ends
+    its command line, dropping every argument after it, JMo's own included.
 
     A bare token is paired with the flag before it, which cannot be told from
     a no-value flag followed by a positional: `["--quiet", "A|B"]` drops both.
     Accepted, since a per_tool entry is flags and their values, and the
-    WARNING names every token it drops."""
+    WARNING names every token it drops. A flag whose value is attached
+    (`-cA|B`, `--x=A|B`) takes no next token: that one is the user's own."""
+    descriptor = DESCRIPTORS.get(tool)
+    clusters = descriptor is None or descriptor.flag_grammar.clusters
     kept: list[str] = []
     i = 0
     while i < len(flags):
         token = flags[i]
-        if not _CMD_METACHARS.intersection(token):
+        if not _CMD_REFUSED.intersection(token):
             kept.append(token)
             i += 1
             continue
         dropped = [token]
         if not token.startswith("-"):
-            if kept and kept[-1].startswith("-") and "=" not in kept[-1]:
+            if kept and _bare_flag(kept[-1], clusters):
                 dropped.insert(0, kept.pop())
-        elif "=" not in token and _value_follows(flags, i):
+        elif _bare_flag(token, clusters) and _value_follows(flags, i):
             dropped.append(flags[i + 1])
             i += 1
         i += 1
         logging.getLogger(__name__).warning(
             "Ignoring `%s` in %s: %s runs through %s, and cmd.exe re-reads any "
-            "of %s in its arguments, where no quoting survives. Give a list "
-            "comma-separated where the tool takes one (checkov: "
-            "`--skip-check A,B`)",
-            " ".join(dropped),
+            "of %s in its arguments, where no quoting survives, and ends its "
+            "command line at a line break. Give a list comma-separated where "
+            "the tool takes one (checkov: `--skip-check A,B`)",
+            " ".join(dropped).replace("\r", "\\r").replace("\n", "\\n"),
             where,
             tool,
             launcher,
             " ".join(sorted(_CMD_METACHARS)),
         )
     return kept
+
+
+def _bare_flag(token: str, clusters: bool) -> bool:
+    """A flag token carrying no value: `--name`; a single-dash name where the
+    parser does not chain short flags (zap's `-quickurl`); and where it does,
+    one short flag alone (`-c`), since `-cA|B` carries its value."""
+    if not token.startswith("-") or "=" in token:
+        return False
+    return token.startswith("--") or not clusters or len(token) == 2
 
 
 #: Paths TruffleHog must not walk in filesystem mode, as newline-separated Go
@@ -509,6 +528,9 @@ def segment_regex(name: str) -> str:
 #: character too (harmlessly broad) and never reaches cmd.exe as itself. A
 #: user's flag holding one cannot be rendered away, so `tool_flags` refuses it.
 _CMD_METACHARS = frozenset("&|^<>%")
+#: What `tool_flags` refuses on a launcher: those, and a line break, at which
+#: cmd.exe ends the command line and drops every argument after it (measured).
+_CMD_REFUSED = _CMD_METACHARS | frozenset("\r\n")
 
 
 def checkov_skip_path_pattern(name: str) -> str:

@@ -1195,7 +1195,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
     after other short flags (`-qftable` is trivy's `-q -f table`), one dash or two for nuclei and
     OSV-Scanner (`-format table`), and an abbreviation for Checkov and ShellCheck (`--outp`)
   - On Windows, Checkov and ZAP run through a `.cmd`/`.bat` launcher, whose arguments cmd.exe
-    reads again: a flag holding any of `& | ^ < > %` is dropped with a warning. Give a list
+    reads again: a flag holding any of `& | ^ < > %`, or a line break, is dropped with a warning. Give a list
     comma-separated instead (`--skip-check CKV_AWS_1,CKV_AWS_2`); see
     [Known limitations](KNOWN_LIMITATIONS.md#on-windows-a-checkov-or-zap-flag-cannot-hold-cmdexes-metacharacters)
   - TruffleHog and Gitleaks run twice on a repository with history. `flags` reach the

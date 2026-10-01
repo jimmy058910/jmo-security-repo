@@ -323,7 +323,8 @@ All notable changes to JMo Security will be documented in this file.
   a parser that refuses a repeat (zizmor's `--offline` and `-o`, TruffleHog's
   `--no-verification` and `--exclude-paths`); or an exit-code flag (grype's `-f high`: use
   JMo's own `--fail-on`). On Windows a flag holding a cmd.exe metacharacter (`& | ^ < > %`)
-  bound for a `.cmd` or `.bat` launcher is dropped too (Checkov: write `A,B`, not `A|B`).
+  or a line break, bound for a `.cmd` or `.bat` launcher, is dropped too (Checkov: write
+  `A,B`, not `A|B`).
   shellcheck's `-o` (`--enable`), which the old list refused wrongly, is now allowed.
   What a user loses: a tool's own exit gating, and their own TruffleHog exclusions, since JMo
   passes `--exclude-paths` itself and TruffleHog failed every run that repeated it (#1335).
