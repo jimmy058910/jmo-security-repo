@@ -327,10 +327,14 @@ All notable changes to JMo Security will be documented in this file.
   shellcheck's `-o` (`--enable`), which the old list refused wrongly, is now allowed.
   What a user loses: a tool's own exit gating, and their own TruffleHog exclusions, since JMo
   passes `--exclude-paths` itself and TruffleHog failed every run that repeated it (#1335).
-- **hadolint no longer lints a documentation file named `Dockerfile.<doc extension>`.**
-  `Dockerfile.md`, `.txt`, `.rst`, `.adoc` and `.html` are prose, and hadolint reported a
-  false DL1000 on them. hadolint and GitLab image discovery now share one definition of a
-  Dockerfile, which also ignores case, so `dockerfile.py` is not one (#1311).
+- **hadolint no longer lints a file named `Dockerfile.<suffix>` that is not a Dockerfile.**
+  A document (`Dockerfile.md`, `.txt`, `.rst`, `.adoc`, `.html`), Docker's own
+  `Dockerfile.dockerignore`, a template that renders one (`.j2`, `.jinja`, `.jinja2`,
+  `.tmpl`, `.tpl`, `.template`, `.in`) and code (`.py`) each got a false DL1000 at error
+  level. They are left out without a warning; the warning is kept for a Dockerfile spelled
+  with another case, which Windows' file search finds and hadolint does not read. hadolint
+  and GitLab image discovery now share one definition of a Dockerfile, which reads names
+  case-sensitively, even on Windows, so `dockerfile.py` is not one (#1311).
 
 ### Fixed
 
@@ -507,15 +511,22 @@ All notable changes to JMo Security will be documented in this file.
   delegates to `common_finding.fingerprint` instead of carrying a copy that rendered a
   missing line and a padded message differently. **Behaviour change:** ids for those three
   tools' findings with no line number or a padded message differ from v1.1.1 (#1010).
-- **GitLab targets scan the container images their repository names.** Each image a
-  Dockerfile (`FROM`), docker-compose file or Kubernetes manifest names is pulled and
-  scanned as an image target of its own, exactly as `--image` would scan it, into
-  `individual-images/<group>_<repo>__<image>/`; until now none was scanned. One target per
-  reference per scan: a reference another target already covers (an `--image`, or an image
-  a second project names) is logged at INFO naming the target that scans it. Build
-  arguments (`FROM $BASE`), build stages and `scratch` are skipped. A reference the
-  validator refuses, or that cannot be pulled (a private registry, an unknown tag), is a
-  `failed` image row, so the scan exits 1, as `--image` does (#1311).
+- **GitLab targets scan the container images their repository names.** When a requested
+  tool reads an image (Trivy, Syft), each image the clone names is pulled and scanned as an
+  image target of its own, exactly as `--image` would scan it, into
+  `individual-images/<group>_<repo>__<image>/`; until now none was scanned. With no such
+  tool, no image target is created and one INFO line says how many were found. The images
+  are read from each Dockerfile's `FROM` instructions (continuations joined, heredoc bodies
+  skipped, as Docker reads them), the `image:` of each `docker-compose*.yml` service that has
+  no `build:`, and the `spec.containers` of each Pod in a `*.k8s.yaml` or `*.k8s.yml` file;
+  nothing else (not `compose.yaml`, `initContainers` or a Deployment's template). One target
+  per reference per scan: a reference another target already covers (an `--image`, or an
+  image a second project names) is logged at INFO naming the target that scans it. Build
+  arguments (`FROM $BASE`), build stages and `scratch` are skipped, and a value that is not
+  an image reference (`FROM {{ base }}`) is named, file and line, in a WARNING and skipped.
+  An image reference JMo does not hand a scanner (a registry with a port), or one that
+  cannot be pulled (a private registry, an unknown tag), is a `failed` image row, so the
+  scan exits 1, as `--image` does (#1311).
 - **A GitLab project named `results` is no longer scanned together with its own output.**
   The clone's scan results went to a folder inside the clone when the project shared that
   name; they now go straight to the target's folder in the results directory (#1364).

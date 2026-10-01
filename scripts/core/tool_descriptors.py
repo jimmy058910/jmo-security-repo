@@ -1048,20 +1048,31 @@ def _osv_reads(name: str) -> bool:
 # GitLab target names both read (#1311): the patterns find the candidates,
 # `is_dockerfile` decides.
 DOCKERFILE_PATTERNS = ("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile")
-_DOCUMENT_SUFFIXES = frozenset({"md", "txt", "rst", "adoc", "html"})
+# `Dockerfile.<suffix>` names that are not a Dockerfile: a document about one,
+# Docker's own ignore file for one, a template that renders one, and code.
+_NOT_DOCKERFILE_SUFFIXES = frozenset(
+    {
+        *("md", "txt", "rst", "adoc", "html"),
+        "dockerignore",
+        *("j2", "jinja", "jinja2", "tmpl", "tpl", "template", "in"),
+        "py",
+    }
+)
 
 
 def is_dockerfile(name: str) -> bool:
     """`Dockerfile`, `Dockerfile.<variant>` or `<variant>.Dockerfile`, case
     included: the walk's glob ignores case on Windows, where it matched a
-    `dockerfile.py`. A document about one (`Dockerfile.md`) is not one:
-    hadolint linted its prose as a Dockerfile, and discovery read a `From the
-    root...` line as an image to pull (measured)."""
+    `dockerfile.py`. A `Dockerfile.<suffix>` that is not one is refused:
+    hadolint linted a document's prose as a Dockerfile (`Dockerfile.md`) and
+    reported a DL1000 at error level on `Dockerfile.dockerignore` and a
+    `Dockerfile.j2` template, and discovery read `From the root...` and
+    `FROM {{ base }}` as images to pull (measured)."""
     if name == "Dockerfile" or name.endswith(".Dockerfile"):
         return True
     if not name.startswith("Dockerfile."):
         return False
-    return name.rsplit(".", 1)[1].lower() not in _DOCUMENT_SUFFIXES
+    return name.rsplit(".", 1)[1].lower() not in _NOT_DOCKERFILE_SUFFIXES
 
 
 def _osv_databases(ctx: ScanContext) -> Shortfall | None:

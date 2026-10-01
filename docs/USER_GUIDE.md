@@ -800,7 +800,7 @@ The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 - **GitLab Repos** now run full repository scanner instead of TruffleHog-only
 - **Web URLs** now include Nuclei (API security scanner) in addition to ZAP
-- GitLab repos also scan each container image their Dockerfiles, docker-compose files and K8s manifests name, as an image target of its own (results in `individual-images/<group>_<repo>__<image>/`). The image is pulled from its registry mid-scan, so one the scanner cannot pull is a failed image target, as it would be with `--image`
+- GitLab repos also scan each container image they name, as an image target of its own (results in `individual-images/<group>_<repo>__<image>/`), when a requested tool reads an image (Trivy, Syft); otherwise one INFO line says how many were found. The images are read from each Dockerfile's `FROM` instructions, the `image:` of each `docker-compose*.yml` service that has no `build:`, and the `spec.containers` of each Pod in a `*.k8s.yaml` or `*.k8s.yml` file, and nowhere else (not `compose.yaml`, `initContainers` or a Deployment's template). A value that is not an image reference (`FROM {{ base }}`) is named in a WARNING and skipped. The image is pulled from its registry mid-scan, so one the scanner cannot pull is a failed image target, as it would be with `--image`
 - Tool selection is automatic based on target type. Use `--tools` to override defaults.
 
 ### Troubleshooting Multi-Target Scans
@@ -2688,7 +2688,7 @@ Permission denied on scripts
 
 Hadolint shows no results
 
-- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile`, `Dockerfile.*` or `*.Dockerfile`, at any depth, spelled with that case; a document such as `Dockerfile.md` is not one); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
+- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile`, `Dockerfile.*` or `*.Dockerfile`, at any depth, spelled with that case; a document such as `Dockerfile.md`, a template such as `Dockerfile.j2` and `Dockerfile.dockerignore` are not one); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
 
 TruffleHog output looks empty
 

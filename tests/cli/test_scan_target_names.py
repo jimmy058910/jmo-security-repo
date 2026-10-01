@@ -956,6 +956,178 @@ class TestAGitLabTargetScansTheImagesItNames:
         assert len(_not_again(caplog)) == 1
 
 
+def _images(results: Path) -> list[str]:
+    """The image targets a scan recorded."""
+    return sorted(
+        {
+            target
+            for target_type, target, _tool in _tool_runs(results)
+            if target_type == "image"
+        }
+    )
+
+
+class TestOnlyAnImageReferenceBecomesAnImageTarget:
+    """Discovery matched `FROM` against every physical line of every
+    `Dockerfile.<x>`, so a line naming no image became an image target, which
+    failed and made a clean GitLab scan exit 1 (measured through
+    `jmo scan --gitlab-repo`, the clone faked): `FROM \\` continued on the
+    next line gave the image `\\`, a Jinja template gave `{{`, Python in a
+    heredoc gave `flask`, and a compose service that builds its own image
+    pulled that tag from a registry. trivy reads an image, so each scan here
+    would create an image target for anything discovery returned."""
+
+    @pytest.mark.parametrize(
+        ("files", "images"),
+        [
+            pytest.param(
+                {"Dockerfile": b"FROM \\\n    alpine:3.19\nRUN echo hi\n"},
+                ["alpine:3.19"],
+                id="continued-from",
+            ),
+            pytest.param(
+                {
+                    "Dockerfile": b'FROM alpine:3.19\nRUN python -c "\\\nfrom os import path"\n'
+                },
+                ["alpine:3.19"],
+                id="continued-run",
+            ),
+            pytest.param(
+                {
+                    "Dockerfile": b"FROM python:3.12\nCOPY <<EOF /app/main.py\n"
+                    b"from flask import Flask\nEOF\n"
+                },
+                ["python:3.12"],
+                id="heredoc",
+            ),
+            pytest.param(
+                {"Dockerfile.j2": b"FROM {{ base_image }}\nRUN echo hi\n"},
+                [],
+                id="template",
+            ),
+            pytest.param(
+                {
+                    "Dockerfile": b"FROM scratch\n",
+                    "docker-compose.yml": b"services:\n  web:\n    build: .\n"
+                    b"    image: example-local/app:dev\n",
+                },
+                [],
+                id="compose-build",
+            ),
+            pytest.param(
+                {"Dockerfile": b"\xef\xbb\xbfFROM alpine:3.19\n"},
+                ["alpine:3.19"],
+                id="byte-order-mark",
+            ),
+        ],
+    )
+    def test_the_scan_exits_zero_with_the_images_the_repository_names(
+        self, env, monkeypatch, files, images
+    ):
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            _clone_holding(files),
+        )
+
+        assert env.run(*GITLAB, "--tools", "trivy") == 0
+
+        assert _images(env.results) == images
+        assert reconcile(env.results).ok
+
+    def test_a_value_that_is_no_image_reference_is_named_and_not_a_target(
+        self, env, monkeypatch, caplog
+    ):
+        """A token Docker could not pull either: the WARNING says where it is,
+        and the scan exits 0, since no target was asked for or created."""
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            _clone_holding(
+                {
+                    "Dockerfile": b"ARG SUITE\nFROM debian:%%SUITE%%\n",
+                    "docker-compose.yml": b'services:\n  web:\n    image: "{{ .Values.image }}"\n',
+                }
+            ),
+        )
+
+        with caplog.at_level(logging.WARNING, logger=GITLAB_LOGGER):
+            assert env.run(*GITLAB, "--tools", "trivy") == 0
+
+        assert _images(env.results) == []
+        said = {
+            r.getMessage()
+            for r in caplog.records
+            if r.name == GITLAB_LOGGER and r.levelno == logging.WARNING
+        }
+        assert said == {
+            "group/app: Dockerfile:2 names 'debian:%%SUITE%%', which is not an "
+            "image reference: not scanned",
+            "group/app: docker-compose.yml:3 names '{{ .Values.image }}', which "
+            "is not an image reference: not scanned",
+        }
+
+    def test_a_reference_the_validator_refuses_is_a_failed_target_and_no_error(
+        self, env, monkeypatch, caplog
+    ):
+        """A registry with a port is an image reference, which JMo does not
+        pass to a scanner: a failed image row, as before, and only the job's
+        WARNING says so. The validator's own ERROR beside it read as a
+        failure of something else."""
+        refused = "registry.corp:5000/team/app:1"
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            _clone_holding({"Dockerfile": f"FROM {refused}\n".encode()}),
+        )
+
+        with caplog.at_level(logging.INFO):
+            assert env.run(*GITLAB, "--tools", "trivy") == 1
+
+        assert _images(env.results) == [refused]
+        assert not [
+            r.getMessage()
+            for r in caplog.records
+            if r.levelno >= logging.ERROR and refused in r.getMessage()
+        ]
+
+
+class TestImagesAreFoundOnlyForAToolThatReadsOne:
+    """A GitLab scan whose tools read no image (hadolint, or the secret
+    scanners) still created an image target for each reference: every row
+    `skipped:not for this target type`, so the target counted as having
+    produced nothing and the scan exited 1 (measured: `--tools hadolint` on
+    `FROM alpine:3.19`). The same command exited 0 before images were
+    scanned. No image target is created, and one line says how many were
+    found."""
+
+    @pytest.mark.parametrize("tools", ["hadolint", "trufflehog,gitleaks"])
+    def test_the_scan_exits_zero_with_the_repository_alone(
+        self, env, monkeypatch, caplog, tools
+    ):
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            _clone_holding(
+                {
+                    "Dockerfile": b"FROM alpine:3.19\n",
+                    "web.Dockerfile": b"FROM nginx:1.27\n",
+                }
+            ),
+        )
+
+        with caplog.at_level(logging.INFO, logger=GITLAB_LOGGER):
+            assert env.run(*GITLAB, "--tools", tools) == 0
+
+        assert _timings(env.results) == {
+            "individual-gitlab/group_app": ("gitlab", "group/app")
+        }
+        assert _images(env.results) == []
+        said = [
+            r.getMessage()
+            for r in caplog.records
+            if r.name == GITLAB_LOGGER and "image" in r.getMessage()
+        ]
+        assert len(said) == 1, said
+        assert "group/app" in said[0] and "2 image" in said[0], said
+
+
 def _gitlab_target(full_path: str) -> dict[str, str]:
     """What `_discover_gitlab_repos` builds for `--gitlab-repo`."""
     group, _, repo = full_path.partition("/")

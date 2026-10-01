@@ -449,10 +449,43 @@ def test_only_the_exact_spelling_is_a_name_it_reads(refused, read) -> None:
     assert reads(read) is True
 
 
-def test_the_walk_leaves_out_what_the_name_test_refuses(tmp_path, caplog) -> None:
-    """`collect_files` with a name test, on a pattern that matches both files on
-    every platform: the one refused is left out and named."""
-    for name in ("requirements.txt", "Requirements.txt.txt"):
+def test_the_walk_names_a_file_its_patterns_found_only_by_ignoring_case(
+    tmp_path, caplog
+) -> None:
+    """Windows' glob ignores case, so `**/requirements*.txt` found
+    `Requirements.txt`, which osv-scanner rejects: it is left out and named.
+    A case-blind glob stands in for Windows', so every platform runs this."""
+
+    class CaseBlind(type(tmp_path)):
+        def glob(self, pattern, **kwargs):
+            return super().glob(pattern, case_sensitive=False)
+
+    for rel in ("a/requirements.txt", "b/Requirements.txt"):
+        (tmp_path / rel).parent.mkdir()
+        (tmp_path / rel).write_bytes(b"x==1\n")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+        found = tool_loop.collect_files(
+            CaseBlind(tmp_path),
+            ("**/requirements*.txt",),
+            "osv-scanner",
+            accepts_name=DESCRIPTORS["osv-scanner"].accepts_name,
+        )
+
+    assert [Path(f).relative_to(tmp_path).as_posix() for f in found] == [
+        "a/requirements.txt"
+    ]
+    assert "b/Requirements.txt" in caplog.text
+    assert "NOT scanned" in caplog.text
+
+
+def test_the_walk_leaves_out_what_the_name_test_refuses_as_spelled(
+    tmp_path, caplog
+) -> None:
+    """A file the patterns match exactly as spelled, which the name test
+    refuses, is one the tool does not read by design: left out, without the
+    WARNING, which says a name was spelled with another case."""
+    for name in ("requirements.txt", "notes.txt"):
         (tmp_path / name).write_bytes(b"x==1\n")
 
     with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
@@ -464,8 +497,7 @@ def test_the_walk_leaves_out_what_the_name_test_refuses(tmp_path, caplog) -> Non
         )
 
     assert [Path(f).name for f in found] == ["requirements.txt"]
-    assert "Requirements.txt.txt" in caplog.text
-    assert "NOT scanned" in caplog.text
+    assert "NOT scanned" not in caplog.text
 
 
 @pytest.mark.parametrize(

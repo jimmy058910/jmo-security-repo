@@ -1295,15 +1295,84 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         assert len(said) == 2, [r.getMessage() for r in caplog.records]
         assert "$BASE" in said[0] or "$BASE" in said[1], said
 
-    def test_a_value_that_is_not_an_image_reference_is_named_for_the_job_to_refuse(
-        self, tmp_path
+    def test_a_value_that_is_not_an_image_reference_is_named_and_dropped(
+        self, tmp_path, caplog
     ):
-        """Discovery reports what the repository names. The job refuses what
-        is not an image reference (it never reaches a tool) and records it as
-        a failed image target, so it is never silently dropped."""
+        """It never reaches a tool's command line (`--file=` is a syft flag),
+        and it is not silently dropped: a WARNING names the file and line. As
+        an image target it failed and made a clean scan exit 1."""
         compose = "services:\n  web:\n    image: --file=/tmp/owned.json\n"
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"docker-compose.yml": compose})
+
+        assert images == set()
+        assert caplog.messages == [
+            "docker-compose.yml:3 names '--file=/tmp/owned.json', which is not "
+            "an image reference: not scanned"
+        ]
+
+    def test_a_registry_with_a_port_is_an_image_reference(self, tmp_path):
+        """Docker pulls it, so discovery keeps it; the job decides whether
+        JMo passes it to a scanner."""
+        images = self._discover(
+            tmp_path, {"Dockerfile": "FROM registry.corp:5000/team/app:1\n"}
+        )
+        assert images == {"registry.corp:5000/team/app:1"}
+
+    @pytest.mark.parametrize(
+        ("dockerfile", "images"),
+        [
+            pytest.param(
+                "# escape=`\nFROM `\n    alpine:3.19\nCOPY C:\\app\\ C:\\dest\\\n",
+                {"alpine:3.19"},
+                id="escape-directive",
+            ),
+            pytest.param(
+                "FROM alpine:3.19 \\\n  # a comment inside\n\n  AS base\nFROM base\n",
+                set(),
+                id="comment-and-blank-inside-a-continuation",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nRUN <<-EOT bash\n\tfrom x import y\n\tEOT\n"
+                "FROM nginx:1.27\n",
+                {"alpine:3.19", "nginx:1.27"},
+                id="tab-stripped-heredoc",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nCOPY <<'A' <<\"B\" /dest/\nfrom a import b\nA\n"
+                "from c import d\nB\nFROM nginx:1.27\n",
+                {"alpine:3.19", "nginx:1.27"},
+                id="two-quoted-heredocs",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nRUN cat <<<from\nFROM nginx:1.27\n",
+                {"alpine:3.19", "nginx:1.27"},
+                id="here-string-is-no-heredoc",
+            ),
+            pytest.param(
+                "# syntax=docker/dockerfile:1\nfrom alpine:3.19 as build\n"
+                "FROM python:3.12\n",
+                {"python:3.12"},
+                id="syntax-directive-and-lower-case",
+            ),
+        ],
+    )
+    def test_instructions_are_read_as_docker_reads_them(
+        self, tmp_path, dockerfile, images
+    ):
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == images
+
+    def test_a_compose_service_that_builds_its_image_names_none_to_pull(self, tmp_path):
+        """With `build:`, `image:` is the tag compose gives its own build."""
+        compose = (
+            "services:\n"
+            "  web:\n    build: .\n    image: example-local/web:dev\n"
+            "  db:\n    image: postgres:16\n"
+        )
         images = self._discover(tmp_path, {"docker-compose.yml": compose})
-        assert images == {"--file=/tmp/owned.json"}
+        assert images == {"postgres:16"}
 
     def test_only_a_dockerfile_is_read_for_its_from_lines(self, tmp_path):
         """One definition of a Dockerfile, hadolint's row's: Docker's names,

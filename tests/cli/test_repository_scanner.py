@@ -1030,6 +1030,18 @@ class TestADockerfileIsOneThing:
             ("Dockerfile.adoc", False),
             ("Dockerfile.html", False),
             ("Dockerfile.MD", False),
+            # Docker's own ignore file for that Dockerfile, a template that
+            # renders one (`FROM {{ base }}`), and code: hadolint reported a
+            # DL1000 at error level on each (measured).
+            ("Dockerfile.dockerignore", False),
+            ("Dockerfile.j2", False),
+            ("Dockerfile.jinja", False),
+            ("Dockerfile.jinja2", False),
+            ("Dockerfile.tmpl", False),
+            ("Dockerfile.tpl", False),
+            ("Dockerfile.template", False),
+            ("Dockerfile.in", False),
+            ("Dockerfile.py", False),
             ("dockerfile", False),
             ("dockerfile_utils.py", False),
             ("Dockerfiles", False),
@@ -1066,6 +1078,33 @@ class TestADockerfileIsOneThing:
             if Path(arg).is_absolute() and repo in Path(arg).parents
         )
         assert read == ["Dockerfile", "Dockerfile.dev", "api.Dockerfile"]
+
+    def test_a_name_that_is_not_a_dockerfile_is_left_out_without_a_word(
+        self, tmp_path, caplog
+    ):
+        """The WARNING is for a Dockerfile spelled with another case, which
+        the walk's glob found on Windows and hadolint does not read. A
+        `Dockerfile.md` is not one, and the WARNING beside every hadolint
+        run read as a missed Dockerfile."""
+        repo = _repo(
+            tmp_path,
+            "app",
+            {
+                "Dockerfile": "FROM alpine\n",
+                "Dockerfile.md": "From the root of the repo, run make.\n",
+                "Dockerfile.j2": "FROM {{ base }}\n",
+                "Dockerfile.dockerignore": "node_modules\n",
+            },
+        )
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            _, rows, defs = _scan(repo, tmp_path / "out", ["hadolint"])
+
+        assert rows["hadolint"].state is State.RAN, rows["hadolint"].label
+        assert [a for a in defs["hadolint"].command if "Dockerfile" in a] == [
+            str(repo / "Dockerfile")
+        ]
+        assert "NOT scanned" not in caplog.text, caplog.text
 
     def test_a_document_alone_is_no_dockerfile(self, tmp_path):
         repo = _repo(tmp_path, "app", {"Dockerfile.md": "From the root of the repo.\n"})

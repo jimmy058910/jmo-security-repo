@@ -10,8 +10,9 @@ own (#1311).
    `individual-gitlab/<group>_<repo>/`, so a project named `results` is never
    scanned with its own output (#1364).
 2. Run scan_repository() with every requested tool.
-3. Discover the images its Dockerfiles (`FROM`), docker-compose files and
-   Kubernetes manifests (`image:`) name.
+3. When a requested tool reads an image, discover the images its Dockerfiles
+   (`FROM`), `docker-compose*.yml` files and `*.k8s.yaml` Pods (`image:`)
+   name.
 4. Scan each with scan_image(), with every requested tool as `--image` would,
    into `individual-images/<group>_<repo>__<image>/`. Its rows go back to the
    orchestrator, which records it as an image target beside this one.
@@ -26,7 +27,7 @@ import re
 import subprocess
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 
 import yaml
@@ -39,10 +40,14 @@ from scripts.core.scan_timings import (
     write_scan_timings,
 )
 from scripts.core.secure_temp import secure_temp_dir
-from scripts.core.tool_descriptors import DOCKERFILE_PATTERNS, is_dockerfile
+from scripts.core.tool_descriptors import (
+    DESCRIPTORS,
+    DOCKERFILE_PATTERNS,
+    is_dockerfile,
+)
 from scripts.core.validation import (
+    image_reference_problem,
     sanitize_subprocess_output,
-    validate_container_image,
 )
 
 from ..path_sanitizers import _sanitize_path_component
@@ -53,10 +58,100 @@ from .tool_loop import collect_files, rows_without_running
 
 logger = logging.getLogger(__name__)
 
-# `FROM [--platform=<p>] <image> [AS <stage>]`: any flags come first.
+# `FROM [--platform=<p>] <image> [AS <stage>]`: any flags come first. Matched
+# against a whole instruction (`_instructions`), never a physical line.
 _FROM_LINE = re.compile(
     r"^\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?", re.IGNORECASE
 )
+
+# A parser directive (`# escape=``), read only before anything else, and only
+# a directive Docker knows: an unknown one is a comment, and ends them.
+_DIRECTIVE = re.compile(r"\s*#\s*([a-zA-Z][a-zA-Z0-9]*)\s*=\s*(.+?)\s*$")
+_DIRECTIVES = frozenset({"syntax", "escape", "check"})
+# A heredoc's opening word (`<<EOF`, `<<-EOF`, `<<"EOF"`), as a word of its
+# own: `<<<` is a here-string. Its body runs to the line holding the word
+# alone, leading tabs stripped first for `<<-`.
+_HEREDOC = re.compile(r"(?:^|\s)\d*<<(-?)([\"']?)([^\s\"'<]+)\2(?=\s|$)")
+_HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
+
+# Docker's own grammar for an image reference (distribution's `reference`
+# package): what a `FROM` or an `image:` must be for Docker to pull it. A
+# registry with a port is one; `{{`, `\` and `debian:%%SUITE%%` are not.
+_PATH_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+_DOMAIN_COMPONENT = r"(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])"
+_REFERENCE = re.compile(
+    rf"(?:{_DOMAIN_COMPONENT}(?:\.{_DOMAIN_COMPONENT})*(?::[0-9]+)?/)?"
+    rf"{_PATH_COMPONENT}(?:/{_PATH_COMPONENT})*"
+    r"(?::\w[\w.-]{0,127})?"
+    r"(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?",
+    re.ASCII,
+)
+
+
+def _instructions(text: str) -> Iterator[tuple[int, str]]:
+    """Each instruction of a Dockerfile, with the line it starts on, read as
+    Docker reads one.
+
+    A `FROM` matched against physical lines read a line that is no
+    instruction: `FROM \\` continued on the next line gave the image `\\`,
+    Python in a BuildKit heredoc (`COPY <<EOF app.py`) or in a continued
+    `RUN python -c` gave `flask` and `os` (measured). So continuations are
+    joined, with the escape character a `# escape=` directive sets, a comment
+    or blank line inside one is dropped, and a heredoc's body is skipped.
+    """
+    lines = text.splitlines()
+    escape = "\\"
+    at = 0
+    while at < len(lines):
+        directive = _DIRECTIVE.match(lines[at])
+        if not directive or directive.group(1).lower() not in _DIRECTIVES:
+            break
+        if directive.group(1).lower() == "escape" and directive.group(2) in "\\`":
+            escape = directive.group(2)
+        at += 1
+    continued = re.compile(re.escape(escape) + r"[ \t]*$")
+    while at < len(lines):
+        start, line = at + 1, lines[at].strip()
+        at += 1
+        if not line or line.startswith("#"):
+            continue
+        while continued.search(line):
+            line = continued.sub("", line)
+            while at < len(lines) and (
+                not lines[at].strip() or lines[at].lstrip().startswith("#")
+            ):
+                at += 1
+            if at == len(lines):
+                break
+            line += lines[at]
+            at += 1
+        yield start, line
+        if line.split(None, 1)[0].lower() in _HEREDOC_INSTRUCTIONS:
+            for chomp, _quote, word in _HEREDOC.findall(line):
+                while at < len(lines):
+                    body = lines[at].lstrip("\t") if chomp else lines[at]
+                    at += 1
+                    if body == word:
+                        break
+
+
+class _Located(str):
+    """A YAML string that knows its line, for a WARNING to name it."""
+
+    line: int | None = None
+
+
+class _LineLoader(yaml.SafeLoader):
+    pass
+
+
+def _construct_located(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> _Located:
+    value = _Located(loader.construct_scalar(node))
+    value.line = node.start_mark.line + 1
+    return value
+
+
+_LineLoader.add_constructor("tag:yaml.org,2002:str", _construct_located)
 
 
 class DiscoveredImages:
@@ -169,36 +264,68 @@ def _abandon(
     return rows
 
 
-def _templated(image: str, source: Path, repo_path: Path) -> bool:
-    """Whether a reference is set by a build argument or a variable (`$BASE`,
-    `${TAG}`): it names no image until a build supplies it, so it is skipped,
-    and the file is named."""
-    if "$" not in image:
+def _scannable(image: str, where: str) -> bool:
+    """Whether a reference a repository file names is an image to scan.
+
+    `scratch` is no image. One set by a build argument or a variable (`$BASE`,
+    `${TAG}`) names none until a build supplies it, and is named at INFO. One
+    that is not an image reference in Docker's own grammar (`{{`,
+    `debian:%%SUITE%%`) could not be pulled by Docker either: it is named at
+    WARNING, file and line, and never becomes an image target, which would
+    fail and make the scan exit 1."""
+    if not image or image.lower() == "scratch":
         return False
-    logger.info(
-        "%s: %s is set by a build argument or variable, so it is not scanned",
-        source.relative_to(repo_path).as_posix(),
-        image,
-    )
+    if "$" in image:
+        logger.info(
+            "%s: %s is set by a build argument or variable, so it is not scanned",
+            where,
+            image,
+        )
+        return False
+    if not _REFERENCE.fullmatch(image):
+        logger.warning(
+            "%s names %r, which is not an image reference: not scanned", where, image
+        )
+        return False
     return True
 
 
-def _discover_container_images(repo_path: Path) -> set[str]:
+def _where(source: Path, repo_path: Path, line: int | None, label: str) -> str:
+    """`<label>: <file>:<line>`, the file relative to the repository."""
+    place = source.relative_to(repo_path).as_posix()
+    if line is not None:
+        place = f"{place}:{line}"
+    return f"{label}: {place}" if label else place
+
+
+def _image_value(
+    value: object, source: Path, repo_path: Path, label: str
+) -> tuple[str, str]:
+    """An `image:` value and where it is."""
+    line = value.line if isinstance(value, _Located) else None
+    return str(value), _where(source, repo_path, line, label)
+
+
+def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     """
     Discover container images referenced in repository files.
 
-    Scans for:
-    - Dockerfile FROM lines
-    - docker-compose.yml service images
-    - Kubernetes manifests (*.k8s.yaml, *.k8s.yml) image references
+    Reads:
+    - each Dockerfile's FROM instructions (`is_dockerfile`)
+    - each `docker-compose*.yml`/`.yaml` service's `image:`, unless the service
+      has `build:`
+    - each `*.k8s.yaml`/`*.k8s.yml` document's `spec.containers` images (a
+      Pod's; not `initContainers`, nor a Deployment's template)
 
     Args:
         repo_path: Path to cloned repository
+        label: The GitLab target, for a log line to name
 
     Returns:
-        Set of discovered image names (e.g., 'nginx:latest', 'python:3.11-slim'),
-        as the repository spells them: the job refuses one that is not an
-        image reference before any tool sees it.
+        Set of discovered image references (e.g., 'nginx:latest',
+        'python:3.11-slim'), as the repository spells them. Each is an image
+        reference in Docker's grammar; the job still refuses one JMo does not
+        pass to a scanner (a registry with a port) before any tool sees it.
     """
     images: set[str] = set()
 
@@ -217,10 +344,11 @@ def _discover_container_images(repo_path: Path) -> set[str]:
     ]
     for dockerfile in dockerfiles:
         try:
-            content = dockerfile.read_text(encoding="utf-8", errors="ignore")
+            # `utf-8-sig`: a byte-order mark hid the first FROM (measured).
+            content = dockerfile.read_text(encoding="utf-8-sig", errors="ignore")
             stages: set[str] = set()
-            for line in content.splitlines():
-                match = _FROM_LINE.match(line)
+            for line, instruction in _instructions(content):
+                match = _FROM_LINE.match(instruction)
                 if not match:
                     continue
                 image, stage = match.group(1), match.group(2)
@@ -230,9 +358,9 @@ def _discover_container_images(repo_path: Path) -> set[str]:
                     # names it.
                     stages.add(stage.lower())
                     continue
-                if image.lower() in ("scratch", *stages):
+                if image.lower() in stages:
                     continue
-                if not _templated(image, dockerfile, repo_path):
+                if _scannable(image, _where(dockerfile, repo_path, line, label)):
                     images.add(image)
         except Exception as e:
             logger.debug(
@@ -247,21 +375,24 @@ def _discover_container_images(repo_path: Path) -> set[str]:
     for compose_file in repo_path.rglob("docker-compose*.y*ml"):
         try:
             with open(compose_file, encoding="utf-8") as f:
-                data = yaml.safe_load(f)
+                data = yaml.load(f, Loader=_LineLoader)  # nosec B506 - a SafeLoader subclass
             if isinstance(data, dict) and "services" in data:
                 services = data["services"]
                 if isinstance(services, dict):
                     for service_name, service_config in services.items():
+                        # With `build:`, compose builds the image and tags it
+                        # `image:`: a name for its own build, not one to pull.
+                        # Pulled, it failed, or scanned a stranger's image of
+                        # that name (measured: syft pulled it, exit 1).
                         if (
                             isinstance(service_config, dict)
                             and "image" in service_config
+                            and "build" not in service_config
                         ):
-                            image = str(service_config["image"])
-                            if (
-                                image
-                                and image.lower() != "scratch"
-                                and not _templated(image, compose_file, repo_path)
-                            ):
+                            image, where = _image_value(
+                                service_config["image"], compose_file, repo_path, label
+                            )
+                            if _scannable(image, where):
                                 images.add(image)
         except Exception as e:
             logger.debug(
@@ -279,7 +410,7 @@ def _discover_container_images(repo_path: Path) -> set[str]:
         try:
             with open(k8s_file, encoding="utf-8") as f:
                 # K8s manifests can contain multiple documents
-                docs = yaml.safe_load_all(f)
+                docs = yaml.load_all(f, Loader=_LineLoader)  # nosec B506 - a SafeLoader subclass
                 for doc in docs:
                     if not isinstance(doc, dict):
                         continue
@@ -290,12 +421,10 @@ def _discover_container_images(repo_path: Path) -> set[str]:
                         if isinstance(containers, list):
                             for container in containers:
                                 if isinstance(container, dict) and "image" in container:
-                                    image = str(container["image"])
-                                    if (
-                                        image
-                                        and image.lower() != "scratch"
-                                        and not _templated(image, k8s_file, repo_path)
-                                    ):
+                                    image, where = _image_value(
+                                        container["image"], k8s_file, repo_path, label
+                                    )
+                                    if _scannable(image, where):
                                         images.add(image)
         except Exception as e:
             logger.debug(
@@ -325,6 +454,11 @@ def _scan_named_images(
     skipped (#1311). A reference this scan already scans (an `--image`,
     another GitLab target) is not scanned twice.
 
+    Only when a requested tool reads an image. Otherwise each image target
+    would have every row `skipped:not for this target type`, so it counted as
+    having produced nothing and failed a scan that asked for no image
+    (measured: `--tools hadolint` exited 1); one line says what was found.
+
     Past the repository's scan, whatever fails here is the images' own. The
     repository's outputs are already where the report reads them, so its rows
     stand; a failure here used to relabel it `failed-before-tools`. And every
@@ -332,7 +466,17 @@ def _scan_named_images(
     """
     mine: list[str] = []
     try:
-        for image in sorted(_discover_container_images(clone_path)):
+        found = sorted(_discover_container_images(clone_path, full_path))
+        if not any("image" in DESCRIPTORS[tool].invocations for tool in tools):
+            if found:
+                logger.info(
+                    "%s names %d image(s), and no requested tool reads an "
+                    "image: not scanned",
+                    full_path,
+                    len(found),
+                )
+            return
+        for image in found:
             covering = images.claim(image, full_path)
             if covering is None:
                 mine.append(image)
@@ -351,16 +495,19 @@ def _scan_named_images(
         )
         for image, folder in zip(mine, folders, strict=True):
             started = time.perf_counter()
-            if not validate_container_image(image):
-                # It never reaches a tool's command line, where it would be
-                # their first argument (`--file=<path>` is a syft flag, and the
-                # repository is not JMo's to trust), and it is not dropped: a
-                # private registry with a port lands here too.
+            # Checked quietly: the WARNING below is the one line it gets, where
+            # the validator would add an ERROR for an outcome that is not one.
+            problem = image_reference_problem(image)
+            if problem is not None:
+                # An image reference (discovery keeps no other) that never
+                # reaches a tool's command line, where it would be their first
+                # argument, and it is not dropped: a private registry with a
+                # port lands here.
                 logger.warning(
-                    "%s names %r, which is not a container image reference "
-                    "JMo passes to a scanner: recorded as a failed image target",
+                    "%s names an image reference JMo does not pass to a "
+                    "scanner (%s): recorded as a failed image target",
                     full_path,
-                    image,
+                    problem,
                 )
                 rows = _abandon(
                     images.images_dir / folder,
@@ -368,7 +515,7 @@ def _scan_named_images(
                     "image",
                     tools,
                     started,
-                    f"not a container image reference JMo passes to a scanner: {image}",
+                    f"JMo does not pass this reference to a scanner: {problem}",
                 )
             else:
                 try:

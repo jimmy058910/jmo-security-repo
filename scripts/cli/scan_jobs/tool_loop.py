@@ -31,6 +31,7 @@ import os
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import replace
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -130,7 +131,10 @@ def collect_files(
     `accepts_name` is the tool's own test of a file name, for a tool that
     decides by the exact name: on Windows the glob ignores case, so it found
     `Requirements.txt` and `Package-Lock.json` for osv-scanner, which rejects
-    both and then read nothing at all. A file it refuses is named and left out.
+    both and then read nothing at all. A file it refuses is left out, and
+    named when the patterns match it only by ignoring case. One they match as
+    spelled is a name the test refuses on purpose (`Dockerfile.md` is no
+    Dockerfile), and a WARNING beside every run read as a missed file.
     """
     seen: set[Path] = set()
     for pattern in patterns:
@@ -148,15 +152,19 @@ def collect_files(
 
     if accepts_name is not None:
         refused = sorted(p for p in seen if not accepts_name(p.name))
-        if refused:
+        seen.difference_update(refused)
+        names = [pattern.rsplit("/", 1)[-1] for pattern in patterns]
+        miscased = [
+            p for p in refused if not any(fnmatchcase(p.name, n) for n in names)
+        ]
+        if miscased:
             logger.warning(
                 "%s: %d file(s) matched its patterns but not a name it reads "
                 "(it reads names exactly, case included) - NOT scanned: %s",
                 tool_name,
-                len(refused),
-                ", ".join(p.relative_to(repo).as_posix() for p in refused),
+                len(miscased),
+                ", ".join(p.relative_to(repo).as_posix() for p in miscased),
             )
-            seen.difference_update(refused)
 
     files = sorted(seen)
     if len(files) > MAX_FILE_ARGS:
