@@ -179,7 +179,7 @@ All notable changes to JMo Security will be documented in this file.
   1.1.0-shaped database: 2,492 scans and 215,761 findings in, all 215,761 findings out.
 - **Breaking. Every requested tool gets one row per target.** Each row is `ran`,
   `skipped:<reason>` or `failed:<reason>`, with its seconds, exit code and attempts. The
-  rows are in each target's `scan-timings.json` (schema 4, whose `kept_findings` counts what a failed row's runs that worked still reported), in `.scan_metadata.json`'s
+  rows are in each target's `scan-timings.json` (schema 4, whose `kept_findings` counts what a failed row's runs that worked still reported, and is null when none worked), in `.scan_metadata.json`'s
   `tool_runs` (replacing `stubbed_tools`), and in a new history table, `scan_tool_runs`,
   which `jmo history show` prints. A tool used to vanish from every artifact when it had
   nothing to read: on a repository without Dockerfiles or shell scripts, hadolint and
@@ -544,10 +544,13 @@ All notable changes to JMo Security will be documented in this file.
   ecosystem, or TruffleHog or gitleaks reads the working tree but fails on git history,
   the findings from what worked are kept and counted: the target is `partial`, the log
   names what failed and how many findings were kept, and history stores the scan with that
-  tool's row failed. **Behaviour change:** such a scan exits 0, where it exited 1. A
-  partial target exits 0 and says what is missing, as it already did when another tool on
-  the target ran; a target that contributed nothing at all still exits 1.
-  `scan-timings.json` is schema 4, with a `kept_findings` count on each row (#1369).
+  tool's row failed. A run that worked and found nothing counts the same way, kept as 0:
+  partial follows whether a run worked, not what it found, or a clean lockfile beside a
+  truncated one would fail the scan where a vulnerable one passed it. **Behaviour
+  change:** such a scan exits 0, where it exited 1. A partial target exits 0 and says what
+  is missing, as it already did when another tool on the target ran; a target where no run
+  of any tool worked still exits 1. `scan-timings.json` is schema 4, with a
+  `kept_findings` count on each row, null when no run of the row worked (#1369).
 
 ## [1.1.1] - 2026-09-11
 

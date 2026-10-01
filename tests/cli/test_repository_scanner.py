@@ -561,6 +561,18 @@ class TestNothingExaminedIsFailed:
             )
 
         assert rows["semgrep"].label == label
+        # Its run succeeded, but one that examined nothing is no run that
+        # worked: the target contributed nothing, and is not partial.
+        from scripts.cli.scan_orchestrator import (
+            TARGET_FAILED,
+            TARGET_OK,
+            classify_target_outcome,
+        )
+
+        assert rows["semgrep"].kept_findings is None
+        assert classify_target_outcome(rows) == (
+            TARGET_FAILED if not scanned else TARGET_OK
+        )
 
     def test_an_unreadable_count_is_not_a_zero(self, tmp_path):
         """No output to read: the count is unknown, not 0, so the row is

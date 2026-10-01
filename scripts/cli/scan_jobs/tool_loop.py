@@ -472,19 +472,27 @@ def _row_from_results(
     )
 
 
-def _kept_findings(results: Iterable[ToolResult]) -> int:
+def _kept_findings(d: ToolDescriptor, results: Iterable[ToolResult]) -> int | None:
     """The findings a failed row's runs that worked still wrote, which reach
-    the report (#1369). This scan's runs only: a file an earlier scan left is
-    not a finding of this one."""
-    written = [r.output_file for r in results if r.status == "success"]
-    if not any(written):
-        return 0
+    the report (#1369), or None when none of them worked. A run worked when
+    it succeeded and examined something: one whose output reports 0 files
+    examined is the row's `EXAMINED_ZERO`, not a run that worked. This scan's
+    runs only: a file an earlier scan left is not a finding of this one."""
+    written = [
+        r.output_file
+        for r in results
+        if r.status == "success"
+        and r.output_file
+        and (d.scanned_count is None or d.scanned_count(r.output_file) != 0)
+    ]
+    if not written:
+        return None
     # Imported here: the report phase's module (compliance mapping, the
     # reporters) is otherwise not loaded by the scan loop, and only a failed
     # row with a run that worked needs it.
     from ...core.normalize_and_report import count_findings
 
-    return sum(count_findings(path) for path in written if path)
+    return sum(count_findings(path) for path in written)
 
 
 def _warn_unread(tool: str, unread: Mapping[str, str]) -> None:
@@ -810,7 +818,7 @@ def run_tools(
                 detail="; ".join(filter(None, (shortfall.detail, said))),
             )
         if row.state is State.FAILED:
-            row = replace(row, kept_findings=_kept_findings(by_tool.get(tool, [])))
+            row = replace(row, kept_findings=_kept_findings(d, by_tool.get(tool, [])))
         rows[tool] = row
 
     rows = {tool: rows[tool] for tool in ordered}

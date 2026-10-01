@@ -327,10 +327,11 @@ def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
     A skipped tool gets no vote. Counting it as a failure would make a target
     where one tool ran cleanly and two were not installed a partial failure.
 
-    A failed row whose runs that worked still found something (its
-    ``kept_findings``) contributed those findings, so its target is partial:
+    A failed row with a run that worked (its ``kept_findings`` is a count, 0
+    included) contributed what that run found, so its target is partial:
     counted as nothing, a target whose report held 292 findings read as having
-    contributed none (#1369).
+    contributed none (#1369). Not "found something": then a clean lockfile
+    beside a truncated one failed the scan and a vulnerable one passed it.
     """
     if not rows:
         return TARGET_FAILED
@@ -343,8 +344,8 @@ def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
         return TARGET_NOT_ATTEMPTED
     if not failed:
         return TARGET_OK
-    kept = any(r.kept_findings for r in in_scope)
-    return TARGET_PARTIAL if ran or kept else TARGET_FAILED
+    worked = any(r.kept_findings is not None for r in in_scope)
+    return TARGET_PARTIAL if ran or worked else TARGET_FAILED
 
 
 @dataclass(frozen=True)
@@ -371,7 +372,7 @@ def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
             f"{r.tool} kept {r.kept_findings} finding(s) from its runs that "
             f"worked, counted before de-duplication (failed: {r.detail or r.reason})"
             for r in rows.values()
-            if r.kept_findings
+            if r.kept_findings is not None
         ),
         not_installed=sorted(
             r.tool

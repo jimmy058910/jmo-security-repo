@@ -847,6 +847,27 @@ def test_a_readable_lockfile_that_found_nothing_keeps_nothing(
     assert row.kept_findings == 0
 
 
+@pytest.mark.parametrize("found", [2, 0], ids=["vulnerable", "clean"])
+def test_a_readable_lockfile_beside_a_truncated_one_makes_the_target_partial(
+    tmp_path, monkeypatch, found
+) -> None:
+    """The pair measured through `jmo scan --repo`: the readable lockfile's
+    run worked either way. Vulnerable, the target was partial and exited 0;
+    clean, it exited 1, said "every tool failed" and was not stored. A run
+    that worked makes the target partial, whatever it found."""
+    from scripts.cli.scan_orchestrator import TARGET_PARTIAL, classify_target_outcome
+
+    _cache(tmp_path, monkeypatch, "npm")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    row = _split(tmp_path / "repo", out, _writing(_sarif(found)))
+
+    assert row.label == "failed:unaccepted exit code"
+    assert row.kept_findings == found
+    assert classify_target_outcome({"osv-scanner": row}) == TARGET_PARTIAL
+
+
 def test_a_partial_database_keeps_what_the_covered_lockfiles_found(
     tmp_path, monkeypatch
 ) -> None:
@@ -915,7 +936,7 @@ def test_an_earlier_scans_report_is_not_kept(tmp_path, monkeypatch, caplog) -> N
         ]
 
     assert row.state is State.FAILED
-    assert row.kept_findings == 0
+    assert row.kept_findings is None
     # With no run that worked, the tool contributed nothing, and says so.
     assert "did NOT contribute findings" in caplog.text
 

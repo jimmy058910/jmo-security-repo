@@ -36,7 +36,8 @@ SCAN_TIMINGS_FILENAME = "scan-timings.json"
 # does not understand instead of misreading it. Version 3 (v2.0.0 Phase 3): a
 # row for every requested tool, including the ones that never ran, keyed
 # `tool/state/reason/seconds/...` rather than ToolRunner's result fields.
-# Version 4: a row's `kept_findings` (#1369).
+# Version 4: a row's `kept_findings` (#1369), null unless a run of a failed row
+# worked.
 SCAN_TIMINGS_SCHEMA_VERSION = 4
 
 # `outcome` values: did the target get as far as running tools at all.
@@ -140,9 +141,12 @@ class ToolRun:
     `kept_findings` is what a failed row's runs that worked still found, and
     so reached the report: osv-scanner's readable lockfiles beside one it
     could not read, a secret scanner's tree beside its failed git-history run
-    (#1369). Such a row contributed findings, so its target is partial rather
-    than empty. Only a failed row carries it. It is the adapter's count,
-    before the report de-duplicates, so the report can hold fewer.
+    (#1369). None when no run of the row worked; 0 when one did and found
+    nothing. A run that worked makes the target partial rather than empty,
+    whatever it found: decided by the count, a clean lockfile beside a
+    truncated one failed the scan where a vulnerable one passed it. Only a
+    failed row carries it. It is the adapter's count, before the report
+    de-duplicates, so the report can hold fewer.
     """
 
     tool: str
@@ -153,7 +157,7 @@ class ToolRun:
     attempts: int = 0
     invocations: int = 0
     detail: str | None = None
-    kept_findings: int = 0
+    kept_findings: int | None = None
 
     def __post_init__(self) -> None:
         if self.state is State.RAN:
@@ -164,7 +168,7 @@ class ToolRun:
                 raise ValueError(f"{self.tool}: {self.reason!r} is not a skip reason")
         elif self.reason not in FAIL_REASONS:
             raise ValueError(f"{self.tool}: {self.reason!r} is not a failure reason")
-        if self.kept_findings and self.state is not State.FAILED:
+        if self.kept_findings is not None and self.state is not State.FAILED:
             raise ValueError(f"{self.tool}: only a failed row keeps findings")
 
     @property
@@ -191,6 +195,7 @@ class ToolRun:
     def from_dict(cls, data: Mapping[str, Any]) -> ToolRun:
         """Read a row back; raises ValueError/KeyError on anything else."""
         reason = data.get("reason")
+        kept = data.get("kept_findings")
         return cls(
             tool=str(data["tool"]),
             state=State(data["state"]),
@@ -200,7 +205,7 @@ class ToolRun:
             attempts=int(data.get("attempts") or 0),
             invocations=int(data.get("invocations") or 0),
             detail=data.get("detail"),
-            kept_findings=int(data.get("kept_findings") or 0),
+            kept_findings=None if kept is None else int(kept),
         )
 
 
