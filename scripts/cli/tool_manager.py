@@ -192,14 +192,6 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
         },
         "jmo_install": "jmo tools install nuclei",
     },
-    "gosec": {
-        "install": {
-            "linux": "go install github.com/securego/gosec/v2/cmd/gosec@latest",
-            "macos": "brew install gosec",
-            "windows": "go install github.com/securego/gosec/v2/cmd/gosec@latest",
-        },
-        "jmo_install": "jmo tools install gosec",
-    },
     "yara": {
         "install": {
             "linux": "pip install yara-python",

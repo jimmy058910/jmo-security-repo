@@ -450,7 +450,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         return seen
 
     def test_a_tool_with_nothing_to_scan_is_not_warned_about(self, monkeypatch):
-        statuses = _rows(trufflehog="ran", gosec="skipped:no Go sources")
+        statuses = _rows(trufflehog="ran", hadolint="skipped:no Dockerfiles")
 
         assert self._logged(monkeypatch, statuses) == [], (
             "a correct skip produced a warning on the target line"
@@ -459,7 +459,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
     def test_a_missing_tool_is_still_warned_about(self, monkeypatch):
         """Narrowed, not deleted: an empty stub from a scanner that never ran
         still satisfies a `zero-secrets` policy (#825)."""
-        statuses = _rows(trufflehog="ran", gosec="skipped:not installed")
+        statuses = _rows(trufflehog="ran", hadolint="skipped:not installed")
 
         logged = self._logged(monkeypatch, statuses)
 
@@ -467,7 +467,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         level, msg = logged[0]
         assert level == "WARN"
         assert "1 tool(s) were stubbed and did NOT run" in msg
-        assert "gosec" in msg
+        assert "hadolint" in msg
 
     def test_a_target_with_nothing_for_any_tool_is_not_warned_about(self, monkeypatch):
         """#1317: `--tools hadolint` on a repository with no Dockerfile is a
@@ -481,7 +481,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
     ):
         """#825's case, which that wording was written for, keeps it."""
         statuses = _rows(
-            trufflehog="skipped:not installed", gosec="skipped:no Go sources"
+            trufflehog="skipped:not installed", hadolint="skipped:no Dockerfiles"
         )
 
         logged = self._logged(monkeypatch, statuses)
@@ -498,7 +498,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         statuses = _rows(
             trufflehog="ran",
             semgrep="skipped:not installed",
-            gosec="skipped:no Go sources",
+            hadolint="skipped:no Dockerfiles",
         )
 
         logged = self._logged(monkeypatch, statuses)
@@ -507,7 +507,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         _level, msg = logged[0]
         assert "1 tool(s)" in msg, "counted the skipped tool as a gap: " + msg
         assert "semgrep" in msg
-        assert "gosec" not in msg, "named a tool that had nothing to scan: " + msg
+        assert "hadolint" not in msg, "named a tool that had nothing to scan: " + msg
 
     def test_a_failed_tool_is_unaffected(self, monkeypatch):
         """The narrowing must not reach the failure path: a tool that ran and
@@ -515,7 +515,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         statuses = _rows(
             trufflehog="ran",
             semgrep="failed:unaccepted exit code",
-            gosec="skipped:no Go sources",
+            hadolint="skipped:no Dockerfiles",
         )
 
         logged = self._logged(monkeypatch, statuses)
@@ -525,6 +525,33 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         assert level == "WARN"
         assert "findings MISSING from 1 failed tool(s)" in msg
         assert "semgrep" in msg
+
+    def test_a_failed_tool_that_kept_findings_says_what_failed_and_what_was_kept(
+        self, monkeypatch
+    ):
+        """#1369: its other runs' findings reached the report, so the target
+        is partial, and this line was "contributed NO findings"."""
+        from scripts.core.scan_timings import Reason, State, ToolRun
+
+        statuses = {
+            "osv-scanner": ToolRun(
+                "osv-scanner",
+                State.FAILED,
+                Reason.EXIT_CODE,
+                detail="sub/package-lock.json: Return code 127 not in (0, 1)",
+                kept_findings=292,
+            )
+        }
+
+        logged = self._logged(monkeypatch, statuses)
+
+        assert len(logged) == 1, f"expected exactly one line: {logged}"
+        level, msg = logged[0]
+        assert level == "WARN"
+        assert "contributed NO findings" not in msg
+        assert "sub/package-lock.json" in msg, msg
+        assert "292 finding(s)" in msg, msg
+        assert "before de-duplication" in msg, msg
 
 
 def _rows(**labels: str):

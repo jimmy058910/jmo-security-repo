@@ -64,9 +64,7 @@ class TestBinaryUrls:
         replaced ``len(...) > 0`` was the only guard against that, and it still
         could not notice a single tool being dropped. Naming them can.
         """
-        assert {"trivy", "grype", "syft", "trufflehog", "nuclei", "gosec"} <= set(
-            BINARY_URLS
-        )
+        assert {"trivy", "grype", "syft", "trufflehog", "nuclei"} <= set(BINARY_URLS)
 
     @pytest.mark.parametrize("tool", list(BINARY_URLS.keys()))
     def test_url_values_are_non_empty_strings(self, tool: str) -> None:

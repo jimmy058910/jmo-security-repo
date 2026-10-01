@@ -188,7 +188,6 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "default": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_{os_lower}_{arch_amd}",
     },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
-    "gosec": "https://github.com/securego/gosec/releases/download/v{version}/gosec_{version}_{os_lower}_{arch_amd}.tar.gz",
     # OPA (Open Policy Agent): "opa_linux_amd64" (no version in filename)
     # Windows provides .exe directly, Linux/macOS provide binary without extension
     "opa": {

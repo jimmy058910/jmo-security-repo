@@ -223,8 +223,15 @@ def check_version_drift_before_scan(
 STDERR_TAIL_CHARS = 500
 
 
-def report_tool_failure(result: ToolResult, reason: str) -> None:
-    """State, on a durable stream, that a tool delivered no findings.
+def report_tool_failure(
+    result: ToolResult, reason: str, others_ran: bool = False
+) -> None:
+    """State, on a durable stream, that one run of a tool failed.
+
+    The line says the tool contributed no findings, unless ``others_ran``:
+    another run of the same tool worked (G1's tree beside its git history,
+    osv-scanner's lockfiles run one by one), so its findings are in the scan
+    and the line says only that this run's are missing (#1369).
 
     Every scan job's results loop used to set ``statuses[tool] = False`` and
     discard ``result.error_message``. The only remaining trace was a ``x`` in
@@ -259,9 +266,12 @@ def report_tool_failure(result: ToolResult, reason: str) -> None:
         detail = f"{detail}; stderr: {tail}"
 
     logger.error(
-        "%s: %s - it did NOT contribute findings to this scan (%s)",
+        "%s: %s - %s (%s)",
         result.tool,
         reason,
+        "what this run would have found is MISSING from this scan"
+        if others_ran
+        else "it did NOT contribute findings to this scan",
         detail,
     )
 
@@ -291,7 +301,6 @@ TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
     and d.exclusion_style
     in (
         ExclusionStyle.INLINE,
-        ExclusionStyle.INLINE_REGEX,
         ExclusionStyle.SEPARATE,
         ExclusionStyle.REGEX,
     )
@@ -304,36 +313,6 @@ TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
 TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
     name: d.timeout_floor for name, d in DESCRIPTORS.items() if d.timeout_floor
 }
-
-
-# Flags JMo passes itself to control **where a tool writes and in what format**.
-# The adapter contract depends on both: `normalize_and_report` globs for a file
-# at a path JMo chose and parses it as JSON.
-#
-# A `per_tool.<tool>.flags` entry repeating one of these wins, because JMo splices
-# user flags in *after* its own and a scalar flag is last-one-wins. The tool then
-# writes something the adapter cannot read, the file exists so the run grades as
-# success, and the findings are gone. Measured on #822: `flags: ["-f","table"]`
-# took a trivy target from **2 findings to 0**, `rc=0`, nothing on any stream.
-#
-# Derived from what the scanners actually pass rather than guessed:
-#     git grep -oE '"(-o|--output|-f|--format|...)"' scripts/cli/scan_jobs/
-#
-# Deliberately narrow. Repeatable flags are **not** listed: `--scanners` unions
-# rather than replaces (measured against trivy 0.70.0), and dropping a legitimate
-# repeated `--exclude` would break working configs. Only the flags that decide
-# whether the output is readable at all belong here.
-RESERVED_OUTPUT_FLAGS: frozenset[str] = frozenset(
-    {
-        "-o",
-        "--output",
-        "--out",
-        "--output-filename",
-        "-f",
-        "--format",
-        "--output-formats",
-    }
-)
 
 
 def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) -> int:
@@ -355,7 +334,10 @@ def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) ->
 
 
 def tool_flags(
-    per_tool_config: Mapping[str, Any], tool: str, key: str = "flags"
+    per_tool_config: Mapping[str, Any],
+    tool: str,
+    key: str = "flags",
+    executable: str | None = None,
 ) -> list[str]:
     """Return a tool's configured extra flags, minus any JMo must own.
 
@@ -363,14 +345,29 @@ def tool_flags(
     no filtering. `key` is `flags` for the tool's run, or `history_flags` for
     its git-history run (#1327); both are filtered alike.
 
-    The reserved set is `RESERVED_OUTPUT_FLAGS` plus the tool's own spellings
-    (its descriptor's `reserved_flags`, #1325).
+    JMo splices user flags in *after* its own, and a scalar flag is
+    last-one-wins, so a user's `-f table` made trivy write a table where the
+    report reads JSON: 2 findings to 0, rc 0, nothing on any stream (#822).
+    A flag is refused when the tool's own parser reads it as one of its
+    descriptor's `reserved_flags`, however it is spelled there (attached,
+    chained, abbreviated, either dash: `ToolDescriptor.reserved_spelling`,
+    #1335). Repeatable flags are not reserved: trivy's `--scanners` unions
+    rather than replaces, and a repeated `--exclude` is a working config.
+
+    With the `executable` the tool resolved to, a flag holding one of cmd.exe's
+    metacharacters is refused too when that is a `.cmd`/`.bat` launcher.
 
     A dropped flag takes its **value** with it. Removing only the flag from
     `["-f", "table"]` would leave a bare `table` in the argv, and trivy reads a
     bare word as a scan target -- strictly worse than the collision being
-    fixed. `--format=json` is handled too, since there the value is not a
-    separate token.
+    fixed. A value inside the token (`--format=json`, `-ftable`) leaves the
+    next token alone. Each drop is logged at WARNING, by name.
+
+    Each token is read on its own, not as the value of the flag before it:
+    trivy's parser reads `--severity -f` as a severity of `-f`, while this
+    drops `-f` and leaves `--severity` to take JMo's next argument as its
+    value. Accepted: a value spelled like a reserved flag is rare, and that
+    run then fails loudly rather than reporting nothing.
     """
     tool_cfg = per_tool_config.get(tool, {})
     if not isinstance(tool_cfg, dict):
@@ -379,53 +376,98 @@ def tool_flags(
     if not isinstance(raw, list):
         return []
     flags = [str(f) for f in raw]
-    own = (
-        descriptor.reserved_flags
-        if (descriptor := DESCRIPTORS.get(tool))
-        else frozenset()
-    )
-    reserved = RESERVED_OUTPUT_FLAGS | own
-    # A tool's own reserved short flags also take a value attached
-    # (`-cmine.toml`): gitleaks' parser reads that as `-c mine.toml`. Only its
-    # own, since elsewhere a single-dash flag can merely start like one
-    # (nuclei's `-fr`, `-omit-raw`).
-    attached = {flag for flag in own if len(flag) == 2}
+    descriptor = DESCRIPTORS.get(tool)
+    where = f"per_tool.{tool}.{key}"
+    logger = logging.getLogger(__name__)
 
     kept: list[str] = []
-    dropped: list[str] = []
     i = 0
     while i < len(flags):
         token = flags[i]
-        joined = len(token) > 2 and token[:2] in attached
-        if token.split("=", 1)[0] not in reserved and not joined:
+        spelled = descriptor.reserved_spelling(token) if descriptor else None
+        if descriptor is None or spelled is None:
             kept.append(token)
             i += 1
             continue
+        flag, inline = spelled
+        end = i + 1
+        if not inline and _value_follows(flags, i):
+            end += 1
+        logger.warning(
+            "Ignoring `%s` in %s: %s reads it as `%s`: %s",
+            " ".join(flags[i:end]),
+            where,
+            tool,
+            flag,
+            descriptor.reserved_flags[flag],
+        )
+        i = end
 
-        dropped.append(token)
-        # `--format=json` carries its value inline; `-f json` does not. Only
-        # consume a following token when it is a value rather than the next flag.
-        if (
-            not joined
-            and "=" not in token
-            and i + 1 < len(flags)
-            and not flags[i + 1].startswith("-")
-        ):
+    if executable and Path(executable).suffix.lower() in (".cmd", ".bat"):
+        kept = _without_cmd_metacharacters(kept, where, tool, Path(executable).name)
+    return kept
+
+
+def _value_follows(flags: list[str], i: int) -> bool:
+    """Whether the token after `flags[i]` is its value rather than a flag."""
+    return i + 1 < len(flags) and not flags[i + 1].startswith("-")
+
+
+def _without_cmd_metacharacters(
+    flags: list[str], where: str, tool: str, launcher: str
+) -> list[str]:
+    """`flags` minus any holding one of `_CMD_METACHARS` or a line break,
+    each with its flag or value: `--skip-check` without its `A|B` would read
+    the next token as its value. The launcher's argv is re-parsed by cmd.exe,
+    where no quoting survives (see `_CMD_METACHARS`), and a line break ends
+    its command line, dropping every argument after it, JMo's own included.
+
+    A bare token is paired with any flag before it, which cannot be told from
+    a no-value flag followed by a positional: `["--quiet", "A|B"]` drops both.
+    Accepted, since a per_tool entry is flags and their values, and the
+    WARNING names every token it drops; a flag left dangling would instead
+    swallow the next argument or fail the parse (checkov's `-ca`). A flag
+    whose value is attached (`-cA|B`, `--x=A|B`) takes no next token: that
+    one is the user's own."""
+    descriptor = DESCRIPTORS.get(tool)
+    clusters = descriptor is None or descriptor.flag_grammar.clusters
+    kept: list[str] = []
+    i = 0
+    while i < len(flags):
+        token = flags[i]
+        if not _CMD_REFUSED.intersection(token):
+            kept.append(token)
+            i += 1
+            continue
+        dropped = [token]
+        if not token.startswith("-"):
+            if kept and kept[-1].startswith("-") and "=" not in kept[-1]:
+                dropped.insert(0, kept.pop())
+        elif _bare_flag(token, clusters) and _value_follows(flags, i):
             dropped.append(flags[i + 1])
             i += 1
         i += 1
-
-    if dropped:
         logging.getLogger(__name__).warning(
-            "Ignoring %s flag(s) in per_tool.%s.%s that JMo must control -- they "
-            "decide where it writes and in what format, and the report phase "
-            "cannot read the output otherwise: %s",
-            len(dropped),
+            "Ignoring `%s` in %s: %s runs through %s, and cmd.exe re-reads any "
+            "of %s in its arguments, where no quoting survives, and ends its "
+            "command line at a line break. Give a list comma-separated where "
+            "the tool takes one (checkov: `--skip-check A,B`)",
+            " ".join(dropped).replace("\r", "\\r").replace("\n", "\\n"),
+            where,
             tool,
-            key,
-            " ".join(dropped),
+            launcher,
+            " ".join(sorted(_CMD_METACHARS)),
         )
     return kept
+
+
+def _bare_flag(token: str, clusters: bool) -> bool:
+    """A flag token carrying no value: `--name`; a single-dash name where the
+    parser does not chain short flags (zap's `-quickurl`); and where it does,
+    one short flag alone (`-c`), since `-cA|B` carries its value."""
+    if not token.startswith("-") or "=" in token:
+        return False
+    return token.startswith("--") or not clusters or len(token) == 2
 
 
 #: Paths TruffleHog must not walk in filesystem mode, as newline-separated Go
@@ -485,8 +527,12 @@ def segment_regex(name: str) -> str:
 #: since it escapes `&`, `|` and `^` with a backslash that still leaves the
 #: character itself in the string (`\&`, `\|`, `\^`), and passes `%`, `<`,
 #: `>` through unescaped. Rendered as `.` instead: it matches that one
-#: character too (harmlessly broad) and never reaches cmd.exe as itself.
+#: character too (harmlessly broad) and never reaches cmd.exe as itself. A
+#: user's flag holding one cannot be rendered away, so `tool_flags` refuses it.
 _CMD_METACHARS = frozenset("&|^<>%")
+#: What `tool_flags` refuses on a launcher: those, and a line break, at which
+#: cmd.exe ends the command line and drops every argument after it (measured).
+_CMD_REFUSED = _CMD_METACHARS | frozenset("\r\n")
 
 
 def checkov_skip_path_pattern(name: str) -> str:
@@ -804,8 +850,6 @@ def tool_exclusion_flags(
     dirs = excluded_dirs_for(tool, results_dir_name=results_dir_name)
     if style == ExclusionStyle.INLINE:
         return [f"{flag}={d}" for d in dirs]
-    if style == ExclusionStyle.INLINE_REGEX:
-        return [f"{flag}={segment_regex(d)}" for d in dirs]
     if style == ExclusionStyle.REGEX:
         # checkov: `re.search` against the absolute path, so a bare name is
         # a substring match anywhere in it (#1313) - end-anchored to one

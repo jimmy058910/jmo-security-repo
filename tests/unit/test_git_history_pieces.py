@@ -412,6 +412,47 @@ def test_a_failed_history_run_fails_the_row_and_keeps_the_tree_findings(
     assert json.loads((out / "trufflehog.json").read_bytes()) == {"from": "filesystem"}
 
 
+def test_the_row_counts_the_findings_the_tree_kept(tmp_path) -> None:
+    """#1369, the same shape as osv-scanner's broken lockfile: the tree's
+    findings reach the report, so the target is partial, not empty."""
+
+    def make(definitions) -> list[ToolResult]:
+        results = _results(fail_git=True)(definitions)
+        for r in results:
+            if r.status == "success":
+                r.stdout = json.dumps(_trufflehog_fs_record(SECRET)) + "\n"
+        return results
+
+    _, rows, _, _ = _definitions(tmp_path, "trufflehog", runner_results=make)
+
+    row = rows["trufflehog"]
+    assert (row.state.value, row.kept_findings) == ("failed", 1)
+
+
+@pytest.mark.parametrize("tool", ["trufflehog", "gitleaks"])
+def test_a_clean_tree_beside_a_failed_history_run_is_partial(tmp_path, tool) -> None:
+    """The tree's run worked and found nothing. Decided by what it found, the
+    target read as having contributed nothing ("every tool failed"), exited
+    1 and was not stored, while the same scan with a secret in the tree
+    exited 0. Its 0 is kept as 0: a run worked."""
+    from scripts.cli.scan_orchestrator import TARGET_PARTIAL, classify_target_outcome
+
+    def make(definitions) -> list[ToolResult]:
+        results = _results(fail_git=True)(definitions)
+        for r in results:
+            if r.status == "success":
+                r.stdout = ""
+                if r.output_file and not r.capture_stdout:
+                    Path(r.output_file).write_bytes(b'{"runs": [{"results": []}]}')
+        return results
+
+    _, rows, _, _ = _definitions(tmp_path, tool, runner_results=make)
+
+    row = rows[tool]
+    assert (row.state.value, row.kept_findings) == ("failed", 0)
+    assert classify_target_outcome({tool: row}) == TARGET_PARTIAL
+
+
 # --- the output file's name -----------------------------------------------------
 
 

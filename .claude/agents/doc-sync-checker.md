@@ -67,7 +67,7 @@ Read it there; do not duplicate it here.
 1. **Check current tool lists in all docs:**
 
    ```bash
-   Grep: "trivy|semgrep|trufflehog|syft|checkov|hadolint|shellcheck|gosec|yara|grype|zap|nuclei"
+   Grep: "trivy|semgrep|trufflehog|syft|checkov|hadolint|shellcheck|zizmor|yara|grype|zap|nuclei"
    ```
 
 2. **Identify docs that list tools:**

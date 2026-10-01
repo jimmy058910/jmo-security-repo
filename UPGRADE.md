@@ -4,11 +4,11 @@ Migration guide for users upgrading JMo Security. [Upgrading to v2.0.0](#upgradi
 
 ## Upgrading to v2.0.0
 
-v2.0.0 removes scan profiles, 16 tools and all but one Docker image. There are no aliases and no deprecation period: a removed flag or subcommand now fails with an argument error (exit code 2).
+v2.0.0 removes scan profiles, 17 tools and all but one Docker image. There are no aliases and no deprecation period: a removed flag or subcommand now fails with an argument error (exit code 2).
 
 ### Scan profiles are removed
 
-`jmo scan` and `jmo ci` consider one tool list, the 16 scanners in [docs/TOOLS.md](docs/TOOLS.md), and the target's content decides which of them run. To narrow the list:
+`jmo scan` and `jmo ci` consider one tool list, the 15 scanners in [docs/TOOLS.md](docs/TOOLS.md), and the target's content decides which of them run. To narrow the list:
 
 - `--tools trivy semgrep` or `--skip-tools zap` on the command line
 - a top-level `tools:` list in `jmo.yml`
@@ -64,7 +64,7 @@ per_tool:
 
 ### Removed tools
 
-These 16 tools are no longer installed, run or parsed. Their `per_tool` blocks in `jmo.yml` have nothing left to configure.
+These 17 tools are no longer installed, run or parsed. Their `per_tool` blocks in `jmo.yml` have nothing left to configure.
 
 | Tool | Why it was removed |
 |------|--------------------|
@@ -72,6 +72,7 @@ These 16 tools are no longer installed, run or parsed. Their `per_tool` blocks i
 | semgrep-secrets, bandit (as a scanner) | semgrep-secrets scanned 0 files and bandit's results were dominated by `.venv` noise; SAST moves to a vendored rule bundle in a later release |
 | trivy-rbac | Its output was identical to Trivy's config scan |
 | checkov-cicd | Folded into checkov, which never actually read `.github/workflows` under JMo (its `.git` exclusion also matched `.github`, #1313); checkov's repository run was then narrowed to Terraform and CloudFormation only, dropping its other CI/CD and secrets frameworks there. zizmor now audits workflows -- see [docs/TOOLS.md](docs/TOOLS.md#when-each-tool-runs) |
+| gosec | It examined 0 files on every run, because neither the image nor `jmo tools install` provides the Go toolchain it loads packages with. Semgrep covers Go until the vendored rule bundle arrives |
 | noseyparker, prowler, akto, scancode, cdxgen, dependency-check, horusec, falco (with falcoctl), afl++, mobsf, lynis | Never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream |
 
 Bandit remains this repository's own pre-commit hook and lint step; only bandit as a JMo scanner is gone. Details: [docs/TOOLS.md](docs/TOOLS.md#removed-in-v200).
@@ -80,18 +81,19 @@ Bandit remains this repository's own pre-commit hook and lint step; only bandit 
 
 `--tools`, `--skip-tools` and `jmo.yml`'s `tools:` split on commas as well as spaces. `--tools trivy,syft` now selects two tools. In v1.x it was one tool named `trivy,syft`, which ran nowhere.
 
-A name that is not in the matrix is a usage error, exit code 2, naming it. That includes the 16 removed tools, whose error says so. In v1.x, `--tools bandit` scanned with nothing and exited 1, and a typo selected nothing without a word.
+A name that is not in the matrix is a usage error, exit code 2, naming it. That includes the 17 removed tools, whose error says so. In v1.x, `--tools bandit` scanned with nothing and exited 1, and a typo selected nothing without a word.
 
-### Every tool gets a row: `scan-timings.json` v3
+### Every tool gets a row: `scan-timings.json` v4
 
-Each target's `scan-timings.json` is at `schema_version` 3. It has one row for **every requested tool**, including the ones that did not run. Each row is `ran`, `skipped:<reason>` or `failed:<reason>`, so a tool that was not installed, had nothing to read, or read zero files says so. v2 listed only the tools that ran, and those tools' fields changed:
+Each target's `scan-timings.json` is at `schema_version` 4. It has one row for **every requested tool**, including the ones that did not run. Each row is `ran`, `skipped:<reason>` or `failed:<reason>`, so a tool that was not installed, had nothing to read, or read zero files says so. v2 listed only the tools that ran, and those tools' fields changed:
 
-| v2 | v3 |
+| v2 | v4 |
 |----|----|
 | `status`, `timed_out`, `error_message` | `state` (`ran` / `skipped` / `failed`), `reason` (for example `timed out`, `not installed`, `no Dockerfiles`), `detail` |
 | `duration` | `seconds` |
 | `returncode` (`-1` for any failure) | `exit_code` (a failed run's own code, or `null` when there was none) |
 | `output_file` | removed: the output is `<tool>.json` beside the document |
+| (none) | `kept_findings`: on a failed row, what its runs that worked still found, counted before de-duplication ([What a scan records](docs/TOOLS.md#what-a-scan-records)) |
 
 `.scan_metadata.json` loses `stubbed_tools` and gains `tool_runs`, the same rows for every target.
 
@@ -99,7 +101,7 @@ Two outcomes changed with it. A repository with no files outside the excluded di
 
 ### One Docker image
 
-There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 16 scanners plus OPA.
+There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 15 scanners plus OPA.
 
 The `:fast`, `:slim`, `:balanced`, `:deep` and `:full` tags, and the tags with a variant suffix, are no longer built. Existing tags are not deleted, but they will never receive another update. Switch to `:latest` or a version tag.
 

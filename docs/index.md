@@ -150,7 +150,7 @@ JMo Security orchestrates these security scanners:
 | Category | Tools |
 |----------|-------|
 | Secrets | TruffleHog |
-| SAST | Semgrep, Gosec |
+| SAST | Semgrep |
 | SBOM | Syft |
 | SCA | Trivy, Grype |
 | IaC | Checkov, Trivy |

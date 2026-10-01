@@ -326,6 +326,12 @@ def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
 
     A skipped tool gets no vote. Counting it as a failure would make a target
     where one tool ran cleanly and two were not installed a partial failure.
+
+    A failed row with a run that worked (its ``kept_findings`` is a count, 0
+    included) contributed what that run found, so its target is partial:
+    counted as nothing, a target whose report held 292 findings read as having
+    contributed none (#1369). Not "found something": then a clean lockfile
+    beside a truncated one failed the scan and a vulnerable one passed it.
     """
     if not rows:
         return TARGET_FAILED
@@ -338,7 +344,8 @@ def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
         return TARGET_NOT_ATTEMPTED
     if not failed:
         return TARGET_OK
-    return TARGET_PARTIAL if ran else TARGET_FAILED
+    worked = any(r.kept_findings is not None for r in in_scope)
+    return TARGET_PARTIAL if ran or worked else TARGET_FAILED
 
 
 @dataclass(frozen=True)
@@ -349,6 +356,8 @@ class TargetSummary:
     failed: list[str]  # tools that failed
     not_installed: list[str]  # skipped because not installed
     skipped: list[str]  # "tool (reason)" for every other in-scope skip
+    # What a failed tool still contributed, and what failed (#1369).
+    kept: list[str]
 
 
 def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
@@ -357,6 +366,14 @@ def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
     return TargetSummary(
         outcome=classify_target_outcome(rows),
         failed=sorted(r.tool for r in rows.values() if r.state is State.FAILED),
+        # The adapter's count, before the report de-duplicates: the report can
+        # hold fewer (304 counted, 292 reported on NodeGoat).
+        kept=sorted(
+            f"{r.tool} kept {r.kept_findings} finding(s) from its runs that "
+            f"worked, counted before de-duplication (failed: {r.detail or r.reason})"
+            for r in rows.values()
+            if r.kept_findings is not None
+        ),
         not_installed=sorted(
             r.tool
             for r in rows.values()
@@ -1084,9 +1101,11 @@ class ScanOrchestrator:
             scan_repository,
             scan_url,
         )
+        from scripts.cli.scan_jobs.gitlab_scanner import DiscoveredImages
         from scripts.cli.scan_jobs.iac_scanner import iac_target_name
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
         from scripts.cli.scan_jobs.url_scanner import url_folder_name
+        from scripts.cli.scan_session import found_image_id
 
         all_results: list[tuple[str, str, dict[str, ToolRun]]] = []
         futures = []
@@ -1113,6 +1132,32 @@ class ScanOrchestrator:
                 from scripts.cli.scan_session import save_session as _save
 
                 _save(session, session_path)
+
+        # The images a GitLab target names are image targets of their own
+        # (#1311), each scanned once in the scan: never one it already scans
+        # with `--image`, nor one a scan it resumes has scanned, and not again
+        # when the one scan of it fails. They are found mid-scan, so the
+        # session learns them as they come back, each under its own typed id
+        # and checkpointed before the target that named it: a resumed scan
+        # that skips that target still has them.
+        found_earlier = session.found_images() if session is not None else {}
+        discovered = DiscoveredImages(
+            self.config.results_dir / "individual-images",
+            {
+                **dict.fromkeys(targets.images, "--image"),
+                **dict(found_earlier.values()),
+            },
+        )
+
+        def _record_found(gitlab_id: str) -> None:
+            for image, image_rows in discovered.found_in(gitlab_id):
+                all_results.append(("image", image, image_rows))
+                image_id = found_image_id(image)
+                if session is not None:
+                    session.register_target(
+                        "image", image_id, tools, found_in=gitlab_id
+                    )
+                _checkpoint(image_id, image, image_rows)
 
         # A tool someone named that no target in this scan reads runs nowhere.
         # Its rows say `skipped` on every target; this line says it once. Only
@@ -1142,6 +1187,9 @@ class ScanOrchestrator:
                 )
 
         skipped_count = 0
+        for image_id in found_earlier:
+            skipped_count += 1
+            _resumed("image", image_id)
         repo_names = targets.repo_names or repo_result_names(targets.repos)
         # Each target's folder, unique within its type (#1312). Assigned over
         # every target, completed or not, so a resumed scan assigns the same.
@@ -1255,6 +1303,7 @@ class ScanOrchestrator:
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    images=discovered,
                 )
                 futures.append(("gitlab", gl_id, future))
 
@@ -1302,6 +1351,8 @@ class ScanOrchestrator:
                 try:
                     name, rows, elapsed = future.result()
                     all_results.append((target_type, name, rows))
+                    if target_type == "gitlab":
+                        _record_found(target_id)
 
                     # Checkpoint after each completed target
                     _checkpoint(target_id, name, rows)

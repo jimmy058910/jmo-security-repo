@@ -449,10 +449,43 @@ def test_only_the_exact_spelling_is_a_name_it_reads(refused, read) -> None:
     assert reads(read) is True
 
 
-def test_the_walk_leaves_out_what_the_name_test_refuses(tmp_path, caplog) -> None:
-    """`collect_files` with a name test, on a pattern that matches both files on
-    every platform: the one refused is left out and named."""
-    for name in ("requirements.txt", "Requirements.txt.txt"):
+def test_the_walk_names_a_file_its_patterns_found_only_by_ignoring_case(
+    tmp_path, caplog
+) -> None:
+    """Windows' glob ignores case, so `**/requirements*.txt` found
+    `Requirements.txt`, which osv-scanner rejects: it is left out and named.
+    A case-blind glob stands in for Windows', so every platform runs this."""
+
+    class CaseBlind(type(tmp_path)):
+        def glob(self, pattern, **kwargs):
+            return super().glob(pattern, case_sensitive=False)
+
+    for rel in ("a/requirements.txt", "b/Requirements.txt"):
+        (tmp_path / rel).parent.mkdir()
+        (tmp_path / rel).write_bytes(b"x==1\n")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+        found = tool_loop.collect_files(
+            CaseBlind(tmp_path),
+            ("**/requirements*.txt",),
+            "osv-scanner",
+            accepts_name=DESCRIPTORS["osv-scanner"].accepts_name,
+        )
+
+    assert [Path(f).relative_to(tmp_path).as_posix() for f in found] == [
+        "a/requirements.txt"
+    ]
+    assert "b/Requirements.txt" in caplog.text
+    assert "NOT scanned" in caplog.text
+
+
+def test_the_walk_leaves_out_what_the_name_test_refuses_as_spelled(
+    tmp_path, caplog
+) -> None:
+    """A file the patterns match exactly as spelled, which the name test
+    refuses, is one the tool does not read by design: left out, without the
+    WARNING, which says a name was spelled with another case."""
+    for name in ("requirements.txt", "notes.txt"):
         (tmp_path / name).write_bytes(b"x==1\n")
 
     with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
@@ -464,8 +497,7 @@ def test_the_walk_leaves_out_what_the_name_test_refuses(tmp_path, caplog) -> Non
         )
 
     assert [Path(f).name for f in found] == ["requirements.txt"]
-    assert "Requirements.txt.txt" in caplog.text
-    assert "NOT scanned" in caplog.text
+    assert "NOT scanned" not in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -706,6 +738,207 @@ def test_a_single_broken_lockfile_has_nothing_to_split_and_is_named(
     assert len(runner.rounds) == 1
     assert row.state is State.FAILED
     assert row.detail == "app/package-lock.json: Return code 127 not in (0, 1)"
+
+
+# --- what a failed row still kept (#1369) ---------------------------------------
+
+
+def _sarif(results: int) -> bytes:
+    """A report of `results` findings, in the shape osv-scanner's adapter reads."""
+    return json.dumps(
+        {
+            "version": "2.1.0",
+            "runs": [
+                {
+                    "tool": {
+                        "driver": {
+                            "name": "osv-scanner",
+                            "rules": [{"id": "JMO-TEST-2026-0001"}],
+                        }
+                    },
+                    "results": [
+                        {
+                            "ruleId": "JMO-TEST-2026-0001",
+                            "ruleIndex": 0,
+                            "message": {
+                                "text": f"Package 'left-pad@1.0.{n}' is vulnerable "
+                                "to 'JMO-TEST-2026-0001'."
+                            },
+                            "locations": [
+                                {
+                                    "physicalLocation": {
+                                        "artifactLocation": {"uri": "package-lock.json"}
+                                    }
+                                }
+                            ],
+                        }
+                        for n in range(results)
+                    ],
+                }
+            ],
+        }
+    ).encode()
+
+
+def _writing(report: bytes):
+    """A run that succeeded and wrote `report`."""
+
+    def ok(definition) -> ToolResult:
+        Path(definition.output_file).write_bytes(report)
+        return _ok(definition)
+
+    return ok
+
+
+def _split(repo: Path, out: Path, readable):
+    """The broken-lockfile shape: the combined run and `sub/`'s fail, the
+    readable lockfile's run answers with `readable`."""
+
+    def respond(d, round_no):
+        if round_no == 1 or _lockfiles(d) == ["sub/package-lock.json"]:
+            return _failed(d, EXTRACTION_ERROR)
+        return readable(d)
+
+    _plant(repo, ["package-lock.json", "sub/package-lock.json"])
+    return _run(repo, out, Scripted(respond))["osv-scanner"]
+
+
+def test_a_broken_lockfile_leaves_the_others_findings_on_the_row(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    """NodeGoat with a truncated lockfile beside its own: the row is failed,
+    and the 292 findings the other lockfile produced reached the report while
+    the target read as having contributed none. The row now carries them."""
+    _cache(tmp_path, monkeypatch, "npm")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    with caplog.at_level(logging.ERROR, logger="scripts.cli.scan_utils"):
+        row = _split(tmp_path / "repo", out, _writing(_sarif(2)))
+
+    assert row.label == "failed:unaccepted exit code"
+    assert row.detail == "sub/package-lock.json: Return code 127 not in (0, 1)"
+    assert row.kept_findings == 2
+    # The failed run's line speaks for that run: the tool's other run's
+    # findings are in this scan.
+    (line,) = [r.getMessage() for r in caplog.records if "127" in r.getMessage()]
+    assert "did NOT contribute findings" not in line, line
+    assert "MISSING from this scan" in line, line
+
+
+@pytest.mark.parametrize(
+    "report",
+    [_sarif(0), b"not a report", b'{"not": "sarif"}'],
+    ids=["clean", "not-json", "not-sarif"],
+)
+def test_a_readable_lockfile_that_found_nothing_keeps_nothing(
+    tmp_path, monkeypatch, report
+) -> None:
+    """What reaches the report is what counts: a clean report, or one its
+    adapter cannot read, adds nothing to it. JSON that is not SARIF is one
+    its adapter raises on, and must not take the scan down with it."""
+    _cache(tmp_path, monkeypatch, "npm")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    row = _split(tmp_path / "repo", out, _writing(report))
+
+    assert row.state is State.FAILED
+    assert row.kept_findings == 0
+
+
+@pytest.mark.parametrize("found", [2, 0], ids=["vulnerable", "clean"])
+def test_a_readable_lockfile_beside_a_truncated_one_makes_the_target_partial(
+    tmp_path, monkeypatch, found
+) -> None:
+    """The pair measured through `jmo scan --repo`: the readable lockfile's
+    run worked either way. Vulnerable, the target was partial and exited 0;
+    clean, it exited 1, said "every tool failed" and was not stored. A run
+    that worked makes the target partial, whatever it found."""
+    from scripts.cli.scan_orchestrator import TARGET_PARTIAL, classify_target_outcome
+
+    _cache(tmp_path, monkeypatch, "npm")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    row = _split(tmp_path / "repo", out, _writing(_sarif(found)))
+
+    assert row.label == "failed:unaccepted exit code"
+    assert row.kept_findings == found
+    assert classify_target_outcome({"osv-scanner": row}) == TARGET_PARTIAL
+
+
+def test_a_partial_database_keeps_what_the_covered_lockfiles_found(
+    tmp_path, monkeypatch
+) -> None:
+    """The run itself succeeded; the row is failed for the lockfile it could
+    not read, decided before the run."""
+    _cache(tmp_path, monkeypatch, "npm")
+    repo = tmp_path / "repo"
+    _plant(repo, ["package-lock.json", "Cargo.lock"])
+
+    row = _run(repo, tmp_path, Scripted(lambda d, n: _writing(_sarif(3))(d)))[
+        "osv-scanner"
+    ]
+
+    assert row.label == "failed:offline database missing"
+    assert row.kept_findings == 3
+
+
+def test_a_file_no_adapter_reads_adds_no_findings(tmp_path) -> None:
+    """The report skips it, so a failed row's count skips it too."""
+    from scripts.core.normalize_and_report import count_findings
+
+    (tmp_path / "osv-scanner.json").write_bytes(_sarif(2))
+    (tmp_path / "no-such-tool.json").write_bytes(_sarif(2))
+
+    assert count_findings(tmp_path / "osv-scanner.json") == 2
+    assert count_findings(tmp_path / "no-such-tool.json") == 0
+
+
+def test_an_adapter_lookup_that_raises_does_not_end_the_scan(
+    tmp_path, monkeypatch
+) -> None:
+    """Counting runs inside the target's scan. Python 3.12 raises
+    PermissionError from the adapter discovery's `Path.exists()` on an
+    unreadable directory (a UID-mismatched bind mount); the row is still
+    written, counting nothing."""
+    from scripts.core import normalize_and_report
+
+    class Unreadable:
+        def get(self, name):
+            raise PermissionError(13, "Permission denied", "adapters")
+
+    monkeypatch.setattr(normalize_and_report, "get_plugin_registry", Unreadable)
+    _cache(tmp_path, monkeypatch, "npm")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    row = _split(tmp_path / "repo", out, _writing(_sarif(2)))
+
+    assert row.label == "failed:unaccepted exit code"
+    assert row.kept_findings == 0
+
+
+def test_an_earlier_scans_report_is_not_kept(tmp_path, monkeypatch, caplog) -> None:
+    """Only this scan's runs that succeeded count. A report on disk from an
+    earlier scan is not a finding of this one."""
+    _cache(tmp_path, monkeypatch, "npm")
+    repo = tmp_path / "repo"
+    _plant(repo, ["app/package-lock.json"])
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "osv-scanner.json").write_bytes(_sarif(3))
+
+    with caplog.at_level(logging.ERROR, logger="scripts.cli.scan_utils"):
+        row = _run(repo, out, Scripted(lambda d, n: _failed(d, EXTRACTION_ERROR)))[
+            "osv-scanner"
+        ]
+
+    assert row.state is State.FAILED
+    assert row.kept_findings is None
+    # With no run that worked, the tool contributed nothing, and says so.
+    assert "did NOT contribute findings" in caplog.text
 
 
 # --- the frozen database and the real binary ----------------------------------

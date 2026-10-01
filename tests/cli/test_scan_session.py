@@ -24,6 +24,7 @@ from scripts.cli.scan_session import (
     compute_config_hash,
     delete_session,
     format_session_summary,
+    found_image_id,
     load_session,
     save_session,
     validate_session_results,
@@ -175,6 +176,39 @@ class TestScanSession:
         assert kept == ("terraform:main.tf", rows)
         assert session.completed_rows("never-registered") is None
 
+    def test_an_image_a_gitlab_target_named_survives_a_round_trip(self):
+        """Found mid-scan, so no target list names it: a resumed scan has only
+        the session to learn it from (#1311). One still pending, or one the
+        user asked for, is not among them."""
+        session = ScanSession(session_id="t", config_hash="h", started_at=0.0, pid=1)
+        session.register_target("gitlab", "group/app", ["trivy"])
+        session.register_target("image", "nginx:latest", ["trivy"])
+        found, pending = found_image_id("alpine:3.19"), found_image_id("redis:7")
+        session.register_target("image", found, ["trivy"], found_in="group/app")
+        session.register_target("image", pending, ["trivy"], found_in="group/app")
+        for target_id in ("group/app", "nginx:latest"):
+            session.mark_target_complete(target_id, _rows(trivy=True))
+        session.mark_target_complete(found, _rows(trivy=True), name="alpine:3.19")
+
+        restored = ScanSession.from_dict(session.to_dict())
+
+        assert restored.found_images() == {found: ("alpine:3.19", "group/app")}
+        assert restored.targets[found].found_in == "group/app"
+        assert restored.targets["nginx:latest"].found_in == ""
+
+    def test_a_found_images_id_is_never_another_targets(self):
+        """The session keys a target by id alone. A project whose Dockerfile
+        names its own path untagged (`acme/api`) gave the image the project's
+        id, and one record held both targets."""
+        session = ScanSession(session_id="t", config_hash="h", started_at=0.0, pid=1)
+        session.register_target("gitlab", "acme/api", ["trufflehog"])
+        session.register_target(
+            "image", found_image_id("acme/api"), ["trufflehog"], found_in="acme/api"
+        )
+
+        assert found_image_id("acme/api") != "acme/api"
+        assert [t.target_type for t in session.targets.values()] == ["gitlab", "image"]
+
     def test_mark_target_complete_records_a_skip_as_skipped(self):
         """A skipped tool is neither completed nor failed, and says why."""
         session = ScanSession(
@@ -183,18 +217,21 @@ class TestScanSession:
             started_at=0.0,
             pid=1,
         )
-        session.register_target("repo", "myrepo", ["trivy", "gosec"])
+        session.register_target("repo", "myrepo", ["trivy", "hadolint"])
         session.mark_target_complete(
             "myrepo",
             {
                 **_rows(trivy=True),
-                "gosec": ToolRun("gosec", State.SKIPPED, Reason.NO_GO_SOURCES),
+                "hadolint": ToolRun("hadolint", State.SKIPPED, Reason.NO_DOCKERFILES),
             },
         )
         assert session.targets["myrepo"].completed is True
         assert session.targets["myrepo"].tools["trivy"].status == "completed"
-        assert session.targets["myrepo"].tools["gosec"].status == "skipped"
-        assert session.targets["myrepo"].tools["gosec"].error == "skipped:no Go sources"
+        assert session.targets["myrepo"].tools["hadolint"].status == "skipped"
+        assert (
+            session.targets["myrepo"].tools["hadolint"].error
+            == "skipped:no Dockerfiles"
+        )
 
     def test_mark_nonexistent_target(self):
         session = ScanSession(

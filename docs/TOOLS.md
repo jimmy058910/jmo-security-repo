@@ -23,7 +23,6 @@ To narrow the list:
 | Hadolint | Dockerfile problems | Repository, GitLab | Dockerfiles are present | Release binary |
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
 | zizmor | GitHub Actions flaws: template injection, unpinned actions, dangerous triggers, credential persistence | Repository, GitLab | Workflows, composite actions or a Dependabot config are present | Release binary |
-| Gosec | Go security issues | Repository, GitLab | Go sources or a `go.mod` are present | Release binary |
 | jmo-native | Next.js, Supabase and Firebase mistakes: a server secret behind a public env prefix, the Supabase `service_role` key or an LLM key in browser code, tables without Row Level Security, open Firebase rules ([details](#jmo-native)) | Repository, GitLab | JS/TS source, `.env` files, Firebase rules or Supabase migrations are present | Nothing: it is part of JMo |
 | YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-python` via pip, plus a rule bundle |
 | Grype | Vulnerable dependencies (Anchore database) | Repository, GitLab | Always | Release binary or install script |
@@ -39,11 +38,10 @@ Being in the matrix makes a tool eligible. Two things then decide whether it run
 
 | Tool | Content it needs | Files it looks for |
 |------|------------------|--------------------|
-| Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile` |
+| Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile`, spelled with that case, but not a `Dockerfile.<suffix>` that is no Dockerfile: a document about one (`.md`, `.txt`, `.rst`, `.adoc`, `.html`), Docker's own `Dockerfile.dockerignore`, a template that renders one (`.j2`, `.jinja`, `.jinja2`, `.tmpl`, `.tpl`, `.template`, `.in`) or code (`.py`). GitLab targets find the images they name in the same files |
 | ShellCheck | Shell scripts | `*.sh`, `*.bash`, `*.ksh` |
 | zizmor | GitHub Actions | `.github/workflows/*.yml` and `*.yaml` (the repository's own, not a subdirectory's), `action.yml` or `action.yaml` anywhere, `.github/dependabot.yml` or `.yaml` |
 | OSV-Scanner | Lockfiles | anywhere: `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `requirements*.txt`, `poetry.lock`, `Pipfile.lock`, `pdm.lock`, `uv.lock`, `pylock.toml`, `go.mod`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `gradle.lockfile`, `pom.xml`, `packages.lock.json`, `packages.config`, `pubspec.lock`, `mix.lock`, `renv.lock` |
-| Gosec | Go code | any `.go` file, or a `go.mod` |
 | jmo-native | Web application code and config | anywhere: `*.ts`, `*.tsx`, `*.js`, `*.jsx`, `*.mjs`, a `.env*`, `*.env` or `*.env.example` file, `firestore.rules`, `storage.rules`; at the repository root only: `supabase/migrations/*.sql` |
 | Checkov | Infrastructure as code | `*.tf`, `*.tf.json`, or a YAML, JSON or `.template` file whose first 8 KB name `AWSTemplateFormatVersion` or an `AWS::` type (CloudFormation) |
 
@@ -55,7 +53,7 @@ Given an IaC file target directly (`--terraform-state`, `--cloudformation`, `--k
 
 Vendored trees are never content: `.git`, `node_modules`, `vendor`, `.venv` and `venv` are excluded before anything is looked for, and so is the results directory when it sits inside the scanned tree.
 
-zizmor reads only the files JMo hands it, since it has no way to exclude a directory itself, and it runs offline, so its audits that call GitHub do not run ([Known limitations](KNOWN_LIMITATIONS.md#zizmor-runs-offline-so-its-online-audits-never-run)).
+zizmor reads only the files JMo hands it, since it has no way to exclude a directory itself, and it runs offline, so its audits that call GitHub do not run ([Known limitations](KNOWN_LIMITATIONS.md#zizmor-runs-offline-so-its-online-audits-never-run)). A file it cannot read is named in the log at WARNING and left out, and the row stays `ran`; when it reads none of them (an `action.yml` that belongs to another framework, say) the row is `skipped:no workflow zizmor could read`, not `failed`. It also obeys the scanned repository's own configuration (`zizmor.yml` or `.github/zizmor.yml`, `.yaml` too), which can switch audits off: a scan run at `--log-level INFO` names the file it reads.
 
 OSV-Scanner reads only the lockfiles JMo hands it (given a directory on Windows it finds none), and a scan never downloads: it matches them against the offline databases in `~/.jmo/osv-db`. Call analysis is off (`--no-call-analysis=all`), so every vulnerable version is reported whether or not the code calls it, on any machine. A lockfile whose ecosystem has no database there is left out, and the row reads `failed:offline database missing`, naming the ecosystem and the lockfile; the other lockfiles are still read. So is a lockfile it cannot parse: the row fails naming it, and the others' findings are kept. It reads `pom.xml` and `requirements.txt` for their direct dependencies only ([Known limitations](KNOWN_LIMITATIONS.md#osv-scanner-reads-pomxml-and-requirementstxt-for-direct-dependencies-only)). `jmo tools update` (and installing osv-scanner) fills `~/.jmo/osv-db` from OSV's own hosted zips, one ecosystem at a time (~280 MB across all eleven); the image never carries it, so a Docker container needs `jmo tools update` run once against a persistent volume ([Docker: osv-scanner's Offline Databases](DOCKER_README.md#osv-scanners-offline-databases)).
 
@@ -66,10 +64,12 @@ Every requested tool leaves one row per target, in `scan-timings.json`, in `.sca
 | Row | Meaning |
 |-----|---------|
 | `ran` | It ran and its output is beside the row. |
-| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no lockfile`, `no Go sources`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
-| `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
+| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no workflow zizmor could read`, `no lockfile`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
+| `failed:<reason>` | It applied and failed: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
 
-`failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep and Gosec report that count, and it is how a run that scanned nothing stops passing for a clean one.
+`failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep reports that count, and it is how a run that scanned nothing stops passing for a clean one.
+
+A failed row can still have contributed findings: OSV-Scanner beside a lockfile it could not read, or whose ecosystem has no database, and TruffleHog or Gitleaks whose git-history run failed while the working tree's worked. The row's `kept_findings` counts what its runs that worked reported, and those findings are in the report; the count is taken before de-duplication, so the report can hold fewer. It is null when no run of the row worked, and 0 when one worked and found nothing. A run worked when it succeeded and did not report 0 files examined. The target is then partial, whatever that run found, like one where another tool ran: its line names what failed and what was kept, the scan is stored in history with the row failed, and the target alone does not make the scan exit 1. Only a target where no run of any tool worked does.
 
 ZAP and Nuclei are DAST scanners: they find vulnerabilities by exercising a **running application** over HTTP, so they run only on `--url` and `--urls-file` targets and never on a repository, where their row reads `skipped:needs --url`. Point them at a deployed or local instance:
 
@@ -109,12 +109,12 @@ Each check is a pattern over source or config, not a proof, so its findings carr
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec, jmo-native and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
 | Kubernetes cluster | `--k8s-context`, optionally with `--k8s-namespace` or `--k8s-all-namespaces` | Trivy (`trivy k8s`) |
-| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone. The container images it references are discovered but not scanned ([#1311](https://github.com/jimmy058910/jmo-security-repo/issues/1311)) |
+| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone. When a requested tool reads an image (Trivy, Syft), each container image the clone names is then an image target of its own, pulled from its registry mid-scan and scanned as `--image` scans it, into `individual-images/<group>_<repo>__<image>/`; otherwise one INFO line says how many were found. The images are read from each Dockerfile's `FROM` instructions, the `image:` of each `docker-compose*.yml` service that has no `build:` (compose builds that one), and the `spec.containers` of each Pod in a `*.k8s.yaml` or `*.k8s.yml` file. Nothing else is read: not `compose.yaml`, not `initContainers`, not a Deployment's or CronJob's template. A build argument (`FROM $BASE`), a build stage and `scratch` are skipped, a value that is not an image reference (`FROM {{ base }}`) is named, file and line, in a WARNING and skipped, and an image the scan already scans is scanned once. One no registry serves is a `failed` image row, and so is an image reference JMo does not hand a scanner (a registry with a port, for now) |
 
 Targets combine in one run: `jmo scan --repo . --image myapp:latest` scans both, each with its own tools.
 
@@ -129,7 +129,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 
 | Tool | How `jmo tools install` installs it | Where it goes |
 |------|-------------------------------------|---------------|
-| TruffleHog, Gitleaks, Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
+| TruffleHog, Gitleaks, Hadolint, ShellCheck, zizmor, OSV-Scanner, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
 | Syft, Trivy, Grype | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
 | Semgrep, Checkov | Pinned PyPI package in a virtual environment of its own, so their dependencies cannot conflict with JMo's or each other's | `~/.jmo/tools/venvs/<tool>/` |
 | YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |
@@ -141,7 +141,6 @@ Platform differences:
 
 - **Linux:** ShellCheck is installed with `sudo apt-get install shellcheck` when passwordless sudo is available, which gives the distribution's version. Otherwise it is the pinned binary.
 - **zizmor has no Windows arm64 build.** On Windows, `jmo tools install` fetches the x86_64 one whatever the architecture, as it does for Hadolint and ShellCheck.
-- **Gosec needs a Go toolchain** (`go` on `PATH`) to load packages, which neither `jmo tools install` nor the Docker image provides. Without one it examines 0 files, and its row reads `failed:examined 0 files` ([#1310](https://github.com/jimmy058910/jmo-security-repo/issues/1310)).
 - **ZAP needs Java 17 or newer** at runtime, which `jmo tools install` does not provide. Install it yourself (`winget install Microsoft.OpenJDK.17`, `sudo apt-get install default-jre-headless`, or `brew install openjdk@17`); `jmo wizard` offers to do it for you.
 - **YARA without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara.rules_path` in `jmo.yml`.
 
@@ -169,6 +168,7 @@ These tools are no longer installed, run or parsed. A `per_tool` block for one o
 | semgrep-secrets | Semgrep with secret-detection rules | It scanned 0 files; SAST moves to a vendored rule bundle in a later release |
 | bandit (as a scanner) | Python SAST | Its results were dominated by `.venv` noise; SAST moves to a vendored rule bundle in a later release |
 | trivy-rbac | Kubernetes RBAC checks | Its output was identical to Trivy's config scan |
+| gosec | Go SAST | It examined 0 files on every run: it loads packages through the `go` command, and neither the image nor `jmo tools install` provides Go. Providing it meant ~58-72 MB of Go in the image and module and toolchain downloads during a scan. Semgrep covers Go until the vendored rule bundle arrives |
 | checkov-cicd | Checkov on CI/CD pipelines | Folded into Checkov, which never actually read `.github/workflows` under JMo (its `.git` exclusion also matched `.github`, #1313); Checkov's repository run was then narrowed to Terraform and CloudFormation only ([above](#when-each-tool-runs)), dropping its other CI/CD and secrets frameworks there. zizmor now audits workflows |
 
 Each tool below was never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream:

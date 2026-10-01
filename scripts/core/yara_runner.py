@@ -30,7 +30,7 @@ Exit codes are the scanner's ``ok_return_codes=(0, 1)`` plus a distinct error:
 ===  ===========================================================
   0  scanned, no matches
   1  scanned, matches found
-  2  did NOT scan (no library, no rules, unreadable target)
+  2  did NOT scan (no library, no rules, unreadable target, a crash)
 ===  ===========================================================
 
 Code 2 matters as much as the other two. A run that examines nothing produces
@@ -45,6 +45,7 @@ import argparse
 import json
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -229,6 +230,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="yara_runner",
         description="Scan a tree with libyara and write JSON the yara adapter parses.",
+        # `--outp x` would otherwise be `--output x`, and a user's flags come
+        # after JMo's: the report would move (#1335).
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--rules", required=True, help="Rule file or directory of rules"
@@ -258,10 +262,32 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # TODO(issue-#1382): an exception not caught below escapes and exits 1,
-    # which the row accepts as matches, over whatever --output already holds.
     args = _parse_args(argv)
 
+    # An earlier scan's output must not outlive this run: the row reads this
+    # run's file or none, and a stop before the scan would otherwise leave the
+    # previous matches to be parsed as this scan's.
+    out_path = Path(args.output)
+    try:
+        out_path.unlink(missing_ok=True)
+    except OSError as exc:
+        _log(
+            f"yara: could not remove an earlier output {out_path}: {exc} - "
+            "nothing was scanned"
+        )
+        return EXIT_ERROR
+
+    try:
+        return _scan(args, out_path)
+    except Exception as exc:
+        # Python exits 1 on an uncaught exception, which is EXIT_MATCHES and
+        # which the row accepts; a crash is "did not scan", and says why.
+        _log(f"yara: {type(exc).__name__}: {exc} - nothing was scanned")
+        _log(traceback.format_exc().rstrip())
+        return EXIT_ERROR
+
+
+def _scan(args: argparse.Namespace, out_path: Path) -> int:
     yara = _import_yara()
     if yara is None:
         _log(
@@ -334,7 +360,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_ERROR
 
-    out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(matches, indent=2), encoding="utf-8")
 

@@ -112,7 +112,7 @@ Parse `<results-dir>/summaries/timings.json` (report phase). Group the flat
 findings produced, mean, max, and real percentiles from the observed samples.
 
 Then read every `<results-dir>/individual-*/<target>/scan-timings.json` (scan
-phase, schema 3) for each tool's row on each target: `state`, `reason`,
+phase, schema 4) for each tool's row on each target: `state`, `reason`,
 `seconds`, `exit_code` and `attempts`. Timeout recommendations come from this
 file, and rates from `scan_tool_runs` in history.
 

@@ -5,7 +5,7 @@ that ran nowhere, so e2e tests written that way passed while scanning nothing;
 a removed tool (`--tools bandit`) was reported as "applicable to no target
 type"; and a typo selected nothing without a word. Decision 4 (2026-09-24):
 split on commas and spaces, and reject an unknown name as a usage error, exit
-2, naming it, with "removed in v2.0.0" for the sixteen the cut removed.
+2, naming it, with "removed in v2.0.0" for the tools v2.0.0 removed.
 
 `--dest` without `--tsv` was ignored; decided 2026-09-25 (handoff 3.3) to be a
 usage error too.
@@ -46,6 +46,7 @@ def test_tools_split_on_commas_and_spaces(sub, argv, expected):
     [
         ("bandit", "removed in v2.0.0"),
         ("kubescape", "removed in v2.0.0"),
+        ("gosec", "removed in v2.0.0"),
         ("trivvy", "unknown tool 'trivvy'"),
     ],
 )

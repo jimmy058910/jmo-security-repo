@@ -2847,12 +2847,16 @@ class ProgressTracker:
                     f"{', '.join(summary.skipped)}",
                 )
             elif outcome == TARGET_PARTIAL:
+                # A failed tool that kept findings is named with what it kept
+                # and what failed: that target was "contributed NO findings"
+                # while its report held them (#1369).
                 _log(
                     self.args,
                     "WARN",
                     f"{message} - findings MISSING from "
                     f"{len(failed_tools)} failed tool(s): "
-                    f"{', '.join(failed_tools)}",
+                    f"{', '.join(failed_tools)}"
+                    + "".join(f"; {kept}" for kept in summary.kept),
                 )
             elif missing_tools:
                 # The tools that ran all succeeded, so this is not a warning
@@ -2861,8 +2865,8 @@ class ProgressTracker:
                 #
                 # Only a tool that is not installed: one that had nothing to
                 # scan is reported once at the end of the run, at INFO. Gating
-                # gosec on content (#1081) would otherwise put this WARN on every
-                # target of every Node, Python, Java, Ruby and PHP scan.
+                # hadolint on content (#1081) would otherwise put this WARN on every
+                # target without a Dockerfile, which is most of them.
                 _log(
                     self.args,
                     "WARN",
@@ -3415,8 +3419,8 @@ def cmd_scan(args) -> int:
     # policy passes on a run where no secret scanner executed. The run still
     # exits on findings alone: `--allow-missing-tools` bought that.
     #
-    # Only `not installed`. A tool the target had nothing for (gosec on a
-    # repository with no Go) produced an empty file that is simply correct, and
+    # Only `not installed`. A tool the target had nothing for (hadolint on a
+    # repository with no Dockerfile) produced an empty file that is simply correct, and
     # warning about it in these words would fire on most repositories (#1081).
     stubbed_by_target = {
         str(name): missing
@@ -3445,7 +3449,7 @@ def cmd_scan(args) -> int:
         )
 
     # Benign, so INFO rather than WARN - but still said out loud, because "why
-    # is there no gosec output?" is a question a user will ask and the answer
+    # is there no hadolint output?" is a question a user will ask and the answer
     # should not require reading scan-timings.json. A tool that reads no target
     # of this type at all is left out: every image target would list ten.
     skipped_by_target = {
@@ -3486,7 +3490,10 @@ def cmd_scan(args) -> int:
     scan_metadata = {
         "tools": tools,
         "timestamp": datetime.now(UTC).isoformat(),
-        "target_count": total_targets,
+        # The targets the scan recorded, not the ones asked for: an image a
+        # GitLab target names is found mid-scan (#1311), and the report counts
+        # the folders it reads, so the count before the scan disagreed with it.
+        "target_count": len(scan_results),
         # The report phase stores this in history. It has no clock of its own
         # that means anything here: its `elapsed` measures the ~30 seconds of
         # aggregation, not the ~20 minutes of scanning, and a wrong number reads

@@ -86,15 +86,6 @@ RUN NUCLEI_VERSION="3.11.1" && \
     rm /tmp/nuclei.zip && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
-# Download Gosec (Go SAST)
-RUN GOSEC_VERSION="2.29.0" && \
-    GOSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/securego/gosec/releases/download/v${GOSEC_VERSION}/gosec_${GOSEC_VERSION}_linux_${GOSEC_ARCH}.tar.gz" \
-    -o /tmp/gosec.tar.gz && \
-    gzip -t /tmp/gosec.tar.gz && \
-    tar -xzf /tmp/gosec.tar.gz -C /usr/local/bin gosec && \
-    chmod +x /usr/local/bin/gosec
-
 # Download Grype (SCA + Vuln - Anchore)
 RUN GRYPE_VERSION="0.118.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
@@ -234,7 +225,6 @@ COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/shfmt /usr/local/bin/shfmt
-COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
@@ -248,7 +238,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/trivy \
     /usr/local/bin/hadolint \
     /usr/local/bin/nuclei \
-    /usr/local/bin/gosec \
     /usr/local/bin/grype \
     /usr/local/bin/opa \
     2>/dev/null || true
@@ -295,7 +284,6 @@ RUN echo "=== Verifying tools ===" && \
     yara --version && \
     shellcheck --version && \
     shfmt --version && \
-    gosec --version && \
     grype version && \
     opa version && \
     echo "=== All tools verified ==="

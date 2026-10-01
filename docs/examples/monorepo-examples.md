@@ -78,6 +78,6 @@ Open the generated `results/dashboard.html` to browse findings grouped by target
   ```
 
 - **Content-triggered tools.** Some tools run only against targets whose contents
-  match — `hadolint` on Dockerfiles, `shellcheck` on shell scripts, `gosec` on Go
-  sources (see [TOOLS.md](../TOOLS.md#when-each-tool-runs)).
+  match — `hadolint` on Dockerfiles, `shellcheck` on shell scripts, `zizmor` on GitHub
+  Actions workflows (see [TOOLS.md](../TOOLS.md#when-each-tool-runs)).
   A polyglot monorepo automatically gets the relevant scanners per subfolder.

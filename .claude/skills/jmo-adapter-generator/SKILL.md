@@ -68,7 +68,7 @@ Use the full template at [templates/adapter-template.py](templates/adapter-templ
   cannot be called from inside the constructor of the `Finding` that needs the
   id. `fingerprint(tool, rule_id, path, start_line, message)` returns 16
   lowercase hex chars; most shipped adapters call it directly
-  (`gosec_adapter.py:166`). semgrep, trivy and trufflehog instead build the
+  (`hadolint_adapter.py:157`). semgrep, trivy and trufflehog instead build the
   `Finding` first and then assign `finding.id = self.get_fingerprint(finding)`
   (`trivy_adapter.py:178`), which delegates to the same formula
 - `name` in metadata matches the **adapter filename** identifier - underscored,

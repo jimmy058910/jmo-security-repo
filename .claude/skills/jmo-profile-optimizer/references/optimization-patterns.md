@@ -220,18 +220,18 @@ guards it:
 
 | Key | Meaning |
 |---|---|
-| `schema_version` | `3` (`SCAN_TIMINGS_SCHEMA_VERSION`). Refuse a shape you do not recognise rather than misreading it. |
+| `schema_version` | `4` (`SCAN_TIMINGS_SCHEMA_VERSION`). Refuse a shape you do not recognise rather than misreading it. |
 | `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s` / `gitlab`. |
 | `wall_seconds` | Elapsed time of the whole parallel tool batch. |
 | `outcome` / `error` | `completed`, or `failed-before-tools` with a one-line `error` (a failed clone, a missing credential, a tree with no files to scan). A failed target still has a row per tool, each `failed` with that reason, or `skipped` when the tool does not read that kind of target. |
-| `tools[]` | One row per requested tool: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`, `detail`. |
+| `tools[]` | One row per requested tool: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`, `detail`, `kept_findings`. On a `failed` row, `kept_findings` counts what its runs that worked still reported (before de-duplication): `null` means no run of the row worked, and `0` means a run worked and found nothing (the target is partial, not a "no output" case). |
 
 `state` is `ran`, `skipped` or `failed`. `reason` is `null` for `ran` and one of
 a closed set otherwise (`Reason` in `scan_timings.py`):
 
 - **skipped:** `needs --url`, `not for this target type`, `not installed` (only
   under `--allow-missing-tools`), `no Dockerfiles`, `no shell scripts`,
-  `no Go sources`, `no IaC files`, `no GitHub Actions workflows`, `no lockfile`,
+  `no IaC files`, `no GitHub Actions workflows`, `no workflow zizmor could read`, `no lockfile`,
   `no JS/TS, .env, Firebase rules or Supabase migrations`
 - **failed:** `not installed`, `timed out`, `no files to scan`,
   `offline database missing`, `examined 0 files`, `unaccepted exit code`, `no output`,
@@ -241,7 +241,7 @@ a closed set otherwise (`Reason` in `scan_timings.py`):
 > **Only `timed out` is a budget question.** `no output` is an accepted exit
 > code with an empty artifact, a tool that appeared to work and did not.
 > `examined 0 files` is a tool whose own output says it read nothing (semgrep's
-> `paths.scanned`, gosec's `Stats.files`). Both belong in a bug report, not in
+> `paths.scanned`, the next scanner's own file count). Both belong in a bug report, not in
 > `jmo.yml`.
 >
 > `attempts` counts every try. `timed out` with `attempts: 4` is a tool that is
@@ -280,7 +280,7 @@ def summarize_scan_timings(results_dir: Path) -> dict:
 
     for path in sorted(results_dir.glob("individual-*/*/scan-timings.json")):
         doc = json.loads(path.read_bytes())
-        if doc.get("schema_version") != 3:
+        if doc.get("schema_version") != 4:
             raise ValueError(f"{path}: unrecognised schema_version {doc.get('schema_version')!r}")
         if doc.get("outcome") != "completed":
             failed_targets.append((doc.get("target"), doc.get("error")))
@@ -508,10 +508,13 @@ per_tool:
     timeout: 1800
 ```
 
-**Container discovery.** The GitLab path also discovers container images
-referenced by Dockerfiles, `docker-compose.yml`, and Kubernetes manifests, but
-it has never scanned one: every call raised before it started (#1311). Budget
-GitLab scan time by repository count until that is fixed or removed.
+**Container discovery.** When a requested tool reads an image (trivy, syft), the
+GitLab path also scans each container image its Dockerfiles, `docker-compose*.yml`
+services without `build:` and `*.k8s.yaml` Pods name, as an image target of its
+own, one after another inside that GitLab target's job (#1311).
+Each is pulled from its registry mid-scan, so budget GitLab scan time by
+repository count plus the images each names: an image target's timings are in
+its own `individual-images/<group>_<repo>__<image>/scan-timings.json`.
 
 > Whether any of these settings actually helps is not measurable from
 > `timings.json` — it records report-phase parsing only. Verify a timeout change

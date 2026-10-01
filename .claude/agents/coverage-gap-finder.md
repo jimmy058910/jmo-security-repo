@@ -115,7 +115,7 @@ Every adapter test must have 5 categories:
 
 ### Below Threshold (1 adapter)
 
-#### 1. gosec_adapter.py - 76% coverage ❌
+#### 1. example_adapter.py - 76% coverage ❌
 
 **Uncovered Lines:** (read them from the coverage report, then open the file and
 cite what those lines actually contain — not what you expect an adapter to contain)
@@ -126,38 +126,38 @@ cite what those lines actually contain — not what you expect an adapter to con
 
 **Missing Tests:**
 ```python
-# tests/adapters/test_gosec_adapter.py
+# tests/adapters/test_example_adapter.py
 # ADD THESE TESTS:
-# (write() is defined at the top of that file; Path and GosecAdapter are
+# (write() is defined at the top of that file; Path and ExampleAdapter are
 #  already imported there)
 
-def test_gosec_empty_issues(tmp_path: Path):
+def test_example_empty_issues(tmp_path: Path):
     """No issues -> no findings."""
-    f = tmp_path / "gosec.json"
+    f = tmp_path / "example.json"
     write(f, {"Issues": []})
-    assert GosecAdapter().parse(f) == []
+    assert ExampleAdapter().parse(f) == []
 
-def test_gosec_issues_not_a_list(tmp_path: Path):
+def test_example_issues_not_a_list(tmp_path: Path):
     """A non-list 'Issues' is rejected, not iterated."""
-    f = tmp_path / "gosec.json"
-    write(f, {"Issues": {"rule_id": "G101"}})
-    assert GosecAdapter().parse(f) == []
+    f = tmp_path / "example.json"
+    write(f, {"Issues": {"rule_id": "RULE-1"}})
+    assert ExampleAdapter().parse(f) == []
 
-def test_gosec_skips_non_dict_issue(tmp_path: Path):
+def test_example_skips_non_dict_issue(tmp_path: Path):
     """Junk entries are skipped; valid siblings still parse."""
-    f = tmp_path / "gosec.json"
-    write(f, {"Issues": ["not-a-dict", {"rule_id": "G101", "file": "a.go", "line": "5"}]})
-    findings = GosecAdapter().parse(f)
+    f = tmp_path / "example.json"
+    write(f, {"Issues": ["not-a-dict", {"rule_id": "RULE-1", "file": "a.txt", "line": "5"}]})
+    findings = ExampleAdapter().parse(f)
     assert len(findings) == 1
-    assert findings[0].ruleId == "G101"
+    assert findings[0].ruleId == "RULE-1"
 
-def test_gosec_line_range_takes_first_line(tmp_path: Path):
+def test_example_line_range_takes_first_line(tmp_path: Path):
     """A '10-15' range reports its first line."""
-    f = tmp_path / "gosec.json"
-    write(f, {"Issues": [{"rule_id": "G104", "file": "a.go", "line": "10-15"}]})
-    findings = GosecAdapter().parse(f)
+    f = tmp_path / "example.json"
+    write(f, {"Issues": [{"rule_id": "RULE-2", "file": "a.txt", "line": "10-15"}]})
+    findings = ExampleAdapter().parse(f)
     assert findings[0].location["startLine"] == 10
-    assert findings[0].location["path"] == "a.go"
+    assert findings[0].location["path"] == "a.txt"
 ```
 
 **Estimated Coverage After:** re-run `pytest --cov` and quote the measured
@@ -176,7 +176,7 @@ number; do not predict it.
 
 To bring every adapter to ≥85% coverage:
 
-1. **gosec_adapter.py:** Add the 4 tests above, then re-run the coverage report
+1. **example_adapter.py:** Add the 4 tests above, then re-run the coverage report
 
 **Result:** quote the re-measured per-adapter numbers, not a prediction
 
@@ -499,7 +499,7 @@ scripts/core/adapters/trivy_adapter.py        92%   15-18, 45
 **Bad coverage pattern:**
 
 ```text
-scripts/core/adapters/gosec_adapter.py        76%   22-35, 45-52, 68-71, 89
+scripts/core/adapters/example_adapter.py        76%   22-35, 45-52, 68-71, 89
 ```
 
 - 76% coverage ❌ (below threshold)

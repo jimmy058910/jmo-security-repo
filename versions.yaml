@@ -97,17 +97,6 @@ binary_tools:
     critical: false
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
-  gosec:
-    version: 2.29.0
-    github_repo: securego/gosec
-    description: Go security analyzer
-    release_pattern: gosec_{version}_linux_{arch}.tar.gz
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/securego/gosec/releases/latest
-    critical: false
-    notes: v1.0.0 - Go-specific SAST
   grype:
     version: 0.118.0
     github_repo: anchore/grype
@@ -221,7 +210,6 @@ update_policies:
     - hadolint
     - shfmt
     - nuclei
-    - gosec
     - grype
     - yara
     description: Non-critical tools can be updated monthly

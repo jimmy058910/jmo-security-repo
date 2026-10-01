@@ -545,6 +545,168 @@ class TestScanExitCodeReflectsTargetOutcome:
         assert "trivy" in err
 
 
+def _kept(tool: str = "trufflehog", kept: int | None = 1) -> ToolRun:
+    """A failed row with a run that worked, which found `kept` findings: a
+    secret scanner's tree beside its failed git-history run (#1369). None:
+    no run of it worked."""
+    return ToolRun(
+        tool,
+        State.FAILED,
+        Reason.EXIT_CODE,
+        attempts=2,
+        invocations=2,
+        detail="git: exit 2",
+        kept_findings=kept,
+    )
+
+
+class TestAFailedRowThatKeptFindings:
+    """#1369: osv-scanner's row is `failed` when one lockfile cannot be read,
+    and the other lockfiles' findings still reach the report. The target was
+    reported as having contributed NO findings and the scan was not stored in
+    history, while its report held 292 findings."""
+
+    def test_the_target_is_partial_not_empty(self):
+        assert classify_target_outcome({"trufflehog": _kept()}) == TARGET_PARTIAL
+        # Beside a tool that ran, or one that failed outright, still partial.
+        assert (
+            classify_target_outcome({"trufflehog": _kept(), **rows(trivy="ran")})
+            == TARGET_PARTIAL
+        )
+        assert (
+            classify_target_outcome(
+                {"trufflehog": _kept(), **rows(trivy="failed:timed out")}
+            )
+            == TARGET_PARTIAL
+        )
+        # The control: the same row with no run that worked contributed nothing.
+        assert (
+            classify_target_outcome({"trufflehog": _kept(kept=None)}) == TARGET_FAILED
+        )
+
+    def test_a_run_that_worked_and_found_nothing_is_partial_too(self):
+        """Partial is "a run of the row worked", not "it found something".
+        Decided by the count, a clean lockfile beside a truncated one exited
+        1, said "every tool failed", and was not stored, while a vulnerable
+        one beside the same truncated file exited 0 (measured): the exit code
+        followed how many vulnerabilities the surviving run found."""
+        assert classify_target_outcome({"trufflehog": _kept(kept=0)}) == TARGET_PARTIAL
+        assert (
+            classify_target_outcome(
+                {"trufflehog": _kept(kept=0), **rows(trivy="failed:timed out")}
+            )
+            == TARGET_PARTIAL
+        )
+
+    def test_the_row_carries_what_it_kept_across_the_handoff(self):
+        """`.scan_metadata.json` is how the report phase learns it."""
+        row = _kept(kept=292)
+        assert ToolRun.from_dict(row.to_dict()) == row
+        assert row.to_dict()["kept_findings"] == 292
+        # 0 is a run that worked and found nothing, not the absence of one.
+        clean = _kept(kept=0)
+        assert ToolRun.from_dict(clean.to_dict()).kept_findings == 0
+        # A row written before the field existed says no run of it worked.
+        older = {k: v for k, v in row.to_dict().items() if k != "kept_findings"}
+        assert ToolRun.from_dict(older).kept_findings is None
+
+    def test_only_a_failed_row_keeps_findings(self):
+        """A row that ran contributed everything it found; a skipped one ran
+        nothing. Either carrying a count would be read as partial."""
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.RAN, kept_findings=3)
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.RAN, kept_findings=0)
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.SKIPPED, Reason.NOT_INSTALLED, kept_findings=3)
+
+    @pytest.mark.parametrize("kept", [3, 0], ids=["found-some", "found-none"])
+    def test_the_target_exits_zero_and_says_what_failed_and_what_was_kept(
+        self, scan_env, capsys, kept
+    ):
+        """A partial target exits 0 and says so, as one whose other tool ran
+        does: only a target that produced *nothing* fails the run. The issue's
+        case exited 1 because it was read as producing nothing. A run that
+        worked and found nothing is said as 0, and no line says that every
+        tool failed or that none ran successfully: one did."""
+        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
+            mock_scan.return_value = ("proj", {"trufflehog": _kept(kept=kept)})
+            rc = jmo.cmd_scan(scan_env)
+
+        err = capsys.readouterr().err
+        assert rc == 0
+        progress = [ln for ln in err.splitlines() if "[1/1]" in ln]
+        assert len(progress) == 1, f"expected one progress line: {progress}"
+        line = progress[0]
+        assert '"level": "WARN"' in line, line
+        assert "\\u26a0" in line, "a partial target should carry the warning glyph"
+        assert "MISSING" in line, line
+        assert "git: exit 2" in line, "the line does not say what failed: " + line
+        assert f"kept {kept} finding(s)" in line, "not what was kept: " + line
+        # The adapter's count: the report de-duplicates, so it can hold fewer.
+        assert "before de-duplication" in line, line
+        assert "contributed NO findings" not in err
+        assert "produced no findings" not in err
+        assert "every tool failed" not in err
+        assert "no tool ran successfully" not in err
+
+    def test_the_same_row_with_no_run_that_worked_still_fails_the_run(
+        self, scan_env, capsys
+    ):
+        """The rule's other half, for this row's shape: no run of any tool
+        worked, so the target contributed nothing."""
+        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
+            mock_scan.return_value = ("proj", {"trufflehog": _kept(kept=None)})
+            rc = jmo.cmd_scan(scan_env)
+
+        err = capsys.readouterr().err
+        assert rc == 1
+        assert "contributed NO findings" in err
+        assert "produced no findings" in err
+
+    @pytest.mark.parametrize("kept", [1, 0], ids=["found-some", "found-none"])
+    def test_the_scan_is_stored_with_that_row_failed(self, scan_env, tmp_path, kept):
+        """Not stored, the next scan's diff compares against an older one;
+        stored, the row says the tool failed, so nothing reads it as clean.
+        A run that worked and found nothing is stored the same way: its 0
+        is this scan's answer for what it read."""
+        db = tmp_path / "history.db"
+        args = TestScanStoresHistory._args(scan_env, tmp_path, db)
+
+        def scan(repo, out_root, *a, **k):
+            # What the tree's run wrote: `kept` findings, a placeholder value.
+            out = Path(out_root) / "proj"
+            out.mkdir(parents=True, exist_ok=True)
+            record = {
+                "SourceMetadata": {
+                    "Data": {"Filesystem": {"file": "keys/live.pem", "line": 1}}
+                },
+                "DetectorName": "PrivateKey",
+                "Verified": False,
+                "Raw": "not-a-secret-7f3a9c",
+            }
+            (out / "trufflehog.json").write_bytes(
+                (json.dumps(record).encode() + b"\n") * kept
+            )
+            return "proj", {"trufflehog": _kept(kept=kept)}
+
+        with patch("scripts.cli.scan_jobs.scan_repository", side_effect=scan):
+            rc = jmo.cmd_scan(args)
+
+        assert rc == 0
+        assert db.exists(), "the scan was not stored in history"
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            scans = con.execute("SELECT tools, total_findings FROM scans").fetchall()
+            runs = con.execute(
+                "SELECT target, tool, state, reason FROM scan_tool_runs"
+            ).fetchall()
+        finally:
+            con.close()
+        assert [(json.loads(t), n) for t, n in scans] == [(["trufflehog"], kept)]
+        assert runs == [("proj", "trufflehog", "failed", "unaccepted exit code")]
+
+
 class TestPreflightNoLongerDropsTools:
     """Phase 3: a missing tool reaches the scan and gets a row. It used to be
     removed before any target, so on a host it had no row anywhere."""
@@ -829,7 +991,7 @@ class TestToolApplicableToNoTargetType:
 
 
 class TestTheSkipReasonsReadDifferently:
-    """#1081: `not installed` is a gap the user can close; `no Go sources` is a
+    """#1081: `not installed` is a gap the user can close; `no Dockerfiles` is a
     correct decision about this target. The end-of-scan WARN is for the first
     only, and must keep firing for it."""
 
@@ -838,7 +1000,7 @@ class TestTheSkipReasonsReadDifferently:
             rows(
                 semgrep="ran",
                 trivy="skipped:not installed",
-                gosec="skipped:no Go sources",
+                hadolint="skipped:no Dockerfiles",
                 zap="skipped:needs --url",
                 grype="failed:timed out",
             )
@@ -848,7 +1010,7 @@ class TestTheSkipReasonsReadDifferently:
         assert summary.failed == ["grype"]
         # In-scope skips only: a tool that reads no target of this kind is not
         # news on a line about why this target produced nothing.
-        assert summary.skipped == ["gosec (no Go sources)", "trivy (not installed)"]
+        assert summary.skipped == ["hadolint (no Dockerfiles)", "trivy (not installed)"]
         assert summary.outcome == TARGET_PARTIAL
 
     @staticmethod
@@ -878,7 +1040,7 @@ class TestTheSkipReasonsReadDifferently:
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
         err = self._scan_with(
-            scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=True
+            scan_env, tmp_path, monkeypatch, capsys, "hadolint", resolves=True
         )
 
         assert "were STUBBED, not executed" not in err, err
@@ -886,7 +1048,7 @@ class TestTheSkipReasonsReadDifferently:
             ln for ln in err.splitlines() if "SKIPPED with nothing to scan" in ln
         ]
         assert len(skipped) == 1, f"expected one skipped line: {err}"
-        assert "gosec (no Go sources)" in skipped[0]
+        assert "hadolint (no Dockerfiles)" in skipped[0]
         assert '"level": "INFO"' in skipped[0], "a benign outcome was raised to WARN"
 
     def test_a_tool_that_reads_no_repository_is_not_listed(
@@ -897,11 +1059,11 @@ class TestTheSkipReasonsReadDifferently:
         default repository scan said zap and nuclei had nothing to scan."""
         cfg = tmp_path / "jmo.yml"
         cfg.write_text(
-            yaml.safe_dump({"tools": ["gosec", "zap"], "outputs": ["json"]}),
+            yaml.safe_dump({"tools": ["hadolint", "zap"], "outputs": ["json"]}),
             encoding="utf-8",
         )
         scan_env.config = str(cfg)
-        scan_env.tools = ["gosec", "zap"]
+        scan_env.tools = ["hadolint", "zap"]
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.tool_loop.find_tool",
             lambda name, *a, **k: "/usr/bin/" + name,
@@ -914,7 +1076,7 @@ class TestTheSkipReasonsReadDifferently:
             ln for ln in err.splitlines() if "SKIPPED with nothing to scan" in ln
         ]
         assert len(skipped) == 1, err
-        assert "gosec (no Go sources)" in skipped[0]
+        assert "hadolint (no Dockerfiles)" in skipped[0]
         assert "zap" not in skipped[0], skipped[0]
 
     def test_a_missing_binary_is_still_reported_as_a_stub(
@@ -922,12 +1084,12 @@ class TestTheSkipReasonsReadDifferently:
     ):
         """The other half: a fix that simply stopped warning would pass above."""
         err = self._scan_with(
-            scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=False
+            scan_env, tmp_path, monkeypatch, capsys, "hadolint", resolves=False
         )
 
         stubbed = [ln for ln in err.splitlines() if "were STUBBED, not executed" in ln]
         assert len(stubbed) == 1, f"the true warning was lost with the false one: {err}"
-        assert "gosec" in stubbed[0]
+        assert "hadolint" in stubbed[0]
         assert '"level": "WARN"' in stubbed[0]
         assert "SKIPPED with nothing to scan" not in err
 
@@ -938,19 +1100,19 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
     end of the run."""
 
     @staticmethod
-    def _scan(scan_env, tmp_path, monkeypatch, capsys, *, gosec_resolves):
+    def _scan(scan_env, tmp_path, monkeypatch, capsys, *, hadolint_resolves):
         from scripts.core.tool_runner import ToolResult
 
         cfg = tmp_path / "jmo.yml"
         cfg.write_text(
-            yaml.safe_dump({"tools": ["trufflehog", "gosec"], "outputs": ["json"]}),
+            yaml.safe_dump({"tools": ["trufflehog", "hadolint"], "outputs": ["json"]}),
             encoding="utf-8",
         )
         scan_env.config = str(cfg)
-        scan_env.tools = ["trufflehog", "gosec"]
+        scan_env.tools = ["trufflehog", "hadolint"]
         scan_env.allow_missing_tools = True
 
-        resolvable = {"trufflehog", "gosec"} if gosec_resolves else {"trufflehog"}
+        resolvable = {"trufflehog", "hadolint"} if hadolint_resolves else {"trufflehog"}
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.tool_loop.find_tool",
             lambda name, *a, **k: ("/usr/bin/" + name) if name in resolvable else None,
@@ -975,22 +1137,26 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
     def test_a_tool_with_nothing_to_scan_does_not_warn_on_the_target_line(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
-        err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=True)
+        err = self._scan(
+            scan_env, tmp_path, monkeypatch, capsys, hadolint_resolves=True
+        )
         line = self._progress_line(err)
 
         assert "were stubbed and did NOT run" not in line, line
         assert '"level": "INFO"' in line, "a clean target was raised to WARN: " + line
         assert "SKIPPED with nothing to scan" in err
-        assert "gosec" in err
+        assert "hadolint" in err
 
     def test_a_missing_tool_still_warns_on_the_target_line(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
-        err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=False)
+        err = self._scan(
+            scan_env, tmp_path, monkeypatch, capsys, hadolint_resolves=False
+        )
         line = self._progress_line(err)
 
         assert "1 tool(s) were stubbed and did NOT run" in line, line
-        assert "gosec" in line
+        assert "hadolint" in line
         assert '"level": "WARN"' in line
 
     def test_a_target_with_nothing_for_its_only_tool_is_not_a_warning(

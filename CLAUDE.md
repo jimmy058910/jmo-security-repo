@@ -9,7 +9,7 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 ## Project Overview
 
-JMo Security is a terminal-first security audit toolkit orchestrating 16 scanners with unified CLI, normalized outputs, and HTML dashboard.
+JMo Security is a terminal-first security audit toolkit orchestrating 15 scanners with unified CLI, normalized outputs, and HTML dashboard.
 
 **Version:** v1.1.1 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
@@ -126,7 +126,7 @@ make test-fast                         # Fast parallel tests (recommended for de
 | Command | Purpose |
 |---------|---------|
 | `jmo wizard` | Interactive setup wizard |
-| `jmo scan --repo .` | Production scan (the target's content decides which of the 16 scanners run; narrow with `--tools` / `--skip-tools`) |
+| `jmo scan --repo .` | Production scan (the target's content decides which of the 15 scanners run; narrow with `--tools` / `--skip-tools`) |
 | `jmo scan --image nginx:latest` | Container image scan |
 | `jmo report ./results` | Generate reports from scan |
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
@@ -226,12 +226,12 @@ skill keeps its old `.graphify_version` stamp while the binary moves on.
 | `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
 | `scripts/core/schema_validator.py` | JSON schema validation for findings |
 | `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
-| `scripts/core/adapters/*.py` | Tool output parsers (16 adapters; four are SARIF bindings over `sarif_common.py`) |
+| `scripts/core/adapters/*.py` | Tool output parsers (15 adapters; four are SARIF bindings over `sarif_common.py`) |
 | `scripts/core/reporters/` | Output formatters |
 | `scripts/jmo_mcp/jmo_server.py` | MCP server (see [mcp.rules.md](.claude/rules/mcp.rules.md)) |
 | `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
 | `jmo.yml` / `versions.yaml` | Main configuration / tool version registry |
-| `Dockerfile` | The one image (tagged `:latest` and the release version): the 16 scanners plus OPA |
+| `Dockerfile` | The one image (tagged `:latest` and the release version): the 15 scanners plus OPA |
 
 `tests/` holds 8,000+ tests across unit/adapters/reporters/integration; `.github/workflows/` holds CI/CD.
 

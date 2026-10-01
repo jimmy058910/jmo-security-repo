@@ -207,7 +207,7 @@ class TestLinuxPackageManagers:
 
     def test_go_installed_tools(self, jmo_runner):
         """Verify Go-installed tools are found."""
-        result = jmo_runner(["tools", "debug", "gosec"], timeout=30)
+        result = jmo_runner(["tools", "debug", "nuclei"], timeout=30)
 
         combined = result.stdout.lower() + result.stderr.lower()
         assert_no_jmo_traceback(combined)

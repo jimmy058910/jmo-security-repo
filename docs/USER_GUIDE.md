@@ -185,7 +185,6 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 | **ShellCheck** | Analyses shell scripts — only fires if `.sh` files exist |
 | **zizmor** | Audits GitHub Actions workflows — only fires if the repo has `.github/workflows`, an `action.yml` or a Dependabot config |
 | **OSV-Scanner** | Checks the dependencies its lockfiles pin against an offline OSV database — only fires if the repo has a lockfile |
-| **Gosec** | Skipped unless the repo contains Go code |
 | **jmo-native** | JMo's own Next.js, Supabase and Firebase checks — skipped unless the repo has JS/TS source, a `.env` file, Firebase rules or Supabase migrations |
 | **ZAP, Nuclei** | Skipped for local repos (they test a running application at a URL) |
 
@@ -553,7 +552,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec, jmo-native and Checkov when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -801,7 +800,7 @@ The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 - **GitLab Repos** now run full repository scanner instead of TruffleHog-only
 - **Web URLs** now include Nuclei (API security scanner) in addition to ZAP
-- GitLab repos also auto-discover and scan container images found in Dockerfiles, docker-compose.yml, and K8s manifests
+- GitLab repos also scan each container image they name, as an image target of its own (results in `individual-images/<group>_<repo>__<image>/`), when a requested tool reads an image (Trivy, Syft); otherwise one INFO line says how many were found. The images are read from each Dockerfile's `FROM` instructions, the `image:` of each `docker-compose*.yml` service that has no `build:`, and the `spec.containers` of each Pod in a `*.k8s.yaml` or `*.k8s.yml` file, and nowhere else (not `compose.yaml`, `initContainers` or a Deployment's template). A value that is not an image reference (`FROM {{ base }}`) is named in a WARNING and skipped. The image is pulled from its registry mid-scan, so one the scanner cannot pull is a failed image target, as it would be with `--image`
 - Tool selection is automatic based on target type. Use `--tools` to override defaults.
 
 ### Troubleshooting Multi-Target Scans
@@ -1172,11 +1171,33 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - log_level: DEBUG|INFO|WARN|ERROR (defaults to INFO)
 - retries: global retry count for flaky tool invocations (0 by default)
 - per_tool: per‑tool overrides (`flags`, `timeout`, and tool-specific keys)
-  - A flag that decides where a tool writes or in what format is JMo's, and is dropped with a
-    warning: `-o`, `--output`, `-f`, `--format` and their kin for every tool, and Gitleaks'
-    `--report-format`, `--report-path`/`-r`, `--report-template`, `--exit-code`, `--redact` and
-    `--config`/`-c` (a repository's own `.gitleaks.toml` is read instead; see
-    [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml))
+  - A flag JMo must control is dropped with a warning that names it and says why. Which flags
+    those are is each tool's own (every one is listed in its row's `reserved_flags`, in
+    `scripts/core/tool_descriptors.py`). They come in five kinds, for example:
+    - Where it writes or in what format: trivy's and hadolint's `-f`, grype's and syft's `-o`
+      and `--file`, semgrep's `-o`, `--text` and `--sarif`, nuclei's `-jsonl`, Gitleaks'
+      `--report-format`, `--report-path`/`-r` and `--redact`
+    - A flag JMo already passes to a tool that refuses one given twice, or whose second one
+      would replace JMo's: zizmor's `--offline` (`-o`), TruffleHog's `--no-verification`
+      (`verify: true` turns verification on) and `--exclude-paths`, and Gitleaks'
+      `--config`/`-c` (a repository's own `.gitleaks.toml` is read instead; see
+      [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml))
+    - Its exit code, which JMo reads to tell a run that worked from one that did not:
+      grype's `-f`/`--fail-on`, trivy's and Gitleaks' `--exit-code`, TruffleHog's `--fail`,
+      Checkov's `--soft-fail` and hadolint's `--no-fail` (both exit 0 whatever they find).
+      JMo's own `--fail-on` (`jmo ci`, `jmo report`) sets the failure threshold
+    - Where JMo's own runners scan: yara's and jmo-native's `--target`
+    - A download during the scan, which a scan never makes: OSV-Scanner's
+      `--download-offline-databases` (`jmo tools update` fetches its databases)
+  - A flag another tool spells the same way is left alone: semgrep's `-f` is `--config`, and
+    shellcheck's `-o` is `--enable`
+  - Each is dropped in every spelling the tool's own parser reads: a value attached (`-ftable`),
+    after other short flags (`-qftable` is trivy's `-q -f table`), one dash or two for nuclei and
+    OSV-Scanner (`-format table`), and an abbreviation for Checkov and ShellCheck (`--outp`)
+  - On Windows, Checkov and ZAP run through a `.cmd`/`.bat` launcher, whose arguments cmd.exe
+    reads again: a flag holding any of `& | ^ < > %`, or a line break, is dropped with a warning. Give a list
+    comma-separated instead (`--skip-check CKV_AWS_1,CKV_AWS_2`); see
+    [Known limitations](KNOWN_LIMITATIONS.md#on-windows-a-checkov-or-zap-flag-cannot-hold-cmdexes-metacharacters)
   - TruffleHog and Gitleaks run twice on a repository with history. `flags` reach the
     working-tree run and `history_flags` the git-history run, since each mode rejects flags the
     other needs (TruffleHog's `--since-commit` and `--branch` are history's). `history: false`
@@ -2669,7 +2690,7 @@ Permission denied on scripts
 
 Hadolint shows no results
 
-- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile`, `Dockerfile.*` or `*.Dockerfile`, at any depth); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
+- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile`, `Dockerfile.*` or `*.Dockerfile`, at any depth, spelled with that case; a document such as `Dockerfile.md`, a template such as `Dockerfile.j2` and `Dockerfile.dockerignore` are not one); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
 
 TruffleHog output looks empty
 

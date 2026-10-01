@@ -653,7 +653,7 @@ def _print_classification_json() -> int:
     Output shape (to stdout, one blob — machine-readable for auto-PR workflows):
 
         {
-          "gosec":    {"current": "2.28.0",   "latest": "2.28.1", "level": "patch",   "critical": false},
+          "hadolint": {"current": "2.15.0",   "latest": "2.15.1", "level": "patch",   "critical": false},
           "semgrep":  {"current": "1.151.0",  "latest": "1.159.0","level": "minor",   "critical": true},
           "trivy":    {"current": "0.74.0",   "latest": "1.0.0",  "level": "major",   "critical": true},
           "zap":      {"current": "2.17.0",   "latest": "w2026-09-01", "level": "unknown", "critical": true}

@@ -36,7 +36,9 @@ SCAN_TIMINGS_FILENAME = "scan-timings.json"
 # does not understand instead of misreading it. Version 3 (v2.0.0 Phase 3): a
 # row for every requested tool, including the ones that never ran, keyed
 # `tool/state/reason/seconds/...` rather than ToolRunner's result fields.
-SCAN_TIMINGS_SCHEMA_VERSION = 3
+# Version 4: a row's `kept_findings` (#1369), null unless a run of a failed row
+# worked.
+SCAN_TIMINGS_SCHEMA_VERSION = 4
 
 # `outcome` values: did the target get as far as running tools at all.
 OUTCOME_COMPLETED = "completed"
@@ -67,9 +69,11 @@ class Reason(StrEnum):
     # skipped: the target has nothing of the kind this tool reads
     NO_DOCKERFILES = "no Dockerfiles"
     NO_SHELL_SCRIPTS = "no shell scripts"
-    NO_GO_SOURCES = "no Go sources"
     NO_IAC = "no IaC files"
     NO_WORKFLOWS = "no GitHub Actions workflows"
+    # zizmor was handed files and read none of them (an `action.yml` of
+    # another framework, a YAML file that does not parse).
+    NO_READABLE_WORKFLOWS = "no workflow zizmor could read"
     NO_LOCKFILE = "no lockfile"
     # jmo-native's: everything its checks read, since the label is all a
     # skipped row prints.
@@ -96,9 +100,9 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NOT_FOR_TARGET,
         Reason.NO_DOCKERFILES,
         Reason.NO_SHELL_SCRIPTS,
-        Reason.NO_GO_SOURCES,
         Reason.NO_IAC,
         Reason.NO_WORKFLOWS,
+        Reason.NO_READABLE_WORKFLOWS,
         Reason.NO_LOCKFILE,
         Reason.NO_WEB_APP_FILES,
     }
@@ -133,6 +137,16 @@ class ToolRun:
     code) and goes to `scan-timings.json` only; `scan_tool_runs` keeps the
     closed `reason`. Nothing the tool printed is kept: on a secret scanner,
     stdout *is* the secrets.
+
+    `kept_findings` is what a failed row's runs that worked still found, and
+    so reached the report: osv-scanner's readable lockfiles beside one it
+    could not read, a secret scanner's tree beside its failed git-history run
+    (#1369). None when no run of the row worked; 0 when one did and found
+    nothing. A run that worked makes the target partial rather than empty,
+    whatever it found: decided by the count, a clean lockfile beside a
+    truncated one failed the scan where a vulnerable one passed it. Only a
+    failed row carries it. It is the adapter's count, before the report
+    de-duplicates, so the report can hold fewer.
     """
 
     tool: str
@@ -143,6 +157,7 @@ class ToolRun:
     attempts: int = 0
     invocations: int = 0
     detail: str | None = None
+    kept_findings: int | None = None
 
     def __post_init__(self) -> None:
         if self.state is State.RAN:
@@ -153,6 +168,8 @@ class ToolRun:
                 raise ValueError(f"{self.tool}: {self.reason!r} is not a skip reason")
         elif self.reason not in FAIL_REASONS:
             raise ValueError(f"{self.tool}: {self.reason!r} is not a failure reason")
+        if self.kept_findings is not None and self.state is not State.FAILED:
+            raise ValueError(f"{self.tool}: only a failed row keeps findings")
 
     @property
     def label(self) -> str:
@@ -171,12 +188,14 @@ class ToolRun:
             "attempts": self.attempts,
             "invocations": self.invocations,
             "detail": self.detail,
+            "kept_findings": self.kept_findings,
         }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> ToolRun:
         """Read a row back; raises ValueError/KeyError on anything else."""
         reason = data.get("reason")
+        kept = data.get("kept_findings")
         return cls(
             tool=str(data["tool"]),
             state=State(data["state"]),
@@ -186,6 +205,7 @@ class ToolRun:
             attempts=int(data.get("attempts") or 0),
             invocations=int(data.get("invocations") or 0),
             detail=data.get("detail"),
+            kept_findings=None if kept is None else int(kept),
         )
 
 

@@ -56,7 +56,6 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     "syft": 30,
     "checkov": 60,
     "nuclei": 90,
-    "gosec": 45,
     "yara": 45,
     # Slow tools (2min+)
     "zap": 300,  # 5 min for DAST baseline

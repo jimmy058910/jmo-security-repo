@@ -553,9 +553,18 @@ def validate_container_image(image: str) -> bool:
         >>> validate_container_image("; rm -rf /")
         False
     """
-    if not image:
-        logger.error("Empty container image reference")
+    problem = image_reference_problem(image)
+    if problem is not None:
+        logger.error(problem)
         return False
+    return True
+
+
+def image_reference_problem(image: str) -> str | None:
+    """Why `validate_container_image` refuses `image`, or None when it does
+    not, without logging: for a caller that reports the refusal itself."""
+    if not image:
+        return "Empty container image reference"
 
     # Check for dangerous characters
     dangerous_chars = [
@@ -576,20 +585,17 @@ def validate_container_image(image: str) -> bool:
     ]
     for char in dangerous_chars:
         if char in image:
-            logger.error(f"Dangerous character '{char}' in image reference: '{image}'")
-            return False
+            return f"Dangerous character '{char}' in image reference: '{image}'"
 
     # Length check
     if len(image) > 255:
-        logger.error(f"Image reference too long: '{image}' ({len(image)} chars)")
-        return False
+        return f"Image reference too long: '{image}' ({len(image)} chars)"
 
     # Basic format validation
     if not IMAGE_NAME_PATTERN.match(image):
-        logger.error(f"Invalid container image format: '{image}'")
-        return False
+        return f"Invalid container image format: '{image}'"
 
-    return True
+    return None
 
 
 # =============================================================================

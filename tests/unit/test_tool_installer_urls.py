@@ -141,22 +141,6 @@ class TestBinaryURLPatterns:
             "nuclei_3.3.7_linux_amd64.zip"
         )
 
-    def test_gosec_url_x86_64(self):
-        """Test gosec URL for x86_64 Linux."""
-        url = BINARY_URLS["gosec"].format(
-            version="2.21.4",
-            os="Linux",
-            os_lower="linux",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-        )
-        assert url == (
-            "https://github.com/securego/gosec/releases/download/v2.21.4/"
-            "gosec_2.21.4_linux_amd64.tar.gz"
-        )
-
     def test_shellcheck_url_x86_64(self):
         """Test shellcheck URL for x86_64 Linux (lowercase, dots).
 
