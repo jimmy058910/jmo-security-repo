@@ -117,7 +117,7 @@ repos:
         # carry `disable=all` to pass here, which blinded that contract.
         exclude: ^tests/fixtures/samples/
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.13.1-1
+    rev: v3.14.1-1
     hooks:
       - id: shfmt
 
