@@ -71,7 +71,11 @@ _DIRECTIVES = frozenset({"syntax", "escape", "check"})
 # A heredoc's opening word (`<<EOF`, `<<-EOF`, `<<"EOF"`), as a word of its
 # own: `<<<` is a here-string. Its body runs to the line holding the word
 # alone, leading tabs stripped first for `<<-`.
+# TODO(issue-#1416): a `<<EOF` inside a quoted string matches too, and the
+# unterminated "body" then swallows every later FROM silently.
 _HEREDOC = re.compile(r"(?:^|\s)\d*<<(-?)([\"']?)([^\s\"'<]+)\2(?=\s|$)")
+# TODO(issue-#1415): `ONBUILD RUN <<EOF` starts with ONBUILD, so its body is
+# read as instructions.
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
 
 # Docker's own grammar for an image reference (distribution's `reference`
@@ -372,6 +376,8 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     # services:
     #   web:
     #     image: nginx:latest
+    # TODO(issue-#1410): misses `compose.yaml`, `Containerfile`, `Dockerfile-dev`
+    # and k8s workloads other than a Pod's `spec.containers`.
     for compose_file in repo_path.rglob("docker-compose*.y*ml"):
         try:
             with open(compose_file, encoding="utf-8") as f:
@@ -435,6 +441,7 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     return images
 
 
+# TODO(issue-#1409): the images scanned here never reach the progress display.
 def _scan_named_images(
     clone_path: Path,
     full_path: str,

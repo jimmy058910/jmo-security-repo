@@ -71,6 +71,8 @@ main() {
     exit 1
   fi
 
+  # TODO(issue-#1417): under `set -euo pipefail` a grep miss kills the script
+  # here, so the "Could not parse" fallback below never runs.
   badge_version=$(get_badge_version)
   if [[ -n $badge_version ]]; then
     echo "🏷️  Badge version (shields.io): $badge_version"

@@ -876,6 +876,8 @@ class ScanOrchestrator:
         if getattr(args, "gitlab_group", None):
             # Note: Actual implementation would query GitLab API
             # For now, create a placeholder entry
+            # TODO(issue-#1407): clones `group:<name>.git`, and the colon in the
+            # results folder is an NTFS alternate data stream.
             group = args.gitlab_group
             gitlab_repos.append(
                 {

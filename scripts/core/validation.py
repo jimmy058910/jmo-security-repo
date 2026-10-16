@@ -535,6 +535,7 @@ IMAGE_NAME_PATTERN = re.compile(
 )
 
 
+# TODO(issue-#1405): a registry with a port (`host:5000/app`) is refused.
 def validate_container_image(image: str) -> bool:
     """
     Validate container image reference format.

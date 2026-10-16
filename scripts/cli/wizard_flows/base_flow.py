@@ -136,6 +136,7 @@ class TargetDetector:
                 pass
 
         # From Dockerfiles (extract FROM lines)
+        # TODO(issue-#1411): walk with tool_descriptors.is_dockerfile, as discovery does.
         for dockerfile in search_dir.glob("**/Dockerfile*"):
             try:
                 content = dockerfile.read_text(encoding="utf-8")

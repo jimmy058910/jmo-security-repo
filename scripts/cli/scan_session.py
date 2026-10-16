@@ -156,6 +156,8 @@ class ScanSession:
         """Register a target for scanning; `found_in` names the GitLab target
         whose repository named it, for an image found mid-scan."""
         tool_records = {name: ToolRecord(name=name) for name in tools}
+        # TODO(issue-#1406): keyed by id alone, so `repo:nginx` and `image:nginx`
+        # share one record; key by (target_type, target_id).
         self.targets[target_id] = TargetRecord(
             target_type=target_type,
             target_id=target_id,
