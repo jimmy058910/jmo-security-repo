@@ -339,6 +339,13 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`mcp` 2.0.0's CVE-2026-59951 failing the same pip-audit gate.** The advisory
+  ([GHSA-84m7-p3x7-pcfv](https://github.com/advisories/GHSA-84m7-p3x7-pcfv), fixed in
+  2.2.0) is an unbounded session pool in the SDK's Streamable HTTP transport. `jmo
+  mcp-server` serves stdio only, so JMo never reached it, but pip-audit reads the whole
+  lock and failed every run regardless. Both declarations, the `mcp` extra and the dev
+  group, now floor at `mcp[cli]>=2.2.0`, and the lock holds mcp and mcp-types 2.2.0;
+  nothing else moved.
 - **Transitive dependency CVEs failing the `quick-checks` pip-audit gate.** pyjwt
   2.13.0 gained advisories on 2026-09-30 (fixed in 2.14.0, one in 2.15.0), and urllib3
   2.7.0 and virtualenv 21.7.0 had theirs by the same day. Because pip-audit reads the
