@@ -100,6 +100,8 @@ def secure_temp_dir(
         # Always attempt cleanup
         if temp_dir is not None and temp_dir.exists():
             try:
+                # TODO(issue-#1404): on Windows git's read-only pack files survive
+                # this, and ignore_errors hides it: a clone's history stays behind.
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 logger.debug(f"Cleaned up secure temp directory: {temp_dir}")
             except (

@@ -586,6 +586,8 @@ def trufflehog_exclude_pattern(name: str, root: str | None = None) -> str:
     return rf"^{re2_escape(root)}[\\/](.*[\\/])?{tail}"
 
 
+# TODO(issue-#1412): merge a user's own TruffleHog exclusions into this file;
+# their `-x` is refused today, since trufflehog rejects a repeat.
 def write_trufflehog_exclude_file(
     out_dir: Path,
     *,

@@ -769,6 +769,8 @@ def _syft_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+# TODO(issue-#1408): measure whether package ids from two images collide; they
+# carry no image name.
 def _syft_image(ctx: ScanContext) -> list[Invocation]:
     return [
         Invocation(
@@ -980,6 +982,8 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
 _OSV_UNREADABLE_LOCKFILE = "extraction failed on specified lockfile"
 
 
+# TODO(issue-#1414): announce a target's own osv-scanner.toml, which can
+# suppress every finding unannounced (#1363's class).
 def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
     # Walk-fed, `-L` per lockfile: given a directory on Windows osv-scanner
     # walks nothing (rc 128, "No package sources found", 2.5.1 and 2.6.0).
@@ -1179,6 +1183,8 @@ def _grype_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+# TODO(issue-#1403): on Windows zap.bat's argv is re-parsed by cmd.exe, so a
+# URL or `-quickout` path holding `&` runs the rest as a command.
 def _zap_url(ctx: ScanContext) -> list[Invocation]:
     binary = Path(ctx.binary)
     return [
@@ -1380,6 +1386,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="checkov",
             invocations={
+                # TODO(issue-#1403): `-d <path>` reaches checkov.cmd's argv, which
+                # cmd.exe re-parses; run with cwd=target and `-d .` instead.
                 "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
             },

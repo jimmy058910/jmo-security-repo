@@ -113,6 +113,8 @@ def collect_rule_files(rules_root: Path) -> list[Path]:
     return sorted(found)
 
 
+# TODO(issue-#1413): a single-file rules root gives a relative path of `.`,
+# whose stem raises ValueError (exit 2).
 def namespace_for(path: Path, rules_root: Path) -> str:
     """Name a rule file's namespace by its position in the bundle.
 
