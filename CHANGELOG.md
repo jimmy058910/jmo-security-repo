@@ -603,8 +603,11 @@ All notable changes to JMo Security will be documented in this file.
   and a file ignoring a lockfile's advisories took a scan from 4 findings to 0 with the
   row `ran` and nothing logged; checkov, which now runs from its target, reads a
   `.checkov.yaml` / `.checkov.yml` there (or in a single IaC file's directory). A scan now
-  names each such file at WARNING (INFO is below a scan's default level), with osv-scanner's `[[IgnoredVulns]]` and
-  `[[PackageOverrides]]` counts. zizmor's announcement of its own `zizmor.yml` moves from
+  names each such file at WARNING (INFO is below a scan's default level), with how many
+  vulnerabilities and packages an `osv-scanner.toml` ignores: its `[[IgnoredVulns]]`, and
+  the `[[PackageOverrides]]` with `ignore = true` or `vulnerability.ignore = true` (an
+  override that ignores nothing is not counted, and a file that ignores nothing is named
+  without saying it suppresses findings). zizmor's announcement of its own `zizmor.yml` moves from
   INFO to WARNING for the same reason, so there is one level for all three. Neither file is overridden:
   honouring a repository's own settings is each tool's documented behaviour (#1414).
 - **yara_runner's crash exits 2, and never leaves an earlier run's output behind.** It

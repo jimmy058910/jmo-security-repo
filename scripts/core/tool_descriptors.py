@@ -1142,8 +1142,13 @@ def _osv_own_config_dirs(ctx: ScanContext) -> list[Path]:
 
 
 def _osv_own_config_detail(path: Path) -> str:
-    """What an `osv-scanner.toml` suppresses: its `[[IgnoredVulns]]` and
-    `[[PackageOverrides]]` entries. A file that does not parse is said to be
+    """What an `osv-scanner.toml` suppresses: its `[[IgnoredVulns]]` entries,
+    and the `[[PackageOverrides]]` entries that ignore a package
+    (`ignore = true`) or its vulnerabilities (`vulnerability.ignore = true`).
+    Measured with osv-scanner 2.6.0: those two dropped an advisory, while an
+    override with `ignore = false` or only a license kept it, and was
+    announced as suppressing. A file that ignores nothing is still named, as
+    read, without the word. A file that does not parse is said to be
     unreadable here, not a crash."""
     try:
         document = tomllib.loads(path.read_bytes().decode("utf-8"))
@@ -1151,13 +1156,26 @@ def _osv_own_config_detail(path: Path) -> str:
         return (
             f"could not be parsed ({type(exc).__name__}): what it suppresses is unknown"
         )
-    ignored = document.get("IgnoredVulns")
-    overrides = document.get("PackageOverrides")
-    n_ignored = len(ignored) if isinstance(ignored, list) else 0
-    n_overrides = len(overrides) if isinstance(overrides, list) else 0
+
+    def tables(key: str) -> list[dict[str, Any]]:
+        value = document.get(key)
+        return (
+            [e for e in value if isinstance(e, dict)] if isinstance(value, list) else []
+        )
+
+    def ignores(override: dict[str, Any]) -> bool:
+        vulnerability = override.get("vulnerability")
+        return override.get("ignore") is True or (
+            isinstance(vulnerability, dict) and vulnerability.get("ignore") is True
+        )
+
+    n_ignored = len(tables("IgnoredVulns"))
+    n_packages = sum(ignores(o) for o in tables("PackageOverrides"))
+    if not n_ignored and not n_packages:
+        return "it ignores no vulnerability and no package"
     return (
         f"{n_ignored} ignored {'vulnerability' if n_ignored == 1 else 'vulnerabilities'}"
-        f" and {n_overrides} package {'override' if n_overrides == 1 else 'overrides'}"
+        f" and {n_packages} ignored {'package' if n_packages == 1 else 'packages'}"
         " suppress findings"
     )
 

@@ -110,8 +110,9 @@ class TestOsvScannerDiscovery:
 
         (line,) = said
         assert "osv-scanner.toml" in line
-        assert "2 ignored vulnerabilities" in line
-        assert "1 package override" in line
+        assert (
+            "2 ignored vulnerabilities and 1 ignored package suppress findings" in line
+        )
 
     def test_the_counts_are_the_files_not_a_constant(self, tmp_path, caplog) -> None:
         said = _osv(
@@ -125,8 +126,63 @@ class TestOsvScannerDiscovery:
         )
 
         (line,) = said
-        assert "1 ignored vulnerability" in line
-        assert "0 package overrides" in line
+        assert (
+            "1 ignored vulnerability and 0 ignored packages suppress findings" in line
+        )
+
+    @pytest.mark.parametrize(
+        ("override", "counted"),
+        [
+            # Measured with osv-scanner 2.6.0 on the frozen database: these two
+            # dropped left-pad's advisory...
+            (b"ignore = true\n", 1),
+            (b"vulnerability.ignore = true\n", 1),
+            # ...and these did not: the finding came back.
+            (b"ignore = false\n", 0),
+            (b'license.override = ["MIT"]\n', 0),
+        ],
+    )
+    def test_only_an_override_that_ignores_is_counted(
+        self, tmp_path, caplog, override, counted
+    ) -> None:
+        """Every `[[PackageOverrides]]` entry was counted as suppressing:
+        `ignore = false` was announced as "1 package override suppress
+        findings" while the finding came back."""
+        toml = (
+            b'[[PackageOverrides]]\nname = "left-pad"\necosystem = "npm"\n' + override
+        )
+        said = _osv(
+            tmp_path,
+            {"package-lock.json": NPM_LOCK, "osv-scanner.toml": toml},
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        if counted:
+            assert "0 ignored vulnerabilities and 1 ignored package suppress" in line
+        else:
+            assert "suppress" not in line
+            assert "it ignores no vulnerability and no package" in line
+
+    def test_a_file_that_ignores_nothing_is_named_but_suppresses_nothing(
+        self, tmp_path, caplog
+    ) -> None:
+        """An empty file read "0 ignored vulnerabilities and 0 package
+        overrides suppress findings". osv-scanner still reads it, so it is
+        named."""
+        said = _osv(
+            tmp_path,
+            {"package-lock.json": NPM_LOCK, "osv-scanner.toml": b""},
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        assert line.endswith(
+            "osv-scanner reads its osv-scanner.toml "
+            "(it ignores no vulnerability and no package)"
+        )
 
     def test_a_toml_beside_a_lockfile_in_a_subdirectory_is_named_by_its_path(
         self, tmp_path, caplog
