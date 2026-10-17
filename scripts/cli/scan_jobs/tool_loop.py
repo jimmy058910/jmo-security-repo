@@ -88,6 +88,16 @@ MAX_FILE_ARGS = 300
 
 _SKIPPED_DIR_NAMES: frozenset[str] = frozenset(VENDORED_DIRS)
 
+# The walk's glob matches with the platform's own case rule, pathlib's default,
+# passed explicitly. Given none, Python 3.13 matches a pattern's wildcard-free
+# part (the `Dockerfile` of `**/Dockerfile`) with a stat, which follows the
+# filesystem, and returns it spelled as the PATTERN spells it: where the
+# filesystem ignores case (Windows, macOS), a file named `sub/dockerfile` came
+# back as `sub/Dockerfile`, and every exact-name test accepted it (#1421).
+# Given a rule, 3.13 lists each directory, as 3.12 always did, so a path it
+# returns is spelled as it is on disk.
+_GLOB_CASE_SENSITIVE = os.path.normcase("Aa") == "Aa"
+
 
 def _same_tree(candidate: Path, target: Path) -> bool:
     """True when ``candidate`` is ``target``, resolving both.
@@ -145,7 +155,7 @@ def collect_files(
     """
     seen: set[Path] = set()
     for pattern in patterns:
-        for path in repo.glob(pattern):
+        for path in repo.glob(pattern, case_sensitive=_GLOB_CASE_SENSITIVE):
             # Relative to the repository: a repository that itself lives under
             # `vendor/` or `node_modules/` still has content of its own.
             if set(path.relative_to(repo).parts) & _SKIPPED_DIR_NAMES:

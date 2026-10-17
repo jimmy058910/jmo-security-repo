@@ -1126,6 +1126,59 @@ class TestADockerfileIsOneThing:
         assert rows["hadolint"].label == "skipped:no Dockerfiles"
 
 
+class TestTheWalkSpellsANameAsItIsOnDisk:
+    """A tool that reads names exactly is shown each file under its own name
+    (#1421). Python 3.13's glob, given no case rule, returns a pattern's
+    wildcard-free part spelled as the pattern spells it, and where the
+    filesystem ignores case that part matches any spelling: under 3.13 on
+    Windows and macOS, `**/Dockerfile` returned a `sub/dockerfile` as
+    `sub/Dockerfile`, and hadolint and GitLab image discovery both read it."""
+
+    @pytest.mark.parametrize(
+        ("tool", "exact", "miscased"),
+        [
+            ("hadolint", "Dockerfile", "sub/dockerfile"),
+            # The same cause on osv-scanner's literal names: 3.13 handed it
+            # `sub/Package-Lock.json` as `sub/package-lock.json`, unannounced,
+            # where 3.12 leaves the file out and names it (measured).
+            ("osv-scanner", "package-lock.json", "sub/Package-Lock.json"),
+        ],
+    )
+    def test_a_miscased_file_never_passes_a_tools_name_test(
+        self, tmp_path, tool, exact, miscased
+    ):
+        """Only a filesystem that ignores case can show this, and only under
+        3.13 or later; elsewhere the walk never finds the miscased file."""
+        repo = _repo(tmp_path, files={exact: "x\n", miscased: "x\n"})
+        descriptor = DESCRIPTORS[tool]
+
+        read = collect_files(
+            repo, descriptor.file_patterns, tool, accepts_name=descriptor.accepts_name
+        )
+        found = collect_files(repo, descriptor.file_patterns, tool)
+
+        assert [Path(f).relative_to(repo).as_posix() for f in read] == [exact]
+        # Every candidate, before the name test: each named as on disk.
+        assert all(Path(f).name in os.listdir(Path(f).parent) for f in found), found
+
+    def test_the_walk_never_leaves_its_glob_to_the_interpreters_default(self, tmp_path):
+        """Each glob is given the platform's own rule (case ignored on Windows
+        only, pathlib's default), so 3.13 lists every directory as 3.12 did.
+        A spy, because 3.12 and a filesystem that keeps case, which is most
+        of CI, cannot show the defect: this is what fails there."""
+        rules = []
+
+        class Spy(type(tmp_path)):
+            def glob(self, pattern, **kwargs):
+                rules.append(kwargs.get("case_sensitive"))
+                return super().glob(pattern, **kwargs)
+
+        patterns = DESCRIPTORS["hadolint"].file_patterns
+        collect_files(Spy(_repo(tmp_path)), patterns, "hadolint")
+
+        assert rules == [sys.platform != "win32"] * len(patterns)
+
+
 def test_trufflehog_anchors_on_the_absolute_root_for_a_relative_target(
     tmp_path, monkeypatch
 ):

@@ -375,6 +375,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **Under Python 3.13 on Windows and macOS, a tool that reads names exactly is no longer
+  shown a file under a spelling it does not have (#1421).** Given no case rule, 3.13's
+  glob tests a pattern's wildcard-free part with a stat and returns it spelled as the
+  pattern spells it, and where the filesystem ignores case that matches any spelling: a
+  `sub/dockerfile` came back as `sub/Dockerfile`, so hadolint linted it and GitLab image
+  discovery named its `FROM` image to scan, and a `Package-Lock.json` reached osv-scanner as
+  `package-lock.json` with no WARNING. The walk now gives its glob the platform's own
+  rule, so 3.13 finds each file under its name on disk, as 3.12 does.
 - **A cloned GitLab project no longer survives its scan in `%TEMP%` on Windows (#1404).** git
   writes pack files and loose objects read-only, `shutil.rmtree` cannot delete a read-only
   file on Windows, and `ignore_errors=True` hid the failure, so a private project's whole
