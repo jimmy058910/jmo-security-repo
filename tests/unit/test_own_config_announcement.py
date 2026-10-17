@@ -77,7 +77,7 @@ def _announced(caplog, tool: str) -> list[str]:
     return [
         r.getMessage()
         for r in caplog.records
-        if r.levelname == "INFO" and f"{tool} reads its" in r.getMessage()
+        if r.levelname == "WARNING" and f"{tool} reads its" in r.getMessage()
     ]
 
 
@@ -384,3 +384,32 @@ def test_real_checkov_obeys_the_repositorys_config_and_the_scan_says_so(
     assert failed(out) < before
     (line,) = _announced(caplog, "checkov")
     assert ".checkov.yaml" in line
+
+
+def test_the_announcement_reaches_a_scan_at_its_default_log_level(
+    tmp_path, capsys
+) -> None:
+    """`jmo scan` configures the `scripts` logger at WARNING unless told
+    otherwise, so an INFO announcement was invisible by default: a repository
+    could still switch findings off with nothing said. A repository's own
+    configuration shaping a security scan's results is a warning."""
+    import argparse
+
+    from scripts.cli import jmo
+
+    repo = tmp_path / "repo"
+    _plant(repo, {"package-lock.json": NPM_LOCK, "osv-scanner.toml": TOML_TWO_AND_ONE})
+    ctx = ScanContext(
+        tool="osv-scanner",
+        target_type="repo",
+        target=repo,
+        out_dir=tmp_path,
+        files=(str(repo / "package-lock.json"),),
+    )
+    jmo.configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+    try:
+        tool_loop._announce_own_config(DESCRIPTORS["osv-scanner"], ctx)
+    finally:
+        jmo.reset_scan_logging()
+
+    assert "osv-scanner reads its osv-scanner.toml" in capsys.readouterr().err

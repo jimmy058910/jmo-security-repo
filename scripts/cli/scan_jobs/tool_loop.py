@@ -271,7 +271,8 @@ def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
     `.github/zizmor.yml` disabling two audits took a sample from 3 rule ids to
     1, unannounced, #1363; osv-scanner: an `osv-scanner.toml` ignoring a
     lockfile's advisories took 4 findings to 0, #1414), so the scan says so at
-    INFO, as it does for gitleaks' `.gitleaks.toml` (#1327). It is not
+    WARNING (INFO is below `jmo scan`'s default level, which left the 4-to-0
+    silent), as it does for gitleaks' `.gitleaks.toml` (#1327). It is not
     overridden: honouring it is each tool's documented behaviour.
 
     The directories are the scan root, or where `d` says it looks (osv-scanner:
@@ -304,7 +305,9 @@ def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
                 if d.own_config_detail is not None
                 else "its audit settings apply"
             )
-            logger.info("%s: %s reads its %s (%s)", anchor.name, d.name, shown, detail)
+            logger.warning(
+                "%s: %s reads its %s (%s)", anchor.name, d.name, shown, detail
+            )
 
 
 def _exclusions(

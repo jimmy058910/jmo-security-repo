@@ -680,7 +680,7 @@ def test_a_repository_config_zizmor_reads_is_announced_naming_it(
     with caplog.at_level(logging.INFO):
         _run_with(repo, out, _success(_completed(".github\\workflows\\ci.yml")))
 
-    said = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
+    said = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
     assert any(config in m and "zizmor" in m for m in said), said
 
 
@@ -775,5 +775,5 @@ def test_real_zizmor_edges_through_the_scan_loop(tmp_path, caplog, monkeypatch) 
         assert row.state is State.RAN, row
         results = json.loads((out / "zizmor.json").read_bytes())["runs"][0]["results"]
         assert "zizmor/unpinned-uses" not in {r["ruleId"] for r in results}
-        said = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
+        said = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
         assert any(".github/zizmor.yml" in m for m in said), said
