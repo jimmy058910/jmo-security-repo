@@ -10,7 +10,7 @@ import json
 import logging
 import re
 import tomllib
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +24,7 @@ from scripts.core.tool_descriptors import (  # noqa: F401
     ZAP_PLAN,
     ExclusionStyle,
     filter_trivy_flags,
+    is_batch_launcher,
     zap_home,
     zap_plan,
 )
@@ -406,9 +407,33 @@ def tool_flags(
         )
         i = end
 
-    if executable and Path(executable).suffix.lower() in (".cmd", ".bat"):
+    if executable and is_batch_launcher(executable):
         kept = _without_cmd_metacharacters(kept, where, tool, Path(executable).name)
     return kept
+
+
+def batch_argv_refusal(command: Sequence[str]) -> str | None:
+    """Why `command` must not run, or None.
+
+    Its launcher is a `.bat`/`.cmd` (`is_batch_launcher`) and an argument
+    holds one of `_CMD_METACHARS` or a line break, which cmd.exe would read
+    as its own: the rest of the argument runs as a command (#1403). The
+    builders keep JMo's paths and URLs off such a launcher's arguments, and
+    `tool_flags` drops a user's; this is what is left, a file JMo must hand
+    the tool by a name that holds one (checkov's `-f pod&x.yaml`), or a tool
+    found on PATH as a batch file. Nothing quotes its way past cmd.exe, so
+    the run is refused rather than repaired."""
+    if not command or not is_batch_launcher(command[0]):
+        return None
+    for arg in command[1:]:
+        if _CMD_REFUSED.intersection(arg):
+            shown = arg.replace("\r", "\\r").replace("\n", "\\n")
+            return (
+                f"`{shown}` would reach cmd.exe through {Path(command[0]).name}, "
+                f"which reads any of {' '.join(sorted(_CMD_METACHARS))} in it as "
+                "its own and ends the command at a line break"
+            )
+    return None
 
 
 def _value_follows(flags: list[str], i: int) -> bool:

@@ -14,9 +14,13 @@ exactly one `ToolRun`, in this order:
    `skipped` with that reason (no Dockerfiles, no IaC files). A
    tool's `precheck` then fails the row for what of that content it cannot
    read (osv-scanner: a lockfile with no offline database), and it runs on
-   the rest, or not at all.
-4. **run**: `ToolRunner`'s result becomes `ran` or `failed:<reason>`, and a
-   tool whose own output says it examined 0 files is `failed` (G2, #1231).
+   the rest, or not at all. zap's, on its URL target with no tree, fails
+   it when java cannot run zap's jar in place of `zap.bat` (`zap_java`).
+4. **run**: a command line a `.bat`/`.cmd` launcher would hand cmd.exe with
+   one of its metacharacters in an argument is `failed` and never runs
+   (#1403). Otherwise `ToolRunner`'s result becomes `ran` or
+   `failed:<reason>`, and a tool whose own output says it examined 0 files is
+   `failed` (G2, #1231).
    An invocation that failed the way its `Fallback` names is replaced by the
    fallback's invocations, run in a second round.
 
@@ -59,6 +63,7 @@ from ...core.tool_descriptors import (
 )
 from ...core.tool_runner import ToolDefinition, ToolResult
 from ..scan_utils import (
+    batch_argv_refusal,
     find_tool,
     gitleaks_config_warning,
     report_tool_failure,
@@ -225,6 +230,17 @@ def _resolve(d: ToolDescriptor, find: Callable[[str], str | None]) -> str | None
         path = find(name)
         if path:
             return path
+    return None
+
+
+def _batch_refusal(invocations: Iterable[Invocation]) -> str | None:
+    """Why one of these command lines, a fallback's included, must not be
+    handed to its `.bat`/`.cmd` launcher (`batch_argv_refusal`, #1403)."""
+    for inv in invocations:
+        for each in (inv, *(inv.fallback.invocations if inv.fallback else ())):
+            why = batch_argv_refusal(each.command)
+            if why:
+                return why
     return None
 
 
@@ -738,13 +754,17 @@ def run_tools(
             stub(tool, ctx.output)
             rows[tool] = ToolRun(tool, State.SKIPPED, reason)
             continue
-        if walk is not None and d.precheck is not None:
+        # Every target: zap's (a URL) has no walk.
+        if d.precheck is not None:
             shortfall = d.precheck(ctx)
             if shortfall is not None:
                 logger.error(
-                    "%s: %s - what it cannot read is MISSING from this scan",
+                    "%s: %s - %s",
                     tool,
                     shortfall.detail,
+                    "what it cannot read is MISSING from this scan"
+                    if shortfall.files
+                    else "it did NOT run and its findings are MISSING from this scan",
                 )
                 if not shortfall.files:
                     rows[tool] = ToolRun(
@@ -757,6 +777,17 @@ def run_tools(
         if key == "repo":
             _announce_own_config(d, Path(scan_root(target)))
         invocations = builder(ctx)
+        refusal = _batch_refusal(invocations)
+        if refusal:
+            logger.error(
+                "%s: %s - it did NOT run and its findings are MISSING from this scan",
+                tool,
+                refusal,
+            )
+            rows[tool] = ToolRun(
+                tool, State.FAILED, Reason.COULD_NOT_RUN, detail=refusal
+            )
+            continue
         planned[tool] = (d, invocations)
         definitions.extend(definition(tool, inv) for inv in invocations)
 

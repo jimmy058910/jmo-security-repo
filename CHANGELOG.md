@@ -603,6 +603,24 @@ All notable changes to JMo Security will be documented in this file.
   of any tool worked still exits 1. `scan-timings.json` is schema 4, with a
   `kept_findings` count on each row, null when no run of the row worked (#1369).
 
+### Security
+
+- **On Windows, a path or URL holding `&` no longer runs the rest of it as a command
+  (#1403).** checkov runs as `checkov.cmd` and zap ran as `zap.bat`, and Windows starts a
+  `.bat`/`.cmd` through `cmd.exe`, which reads `& | ^ < > %` in every argument as its own,
+  quoted or not. Measured through `jmo scan` with a harmless `echo` as the injected
+  command: a `--results-dir` named `res&echo.X` cut zap's plan path there and ran `echo.X`
+  (zap.bat exited 0, no report); a repository named `tf&echo.X` did the same to checkov,
+  whose row read `ran` with none of its 10 findings, and so did an IaC file's directory.
+  The URL itself was already safe, since every zap run became a plan. zap on Windows now runs
+  `java -Xmx512m -jar zap-<version>.jar` from its own directory, exactly as `zap.bat` did
+  but without cmd.exe; a zap directory without exactly one `zap-*.jar`, or no java, fails
+  the row and names what was found. checkov runs from its target as `-d .` (same findings,
+  paths and exclusions, measured), and an IaC file by its name from its own directory, so
+  a finding's path is now `pod.yaml` where it was relative to wherever jmo ran from. A run
+  that would still hand one of those characters to a `.bat`/`.cmd` launcher (an IaC file
+  whose own name holds one) fails its row as `could not be run` instead of running.
+
 ## [1.1.1] - 2026-09-11
 
 A patch release continuing v1.1.0's theme: a scan must not report success for work it did not do. Three tools in the default profiles were contributing nothing while reading as healthy — kubescape and trivy-rbac produced zero findings on every Kubernetes repository, each for more than one independent reason, and ZAP could not run against a repository target in any configuration. Two others were wrong in the opposite direction, reporting an ERROR on every repository that merely had nothing for them to scan. Separately, scans no longer walk vendored dependency trees or JMo's own results directory, both of which were being read back as findings.

@@ -92,6 +92,17 @@ def filter_trivy_flags(subcommand: str, flags: Iterable[str]) -> list[str]:
 PART_OUTPUT = "{tool}.part{n}.json"
 
 
+def is_batch_launcher(executable: str | Path) -> bool:
+    """Whether Windows runs `executable` through cmd.exe.
+
+    `CreateProcess` cannot execute a `.bat`/`.cmd` file itself: it hands the
+    whole command line to `cmd.exe /c`, which re-reads `& | ^ < > %` in every
+    argument whatever its quoting (#1403). checkov resolves to `checkov.cmd`
+    and zap to `zap.bat` there; every other tool to an `.exe`.
+    """
+    return Path(executable).suffix.lower() in (".bat", ".cmd")
+
+
 class ExclusionStyle(StrEnum):
     """How a tool is told to skip a directory. Measured per tool, never guessed.
 
@@ -327,6 +338,7 @@ class Invocation:
     ok_return_codes: tuple[int, ...]
     # zap.bat resolves its jar against the working directory: run from anywhere
     # else, it fails with "Unable to access jarfile zap-2.17.0.jar" (measured).
+    # checkov runs from its target, so the target's path is not an argument.
     cwd: Path | None = None
     # Which of a tool's invocations this is, for a failed row to name.
     label: str = ""
@@ -433,7 +445,8 @@ class ToolDescriptor:
     no_files_reason: Reason | None = None
     trigger: Trigger | None = None
     # Run once the content is known to be there: what the tool cannot read
-    # of it fails the row before it runs (a trigger can only skip).
+    # of it, or what it cannot be run without (zap's jar on Windows), fails
+    # the row before it runs (a trigger can only skip).
     precheck: Precheck | None = None
     # The tool was handed files and read none of them: a skip, not a failure.
     nothing_read: NothingRead | None = None
@@ -860,13 +873,25 @@ _CHECKOV_IAC_FRAMEWORKS: tuple[str, ...] = (
 
 
 def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
+    """Run from the target (`-d .`), or from the file's directory (`-f <name>`),
+    so no path reaches the command line: on Windows checkov is `checkov.cmd`,
+    whose arguments cmd.exe re-reads. A repository named `tf&echo.X` ran
+    `echo.X` there and read none of its 10 findings, rc 0, the row `ran`
+    (#1403). `-d .` from the target gave the same ids, paths and `--skip-path`
+    exclusions as the absolute path (measured, 3.3.16). A file's path in a
+    finding is now its name, where it was relative to wherever jmo ran from.
+    A file whose own name holds one of those characters still reaches the
+    command line; the scan loop refuses that run (`batch_argv_refusal`)."""
+
     def build(ctx: ScanContext) -> list[Invocation]:
+        target = Path(ctx.target)
+        cwd, operand = (target, ".") if flag == "-d" else (target.parent, target.name)
         return [
             Invocation(
                 command=(
                     ctx.binary,
                     flag,
-                    str(ctx.target),
+                    operand,
                     "-o",
                     "json",
                     *(("--framework", *_CHECKOV_IAC_FRAMEWORKS) if framework else ()),
@@ -876,6 +901,7 @@ def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
                 output_file=ctx.output,
                 capture_stdout=True,
                 ok_return_codes=(0, 1),
+                cwd=cwd,
             )
         ]
 
@@ -1349,16 +1375,63 @@ def zap_plan(target: str, report: Path, timeout: int, api_spec: str = "") -> str
     return yaml.safe_dump(document, sort_keys=False)
 
 
-# TODO(issue-#1403): on Windows zap.bat's argv is re-parsed by cmd.exe, so a
-# plan or home path holding `&` runs the rest as a command.
+# zap.bat's heap: it reads `%USERPROFILE%\ZAP\.ZAP_JVM.properties` instead when
+# that file exists, `-Xmx512m` otherwise.
+ZAP_HEAP = "-Xmx512m"
+
+
+def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
+    """What runs zap in place of `zap.bat`, beside it: `java -Xmx512m -jar
+    <its directory>/zap-<version>.jar`; or, with no command, why not.
+
+    zap.bat is that same java line followed by its own arguments, so running
+    it puts JMo's arguments through cmd.exe (`is_batch_launcher`): a plan
+    under a `--results-dir` holding `&` ran the rest of the path as a
+    command, rc 0, no report, 0 requests (#1403, measured). java.exe takes
+    them as given: a URL holding `&` reached the target whole (measured, ZAP
+    2.17.0). The jar is the one zap.bat names, so exactly one must be there.
+    java is resolved as `jmo tools check` resolves it for zap.
+    """
+    # tool_utils -> tool_registry -> this module.
+    from scripts.core.tool_utils import find_tool
+
+    jars = sorted(launcher.parent.glob("zap-*.jar"))
+    if len(jars) != 1:
+        found = ", ".join(jar.name for jar in jars) or "none"
+        return (), (
+            f"{launcher.name} is replaced by java -jar zap-<version>.jar from "
+            f"{launcher.parent}, which must hold exactly one zap-*.jar "
+            f"(found: {found})"
+        )
+    java = find_tool("java")
+    if not java:
+        return (), "java, which zap runs on, could not be found"
+    return (java, ZAP_HEAP, "-jar", str(jars[0])), ""
+
+
+def _zap_launch(ctx: ScanContext) -> Shortfall | None:
+    """A `zap.bat` that cannot be replaced by java fails the row: run, it
+    would put JMo's arguments through cmd.exe (`zap_java`)."""
+    if not is_batch_launcher(ctx.binary):
+        return None
+    _, problem = zap_java(Path(ctx.binary))
+    return Shortfall(Reason.COULD_NOT_RUN, problem, ()) if problem else None
+
+
 def _zap_url(ctx: ScanContext) -> list[Invocation]:
     if ctx.plan is None:
         raise ValueError("zap runs the plan the scan loop writes, and none was given")
     binary = Path(ctx.binary)
+    launch: tuple[str, ...] = (ctx.binary,)
+    if is_batch_launcher(binary):
+        launch, problem = zap_java(binary)
+        if problem:
+            # `_zap_launch` fails the row before the scan loop builds it.
+            raise ValueError(problem)
     return [
         Invocation(
             command=(
-                ctx.binary,
+                *launch,
                 "-cmd",
                 # No call home: 7 connections to zaproxy.org a run without it.
                 "-silent",
@@ -1556,8 +1629,6 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="checkov",
             invocations={
-                # TODO(issue-#1403): `-d <path>` reaches checkov.cmd's argv, which
-                # cmd.exe re-parses; run with cwd=target and `-d .` instead.
                 "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
             },
@@ -1789,6 +1860,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
+            precheck=_zap_launch,
             automation_plan=True,
             # The plan's whole budget (`zap_minutes`).
             timeout_floor=900,

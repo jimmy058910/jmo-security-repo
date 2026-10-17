@@ -87,14 +87,37 @@ built from a directory name, `checkov_skip_path_pattern`
 name differing only in one of these six characters and otherwise identical
 is not a realistic collision) and never appears in the rendered string. When
 losing precision is not acceptable, the value has to be kept off a `.cmd`
-launcher's argv another way (a config/response file, or invoking a `.exe`
-sibling if one exists) rather than escaped — there is no in-band escape that
-survives this re-parse.
+launcher's argv another way rather than escaped — there is no in-band escape
+that survives this re-parse. The two ways JMo uses (#1403), each measured
+through `jmo scan` with a benign `echo.<MARKER>` as the injected command:
+
+- **Run from the value instead of naming it.** checkov runs with `cwd` set to
+  its target and `-d .` (an IaC file: from its directory, `-f <name>`). A
+  repository named `tf&echo.X` had run `echo.X` and read 0 of 10 findings;
+  `-d .` gave the same ids, paths and `--skip-path` exclusions.
+- **Run what the launcher runs.** `zap.bat` is one line, `java -Xmx512m -jar
+  zap-<version>.jar %*`; on Windows JMo runs that java line itself
+  (`zap_java`), so a plan path under a `--results-dir` holding `&` reaches
+  ZAP whole, where through `zap.bat` it ran the rest as a command, rc 0.
+
+What neither can cover — a file whose own name holds one, a tool found on PATH
+as a `.cmd` shim — the scan loop refuses: `batch_argv_refusal`
+(`scripts/cli/scan_utils.py`) fails the row as `could not be run` and the
+command never starts. Decide "is this a batch launcher" with
+`is_batch_launcher` (`scripts/core/tool_descriptors.py`), the one predicate
+`tool_flags` and the loop share.
 
 **Test for this class**, not just this one tool: does the rendered string
 contain any of `& | ^ < > %` at all? If yes, and the string reaches a `.cmd`
 tool's argv, it is a candidate for this defect regardless of what character
-class produced it.
+class produced it. `tests/unit/test_batch_launcher_argv.py` does this for
+every descriptor: it renders each command line with a target, a results
+directory and walked files holding each character, and fails on any that
+reaches an argument after a `.bat`/`.cmd`. A tool is rendered with a batch
+launcher unless that file shows it resolves to an `.exe` on Windows
+(`RESOLVES_TO_EXE`: a downloaded binary, the interpreter, semgrep's pip
+shim), so **a new tool starts out checked as a batch file**; add it there
+only with how it resolves.
 
 ## Console Encoding (Windows) — the class that CI structurally cannot see
 

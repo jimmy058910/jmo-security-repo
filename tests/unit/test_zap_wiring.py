@@ -34,6 +34,7 @@ import yaml
 
 from scripts.cli.scan_jobs import tool_loop
 from scripts.cli.scan_utils import tool_flags, write_zap_plan
+from scripts.core import tool_utils
 from scripts.core.tool_descriptors import (
     DESCRIPTORS,
     ZAP_PLAN,
@@ -367,6 +368,59 @@ class TestTheCommandLine:
     def test_without_a_plan_it_refuses_to_build(self, tmp_path):
         with pytest.raises(ValueError, match="plan"):
             DESCRIPTORS["zap"].invocations["url"](_ctx(tmp_path, plan=None))
+
+    @staticmethod
+    def _zap_bat(tmp_path, monkeypatch, *jars):
+        where = tmp_path / "zap"
+        where.mkdir()
+        for name in ("zap.bat", *jars):
+            (where / name).write_bytes(b"")
+        monkeypatch.setattr(
+            tool_utils,
+            "find_tool",
+            lambda name: "C:/jre/bin/java.exe" if name == "java" else None,
+        )
+        return where
+
+    def test_on_windows_java_runs_its_jar_with_the_same_arguments(
+        self, tmp_path, monkeypatch
+    ):
+        """zap.bat is `java -Xmx512m -jar zap-<version>.jar %*`, and running
+        it puts every argument through cmd.exe: a plan under a results
+        directory holding `&` ran the rest of its path as a command (#1403,
+        measured)."""
+        where = self._zap_bat(tmp_path, monkeypatch, "zap-2.17.0.jar")
+        ctx = _ctx(
+            tmp_path,
+            binary=str(where / "zap.bat"),
+            flags=("-config", "api.disablekey=true"),
+        )
+        (inv,) = DESCRIPTORS["zap"].invocations["url"](ctx)
+
+        assert inv.command == (
+            "C:/jre/bin/java.exe",
+            "-Xmx512m",
+            "-jar",
+            str(where / "zap-2.17.0.jar"),
+            "-cmd",
+            "-silent",
+            "-dir",
+            str(zap_home()),
+            "-autorun",
+            str(tmp_path / ZAP_PLAN),
+            "-config",
+            "api.disablekey=true",
+        )
+        assert inv.cwd == where
+
+    def test_a_zap_bat_java_cannot_replace_is_never_built(self, tmp_path, monkeypatch):
+        """The scan loop fails its row first (`_zap_launch`); the builder
+        refuses too rather than fall back to zap.bat."""
+        where = self._zap_bat(tmp_path, monkeypatch)
+        with pytest.raises(ValueError, match="found: none"):
+            DESCRIPTORS["zap"].invocations["url"](
+                _ctx(tmp_path, binary=str(where / "zap.bat"))
+            )
 
     def test_its_home_is_jmos_and_not_the_users_zap(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))

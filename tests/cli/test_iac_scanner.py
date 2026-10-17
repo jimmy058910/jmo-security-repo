@@ -81,7 +81,10 @@ class TestIacScanner:
 
         assert rows["checkov"].state is State.RAN
         (checkov_def,) = _defs(MockRunner)
-        assert checkov_def.command[1:3] == ["-f", str(tmp_path / "main.tf")]
+        # By name, from its directory: on Windows checkov is `checkov.cmd`,
+        # and cmd.exe re-reads the path's `&` (#1403).
+        assert checkov_def.command[1:3] == ["-f", "main.tf"]
+        assert checkov_def.cwd == tmp_path
 
     def test_checkov_keeps_every_framework_on_a_file_target(self, tmp_path):
         """The single-file invocation (`-f`) is NOT narrowed. The
