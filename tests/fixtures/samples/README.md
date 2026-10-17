@@ -32,7 +32,8 @@ samples/
 └── zap/                   # A live target for zap (DAST), not files to scan
     ├── fixture_server.py  # 127.0.0.1, OS-assigned port: an API, and a site with an XSS
     ├── openapi.json       # Its four operations; `servers` names prod.invalid
-    └── openapi-v1.json    # The same, with the base path /v1
+    ├── openapi-v1.json    # The same, with the base path /v1
+    └── report-2.17.0-xss.json  # A real ZAP 2.17 report of a scan of it (read by the adapter test)
 ```
 
 ## Security Warning

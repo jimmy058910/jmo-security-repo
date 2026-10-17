@@ -371,6 +371,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **zap's findings carry the severity and the confidence ZAP gave them (#1347).** The
+  adapter read a `risk` key that ZAP 2.17's report never writes, so every finding was
+  MEDIUM, a reflected XSS and `--fail-on HIGH` included. ZAP writes `riskcode` ("0" to
+  "3") and `riskdesc` ("High (Medium)"); the adapter now translates the code (falling
+  back to `riskdesc`'s first word) before rating it. The confidence is a code too ("2"),
+  which became the tag `confidence:2`; it is now named (`confidence:medium`).
 - **A `--url` that is a bare root with a slash (`http://h/`) no longer stops zap's
   spider at that page (#1348).** `-quickurl` scanned only the page it was given, and a
   reflected XSS one link away was missed where `http://h` found it. Through the plan

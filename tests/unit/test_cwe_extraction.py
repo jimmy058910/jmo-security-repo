@@ -226,8 +226,9 @@ def test_the_pipeline_actually_calls_the_backfill(tmp_path):
                         "alerts": [
                             {
                                 "alert": "SQL Injection",
-                                "risk": "High",
-                                "confidence": "Medium",
+                                "riskcode": "3",
+                                "riskdesc": "High (Medium)",
+                                "confidence": "2",
                                 "desc": "SQL injection may be possible.",
                                 "cweid": "89",
                                 "wascid": "19",
