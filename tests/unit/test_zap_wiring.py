@@ -26,6 +26,7 @@ The real-binary gates are `tests/integration/test_zap_scans.py`.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from urllib.parse import unquote, urlsplit, urlunsplit
@@ -699,11 +700,15 @@ class TestTheLoopWritesTheRowsPlan:
 
 def test_the_tracked_definitions_are_the_ones_the_fixture_serves(tmp_path):
     """The real-binary gate imports the file, and the fixture serves `spec()`:
-    if they drifted, the import would list operations the server lacks."""
+    if they drifted, the import would list operations the server lacks.
+
+    Compared as parsed JSON: a Windows checkout with autocrlf holds the
+    tracked file with CRLF line endings, which are not drift."""
     from tests.fixtures.samples.zap import fixture_server as fx
 
     tracked = Path(fx.__file__).resolve().parent
     fx.write_specs(tmp_path)
 
     for name in ("openapi.json", "openapi-v1.json"):
-        assert (tmp_path / name).read_bytes() == (tracked / name).read_bytes()
+        written = json.loads((tmp_path / name).read_bytes())
+        assert written == json.loads((tracked / name).read_bytes())
