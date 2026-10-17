@@ -739,18 +739,31 @@ def run_tools(
             _exclusions(d, out_dir, results_name, target) if key == "repo" else ((), ())
         )
         # A plan-reading tool takes this target, and its jobs' budget (the
-        # tool's timeout), from a file written here for this run.
-        plan = (
-            write_zap_plan(
-                out_dir,
-                target=str(target),
-                report=out_dir / f"{tool}.json",
-                timeout=tool_timeout(per_tool_config, tool, timeout),
-                api_spec=api_spec,
-            )
-            if d.automation_plan
-            else None
-        )
+        # tool's timeout), from a file written here for this run. Its row
+        # alone fails when that file or zap's home cannot be written: raised,
+        # it failed every tool on the target, nuclei unrun (measured).
+        plan = None
+        if d.automation_plan:
+            try:
+                plan = write_zap_plan(
+                    out_dir,
+                    target=str(target),
+                    report=out_dir / f"{tool}.json",
+                    timeout=tool_timeout(per_tool_config, tool, timeout),
+                    api_spec=api_spec,
+                )
+            except OSError as exc:
+                detail = f"its plan or its home could not be written: {exc}"
+                logger.error(
+                    "%s: %s - it did NOT run and its findings are MISSING from "
+                    "this scan",
+                    tool,
+                    detail,
+                )
+                rows[tool] = ToolRun(
+                    tool, State.FAILED, Reason.COULD_NOT_RUN, detail=detail
+                )
+                continue
         ctx = ScanContext(
             tool=tool,
             target_type=key,

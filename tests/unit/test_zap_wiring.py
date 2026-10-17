@@ -36,6 +36,7 @@ import yaml
 from scripts.cli.scan_jobs import tool_loop
 from scripts.cli.scan_utils import tool_flags, write_zap_plan
 from scripts.core import tool_utils
+from scripts.core.scan_timings import Reason, State
 from scripts.core.tool_descriptors import (
     DESCRIPTORS,
     ZAP_PLAN,
@@ -648,6 +649,24 @@ class TestTheLoopWritesTheRowsPlan:
             "context": "target",
         }
         assert "spider" not in jobs
+
+    def test_a_home_that_cannot_be_made_fails_zap_alone(self, tmp_path, monkeypatch):
+        """The plan is written, and the home readied, in the scan loop, before
+        any tool runs: a `~/.jmo/zap-home` that is a file raised out of the
+        loop and failed every tool on the URL target, nuclei included, which
+        never ran (measured through `jmo scan`)."""
+        home = tmp_path / "home"
+        (home / ".jmo").mkdir(parents=True)
+        (home / ".jmo" / "zap-home").write_bytes(b"not a dir")
+
+        rows, out, defs = _run(tmp_path, monkeypatch, ["zap", "nuclei"])
+
+        assert rows["zap"].state is State.FAILED
+        assert rows["zap"].reason is Reason.COULD_NOT_RUN
+        assert "zap-home" in rows["zap"].detail
+        assert list(defs) == ["nuclei"]
+        assert rows["nuclei"].state is State.RAN
+        assert not (out / ZAP_PLAN).exists()
 
     def test_another_url_tool_gets_no_plan(self, tmp_path, monkeypatch):
         _, out, defs = _run(tmp_path, monkeypatch, ["nuclei"])
