@@ -829,8 +829,10 @@ class ScanOrchestrator:
 
         A spec that cannot be read is refused with its URL, both named: scanned
         without it, an API is a page with no links, nothing it lists is
-        requested, and the run reads clean. A file is made absolute, since zap
-        runs from its own directory.
+        requested, and the run reads clean. A `--urls-file` line naming the
+        same URL keeps its plain scan, and the log says so. A file is made
+        absolute, since zap runs from its own directory. Only zap reads a
+        definition, so a scan without zap says the spec is not used.
         """
         if not url or url not in urls:
             self._reject(
@@ -853,9 +855,25 @@ class ScanOrchestrator:
             # The first occurrence is --url's: a --urls-file line naming the
             # same URL asked for a plain scan of it, and keeps it.
             urls.remove(url)
-            self._reject("--url", url, f"not scanned without its --api-spec ({why})")
+            if url in urls:
+                logger.warning(
+                    "--url %s: scanned without its --api-spec (%s), as "
+                    "--urls-file lists it too",
+                    url,
+                    why,
+                )
+            else:
+                self._reject(
+                    "--url", url, f"not scanned without its --api-spec ({why})"
+                )
             return
         self._api_specs[url] = resolved
+        if "zap" not in self.config.tools:
+            logger.warning(
+                "--api-spec %s: only zap imports a definition, and this scan "
+                "does not run zap, so it is not used",
+                spec,
+            )
 
     def _discover_gitlab_repos(self, args) -> list[dict[str, str]]:
         """
