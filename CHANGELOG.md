@@ -619,7 +619,9 @@ All notable changes to JMo Security will be documented in this file.
   paths and exclusions, measured), and an IaC file by its name from its own directory, so
   a finding's path is now `pod.yaml` where it was relative to wherever jmo ran from. A run
   that would still hand one of those characters to a `.bat`/`.cmd` launcher (an IaC file
-  whose own name holds one) fails its row as `could not be run` instead of running.
+  whose own name holds one) fails its row as `could not be run` instead of running. So
+  does checkov on a UNC target (`\\server\share\...`): cmd.exe will not start there, and
+  checkov fails on one named from another drive (rc 2, as before).
 
 ## [1.1.1] - 2026-09-11
 

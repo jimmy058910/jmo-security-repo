@@ -325,6 +325,18 @@ unaffected.
 `--skip-check CKV_AWS_1,CKV_AWS_2` for Checkov. Rename an IaC file whose name
 holds one of the six.
 
+### On Windows, Checkov cannot scan a UNC path
+
+A repository or IaC file on a UNC path (`\\server\share\...`, or a WSL
+directory as `\\wsl.localhost\<distro>\...`) cannot be scanned by
+`checkov.cmd`. cmd.exe will not start in a UNC directory (it starts in
+`C:\Windows` instead), and Checkov started on another drive fails on the path
+(exit 2). So Checkov's row fails as `could not be run`, naming the path, and
+Checkov does not run.
+
+**What to do:** map the share to a drive letter (`net use Z: \\server\share`)
+and scan `Z:\...`, or scan a local copy. From WSL, run JMo inside WSL.
+
 ### jmo-native reads one application, at the repository root
 
 jmo-native decides what it reads by path from the scanned root

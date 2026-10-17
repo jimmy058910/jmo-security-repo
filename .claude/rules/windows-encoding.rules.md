@@ -94,7 +94,13 @@ through `jmo scan` with a benign `echo.<MARKER>` as the injected command:
 - **Run from the value instead of naming it.** checkov runs with `cwd` set to
   its target and `-d .` (an IaC file: from its directory, `-f <name>`). A
   repository named `tf&echo.X` had run `echo.X` and read 0 of 10 findings;
-  `-d .` gave the same ids, paths and `--skip-path` exclusions.
+  `-d .` gave the same ids, paths and `--skip-path` exclusions. **Never give
+  a batch launcher a UNC `cwd`** (`\\server\share\...`, `\\wsl.localhost\...`):
+  cmd.exe will not start there, says "Defaulting to Windows directory", and
+  checkov scanned `C:\Windows` (row `ran`, 0 of 10 findings). Named as an
+  argument from another drive instead, checkov fails on it (`os.path.relpath`
+  across drives, rc 2), so `_checkov_unc` fails a UNC target's row before it
+  runs (`is_unc` decides).
 - **Run what the launcher runs.** `zap.bat` is one line, `java -Xmx512m -jar
   zap-<version>.jar %*`; on Windows JMo runs that java line itself
   (`zap_java`), so a plan path under a `--results-dir` holding `&` reaches
@@ -113,7 +119,8 @@ tool's argv, it is a candidate for this defect regardless of what character
 class produced it. `tests/unit/test_batch_launcher_argv.py` does this for
 every descriptor: it renders each command line with a target, a results
 directory and walked files holding each character, and fails on any that
-reaches an argument after a `.bat`/`.cmd`. A tool is rendered with a batch
+reaches an argument after a `.bat`/`.cmd`, or that starts one in a UNC
+directory (a second rendering, under a UNC root). A tool is rendered with a batch
 launcher unless that file shows it resolves to an `.exe` on Windows
 (`RESOLVES_TO_EXE`: a downloaded binary, the interpreter, semgrep's pip
 shim), so **a new tool starts out checked as a batch file**; add it there

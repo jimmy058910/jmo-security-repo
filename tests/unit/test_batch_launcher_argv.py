@@ -20,7 +20,8 @@ rendered with one (`BATCH_TOOLS`).
 
 from __future__ import annotations
 
-from pathlib import Path
+from dataclasses import replace
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -74,13 +75,13 @@ def _launcher(tmp_path: Path, tool: str, suffix: str) -> Path:
     return launcher
 
 
-def _target(tmp_path: Path, key: str, char: str):
-    """A target holding `char`. An IaC file holds it in its directory: a file
-    is handed to its tool by name, and a name holding one is refused by the
-    scan loop instead (`batch_argv_refusal`)."""
+def _target(root: Path, key: str, char: str):
+    """A target holding `char`, under `root`. An IaC file holds it in its
+    directory: a file is handed to its tool by name, and a name holding one is
+    refused by the scan loop instead (`batch_argv_refusal`)."""
     return {
-        "repo": tmp_path / f"repo{char}x",
-        "iac": tmp_path / f"iac{char}x" / "main.tf",
+        "repo": root / f"repo{char}x",
+        "iac": root / f"iac{char}x" / "main.tf",
         "url": f"http://127.0.0.1:1/a{char}b/?q=1{char}echo.X",
         "image": f"registry.test/img{char}x:latest",
         "k8s": {"context": f"ctx{char}x", "namespace": f"ns{char}x"},
@@ -97,11 +98,18 @@ def _exclusions(tool: str, out_dir: Path, results_name: str) -> tuple[str, ...]:
     return tuple(tool_exclusion_flags(tool, results_dir_name=results_name))
 
 
-def _render(tmp_path: Path, tool: str, key: str, char: str, suffix: str):
+def _render(
+    tmp_path: Path,
+    tool: str,
+    key: str,
+    char: str,
+    suffix: str,
+    root: Path | None = None,
+):
     d = DESCRIPTORS[tool]
     results_name = f"res{char}ults"
     out_dir = tmp_path / results_name / "target"
-    target = _target(tmp_path, key, char)
+    target = _target(root or tmp_path, key, char)
     repo = key == "repo"
     excl = _exclusions(tool, out_dir, results_name) if repo else ()
     files = (
@@ -176,6 +184,49 @@ def test_no_value_reaches_a_batch_launchers_command_line(
     assert _leaks(invocations) == [], _command_lines(invocations)
 
 
+# A share no test reaches: nothing here may touch it.
+UNC_ROOT = Path(r"\\server.invalid\share")
+
+
+def _is_unc(path: Path | None) -> bool:
+    return path is not None and PureWindowsPath(str(path)).drive.startswith("\\\\")
+
+
+def _unc_cwds(invocations: list[Invocation]) -> list[tuple[str, str]]:
+    """(launcher, cwd) for each batch launcher told to start in a UNC
+    directory: cmd.exe will not, and starts in `C:\\Windows` instead."""
+    every = [
+        each
+        for inv in invocations
+        for each in (inv, *(inv.fallback.invocations if inv.fallback else ()))
+    ]
+    return [
+        (Path(each.command[0]).name, str(each.cwd))
+        for each in every
+        if Path(each.command[0]).suffix.lower() in BATCH_SUFFIXES and _is_unc(each.cwd)
+    ]
+
+
+UNC_CASES = [
+    pytest.param(tool, key, suffix, id=f"{tool}-{key}{suffix}")
+    for tool in BATCH_TOOLS
+    for key in sorted(DESCRIPTORS[tool].invocations)
+    for suffix in BATCH_SUFFIXES
+]
+
+
+@pytest.mark.parametrize(("tool", "key", "suffix"), UNC_CASES)
+def test_no_batch_launcher_starts_in_a_unc_directory(
+    tmp_path, java, tool, key, suffix
+) -> None:
+    """A target on a share (`\\\\wsl.localhost\\...`, a mapped server): run
+    from there, checkov scanned `C:\\Windows`, row `ran`, 0 of 10 findings
+    (measured through `jmo scan`)."""
+    invocations = _render(tmp_path, tool, key, "-", suffix, root=UNC_ROOT)
+
+    assert _unc_cwds(invocations) == [], [i.cwd for i in invocations]
+
+
 class TestTheClassTestIsNotVacuous:
     def test_the_tools_known_to_resolve_to_a_batch_file_are_rendered_as_one(self):
         assert {"checkov", "zap"} <= set(BATCH_TOOLS)
@@ -233,6 +284,27 @@ class TestTheClassTestIsNotVacuous:
         )
         assert _leaks([outer]) == [("t.cmd", "a|b")]
 
+    @pytest.mark.parametrize(
+        ("launcher", "cwd", "flagged"),
+        [
+            ("C:/x/t.cmd", r"\\server\share\repo", True),
+            ("C:/x/t.BAT", r"\\wsl.localhost\Ubuntu\home\u\repo", True),
+            ("C:/x/t.exe", r"\\server\share\repo", False),
+            ("C:/x/t.cmd", "C:/repo", False),
+            ("C:/x/t.cmd", None, False),
+        ],
+        ids=["cmd-unc", "bat-wsl", "exe-unc", "cmd-local", "cmd-none"],
+    )
+    def test_the_unc_oracle_flags_a_batch_launcher_only(self, launcher, cwd, flagged):
+        inv = Invocation(
+            command=(launcher, "-d", "."),
+            output_file=Path("o.json"),
+            capture_stdout=True,
+            ok_return_codes=(0,),
+            cwd=None if cwd is None else Path(cwd),
+        )
+        assert bool(_unc_cwds([inv])) is flagged
+
 
 # --- what the fix is made of --------------------------------------------------
 
@@ -244,16 +316,51 @@ class TestCheckovRunsFromItsTarget:
     under JMo's `--skip-path` exclusions, as the absolute path."""
 
     @staticmethod
-    def _invocation(tmp_path: Path, key: str, target: Path) -> Invocation:
+    def _invocation(
+        tmp_path: Path,
+        key: str,
+        target: Path,
+        binary: str = "C:/venv/Scripts/checkov.cmd",
+    ) -> Invocation:
         ctx = ScanContext(
             tool="checkov",
             target_type=key,
             target=target,
             out_dir=tmp_path / "out",
-            binary="C:/venv/Scripts/checkov.cmd",
+            binary=binary,
         )
         (inv,) = DESCRIPTORS["checkov"].invocations[key](ctx)
         return inv
+
+    @pytest.mark.parametrize(
+        ("key", "flag", "target"),
+        [
+            ("repo", "-d", UNC_ROOT / "repo"),
+            ("iac", "-f", UNC_ROOT / "iac" / "pod.yaml"),
+            ("repo", "-d", Path(r"\\wsl.localhost\Ubuntu-24.04\home\u\repo")),
+        ],
+        ids=["repo", "iac", "wsl"],
+    )
+    def test_a_unc_target_is_the_argument_with_no_cwd(
+        self, tmp_path, key, flag, target
+    ):
+        """cmd.exe will not start in a UNC directory ("UNC paths are not
+        supported. Defaulting to Windows directory."): from there checkov
+        scanned `C:\\Windows`, 0 of 10 findings (measured through `jmo scan`).
+        The scan loop fails this row first (`_checkov_unc`); built anyway,
+        the path is the argument, as before #1403, and checkov fails loudly."""
+        inv = self._invocation(tmp_path, key, target)
+
+        assert inv.command[1:3] == (flag, str(target))
+        assert inv.cwd is None
+
+    def test_a_unc_target_through_an_exe_is_still_run_from(self, tmp_path):
+        """The control: only cmd.exe refuses a UNC working directory."""
+        target = UNC_ROOT / "repo"
+        inv = self._invocation(tmp_path, "repo", target, "C:/venv/Scripts/checkov.exe")
+
+        assert inv.command[1:3] == ("-d", ".")
+        assert inv.cwd == target
 
     def test_a_repository_is_scanned_as_dot_from_inside_it(self, tmp_path):
         repo = tmp_path / "repo"
@@ -375,6 +482,63 @@ class TestTheScanLoopRefusesALeakingLauncher:
 
         assert [d.command[1:3] for d in ran] == [["-f", "pod&echo.X.yaml"]]
         assert row.label == "ran"
+
+    @pytest.mark.parametrize(
+        "manifest",
+        [UNC_ROOT / "iac" / "pod.yaml", UNC_ROOT / "iac&echo.X" / "pod.yaml"],
+        ids=["plain", "metacharacter"],
+    )
+    def test_a_unc_target_fails_checkovs_row_saying_why(
+        self, tmp_path, monkeypatch, manifest
+    ):
+        """checkov.cmd cannot scan a UNC path from anywhere: from the target
+        cmd.exe started in `C:\\Windows` and checkov scanned that (row `ran`,
+        0 of 10 findings), and from another drive checkov failed on the path,
+        rc 2 (both measured through `jmo scan`)."""
+        row, ran = _run(
+            tmp_path,
+            monkeypatch,
+            "checkov",
+            "iac",
+            manifest,
+            lambda name: "C:/venv/Scripts/checkov.cmd",
+        )
+
+        assert ran == []
+        assert row.label == "failed:could not be run"
+        assert str(manifest) in row.detail and "UNC" in row.detail, row.detail
+        assert "drive letter" in row.detail, row.detail
+
+    def test_a_unc_target_through_an_exe_runs(self, tmp_path, monkeypatch):
+        """The control: the refusal is cmd.exe's, not the share's."""
+        row, ran = _run(
+            tmp_path,
+            monkeypatch,
+            "checkov",
+            "iac",
+            UNC_ROOT / "iac" / "pod.yaml",
+            lambda name: "C:/venv/Scripts/checkov.exe",
+        )
+
+        assert [d.command[1:3] for d in ran] == [["-f", "pod.yaml"]]
+        assert row.label == "ran"
+
+    def test_a_unc_repository_is_refused_by_the_same_precheck(self, tmp_path):
+        """The repository row reaches the precheck once its trigger has found
+        IaC files in the tree: the precheck alone decides."""
+        ctx = ScanContext(
+            tool="checkov",
+            target_type="repo",
+            target=UNC_ROOT / "repo",
+            out_dir=tmp_path,
+            binary="C:/venv/Scripts/checkov.cmd",
+        )
+        shortfall = DESCRIPTORS["checkov"].precheck(ctx)
+
+        assert shortfall is not None and shortfall.files == ()
+        assert str(UNC_ROOT / "repo") in shortfall.detail
+        local = replace(ctx, target=tmp_path / "repo")
+        assert DESCRIPTORS["checkov"].precheck(local) is None
 
     def test_a_fallbacks_command_line_is_checked_too(self, tmp_path, monkeypatch):
         """A fallback runs in a second round, which no builder sees again."""

@@ -15,7 +15,8 @@ exactly one `ToolRun`, in this order:
    tool's `precheck` then fails the row for what of that content it cannot
    read (osv-scanner: a lockfile with no offline database), and it runs on
    the rest, or not at all. zap's, on its URL target with no tree, fails
-   it when java cannot run zap's jar in place of `zap.bat` (`zap_java`).
+   it when java cannot run zap's jar in place of `zap.bat` (`zap_java`);
+   checkov's, a UNC target its `.cmd` cannot scan (`_checkov_unc`).
 4. **run**: a command line a `.bat`/`.cmd` launcher would hand cmd.exe with
    one of its metacharacters in an argument is `failed` and never runs
    (#1403). Otherwise `ToolRunner`'s result becomes `ran` or

@@ -29,7 +29,7 @@ import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 from urllib.parse import quote, urlsplit
 
@@ -101,6 +101,13 @@ def is_batch_launcher(executable: str | Path) -> bool:
     and zap to `zap.bat` there; every other tool to an `.exe`.
     """
     return Path(executable).suffix.lower() in (".bat", ".cmd")
+
+
+def is_unc(path: str | Path) -> bool:
+    """Whether `path` is a UNC path (`\\\\server\\share\\...`), which cmd.exe
+    refuses as its working directory: it starts in `C:\\Windows` instead.
+    Read as a Windows path on every platform; elsewhere no path is one."""
+    return PureWindowsPath(str(path)).drive.startswith("\\\\")
 
 
 class ExclusionStyle(StrEnum):
@@ -445,8 +452,9 @@ class ToolDescriptor:
     no_files_reason: Reason | None = None
     trigger: Trigger | None = None
     # Run once the content is known to be there: what the tool cannot read
-    # of it, or what it cannot be run without (zap's jar on Windows), fails
-    # the row before it runs (a trigger can only skip).
+    # of it, or what it cannot be run without or on (zap's jar, checkov on a
+    # UNC path; both Windows), fails the row before it runs (a trigger can
+    # only skip).
     precheck: Precheck | None = None
     # The tool was handed files and read none of them: a skip, not a failure.
     nothing_read: NothingRead | None = None
@@ -881,11 +889,22 @@ def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
     exclusions as the absolute path (measured, 3.3.16). A file's path in a
     finding is now its name, where it was relative to wherever jmo ran from.
     A file whose own name holds one of those characters still reaches the
-    command line; the scan loop refuses that run (`batch_argv_refusal`)."""
+    command line; the scan loop refuses that run (`batch_argv_refusal`).
+
+    A UNC target (`\\\\server\\share\\...`) is never a working directory here:
+    `_checkov_unc` fails that row first, and built anyway it is the argument,
+    as before #1403, so checkov fails loudly instead of scanning `C:\\Windows`.
+    """
 
     def build(ctx: ScanContext) -> list[Invocation]:
         target = Path(ctx.target)
-        cwd, operand = (target, ".") if flag == "-d" else (target.parent, target.name)
+        cwd: Path | None
+        if is_batch_launcher(ctx.binary) and is_unc(target):
+            cwd, operand = None, str(target)
+        elif flag == "-d":
+            cwd, operand = target, "."
+        else:
+            cwd, operand = target.parent, target.name
         return [
             Invocation(
                 command=(
@@ -906,6 +925,30 @@ def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
         ]
 
     return build
+
+
+def _checkov_unc(ctx: ScanContext) -> Shortfall | None:
+    """checkov.cmd cannot scan a UNC target, from anywhere: the row fails
+    with why, before it runs (measured through `jmo scan`, a
+    `\\\\wsl.localhost\\...` directory holding 10 findings).
+
+    - From the target, cmd.exe will not start there ("UNC paths are not
+      supported. Defaulting to Windows directory."): checkov scanned
+      `C:\\Windows`, row `ran`, exit 0, 0 findings; an IaC file was not found
+      there, rc 2.
+    - From anywhere else, checkov fails on it: its `os.path.relpath` raises
+      across drives ("path is on mount '\\\\wsl.localhost\\...', start on
+      mount 'C:'"), rc 2. That was the scan before #1403.
+    """
+    if not (is_batch_launcher(ctx.binary) and is_unc(ctx.target)):
+        return None
+    return Shortfall(
+        Reason.COULD_NOT_RUN,
+        f"{ctx.target} is a UNC path, which {Path(ctx.binary).name} cannot scan: "
+        "cmd.exe will not start in it, and checkov started on another drive "
+        "fails on it. Map the share to a drive letter, or scan a local copy",
+        (),
+    )
 
 
 def _file_fed(*format_args: str) -> Builder:
@@ -1656,6 +1699,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             short_switches=frozenset({"-h", "-l", "-s", "-v"}),
             trigger=_iac_trigger,
+            precheck=_checkov_unc,
             stub={"results": {"failed_checks": []}},
         ),
         ToolDescriptor(
