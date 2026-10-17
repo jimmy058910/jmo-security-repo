@@ -290,7 +290,7 @@ touch the ~25 documents that state it.
 | **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster; a consensus finding merges its members (#1355, first); CVSS v4.0; a code comment's private-repository name (#1366) | #1346 #1355 #1356 #1366 |
 | **N** | the `jmo-native` row, its runner and its tracked fixture | — |
 | **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included; zizmor's invalid-input edges (#1362) and its unannounced repository config (#1363); a GitLab project named `results` (#1364); a failed row that still contributed findings reads as none (#1369); yara_runner's crash exits 1, read as findings, over a stale output (#1382; G edits its parser for #1335 anyway) | #1310 #1311 #1335 #1362 #1363 #1364 #1369 #1382 |
-| **API** | zap's OpenAPI import: a new invocation with its own target rules, on its own PR as PR T was; three routed by PR G's final review: a `--url` holding `&` runs the rest as a command through `zap.bat` on Windows, with checkov's `-d` path the same class (#1403, security: the automation plan takes the URL off argv), a GitLab clone's read-only pack files left in `%TEMP%` (#1404), and osv-scanner's unannounced repository `osv-scanner.toml` (#1414, #1363's class) | #1331 #1347 #1348 #1403 #1404 #1414 |
+| **API** | every zap run as one automation plan in a JMo-owned ZAP home, so zap's OpenAPI import is a new job with its own target rules and the trailing-slash defect goes with `-quickurl`; zap's severity and confidence; on its own PR as PR T was; three routed by PR G's final review: a `--url` holding `&` runs the rest as a command through `zap.bat` on Windows, with checkov's `-d` path the same class (#1403, security: the automation plan takes the URL off argv), a GitLab clone's read-only pack files left in `%TEMP%` (#1404), and osv-scanner's unannounced repository `osv-scanner.toml` (#1414, #1363's class) | #1331 #1347 #1348 #1403 #1404 #1414 |
 
 A precedes Z because the corrections change Z's gate. Z precedes O only for review
 size; O and N are independent. G follows N because #1335 covers the new rows' flags.
@@ -542,36 +542,101 @@ row, tests beside each.
 
 ---
 
-## Task API1: zap imports an OpenAPI definition (#1331)
+### Re-measured before PR API (2026-10-16)
+
+The 2026-09-27 fixture was not kept, so PR API rebuilt it (a standard-library server on
+127.0.0.1 with the four operations, a spec naming `prod.invalid`, a spiderable page with a
+reflected XSS, and an upstream-proxy mode that answers any other host 502) and re-measured
+every claim above through `jmo scan` and by hand, ZAP 2.17.0 on Java 21.0.12. All held, with
+these corrections and additions:
+
+- The plan form runs in ~16.5 s, not 45 s, and its findings equal the report's alert
+  **instances** (3 alerts, 8 instances, 8 findings), not its alerts.
+- Only the bare root breaks `-quickurl`: `http://h/` misses the XSS, `http://h/app/` does
+  not. Through an automation plan none of `http://h`, `http://h/`, `http://h/app`,
+  `http://h/app/` misses it. So once every zap run is a plan, #1348 needs no URL rule.
+- The adapter's `confidence` is broken the same way as its severity: ZAP 2.17 writes a code
+  (`"2"`), and the finding is tagged `confidence:2`.
+- **A plan does not by itself close #1403.** `-autorun <plan path>` is still on `zap.bat`'s
+  argv, and a results directory containing `&` ran the injected command with rc 0 and no
+  report. Running `java -jar zap-2.17.0.jar` directly (what `zap.bat` does, plus `-Xmx512m`)
+  carries `&` intact.
+- **ZAP persists `-config` values and plan settings into `~/ZAP/config.xml`.** A persisted
+  upstream proxy routed a later run into a dead port and zeroed it. `-dir <home>` isolates it:
+  the user's file is unchanged, a fresh home costs 12 s and 276 MB once, a reused one ~2 s.
+- checkov run from the target with `-d .` gives the same ids, paths and exclusions as
+  `-d <path>`, and a target directory whose name holds `&` goes from 0 findings to 10.
+- osv-scanner reads `osv-scanner.toml` only beside each lockfile, has no flag to stop
+  reading it, and already names it on stderr (`Loaded filter from:`, `Filtered N
+  vulnerabilities`). A `--config` naming an empty file overrides it at no cost.
+- `shutil.rmtree(onexc=...)` that clears the read-only bit and retries removes a clone's
+  read-only pack files and loose objects; today they stay, and the DEBUG line says cleaned.
+
+## Task API1: every zap run is one automation plan; zap imports an OpenAPI definition (#1331, #1348)
 
 **Files:** `scripts/core/tool_descriptors.py` (`_zap_url`, a plan builder),
-`scripts/cli/scan_orchestrator.py` (`--api-spec` discovery), `scripts/core/adapters/zap_adapter.py`,
-the wizard's API mode, tests beside each.
+`scripts/cli/scan_orchestrator.py` (`--api-spec` discovery and its target rule), the wizard's
+API mode, a tracked copy of the measurement fixture under `tests/`, tests beside each.
 
-- [ ] Red first, against the measurement fixture (a local API whose spec names
-  `servers: [http://prod.invalid/]`, behind a logging proxy): today 0 of 4 operations
-  requested.
+- [ ] Red first, against the fixture: today `--api-spec` reaches 0 of 4 operations, and
+  `--url http://h/` (bare root) misses the reflected XSS.
 - [ ] `--api-spec FILE|URL` requires `--url TARGET` (exit 2 naming both otherwise):
-  without an explicit target zap sent 1,276 requests to the spec's own server.
-- [ ] JMo writes an automation plan into the output directory (context = the target;
-  an `openapi` job with `apiFile`/`apiUrl` and `targetUrl`; `passiveScan-wait`;
-  `activeScan` with a `maxDuration` from the tool's timeout; a `traditional-json`
-  report) and runs `zap -cmd -silent -autorun <plan>`. rc 1 is a failure for this
-  invocation (a failed import writes no report).
-- [ ] `targetUrl` keeps the user's path as typed (`http://h` keeps the spec's base
-  path, `http://h/` drops it: measured), and the PR records which one JMo sends.
-- [ ] Gate: 3 of 4 operations attacked including `{id}`, 0 requests to `prod.invalid`,
-  the adapter's findings equal to the report's alerts.
+  without an explicit target zap sent 1,278 requests to the spec's own server.
+- [ ] JMo writes an automation plan into the output directory and runs
+  `zap -cmd -silent -dir <JMo's ZAP home> -autorun <plan>` for **every** zap run. A URL scan:
+  context = the target, `spider`, `passiveScan-wait`, `activeScan` with a `maxDuration` from
+  the tool's timeout, a `traditional-json` report. A spec scan: the same, with an `openapi`
+  job (`apiFile` or `apiUrl`, and `targetUrl`) in place of the spider. rc 1 is a failure (a
+  failed import writes no report).
+- [ ] `targetUrl` is the user's URL exactly as typed: ZAP gives the slash meaning (empty path
+  keeps the spec's base path; any path, `/` included, replaces it), and normalising it would
+  take away the user's only way to choose.
+- [ ] JMo's ZAP home is a directory under `~/.jmo`, reused across runs, so a scan neither
+  reads nor writes the user's `~/ZAP`.
+- [ ] Gates through `jmo scan`: the spec scan requests all 4 operations and attacks the 3
+  parameterised ones including `{id}`, with 0 requests to `prod.invalid`, and the adapter's
+  findings equal the report's alert instances; the URL scan finds the XSS for all four slash
+  forms; `~/ZAP/config.xml` is byte-identical before and after.
 
-## Task API2: zap's URL scans, as found in API1's measurement
+## Task API2: zap's severity and confidence (#1347)
 
-- [ ] `-silent` on every zap run (6–13 calls to `*.zaproxy.org` per run without it).
-- [ ] The trailing slash, as decided (see "New defects"): measured, `-quickurl
-  http://h/` missed an XSS that `http://h` found. Red first on the spiderable fixture.
-- [ ] Severity, as decided: `zap_adapter.py:93` reads `riskcode`/`riskdesc`. Red first:
-  the fixture's High XSS reads `MEDIUM` today.
+- [ ] Red first on a real ZAP 2.17 `traditional-json` report (tracked, from the fixture
+  run): its riskcode-3 XSS reads `MEDIUM` today, and its confidence tag reads `confidence:2`.
+- [ ] Translate `riskcode` 0-3 (fallback: the first word of `riskdesc`) before
+  `map_tool_severity`, and `confidence` the same way. An invented `risk` key in the existing
+  tests is replaced by the fields ZAP writes.
 - [ ] nuclei stays a plain `-u` scan (decision 7); its spec import is the after-the-tag
   issue filed with PR A.
+
+## Task API3: no JMo-built value reaches a `.bat`/`.cmd` argv (#1403)
+
+- [ ] Red first: a target URL holding `&` (zap), a results directory holding `&` (zap's plan
+  path) and a target directory holding `&` (checkov) each reach cmd.exe today. The probe is a
+  benign `echo.<marker>` and nothing else.
+- [ ] zap on Windows: when the launcher resolves to `zap.bat`, run `java -Xmx512m -jar
+  zap-<version>.jar` directly, from zap's directory, with the same arguments. zap.sh stays as
+  it is on Linux, macOS and in the image.
+- [ ] checkov: run from the target with `-d .` (measured drop-in: same ids, paths and
+  exclusions).
+- [ ] A test over every descriptor that renders its invocations for values holding each of
+  `& | ^ < > %` and fails if any reaches the argv of a `.bat`/`.cmd` launcher.
+
+## Task API4: a GitLab clone's read-only files are removed (#1404)
+
+- [ ] Red first: a `git clone` inside `secure_temp_dir` leaves its read-only pack files on
+  Windows.
+- [ ] `rmtree` with an `onexc` handler that clears the read-only bit and retries; anything
+  still left is logged at WARNING, and the DEBUG line no longer claims success it did not
+  have.
+
+## Task API5: osv-scanner announces a target's own `osv-scanner.toml` (#1414)
+
+- [ ] Red first: a vulnerable lockfile with an `osv-scanner.toml` beside it scans to 0
+  findings with nothing said.
+- [ ] Announce it as #1363 does for zizmor, extended to where osv-scanner looks: beside each
+  lockfile JMo hands it, naming each file and its ignore and override counts. JMo does not
+  override it: honouring a repository's ignores is osv-scanner's documented behaviour, and
+  the choice stays the user's.
 
 ---
 
