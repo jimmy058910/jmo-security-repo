@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import pytest
 import yaml
@@ -236,6 +237,30 @@ def _in_context(context: dict, url: str) -> bool:
     return hit(includes) and not hit(excludes)
 
 
+def _node_name(url: str) -> str:
+    """The name ZAP gives a URL's site-tree node, which is what its active
+    scan matches a context against (`Context.isInContext(SiteNode)` reads
+    `getHierarchicNodeName`, disassembled from zap-2.17.0.jar): the scheme's
+    default port dropped and the path percent-decoded. The spider matches the
+    URL as requested. Scoped by the typed spelling alone, `http://h:80/app/`
+    and `http://h/my%20app/` attacked nothing (measured)."""
+    parts = urlsplit(url)
+    netloc = parts.netloc
+    if parts.port == {"http": 80, "https": 443}[parts.scheme.lower()]:
+        netloc = netloc.rsplit(":", 1)[0]
+    return urlunsplit((parts.scheme, netloc, unquote(parts.path), parts.query, ""))
+
+
+def _in_scope(context: dict, url: str) -> bool:
+    """Inside for both of ZAP's readers: the spider and the active scan."""
+    return _in_context(context, url) and _in_context(context, _node_name(url))
+
+
+def _out_of_scope(context: dict, url: str) -> bool:
+    """Outside for both: neither may reach it."""
+    return not _in_context(context, url) and not _in_context(context, _node_name(url))
+
+
 def _context(url: str) -> dict:
     return yaml.safe_load(zap_plan(url, REPORT, 900))["env"]["contexts"][0]
 
@@ -276,6 +301,51 @@ SCOPES = [
         ["http://h.test/a(b/[c]{1}$", "http://h.test/a(b/[c]{1}$/d?e=1"],
         ["http://h.test/a"],
     ),
+    # The scheme's default port, typed: ZAP's node names drop it.
+    (
+        "http://h.test:80/app/",
+        ["http://h.test:80/app/search?q=1", "http://h.test/app/search?q=1"],
+        [
+            "http://h.test/",
+            "http://h.test:80/",
+            "http://h.test/apple",
+            "http://h.test:8080/app/",
+            "https://h.test/app/",
+            "http://h.test.evil.test/app/",
+        ],
+    ),
+    # Any other port is a different server: it stays.
+    (
+        "http://h.test:8080/app/",
+        ["http://h.test:8080/app/x"],
+        ["http://h.test/app/x", "http://h.test:80/app/x"],
+    ),
+    (
+        "http://h.test:80",
+        ["http://h.test:80/", "http://h.test/search?q=1"],
+        ["http://h.test:8080/", "http://h.test.evil.test/", "https://h.test/"],
+    ),
+    (
+        "https://h.test:443/",
+        ["https://h.test:443/x", "https://h.test/x"],
+        [
+            "http://h.test/x",
+            "https://h.test:4430/x",
+            "https://h.test:8443/x",
+            "https://h.test.evil.test/x",
+        ],
+    ),
+    # A percent-encoded path: ZAP's node names decode it.
+    (
+        "http://h.test/my%20app/",
+        ["http://h.test/my%20app/search?q=1", "http://h.test/my app/search?q=1"],
+        ["http://h.test/", "http://h.test/my%20apple", "http://h.test/myXapp/"],
+    ),
+    (
+        "http://h.test/caf%C3%A9/",
+        ["http://h.test/caf%C3%A9/x", "http://h.test/café/x"],
+        ["http://h.test/", "http://h.test/cafe/x", "http://h.test/caf%C3%A9x"],
+    ),
 ]
 
 
@@ -284,11 +354,23 @@ def test_the_context_is_the_target_as_typed_and_no_wider(target, inside, outside
     """Under 73e80aca the context was `urls: [target]`: `/search?q=hello`
     put its own target out of scope (1 request, nothing attacked, rc 0),
     `q=(x` did not compile (rc 1, "Invalid URL"), and `http://example.com`
-    also took in `http://example.com.evil.test/`."""
+    also took in `http://example.com.evil.test/`. Each URL is judged as the
+    spider requests it and as the active scan names it (`_node_name`)."""
     context = _context(target)
 
-    assert [u for u in inside if not _in_context(context, u)] == []
-    assert [u for u in outside if _in_context(context, u)] == []
+    assert [u for u in inside if not _in_scope(context, u)] == []
+    assert [u for u in outside if not _out_of_scope(context, u)] == []
+
+
+@pytest.mark.parametrize(
+    "target", ["http://h.test:80/app/", "https://h.test:443/", "http://h.test/a%20b/"]
+)
+def test_the_spider_and_the_import_keep_a_target_zap_would_respell(target):
+    """Only the scope takes ZAP's spelling too: the spider's seed and the
+    import's `targetUrl` are what the user typed."""
+    assert _jobs(zap_plan(target, REPORT, 900))["spider"]["parameters"]["url"] == target
+    spec = _jobs(zap_plan(target, REPORT, 900, api_spec="/specs/openapi.json"))
+    assert spec["openapi"]["parameters"]["targetUrl"] == target
 
 
 @pytest.mark.parametrize("target", [t for t, _, _ in SCOPES])

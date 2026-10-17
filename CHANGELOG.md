@@ -250,11 +250,15 @@ All notable changes to JMo Security will be documented in this file.
   definition (#1331).** JMo writes the plan beside zap's output (`.zap-plan.yaml`) and runs
   `zap -cmd -silent -dir ~/.jmo/zap-home -autorun <plan>`. A URL scan spiders, waits for
   the passive scan, runs the active scan and writes `zap.json`. The spider and the active
-  scan stay inside `--url` as typed, query string and regex characters included: ZAP reads
-  a plan's context URL as an unescaped regex and matches it with the query cut off, so a
-  target such as `/search?q=hello` fell outside its own scope (1 request, nothing
-  attacked, rc 0) and `?q=(x` did not compile (rc 1). The context is the URL, quoted,
-  without its query, and nothing wider. With `--api-spec FILE|URL`
+  scan stay inside `--url` as typed, however ZAP spells it, query string and regex
+  characters included: ZAP reads a plan's context URL as an unescaped regex and matches it
+  with the query cut off, so a target such as `/search?q=hello` fell outside its own scope
+  (1 request, nothing attacked, rc 0) and `?q=(x` did not compile (rc 1). The context is
+  the URL, quoted, without its query, and nothing wider. It holds the URL twice: as typed,
+  which the spider matches, and as ZAP names its site-tree nodes, which the active scan
+  matches, without the scheme's default port and with the path percent-decoded. Scoped as
+  typed alone, `http://h:80/app/`, `http://h/my%20app/` and an `--api-spec` scan of
+  `http://h:80` were crawled and attacked nothing, rc 0. With `--api-spec FILE|URL`
   (a file, or the http(s) URL it is served from) an import of the definition replaces the
   spider, and its operations are sent to `--url`, kept as typed: zap gives the path
   meaning (an empty path keeps the definition's base path, any path replaces it). Against

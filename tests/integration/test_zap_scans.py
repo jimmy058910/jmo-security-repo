@@ -43,6 +43,10 @@ OPERATIONS = {"items_list", "items_get", "login", "admin_users"}
 # The operations with a parameter to attack; `admin_users` has none.
 PARAMETERISED = ("items_list", "items_get", "login")
 REFLECTED_XSS = "40012"  # ZAP's "Cross Site Scripting (Reflected)"
+# A host zap reaches only through the fixture's proxy, never resolved, so a URL
+# can name port 80, the scheme's default, without the fixture binding it.
+ALIAS = "zap-fixture.test"
+DEFAULT_PORT = (f"{ALIAS}:80", ALIAS)
 
 pytestmark = [pytest.mark.requires_tools, pytest.mark.timeout(600)]
 
@@ -110,14 +114,20 @@ def _alerts(report: Path) -> list[dict]:
     return [alert for site in data.get("site", []) for alert in site["alerts"]]
 
 
+@pytest.mark.parametrize("default_port", [False, True], ids=["own-port", "port-80"])
 def test_a_spec_scan_attacks_every_operation_at_the_target_only(
-    jmo_scan, tmp_path
+    jmo_scan, tmp_path, default_port
 ) -> None:
+    """`port-80`: ZAP names its site-tree nodes without the scheme's default
+    port, and its active scan matches the context against those names. With
+    the context `--url` as typed, `http://h:80` had each operation requested
+    once by the import and none attacked, rc 0 (measured, ZAP 2.17.0)."""
     log = tmp_path / "requests.jsonl"
-    f = fx.start("api", log)
+    f = fx.start("api", log, aliases=DEFAULT_PORT if default_port else ())
+    url = f"http://{ALIAS}:80" if default_port else f.url
     try:
         rc, out = jmo_scan(
-            "--url", f.url, "--api-spec", str(SPEC), flags=tuple(fx.proxy_flags(f.port))
+            "--url", url, "--api-spec", str(SPEC), flags=tuple(fx.proxy_flags(f.port))
         )
     finally:
         f.close()
@@ -153,6 +163,57 @@ def test_a_url_scan_finds_the_reflected_xss_whatever_the_slash(
     assert rc == 0
     found = [a["pluginid"] for a in _alerts(out / "zap.json")]
     assert REFLECTED_XSS in found, found
+
+
+@pytest.mark.parametrize("path", ["", "/", "/app/"])
+def test_a_url_naming_its_default_port_is_attacked(jmo_scan, tmp_path, path) -> None:
+    """ZAP names its site-tree nodes without the scheme's default port, and its
+    active scan matches the context against those names, not the URL
+    requested. With the context `--url` as typed, `http://h:80/` and
+    `http://h:80/app/` were spidered, 2 requests, and attacked nothing, rc 0
+    (measured, ZAP 2.17.0). The scope holds both spellings, and no more."""
+    log = tmp_path / "requests.jsonl"
+    f = fx.start("spider", log, aliases=DEFAULT_PORT)
+    try:
+        rc, out = jmo_scan(
+            "--url", f"http://{ALIAS}:80{path}", flags=tuple(fx.proxy_flags(f.port))
+        )
+    finally:
+        f.close()
+
+    assert rc == 0
+    found = [a["pluginid"] for a in _alerts(out / "zap.json")]
+    assert REFLECTED_XSS in found, found
+    requests = fx.read_log(log)
+    attacked = Counter(r["op"] for r in requests if r["payload"])
+    assert attacked["app_search" if path == "/app/" else "search"], attacked
+    if path == "/app/":
+        # `/` links to the other search page: reaching it would mean the
+        # scope widened past `/app/`.
+        reached = Counter(r["op"] for r in requests)
+        assert not reached["root"] and not reached["search"], reached
+
+
+def test_a_percent_encoded_path_is_attacked(jmo_scan, tmp_path) -> None:
+    """ZAP names a node by its percent-decoded path (`/my app/`), and its
+    active scan matches the context against that name. With the context
+    `--url` as typed, `/my%20app/` was spidered, 3 requests, and attacked
+    nothing, rc 0 (measured, ZAP 2.17.0)."""
+    log = tmp_path / "requests.jsonl"
+    f = fx.start("spider", log)
+    try:
+        rc, out = jmo_scan("--url", f"{f.url}/my%20app/")
+    finally:
+        f.close()
+
+    assert rc == 0
+    found = [a["pluginid"] for a in _alerts(out / "zap.json")]
+    assert REFLECTED_XSS in found, found
+    requests = fx.read_log(log)
+    attacked = Counter(r["op"] for r in requests if r["payload"])
+    assert attacked["spaced_search"], attacked
+    reached = Counter(r["op"] for r in requests)
+    assert not reached["root"] and not reached["search"], reached
 
 
 @pytest.mark.parametrize(

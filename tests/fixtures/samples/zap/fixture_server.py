@@ -8,7 +8,9 @@ one JSON line. It is also an HTTP upstream proxy: a request for any other host
 resolving that host, so a tool told to use it as its proxy cannot reach
 anything but this server, and every attempt to is counted. zap is pointed at
 it with `-config network.connection.httpProxy.enabled=true`, `...host=127.0.0.1`
-and `...port=<port>` (`proxy_flags`).
+and `...port=<port>` (`proxy_flags`). As a proxy it also answers, as itself, for
+the `aliases` it was started with: `zap-fixture.test:80` lets a scan name the
+scheme's default port, with no privileged port bound and no name resolved.
 
 The two definitions beside this file, `openapi.json` and `openapi-v1.json`,
 are `write_specs`' output; `spec()` is what the server serves.
@@ -27,6 +29,8 @@ Modes
     unescaped (a reflected XSS). ``/app/`` links, relatively, to
     ``search?q=hello`` (``/app/search``), which does the same. ``/app``
     redirects 301 to ``/app/``, as a static server does for a directory.
+    Routed on the percent-decoded path, as a server is: ``/my%20app/`` is
+    the directory ``/my app/``, which links and reflects as ``/app/`` does.
 
 Each log line: ``t``, ``via`` (``direct`` | ``proxy``), ``method``, ``host``
 (the Host header), ``target`` (the host a proxied request named), ``path``,
@@ -38,7 +42,7 @@ Entry points
 ------------
 ``python fixture_server.py --mode api --log requests.jsonl [--port-file F]``
     prints ``PORT <n>`` and serves until killed.
-``start(mode, log_path) -> Fixture``
+``start(mode, log_path, aliases=()) -> Fixture``
     for tests: ``.port``, ``.url``, ``.close()``.
 ``write_specs(directory)``
     writes ``openapi.json`` and ``openapi-v1.json``.
@@ -55,7 +59,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qsl, unquote_plus, urlsplit
+from urllib.parse import parse_qsl, unquote, unquote_plus, urlsplit
 
 SPEC_SERVER = "http://prod.invalid/"
 SPEC_SERVER_V1 = "http://prod.invalid/v1"
@@ -354,27 +358,35 @@ class _Handler(BaseHTTPRequestHandler):
             return 200, "admin_users", prefix
 
         # spider
+        path = unquote(path)
         if path == "/":
             self._send(200, _INDEX_SPIDER, "text/html")
             return 200, "root", ""
         if path == "/app":
             self._send(301, b"", "text/html", {"Location": "/app/"})
             return 301, "app_redirect", ""
-        if path == "/app/":
+        if path in ("/app/", "/my app/"):
             self._send(200, _INDEX_APP, "text/html")
-            return 200, "app_root", ""
-        if path in ("/search", "/app/search"):
+            return 200, ("app_root" if path == "/app/" else "spaced_root"), ""
+        searches = {
+            "/search": "search",
+            "/app/search": "app_search",
+            "/my app/search": "spaced_search",
+        }
+        if path in searches:
             q = params.get("q", "")
             # Unescaped on purpose: the reflected XSS zap should find.
             page = f"<html><body><p>Results for: {q}</p></body></html>"
             self._send(200, page.encode("utf-8"), "text/html")
-            return 200, ("search" if path == "/search" else "app_search"), ""
+            return 200, searches[path], ""
         self._send(404, b"<html><body>not found</body></html>", "text/html")
         return 404, "other", ""
 
 
 class Fixture:
-    def __init__(self, mode: str, log_path: Path) -> None:
+    def __init__(
+        self, mode: str, log_path: Path, aliases: tuple[str, ...] = ()
+    ) -> None:
         if mode not in ("api", "spider"):
             raise ValueError(f"unknown mode {mode!r}")
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
@@ -386,6 +398,7 @@ class Fixture:
         self.httpd.own_netlocs = {  # type: ignore[attr-defined]
             f"127.0.0.1:{self.port}",
             f"localhost:{self.port}",
+            *(alias.lower() for alias in aliases),
         }
         self.url = f"http://127.0.0.1:{self.port}"
         self._thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
@@ -399,8 +412,8 @@ class Fixture:
         self.httpd.server_close()
 
 
-def start(mode: str, log_path: Path) -> Fixture:
-    return Fixture(mode, log_path).start()
+def start(mode: str, log_path: Path, aliases: tuple[str, ...] = ()) -> Fixture:
+    return Fixture(mode, log_path, aliases).start()
 
 
 def read_log(log_path: Path) -> list[dict]:

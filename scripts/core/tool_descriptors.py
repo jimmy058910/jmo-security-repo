@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 import yaml
 
@@ -1352,9 +1352,19 @@ def _java_quote(text: str) -> str:
     return "\\Q" + text.replace("\\E", "\\E\\\\E\\Q") + "\\E"
 
 
+def _zap_node_name(scheme: str, netloc: str, path: str) -> str:
+    """`scheme://netloc/path` as ZAP names its site-tree node: without the
+    scheme's default port, the path percent-decoded."""
+    host, colon, port = netloc.rpartition(":")
+    default = {"http": 80, "https": 443}.get(scheme.lower())
+    if colon and port.isdigit() and int(port) == default:
+        netloc = host
+    return f"{scheme}://{netloc}{unquote(path)}"
+
+
 def _zap_context(target: str) -> dict[str, Any]:
-    """The context the spider and the active scan are confined to: `target`
-    as typed, and nothing wider.
+    """The context the spider and the active scan are confined to: `target`,
+    however ZAP spells it, and nothing wider.
 
     ZAP 2.17 turns each `urls` entry into the regex `<entry>.*`, nothing
     escaped (automation-beta-0.58.0's ContextWrapper), and matches a context's
@@ -1364,8 +1374,17 @@ def _zap_context(target: str) -> dict[str, Any]:
     compile (rc 1, "Invalid URL"), and `http://example.com` also took in
     `http://example.com.evil.test/` (measured on the first three).
 
-    - `includePaths`: the target without its query and fragment, quoted, then
-      anything (a target with no path: anything after a `/`, `?` or `#`).
+    The spider matches the context against the URL it requests; the active
+    scan against the name ZAP gives each site-tree node, with the scheme's
+    default port dropped and the path percent-decoded (`Context.isInContext`
+    on a `SiteNode`, read from zap-2.17.0.jar). Scoped by the typed spelling
+    alone, `http://h:80/app/`, `http://h/my%20app/` and an `--api-spec` scan
+    of `http://h:80` attacked nothing, rc 0; by the node's spelling alone the
+    spider's seed fell outside and nothing was crawled. So the scope is both.
+
+    - `includePaths`: the target without its query and fragment, as typed or
+      as ZAP names it, quoted, then anything (a target with no path: anything
+      after a `/`, `?` or `#`).
     - `excludePaths`: every URL that does not match that, so the loose regex
       ZAP makes of the entry below adds nothing.
     - `urls` (ZAP requires one, and requests it): the target without its query,
@@ -1373,13 +1392,16 @@ def _zap_context(target: str) -> dict[str, Any]:
 
     The spider's `url` and the `openapi` job's `targetUrl` stay as typed.
     Measured through plans on the spider fixture: every form of `/search?q=`
-    above and `http://h`, `http://h/app/` found the reflected XSS, and `/app/`
-    did not reach `/`.
+    above, `http://h`, `http://h/app/`, `http://h:80/app/` and `/my%20app/`
+    found the reflected XSS, and `/app/` did not reach `/`.
     """
     parts = urlsplit(target)
     origin = f"{parts.scheme}://{parts.netloc}"
     tail = ".*" if parts.path else "(?:[/?#].*)?"
-    scope = _java_quote(origin + parts.path) + tail
+    spellings = dict.fromkeys(
+        (origin + parts.path, _zap_node_name(parts.scheme, parts.netloc, parts.path))
+    )
+    scope = "(?:" + "|".join(_java_quote(s) for s in spellings) + ")" + tail
     path = "".join(
         f"%{ord(c):02X}" if c in _REGEX_CHARACTERS else c for c in parts.path
     )
