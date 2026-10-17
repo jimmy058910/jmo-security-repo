@@ -290,7 +290,7 @@ touch the ~25 documents that state it.
 | **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster; a consensus finding merges its members (#1355, first); CVSS v4.0; a code comment's private-repository name (#1366) | #1346 #1355 #1356 #1366 |
 | **N** | the `jmo-native` row, its runner and its tracked fixture | — |
 | **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included; zizmor's invalid-input edges (#1362) and its unannounced repository config (#1363); a GitLab project named `results` (#1364); a failed row that still contributed findings reads as none (#1369); yara_runner's crash exits 1, read as findings, over a stale output (#1382; G edits its parser for #1335 anyway) | #1310 #1311 #1335 #1362 #1363 #1364 #1369 #1382 |
-| **API** | every zap run as one automation plan in a JMo-owned ZAP home, so zap's OpenAPI import is a new job with its own target rules and the trailing-slash defect goes with `-quickurl`; zap's severity and confidence; on its own PR as PR T was; three routed by PR G's final review: a `--url` holding `&` runs the rest as a command through `zap.bat` on Windows, with checkov's `-d` path the same class (#1403, security: the automation plan takes the URL off argv), a GitLab clone's read-only pack files left in `%TEMP%` (#1404), and osv-scanner's unannounced repository `osv-scanner.toml` (#1414, #1363's class) | #1331 #1347 #1348 #1403 #1404 #1414 |
+| **API** | every zap run as one automation plan in a JMo-owned ZAP home, so zap's OpenAPI import is a new job with its own target rules and the trailing-slash defect goes with `-quickurl`; zap's severity and confidence; on its own PR as PR T was; three routed by PR G's final review: a `--url` holding `&` runs the rest as a command through `zap.bat` on Windows, with checkov's `-d` path the same class (#1403, security: the automation plan takes the URL off argv), a GitLab clone's read-only pack files left in `%TEMP%` (#1404), and osv-scanner's unannounced repository `osv-scanner.toml` (#1414, #1363's class) | #1331 #1347 #1348 #1403 #1404 #1414 #1421 |
 
 A precedes Z because the corrections change Z's gate. Z precedes O only for review
 size; O and N are independent. G follows N because #1335 covers the new rows' flags.
@@ -637,6 +637,24 @@ API mode, a tracked copy of the measurement fixture under `tests/`, tests beside
   lockfile JMo hands it, naming each file and its ignore and override counts. JMo does not
   override it: honouring a repository's ignores is osv-scanner's documented behaviour, and
   the choice stays the user's.
+
+## Task API6: the first nightly after the sync (#1421)
+
+The nightly of 2026-10-17 on `main` (`238c0d9e`, the first nightly at a commit carrying PRs
+O, N and G) failed in two classes. Lint, and so pip-audit, passed.
+
+- [ ] Python 3.13 on Windows and macOS (3.12 and Ubuntu's 3.13 pass): discovery reads an
+  extra image (`busybox:1`) from a file the case-sensitive Dockerfile definition excludes,
+  and hadolint's file list differs, in
+  `test_gitlab_scanner.py::TestDiscoveryNamesOnlyImagesJmoCanPull::test_only_a_dockerfile_is_read_for_its_from_lines`
+  and
+  `test_repository_scanner.py::TestADockerfileIsOneThing::test_hadolint_reads_the_dockerfiles_and_not_a_document_about_one`.
+  Red first under 3.13, find the cause, fix the product, not the test.
+- [ ] Two Docker e2e tests of v2-only behaviour (osv-scanner's missing database, a fresh named
+  volume on the JMo home) run in the nightly against the published image, v1.1.1 until the
+  tag. They skip, naming the reason, when the image under test predates the version that
+  introduced the behaviour. `docker-smoke` builds the tree's image on every pull request and
+  still runs them.
 
 ---
 
