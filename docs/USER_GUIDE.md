@@ -518,7 +518,7 @@ ghcr.io/myorg/api:main
 
 - `--url URL`: Single web application URL to scan
 - `--urls-file FILE`: File with URLs (one per line, supports `#` comments)
-- `--api-spec URL`: an OpenAPI/Swagger spec's http(s) URL. It is scanned as a plain URL: zap is not told it is a spec, so the API's endpoints are not requested, and a local spec file is refused. The OpenAPI import is [#1331](https://github.com/jimmy058910/jmo-security-repo/issues/1331).
+- `--api-spec FILE|URL`: an OpenAPI definition (a file, or the http(s) URL it is served from) for zap to import. It needs `--url`: zap sends every operation the definition lists to that address and never to the servers the definition names. The URL is kept as you typed it, because zap gives its path meaning: an empty path keeps the definition's base path, and any path, `/` included, replaces it. A definition that cannot be read is refused together with its `--url`. Nuclei scans `--url` as usual.
 
 **Example urls.txt:**
 
@@ -819,9 +819,8 @@ The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 **ZAP scan timeout:**
 
-- Increase timeout: `--timeout 1200` or in `jmo.yml` per_tool override
-- Reduce spider duration: `zap.flags: ["-config", "spider.maxDuration=3"]`
-- `--api-spec` does not narrow the scan yet: zap crawls the spec's own URL ([#1331](https://github.com/jimmy058910/jmo-security-repo/issues/1331))
+- Each zap run is one automation plan, and `per_tool.zap.timeout` (default 900 s) is its whole budget: the spider gets a third of its minutes, the active scan the rest less two (the passive wait and startup), at least a minute each. zap stops itself and writes its report before JMo's timeout would kill it. Raise the timeout to scan deeper: `per_tool: {zap: {timeout: 1800}}`
+- `-config spider.maxDuration=N` in `zap.flags` limits nothing: the plan's spider reads its own limit, and the `-config` value is not read
 
 **Nuclei scan issues:**
 
@@ -1227,7 +1226,7 @@ per_tool:
   trivy:
     flags: ["--no-progress"]
   zap:
-    flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
+    flags: ["-config", "api.disablekey=true"]
 
 policy:
   enabled: true

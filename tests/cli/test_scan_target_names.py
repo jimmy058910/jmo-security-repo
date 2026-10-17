@@ -393,7 +393,11 @@ class TestOneTargetOneFolder:
         written = self._own_output(env.results, "zap")
         assert sorted(written) == [app1, app2], "one folder held both targets"
         for url, command in written.items():
-            assert any(url in part for part in command), (url, command)
+            # zap's target is in the plan the command names, not on its argv.
+            plan = Path(command[command.index("-autorun") + 1])
+            assert yaml.safe_load(plan.read_bytes())["env"]["contexts"][0]["urls"] == [
+                url
+            ], (url, command)
         assert sorted(_timings(env.results)) == [
             "individual-web/staging.example.com",
             "individual-web/staging.example.com-2",
@@ -1254,38 +1258,57 @@ class TestDiscoveryHandsEachJobWhatItCanScan:
         assert rc == 0
         assert [cmd[-2] for cmd in clones] == ["https://gitlab.com/group/app.git"]
 
-    def test_a_local_api_spec_is_refused_with_its_reason(self, env, tmp_path, caplog):
-        """#1320: a local spec became `file://C:\\...` (malformed on Windows),
-        which the URL job rejects for its scheme after the scan started. zap
-        runs a URL scan and cannot import a spec until #1331, so discovery
-        refuses the file and says why."""
+    API = "http://api.test:8080"
+
+    @staticmethod
+    def _plan_jobs(results: Path) -> dict[str, dict]:
+        (plan,) = results.glob("individual-web/*/.zap-plan.yaml")
+        return {job["type"]: job for job in yaml.safe_load(plan.read_bytes())["jobs"]}
+
+    def test_an_api_spec_without_a_url_is_a_usage_error(self, env, tmp_path, capsys):
+        """Without a target zap attacked the servers the definition names, not
+        the API meant (#1331): refused before anything runs, naming both."""
         (tmp_path / "openapi.yaml").write_bytes(b"openapi: 3.0.0\n")
 
         rc = env.run("--api-spec", "openapi.yaml", "--tools", "zap")
 
-        assert rc == 1
-        refusals = [
-            r.getMessage()
-            for r in caplog.records
-            if "--api-spec openapi.yaml" in r.getMessage()
-        ]
-        assert refusals, [r.getMessage() for r in caplog.records]
-        assert all("#1331" in message for message in refusals), refusals
-        assert not (env.results / "individual-web").exists()
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "--api-spec needs --url" in err
+        assert not env.results.exists()
 
-    def test_a_remote_api_spec_is_scanned_as_a_url_and_says_so(self, env, caplog):
-        """An http(s) spec is still scanned, as the plain URL it is: zap
-        crawls the document's address, not the API it describes (#1331)."""
+    def test_a_local_api_spec_is_imported_and_aimed_at_the_url(self, env, tmp_path):
+        """#1320: a local spec became `file://C:\\...`, which the URL job
+        rejected after the scan started; then it was refused, since zap could
+        not import one (#1331). It is imported now, and attacks `--url`."""
+        (tmp_path / "openapi.yaml").write_bytes(b"openapi: 3.0.0\n")
+
+        rc = env.run("--url", self.API, "--api-spec", "openapi.yaml", "--tools", "zap")
+
+        assert rc == 0
+        assert _tool_runs(env.results) == [("url", self.API, "zap")]
+        assert self._plan_jobs(env.results)["openapi"]["parameters"] == {
+            "apiFile": str(tmp_path / "openapi.yaml"),
+            "targetUrl": self.API,
+            "context": "target",
+        }
+
+    def test_a_remote_api_spec_is_fetched_by_zap_not_scanned_as_a_target(self, env):
+        """It used to be scanned as the plain URL it is: zap crawled the
+        document's address, not the API it describes (#1331)."""
         spec = "http://h.test/openapi.json"
 
-        assert env.run("--api-spec", spec, "--tools", "zap") == 0
+        assert env.run("--url", self.API, "--api-spec", spec, "--tools", "zap") == 0
 
-        assert _tool_runs(env.results) == [("url", spec, "zap")]
-        warnings = [
-            r.getMessage()
-            for r in caplog.records
-            if r.levelname == "WARNING" and spec in r.getMessage()
-        ]
-        assert len(warnings) == 1, [r.getMessage() for r in caplog.records]
-        assert "plain URL" in warnings[0]
-        assert "#1331" in warnings[0]
+        assert _tool_runs(env.results) == [("url", self.API, "zap")]
+        assert self._plan_jobs(env.results)["openapi"]["parameters"] == {
+            "apiUrl": spec,
+            "targetUrl": self.API,
+            "context": "target",
+        }
+
+    def test_an_unreadable_api_spec_scans_nothing_and_says_why(self, env):
+        rc = env.run("--url", self.API, "--api-spec", "missing.json", "--tools", "zap")
+
+        assert rc == 1, "every target refused: not a clean scan of a linkless page"
+        assert not (env.results / "individual-web").exists()

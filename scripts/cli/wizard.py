@@ -427,10 +427,10 @@ def _display_target_details(target: TargetConfig) -> None:
     elif target.type == "url":
         if target.url:
             print(f"    URL: {target.url}")
+            if target.api_spec:
+                print(f"    API spec: {target.api_spec}")
         elif target.urls_file:
             print(f"    URLs file: {target.urls_file}")
-        elif target.api_spec:
-            print(f"    API spec: {target.api_spec}")
     elif target.type == "gitlab":
         print(f"    GitLab URL: {target.gitlab_url}")
         print(f"    Token: {'***' if target.gitlab_token else 'NOT SET'}")

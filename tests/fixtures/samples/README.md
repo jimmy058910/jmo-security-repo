@@ -27,8 +27,12 @@ samples/
 │   └── vulnerable_script.sh  # Quoting, word splitting, unsafe patterns
 ├── github-actions/        # GitHub Actions flaws (zizmor)
 │   └── .github/workflows/ci.yml  # Template injection, unpinned action, pull_request_target
-└── native/                # JMo's own check pack (jmo-native), see its own README.md
-    └── ...                # Next.js/Supabase/Firebase placeholder findings + 4 negatives
+├── native/                # JMo's own check pack (jmo-native), see its own README.md
+│   └── ...                # Next.js/Supabase/Firebase placeholder findings + 4 negatives
+└── zap/                   # A live target for zap (DAST), not files to scan
+    ├── fixture_server.py  # 127.0.0.1, OS-assigned port: an API, and a site with an XSS
+    ├── openapi.json       # Its four operations; `servers` names prod.invalid
+    └── openapi-v1.json    # The same, with the base path /v1
 ```
 
 ## Security Warning
@@ -48,6 +52,7 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 | shell-issues/ | ShellCheck |
 | github-actions/ | zizmor |
 | native/ | jmo-native (JMo's own check pack; see `native/README.md`) |
+| zap/ | ZAP, through `jmo scan --url` (and `--api-spec`): started by `tests/integration/test_zap_scans.py`, which counts each request it logs |
 
 ## Usage
 

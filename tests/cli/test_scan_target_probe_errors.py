@@ -169,8 +169,12 @@ def test_an_unstattable_target_is_rejected_not_raised(
     target = tmp_path / "target"
     target.mkdir()
     _raise_on(monkeypatch, target, "exists")
+    given = {attr: str(target)}
+    if attr == "api_spec":
+        # A spec is read only beside the URL it is aimed at (#1331).
+        given["url"] = "http://127.0.0.1:8080"
 
-    targets = orch.discover_targets(_Args(**{attr: str(target)}))
+    targets = orch.discover_targets(_Args(**given))
 
     assert targets.rejected, f"{flag} dropped an unstattable path without comment"
     joined = "\n".join(targets.rejected)

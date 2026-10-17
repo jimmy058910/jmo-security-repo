@@ -33,6 +33,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+import yaml
+
 from scripts.core import osv_database
 from scripts.core.scan_timings import Reason
 
@@ -240,6 +242,9 @@ class ScanContext:
     history: bool = False
     files: tuple[str, ...] = ()
     iter_files: Callable[[], Iterator[Path]] | None = None
+    # The plan the scan loop wrote for a row that reads one
+    # (`ToolDescriptor.automation_plan`): zap's target, jobs and report.
+    plan: Path | None = None
 
     @property
     def output(self) -> Path:
@@ -446,6 +451,9 @@ class ToolDescriptor:
     builtin: bool = False
     # Reads a repository's git history too, when `read_history` allows (G1).
     reads_history: bool = False
+    # Takes its target, its jobs and where it reports from a plan file the
+    # scan loop writes for each target (`ScanContext.plan`): zap (#1331).
+    automation_plan: bool = False
     execution_commands: tuple[str, ...] = ()  # what must exist to execute it
     stub: Any = field(default_factory=dict)  # empty-result shape of its output
     # Files examined, read from the output file; None when it cannot tell.
@@ -1183,26 +1191,138 @@ def _grype_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+# zap's automation plan, beside the target's outputs. Dot-prefixed scratch, as
+# `.gitleaks.toml`: the report reads every `<tool>.json` there and nothing else.
+ZAP_PLAN = ".zap-plan.yaml"
+
+
+def zap_home() -> Path:
+    """The ZAP home every zap run uses: JMo's own, reused across runs.
+
+    ZAP stores `-config` values and plan settings in its home's `config.xml`
+    and applies them to every later run: an upstream proxy stored there sent a
+    later scan to a dead port, 0 requests reached the target (measured, ZAP
+    2.17.0). With its own home a scan neither reads nor changes the user's
+    `~/ZAP`. A fresh home costs ~25 s and 276 MB once; a reused one nothing.
+    """
+    return Path.home() / ".jmo" / "zap-home"
+
+
+def zap_minutes(timeout: int, *, spider: bool) -> tuple[int, int]:
+    """The spider's and the active scan's minutes, from the tool's timeout.
+
+    The plan must end, and write its report, before JMo's timeout kills zap: a
+    killed zap writes nothing. So the timeout is the plan's whole budget. Of
+    its whole minutes the spider takes a third, two are held back (the
+    one-minute passive wait; startup, 14-25 s measured; the 5-8 s each capped
+    job runs past its cap; the report), and the active scan takes the rest.
+    Every job gets at least a minute. Without a spider (an OpenAPI import),
+    the active scan takes the spider's share too. At the 900 s floor: 5 and 8,
+    or 0 and 13.
+    """
+    total = max(1, timeout // 60)
+    if not spider:
+        return 0, max(1, total - 2)
+    crawl = max(1, total // 3)
+    return crawl, max(1, total - crawl - 2)
+
+
+def zap_plan(target: str, report: Path, timeout: int, api_spec: str = "") -> str:
+    """The automation plan for one zap run, as YAML.
+
+    One plan for every run: the target and the report path never reach
+    zap's command line, and a bare root (`http://h/`) is spidered like any
+    other URL. `-quickurl` stopped at that page and missed an XSS one link
+    away (#1348); through a plan none of `http://h`, `http://h/`,
+    `http://h/app`, `http://h/app/` did (measured, ZAP 2.17.0).
+
+    - A URL scan spiders `target`. With `api_spec` an `openapi` job imports
+      that definition instead (`apiUrl` for an http(s) URL, `apiFile` for a
+      file) and sends its operations to `target` (#1331). `target` is kept
+      as typed: ZAP gives its path meaning (empty keeps the definition's
+      base path, any path, `/` included, replaces it), and without it zap
+      attacked the server the definition names, 1,278 requests to it.
+    - The spider reads its own `maxDuration` (default: unlimited); a
+      `-config spider.maxDuration` on the command line is stored and not
+      read (341 s of crawling, killed, no report). activeScan reads
+      `maxScanDurationInMins`; `maxDuration` there is "Unrecognised
+      parameter", a warning. Both come from `timeout` (`zap_minutes`).
+    - `traditional-json`, the shape the zap adapter reads, with every risk
+      and confidence.
+
+    `yaml.safe_dump`, not a template: a URL holding `#` or `: ` stays one
+    value, and the output is ASCII, whatever charset the JVM reads it in.
+    """
+    spec = bool(api_spec)
+    crawl, attack = zap_minutes(timeout, spider=not spec)
+    if spec:
+        source = "apiUrl" if api_spec.startswith(("http://", "https://")) else "apiFile"
+        first = {
+            "type": "openapi",
+            "parameters": {source: api_spec, "targetUrl": target, "context": "target"},
+        }
+    else:
+        first = {
+            "type": "spider",
+            "parameters": {"context": "target", "url": target, "maxDuration": crawl},
+        }
+    document = {
+        "env": {
+            "contexts": [{"name": "target", "urls": [target]}],
+            # An error (a definition it cannot read) ends the plan, rc 1, with
+            # no report; a warning does not stop it (rc 2, report written).
+            "parameters": {
+                "failOnError": True,
+                "failOnWarning": False,
+                "progressToStdout": True,
+            },
+        },
+        "jobs": [
+            first,
+            {"type": "passiveScan-wait", "parameters": {"maxDuration": 1}},
+            {
+                "type": "activeScan",
+                "parameters": {"context": "target", "maxScanDurationInMins": attack},
+            },
+            {
+                "type": "report",
+                "parameters": {
+                    "template": "traditional-json",
+                    "reportDir": str(report.parent),
+                    "reportFile": report.name,
+                },
+                "risks": ["info", "low", "medium", "high"],
+                "confidences": ["falsepositive", "low", "medium", "high", "confirmed"],
+            },
+        ],
+    }
+    return yaml.safe_dump(document, sort_keys=False)
+
+
 # TODO(issue-#1403): on Windows zap.bat's argv is re-parsed by cmd.exe, so a
-# URL or `-quickout` path holding `&` runs the rest as a command.
+# plan or home path holding `&` runs the rest as a command.
 def _zap_url(ctx: ScanContext) -> list[Invocation]:
+    if ctx.plan is None:
+        raise ValueError("zap runs the plan the scan loop writes, and none was given")
     binary = Path(ctx.binary)
     return [
         Invocation(
             command=(
                 ctx.binary,
                 "-cmd",
-                "-quickurl",
-                str(ctx.target),
-                # Absolute: the working directory is zap's own, not the caller's.
-                "-quickout",
-                str(ctx.output.absolute()),
-                "-quickprogress",
+                # No call home: 7 connections to zaproxy.org a run without it.
+                "-silent",
+                "-dir",
+                str(zap_home()),
+                "-autorun",
+                str(ctx.plan),
                 *ctx.flags,
             ),
             output_file=ctx.output,
             capture_stdout=False,
-            ok_return_codes=(0, 1, 2),
+            # 2: a job warned, and the report was written. 1 is an error: a
+            # definition it cannot read writes no report.
+            ok_return_codes=(0, 2),
             cwd=binary.parent if binary.parent != Path() else None,
         )
     ]
@@ -1612,10 +1732,15 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             exclusion_style=ExclusionStyle.NOT_FILESYSTEM,
             flag_grammar=FlagGrammar.ZAP,
-            # Where it writes; the file's extension picks the format.
-            reserved_flags=_reserve(OUTPUT=("-quickout",)),
+            # Each would make zap run something besides JMo's plan: another
+            # plan, or a quick scan of another URL written elsewhere.
+            reserved_flags=_reserve(
+                OUTPUT=("-quickout", "-autorun"), TARGET=("-quickurl",)
+            ),
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
+            automation_plan=True,
+            # The plan's whole budget (`zap_minutes`).
             timeout_floor=900,
             binary="zap.sh",
             execution_commands=("zap.sh", "java"),

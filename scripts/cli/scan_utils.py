@@ -21,8 +21,11 @@ from scripts.core.tool_descriptors import (  # noqa: F401
     DESCRIPTORS,
     TRIVY_UNSUPPORTED_FLAGS,
     VENDORED_DIRS,
+    ZAP_PLAN,
     ExclusionStyle,
     filter_trivy_flags,
+    zap_home,
+    zap_plan,
 )
 from scripts.core.tool_utils import (  # noqa: F401
     TOOL_INSTALL_HINTS,
@@ -701,6 +704,45 @@ def write_gitleaks_config(
     ]
     path = (out_dir / ".gitleaks.toml").resolve()
     path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+    return path
+
+
+def write_zap_plan(
+    out_dir: Path, *, target: str, report: Path, timeout: int, api_spec: str = ""
+) -> Path:
+    """Write zap's automation plan for one target and return its absolute path.
+
+    The plan is `zap_plan`'s (scripts/core/tool_descriptors.py), written as
+    dot-prefixed scratch beside the outputs, as bytes (LF, ASCII). Paths are
+    absolute: zap runs from its own directory, not the caller's.
+
+    It also readies JMo's ZAP home (`zap_home`) for the run:
+
+    - **Created, parents too.** ZAP creates a missing home only when its parent
+      exists; otherwise rc 1, "Unable to create home directory" (measured).
+    - **Without `config.xml`.** ZAP stores every `-config` value and plan
+      setting there and applies it to later runs, so a user's
+      `per_tool.zap.flags` proxy, say, would stay behind for every scan after;
+      and a zap killed mid-run left that file unparseable (ZAP then rewrote
+      it). Starting each run without it measured no slower (19.9-20.1 s
+      against 20.3-20.4 s on a reused home) with the same requests, alert
+      instances and payloads. The add-ons beside it, which make a reused home
+      fast, stay.
+    """
+    home = zap_home()
+    home.mkdir(parents=True, exist_ok=True)
+    try:
+        (home / "config.xml").unlink(missing_ok=True)
+    except OSError as exc:
+        logging.getLogger(__name__).warning(
+            "zap: could not remove %s, so settings an earlier run stored there "
+            "apply to this one: %s",
+            home / "config.xml",
+            exc,
+        )
+    path = (out_dir / ZAP_PLAN).absolute()
+    plan = zap_plan(target, report.absolute(), timeout, api_spec)
+    path.write_bytes(plan.encode("utf-8"))
     return path
 
 

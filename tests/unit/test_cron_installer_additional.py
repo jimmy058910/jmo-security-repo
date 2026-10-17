@@ -22,7 +22,10 @@ pytestmark = pytest.mark.skipif(
     sys.platform == "win32", reason="Cron scheduling not supported on Windows"
 )
 
-from scripts.core.cron_installer import CronInstaller  # noqa: E402
+from scripts.core.cron_installer import (  # noqa: E402
+    CronInstaller,
+    CronValidationError,
+)
 from scripts.core.schedule_manager import (  # noqa: E402
     BackendConfig,
     JobTemplateSpec,
@@ -199,14 +202,14 @@ def test_generate_cron_entry_with_web_urls(basic_schedule):
     assert "--url https://api.example.com" in entry
 
 
-def test_generate_cron_entry_with_api_spec(basic_schedule):
-    """Test _generate_cron_entry with API spec target."""
+def test_generate_cron_entry_refuses_an_api_spec_without_a_url(basic_schedule):
+    """`jmo scan --api-spec` without `--url` exits 2 (#1331): the installed
+    job would fail every time it fired."""
     basic_schedule.spec.jobTemplate.targets = {"web": {"api_spec": "openapi.yaml"}}
 
     installer = CronInstaller()
-    entry = installer._generate_cron_entry(basic_schedule)
-
-    assert "--api-spec openapi.yaml" in entry
+    with pytest.raises(CronValidationError, match="needs --url"):
+        installer._generate_cron_entry(basic_schedule)
 
 
 def test_generate_cron_entry_with_web_urls_and_api_spec(basic_schedule):

@@ -75,7 +75,16 @@ ZAP and Nuclei are DAST scanners: they find vulnerabilities by exercising a **ru
 
 ```bash
 jmo scan --url https://staging.example.com
+jmo scan --url http://127.0.0.1:8080 --api-spec openapi.json
 ```
+
+ZAP runs one automation plan per target, which JMo writes beside its output
+(`.zap-plan.yaml`): it spiders the URL, or, with `--api-spec`, imports the OpenAPI
+definition and sends its operations to `--url`; then it waits for the passive scan, runs
+the active scan and writes `zap.json`. `per_tool.zap.timeout` is the plan's whole budget,
+so zap stops and reports before JMo's timeout. It runs with a ZAP home of JMo's own,
+`~/.jmo/zap-home`, which starts each run without the settings the last one stored, so a
+scan neither reads nor changes your `~/ZAP`.
 
 The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
 

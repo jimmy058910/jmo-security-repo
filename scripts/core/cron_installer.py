@@ -13,7 +13,11 @@ import platform
 import shlex
 import subprocess
 
-from scripts.core.schedule_manager import ScanSchedule
+from scripts.core.schedule_manager import (
+    ScanSchedule,
+    SpecWithoutTargetError,
+    reject_api_spec_without_url,
+)
 from scripts.core.validation import (
     validate_container_image,
     validate_cron_expression,
@@ -335,6 +339,10 @@ class CronInstaller:
         # 4. Web URLs
         if "web" in targets:
             web = targets["web"]
+            try:
+                reject_api_spec_without_url(web)
+            except SpecWithoutTargetError as exc:
+                raise CronValidationError(str(exc)) from exc
             if "urls" in web:
                 for url in web["urls"]:
                     if not validate_url(url):

@@ -635,11 +635,16 @@ def test_configure_url_target_batch_invalid_file_retry():
 
 
 def _api_mode(answers: list[str]) -> tuple[MagicMock, list[str]]:
-    """Run the API mode with these answers; the result and what it printed."""
+    """Run the API mode with these answers, every URL reachable; the result
+    and what it printed."""
     with (
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
         ) as mock_prompter,
+        patch(
+            "scripts.cli.wizard_flows.target_configurators.validate_url",
+            return_value=True,
+        ),
         patch("builtins.input", side_effect=answers),
     ):
         mock_prompter.prompt_choice.return_value = "api"
@@ -649,25 +654,46 @@ def _api_mode(answers: list[str]) -> tuple[MagicMock, list[str]]:
     return result, printed
 
 
-def test_configure_url_target_api_mode_takes_the_spec_url_and_says_how():
-    """zap runs a URL scan and is not told a spec is one (#1331): the spec is
-    scanned as the URL it is served from, and the wizard says so."""
-    result, printed = _api_mode(["https://api.example.com/openapi.json"])
+def test_configure_url_target_api_mode_takes_the_spec_and_the_api_it_attacks():
+    """zap imports the definition and sends its operations to the API's
+    address (#1331): `jmo scan --api-spec` without `--url` exits 2, so the
+    wizard asks for both."""
+    result, printed = _api_mode(
+        ["https://api.example.com/openapi.json", "https://api.example.com"]
+    )
 
     assert result.type == "url"
     assert result.api_spec == "https://api.example.com/openapi.json"
-    assert any("plain URL" in line and "#1331" in line for line in printed), printed
+    assert result.url == "https://api.example.com"
+    assert any("https://api.example.com" in line for line in printed), printed
 
 
-def test_configure_url_target_api_mode_asks_again_for_a_local_file():
-    """Its default was `./openapi.yaml`, a local file that `jmo scan`
-    rejected after the scan started (#1320) and now refuses up front."""
+def test_configure_url_target_api_mode_takes_a_local_file(tmp_path):
+    """zap imports a file too; it was refused while zap could not (#1320)."""
+    spec = tmp_path / "openapi.yaml"
+    spec.write_bytes(b"openapi: 3.0.3\n")
+
+    result, _ = _api_mode([str(spec), "http://127.0.0.1:8080"])
+
+    assert result.api_spec == str(spec.resolve())
+    assert result.url == "http://127.0.0.1:8080"
+
+
+def test_configure_url_target_api_mode_asks_again_for_what_it_cannot_use(tmp_path):
+    """A file that is not there, then an address that is not http(s)."""
     result, printed = _api_mode(
-        ["./openapi.yaml", "https://api.example.com/openapi.json"]
+        [
+            str(tmp_path / "missing.yaml"),
+            "https://api.example.com/openapi.json",
+            "api.example.com",
+            "https://api.example.com",
+        ]
     )
 
     assert result.api_spec == "https://api.example.com/openapi.json"
-    assert any("local" in line and "#1331" in line for line in printed), printed
+    assert result.url == "https://api.example.com"
+    assert any("File not found" in line for line in printed), printed
+    assert any("http:// or https://" in line for line in printed), printed
 
 
 # ========== Category 5: GitLab Target Configuration ==========

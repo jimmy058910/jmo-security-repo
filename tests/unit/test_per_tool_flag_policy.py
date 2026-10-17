@@ -834,9 +834,10 @@ class TestALauncherGetsNoCmdMetacharacter:
         assert tool_flags(cfg, "checkov", executable=CHECKOV_CMD) == expected
 
     def test_a_single_dash_name_takes_its_value_where_nothing_chains(self):
-        """zap's parser reads `-quickurl` as one name, not `-q` with a value:
-        the URL after it is its value, and goes with it."""
-        cfg = {"zap": {"flags": ["-quickurl", "http://127.0.0.1/?a=1&b=2", "-silent"]}}
+        """zap's parser reads `-config` as one name, not `-c` with a value:
+        the setting after it is its value, and goes with it. (`-quickurl`, the
+        first example here, is reserved now: JMo's plan is zap's only scan.)"""
+        cfg = {"zap": {"flags": ["-config", "spider.userAgent=a&b", "-silent"]}}
         assert tool_flags(cfg, "zap", executable="C:/zap/zap.bat") == ["-silent"]
 
     @pytest.mark.parametrize("launcher", ["zap.bat", "CHECKOV.CMD"])

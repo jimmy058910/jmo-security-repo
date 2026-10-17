@@ -217,6 +217,9 @@ class ScanTargets:
     # Each repository's results folder, parallel to `repos` and unique in the
     # scan (#1303). Filled by `discover_targets`; see `repo_result_names`.
     repo_names: list[str] = field(default_factory=list)
+    # A URL target -> the OpenAPI definition zap imports and attacks it with:
+    # `--url` paired with `--api-spec` (#1331).
+    api_specs: dict[str, str] = field(default_factory=dict)
 
     def total_count(self) -> int:
         """Return total number of scan targets across all types."""
@@ -251,6 +254,7 @@ class ScanTargets:
             "images": self.images,
             "iac_files": [(t, str(p)) for t, p in self.iac_files],
             "urls": self.urls,
+            "api_specs": self.api_specs,
             "gitlab_repos": self.gitlab_repos,
             "k8s_resources": self.k8s_resources,
             "total_count": self.total_count(),
@@ -475,6 +479,7 @@ class ScanOrchestrator:
         # methods are also called directly (7 tests do exactly that) and must
         # not depend on state their usual caller happens to set first.
         self._rejected: list[str] = []
+        self._api_specs: dict[str, str] = {}
 
     def discover_targets(self, args) -> ScanTargets:
         """
@@ -490,6 +495,7 @@ class ScanOrchestrator:
         # Reset per call - discover_targets may run more than once per process
         # (the wizard and `jmo ci` both build orchestrators).
         self._rejected = []
+        self._api_specs = {}
 
         # Discover repositories
         targets.repos = self._discover_repos(args)
@@ -514,6 +520,7 @@ class ScanOrchestrator:
         targets.repo_names = repo_result_names(targets.repos)
 
         targets.rejected = list(self._rejected)
+        targets.api_specs = dict(self._api_specs)
         return targets
 
     def _reject(self, flag: str, value: object, reason: str) -> None:
@@ -805,37 +812,50 @@ class ScanOrchestrator:
                             "--urls-file", line, "only http/https URLs are scanned"
                         )
 
-        # OpenAPI/Swagger spec. This is advertised in `jmo scan --help` but was
-        # handled only by jmo.py's _iter_urls, which nothing had called since
-        # discovery moved here - so the flag was silently accepted and dropped
-        # (#807). That dead helper has since been deleted (#808).
-        #
-        # zap runs a URL scan (`-quickurl`) and is never told the target is an
-        # OpenAPI definition, so a spec is only ever a URL (#1331). A remote
-        # one is scanned as that URL and says so. A local one became a
-        # `file://` URL that the URL job then rejected for its scheme, after
-        # the scan had started (#1320): it is refused here instead.
         if getattr(args, "api_spec", None):
-            spec = args.api_spec
-            if spec.startswith(("http://", "https://")):
-                logger.warning(
-                    "--api-spec %s is scanned as a plain URL: zap is not told it "
-                    "is an OpenAPI definition, so the API's endpoints are not "
-                    "requested (#1331)",
-                    spec,
-                )
-                urls.append(spec)
-            else:
-                p = _user_path(spec)
-                why = _probe(p.exists, "spec file does not exist") or (
-                    "a local OpenAPI file is not scanned: zap runs a URL scan and "
-                    "cannot import a spec yet (#1331); pass the running API's "
-                    "address with --url"
-                )
-                self._reject("--api-spec", spec, why)
+            self._pair_api_spec(args.api_spec, getattr(args, "url", None), urls)
 
         # A URL listed twice is scanned once, as a TSV row is (#1312).
         return list(dict.fromkeys(urls))
+
+    def _pair_api_spec(self, spec: str, url: str | None, urls: list[str]) -> None:
+        """Pair `--api-spec` with `--url`, the API zap sends its operations to.
+
+        zap imports the definition (a file, or an http(s) URL it fetches) and
+        attacks `--url` with it (#1331): the spec is not a target of its own.
+        Without an explicit target zap attacked the server the definition
+        names, 1,278 requests to it and none to the API meant (measured), so
+        `jmo scan` refuses `--api-spec` without `--url` (exit 2) before this.
+
+        A spec that cannot be read is refused with its URL, both named: scanned
+        without it, an API is a page with no links, nothing it lists is
+        requested, and the run reads clean. A file is made absolute, since zap
+        runs from its own directory.
+        """
+        if not url or url not in urls:
+            self._reject(
+                "--api-spec",
+                spec,
+                "needs --url, the API to attack, and none is scanned",
+            )
+            return
+        if spec.startswith(("http://", "https://")):
+            resolved = spec
+            why = None if validate_url(spec) else "not a valid http(s) URL"
+        else:
+            path = _user_path(spec)
+            resolved = str(path.absolute())
+            why = _probe(path.exists, "spec file does not exist") or _probe(
+                path.is_file, "is not a file"
+            )
+        if why:
+            self._reject("--api-spec", spec, why)
+            # The first occurrence is --url's: a --urls-file line naming the
+            # same URL asked for a plain scan of it, and keeps it.
+            urls.remove(url)
+            self._reject("--url", url, f"not scanned without its --api-spec ({why})")
+            return
+        self._api_specs[url] = resolved
 
     def _discover_gitlab_repos(self, args) -> list[dict[str, str]]:
         """
@@ -1286,6 +1306,7 @@ class ScanOrchestrator:
                     per_tool_config,
                     self.config.allow_missing_tools,
                     result_name=folder,
+                    api_spec=targets.api_specs.get(url, ""),
                 )
                 futures.append(("url", url, future))
 

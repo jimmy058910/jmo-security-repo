@@ -428,3 +428,65 @@ def test_the_gitlab_token_is_a_variable_reference_not_a_literal() -> None:
 
     assert "glpat-SECRET-VALUE" not in script
     assert "--gitlab-token ${GITLAB_TOKEN}" in script
+
+
+# ---------------------------------------------------------------------------
+# An OpenAPI definition needs the URL it is aimed at (#1331).
+# ---------------------------------------------------------------------------
+
+
+def _cron_entry(schedule: ScanSchedule) -> str:
+    """The cron line; rendering it is the same on any host, so this runs on
+    Windows too, where the installer itself refuses to construct."""
+    from unittest.mock import patch
+
+    from scripts.core.cron_installer import CronInstaller
+
+    with patch("scripts.core.cron_installer.platform.system", return_value="Linux"):
+        installer = CronInstaller()
+    return installer._generate_cron_entry(schedule)
+
+
+SPEC_ONLY = {"web": {"api_spec": "/srv/openapi.yaml"}}
+
+
+@pytest.mark.parametrize(
+    ("consumer", "render", "error"),
+    [
+        ("gitlab_ci", _gitlab_scan_argv, "SpecWithoutTargetError"),
+        ("github_actions", _github_scan_argv, "SpecWithoutTargetError"),
+        ("cron_installer", _cron_entry, "CronValidationError"),
+    ],
+    ids=["gitlab_ci", "github_actions", "cron_installer"],
+)
+def test_every_consumer_refuses_a_spec_without_a_url(consumer, render, error) -> None:
+    """`jmo scan --api-spec` without `--url` exits 2: zap would attack the
+    servers the definition names. Each consumer rendered that command, so
+    every workflow it exported failed every run."""
+    schedule = _maximal_schedule()
+    schedule.spec.jobTemplate.targets = dict(SPEC_ONLY)
+
+    with pytest.raises(Exception, match="needs --url") as raised:
+        render(schedule)
+    assert type(raised.value).__name__ == error
+
+
+def test_a_schedule_cannot_be_built_with_a_spec_and_no_url() -> None:
+    """Refused where the schedule is built, while the caller can fix it."""
+    from scripts.core.schedule_manager import SpecWithoutTargetError
+
+    with pytest.raises(SpecWithoutTargetError, match="needs --url"):
+        ScanSchedule.from_simple_args(
+            name="api", cron="0 2 * * *", api_spec="/srv/openapi.yaml"
+        )
+
+    built = ScanSchedule.from_simple_args(
+        name="api",
+        cron="0 2 * * *",
+        api_spec="/srv/openapi.yaml",
+        url="https://api.example.test",
+    )
+    assert built.spec.jobTemplate.targets["web"] == {
+        "urls": ["https://api.example.test"],
+        "api_spec": "/srv/openapi.yaml",
+    }

@@ -7,7 +7,7 @@ import shlex
 from datetime import UTC
 from typing import Any
 
-from scripts.core.schedule_manager import ScanSchedule
+from scripts.core.schedule_manager import ScanSchedule, reject_api_spec_without_url
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +232,7 @@ class GitLabCIGenerator:
         # before this fix.
         web = targets.get("web", {})
         urls = web.get("urls", []) or targets.get("urls", [])
+        reject_api_spec_without_url({**web, "urls": urls})
         for url in urls:
             cmd_parts.append(f"--url {shlex.quote(url)}")
         if "api_spec" in web:

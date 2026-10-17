@@ -68,6 +68,7 @@ from ..scan_utils import (
     write_gitleaks_config,
     write_stub,
     write_trufflehog_exclude_file,
+    write_zap_plan,
 )
 
 logger = logging.getLogger(__name__)
@@ -560,6 +561,7 @@ def run_tools(
     repo_root: Path | None = None,
     results_name: str | None = None,
     results_tree: Path | None = None,
+    api_spec: str = "",
 ) -> TargetRows:
     """Run every requested tool that applies to this target; one row per tool.
 
@@ -576,6 +578,8 @@ def run_tools(
             targets that are not a tree.
         results_name: The in-tree results directory's name, for the flags.
         results_tree: The same directory, resolved, for JMo's own walk.
+        api_spec: An OpenAPI definition (a file or an http(s) URL) whose
+            operations a plan-reading tool sends to this URL target (#1331).
     """
     find = find_tool_func or find_tool
     stub = write_stub_func or write_stub
@@ -690,6 +694,19 @@ def run_tools(
         tree_excl, history_excl = (
             _exclusions(d, out_dir, results_name, target) if key == "repo" else ((), ())
         )
+        # A plan-reading tool takes this target, and its jobs' budget (the
+        # tool's timeout), from a file written here for this run.
+        plan = (
+            write_zap_plan(
+                out_dir,
+                target=str(target),
+                report=out_dir / f"{tool}.json",
+                timeout=tool_timeout(per_tool_config, tool, timeout),
+                api_spec=api_spec,
+            )
+            if d.automation_plan
+            else None
+        )
         ctx = ScanContext(
             tool=tool,
             target_type=key,
@@ -707,6 +724,7 @@ def run_tools(
             history=history and tool in readers,
             files=files,
             iter_files=walk,
+            plan=plan,
         )
         # Content decides only on a tree. An IaC file target is itself the
         # content checkov reads; walking for it there would find nothing.

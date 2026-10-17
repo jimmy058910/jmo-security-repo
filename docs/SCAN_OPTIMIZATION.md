@@ -263,16 +263,14 @@ ZAP (DAST) can be very slow. Limit spider depth and scan duration.
 ```yaml
 per_tool:
   zap:
+    # The whole budget of zap's automation plan: the spider gets a third of its
+    # minutes, the active scan the rest less two. zap stops itself in time.
     timeout: 600
     flags:
       - -config
       - api.disablekey=true
-      # Limit spider duration (minutes)
-      - -config
-      - spider.maxDuration=5
-      # Limit spider depth
-      - -config
-      - spider.maxDepth=3
+      # The spider's limits are its plan job's own: `-config spider.*` values
+      # are stored and not read (measured for spider.maxDuration).
       # Disable slow passive scanners
       - -config
       - pscans.enableAllPassiveScanners=false
@@ -514,7 +512,7 @@ Before running a scan, verify these settings:
 | Semgrep timeout | Large codebase | Add more exclusions, increase timeout |
 | Nuclei slow | Too many templates | Limit severity: `-severity critical,high` |
 | High memory usage | Too many threads | Reduce thread count |
-| ZAP timeout | Deep spidering | Limit spider: `spider.maxDuration=5` |
+| ZAP slow | Deep spidering | Lower `per_tool.zap.timeout`, the plan's whole budget (spider a third) |
 
 ## Summary
 

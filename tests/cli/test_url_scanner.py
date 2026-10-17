@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
@@ -18,6 +19,12 @@ from scripts.core.scan_timings import Reason, State
 from scripts.core.tool_runner import ToolResult
 
 ZAP = str(Path("/opt/zap/zap.sh"))
+
+
+@pytest.fixture(autouse=True)
+def _home(tmp_path, monkeypatch):
+    """zap's run readies JMo's ZAP home under `Path.home()`: keep it here."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "home"))
 
 
 def _found(tool_name):
@@ -135,13 +142,13 @@ class TestUrlScanner:
         assert "-config" in zap_def.command
         assert "api.disablekey=true" in zap_def.command
 
-    def test_zap_runs_from_its_own_directory_with_an_absolute_output(
+    def test_zap_runs_from_its_own_directory_with_absolute_paths(
         self, tmp_path, monkeypatch
     ):
         """zap.bat resolves its jar against the working directory: from anywhere
         else it fails "Unable to access jarfile zap-2.17.0.jar" (measured on
-        Windows, 2026-09-25). Its output path must then be absolute, or zap
-        writes it under its own directory."""
+        Windows, 2026-09-25). Its plan, and the report the plan writes, must
+        then be absolute, or zap looks for them under its own directory."""
         # The relative results directory is the point; it must not land in the
         # repository the suite runs from.
         monkeypatch.chdir(tmp_path)
@@ -154,11 +161,11 @@ class TestUrlScanner:
         (zap_def,) = _defs(MockRunner)
 
         assert zap_def.cwd == Path(ZAP).parent
-        out = zap_def.command[zap_def.command.index("-quickout") + 1]
-        assert Path(out).is_absolute()
-        assert out == str(
-            (Path("relative-results") / "example.com" / "zap.json").absolute()
-        )
+        out = (Path("relative-results") / "example.com").absolute()
+        plan = zap_def.command[zap_def.command.index("-autorun") + 1]
+        assert plan == str(out / ".zap-plan.yaml")
+        report = yaml.safe_load(Path(plan).read_bytes())["jobs"][-1]["parameters"]
+        assert (report["reportDir"], report["reportFile"]) == (str(out), "zap.json")
 
     def test_nuclei_writes_jsonl(self, tmp_path):
         """nuclei 3 dropped `-json`: "flag provided but not defined: -json",
@@ -233,7 +240,7 @@ class TestUrlScanner:
             ["zap", "nuclei"],
             url="https://test.example.com",
             per_tool_config={
-                "zap": {"flags": ["-config", "spider.maxDuration=5"]},
+                "zap": {"flags": ["-config", "connection.timeoutInSecs=60"]},
                 "nuclei": {"flags": ["-severity", "critical,high"]},
             },
         )
@@ -241,7 +248,7 @@ class TestUrlScanner:
         defs = _defs(MockRunner)
         zap_def = next((t for t in defs if t.name == "zap"), None)
         assert zap_def is not None
-        assert "spider.maxDuration=5" in zap_def.command
+        assert "connection.timeoutInSecs=60" in zap_def.command
         nuclei_def = next((t for t in defs if t.name == "nuclei"), None)
         assert nuclei_def is not None
         assert "critical,high" in nuclei_def.command

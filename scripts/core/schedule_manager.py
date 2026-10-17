@@ -74,6 +74,29 @@ def _reject_conflicting_repository_targets(repositories: dict[str, Any]) -> None
         )
 
 
+class SpecWithoutTargetError(ValueError):
+    """A schedule names an OpenAPI definition and no URL for zap to attack."""
+
+
+def reject_api_spec_without_url(web: dict[str, Any]) -> None:
+    """Raise if `web` names an `api_spec` and no `urls`.
+
+    `jmo scan --api-spec` needs `--url`: zap imports the definition and sends
+    its operations there, and without one it attacked the servers the
+    definition names (#1331). So `jmo scan` exits 2 on it, and a schedule
+    holding one renders that command in every consumer. Called where a
+    schedule is built and by each generator, since `schedules.json` can be
+    edited by hand.
+    """
+    if web.get("api_spec") and not web.get("urls"):
+        raise SpecWithoutTargetError(
+            f"schedule names web.api_spec ({web['api_spec']}) and no web.urls: "
+            "`jmo scan --api-spec` needs --url, the API zap attacks with the "
+            "definition, so this schedule would render a command that exits 2. "
+            "Add the API's address as a URL."
+        )
+
+
 @dataclass
 class ScheduleMetadata:
     """Kubernetes-style metadata."""
@@ -234,6 +257,7 @@ class ScanSchedule:
         if "api_spec" in kwargs:
             web["api_spec"] = kwargs.pop("api_spec")
         if web:
+            reject_api_spec_without_url(web)
             targets["web"] = web
 
         iac = {

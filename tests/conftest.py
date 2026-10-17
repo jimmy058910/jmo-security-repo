@@ -283,6 +283,33 @@ def _guard_real_jmo_install():
         )
 
 
+@pytest.fixture(autouse=True)
+def _guard_real_zap_home(request):
+    """Fail the test that created the real `~/.jmo/zap-home`.
+
+    The scan loop readies JMo's ZAP home before a zap run: it creates the
+    directory and removes the `config.xml` an earlier run left there
+    (`write_zap_plan`). A test that drives zap through the loop without
+    redirecting `Path.home()` does both to the developer's real home. Armed
+    where the home does not exist yet, as on CI and a fresh clone.
+    """
+    from pathlib import Path
+
+    home = Path.home() / ".jmo" / "zap-home"
+    existed = home.exists()
+
+    yield
+
+    if not existed and home.exists():
+        pytest.fail(
+            f"{request.node.nodeid} created the real ZAP home {home}.\n"
+            "A zap run through the scan loop readies it under Path.home(). "
+            "Redirect it:\n"
+            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))",
+            pytrace=False,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Guard: the test suite must never write to the developer's real state.
 # ---------------------------------------------------------------------------

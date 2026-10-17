@@ -92,8 +92,12 @@ PARAMETERIZED_MODULES = {p.values[0] for p in SCANNERS}
 
 
 def _run(module: str, scan_func, target_kwargs: dict, tool: str, tmp_path: Path):
-    """Run a scan job whose single tool succeeds, with ToolRunner mocked out."""
-    with patch(f"scripts.cli.scan_jobs.{module}.ToolRunner") as MockRunner:
+    """Run a scan job whose single tool succeeds, with ToolRunner mocked out.
+    `Path.home()` is redirected: zap's run readies JMo's ZAP home under it."""
+    with (
+        patch(f"scripts.cli.scan_jobs.{module}.ToolRunner") as MockRunner,
+        patch.object(Path, "home", return_value=tmp_path / "home"),
+    ):
         mock_runner = MagicMock()
         MockRunner.return_value = mock_runner
         mock_runner.run_all_parallel.return_value = [
