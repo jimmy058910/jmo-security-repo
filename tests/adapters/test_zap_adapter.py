@@ -37,8 +37,9 @@ class TestZapBasicParsing:
                     "alerts": [
                         {
                             "alert": "SQL Injection",
-                            "risk": "High",
-                            "confidence": "Medium",
+                            "riskcode": "3",
+                            "riskdesc": "High (Medium)",
+                            "confidence": "2",
                             "desc": "SQL injection may be possible",
                             "solution": "Use parameterized queries",
                             "reference": "https://owasp.org/www-community/attacks/SQL_Injection",
@@ -90,8 +91,9 @@ class TestZapMultipleInstances:
                     "alerts": [
                         {
                             "alert": "Cross Site Scripting (XSS)",
-                            "risk": "Medium",
-                            "confidence": "High",
+                            "riskcode": "2",
+                            "riskdesc": "Medium (Medium)",
+                            "confidence": "3",
                             "desc": "XSS vulnerability detected",
                             "instances": [
                                 {
@@ -127,8 +129,9 @@ class TestZapMultipleInstances:
                     "alerts": [
                         {
                             "alert": "Missing Security Header",
-                            "risk": "Low",
-                            "confidence": "High",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
+                            "confidence": "3",
                             "instances": [],
                         }
                     ]
@@ -154,8 +157,9 @@ class TestZapSeverityMapping:
                     "alerts": [
                         {
                             "alert": "Info Alert",
-                            "risk": "Informational",
-                            "confidence": "Medium",
+                            "riskcode": "0",
+                            "riskdesc": "Informational (Medium)",
+                            "confidence": "2",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -175,8 +179,9 @@ class TestZapSeverityMapping:
                     "alerts": [
                         {
                             "alert": "Low Alert",
-                            "risk": "Low",
-                            "confidence": "Medium",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
+                            "confidence": "2",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -196,8 +201,9 @@ class TestZapSeverityMapping:
                     "alerts": [
                         {
                             "alert": "Medium Alert",
-                            "risk": "Medium",
-                            "confidence": "Medium",
+                            "riskcode": "2",
+                            "riskdesc": "Medium (Medium)",
+                            "confidence": "2",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -217,8 +223,9 @@ class TestZapSeverityMapping:
                     "alerts": [
                         {
                             "alert": "High Alert",
-                            "risk": "High",
-                            "confidence": "Medium",
+                            "riskcode": "3",
+                            "riskdesc": "High (Medium)",
+                            "confidence": "2",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -238,8 +245,8 @@ class TestZapSeverityMapping:
                     "alerts": [
                         {
                             "alert": "Unknown Risk Alert",
-                            "risk": "UnknownLevel",
-                            "confidence": "Medium",
+                            "riskcode": "9",
+                            "confidence": "2",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -351,7 +358,8 @@ class TestZapEdgeCases:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": ["not a dict", 123],
                         }
                     ]
@@ -376,7 +384,8 @@ class TestZapTagging:
                     "alerts": [
                         {
                             "alert": "XSS",
-                            "risk": "High",
+                            "riskcode": "3",
+                            "riskdesc": "High (Medium)",
                             "cweid": "79",
                             "instances": [{"uri": "http://example.com"}],
                         }
@@ -397,7 +406,8 @@ class TestZapTagging:
                     "alerts": [
                         {
                             "alert": "CSRF",
-                            "risk": "Medium",
+                            "riskcode": "2",
+                            "riskdesc": "Medium (Medium)",
                             "wascid": "9",
                             "instances": [{"uri": "http://example.com"}],
                         }
@@ -418,8 +428,9 @@ class TestZapTagging:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
-                            "confidence": "High",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
+                            "confidence": "3",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -439,7 +450,8 @@ class TestZapTagging:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -464,7 +476,8 @@ class TestZapContext:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [
                                 {
                                     "uri": "http://example.com/api/users",
@@ -489,7 +502,8 @@ class TestZapContext:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [
                                 {"uri": "http://example.com", "method": "DELETE"}
                             ],
@@ -511,7 +525,8 @@ class TestZapContext:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [
                                 {"uri": "http://example.com", "param": "user_id"}
                             ],
@@ -534,7 +549,8 @@ class TestZapContext:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [
                                 {"uri": "http://example.com", "evidence": long_evidence}
                             ],
@@ -556,7 +572,8 @@ class TestZapContext:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [{"url": "http://alt.example.com"}],
                         }
                     ]
@@ -576,7 +593,8 @@ class TestZapContext:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [
                                 {"uri": "http://example.com", "parameter": "token"}
                             ],
@@ -602,7 +620,8 @@ class TestZapReferences:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "reference": "https://owasp.org/xss",
                             "instances": [{"uri": "http://example.com"}],
                         }
@@ -623,7 +642,8 @@ class TestZapReferences:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "reference": "https://owasp.org/xss\nhttps://cwe.mitre.org/79",
                             "instances": [{"uri": "http://example.com"}],
                         }
@@ -646,7 +666,8 @@ class TestZapReferences:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "reference": "",
                             "instances": [{"uri": "http://example.com"}],
                         }
@@ -671,7 +692,8 @@ class TestZapCompliance:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -691,7 +713,8 @@ class TestZapCompliance:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -711,7 +734,8 @@ class TestZapCompliance:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "solution": "Apply input validation",
                             "instances": [{"uri": "http://example.com"}],
                         }
@@ -736,7 +760,8 @@ class TestZapFingerprinting:
                     "alerts": [
                         {
                             "alert": "XSS",
-                            "risk": "High",
+                            "riskcode": "3",
+                            "riskdesc": "High (Medium)",
                             "cweid": "79",
                             "instances": [
                                 {"uri": "http://example.com/page1", "param": "a"},
@@ -761,7 +786,8 @@ class TestZapFingerprinting:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [{"uri": "http://example.com/same"}],
                         }
                     ]
@@ -786,7 +812,8 @@ class TestZapUnicodeHandling:
                     "alerts": [
                         {
                             "alert": "Vuln\u00e9rabilit\u00e9 XSS",
-                            "risk": "High",
+                            "riskcode": "3",
+                            "riskdesc": "High (Medium)",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -807,7 +834,8 @@ class TestZapUnicodeHandling:
                     "alerts": [
                         {
                             "alert": "Test",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [
                                 {"uri": "http://example.com/\u65e5\u672c\u8a9e/page"}
                             ],
@@ -834,7 +862,8 @@ class TestZapMultipleSites:
                     "alerts": [
                         {
                             "alert": "Site1 Issue",
-                            "risk": "Low",
+                            "riskcode": "1",
+                            "riskdesc": "Low (Medium)",
                             "instances": [{"uri": "http://site1.com"}],
                         }
                     ]
@@ -843,7 +872,8 @@ class TestZapMultipleSites:
                     "alerts": [
                         {
                             "alert": "Site2 Issue",
-                            "risk": "High",
+                            "riskcode": "3",
+                            "riskdesc": "High (Medium)",
                             "instances": [{"uri": "http://site2.com"}],
                         }
                     ]
@@ -866,7 +896,8 @@ class TestZapMultipleSites:
                     "alerts": [
                         {
                             "alert": "Real Alert",
-                            "risk": "Medium",
+                            "riskcode": "2",
+                            "riskdesc": "Medium (Medium)",
                             "instances": [{"uri": "http://example.com"}],
                         }
                     ]
@@ -878,3 +909,98 @@ class TestZapMultipleSites:
         findings = adapter.parse(path)
         assert len(findings) == 1
         assert findings[0].title == "Real Alert"
+
+
+REAL_REPORT = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "samples"
+    / "zap"
+    / "report-2.17.0-xss.json"
+)
+
+
+class TestZapRealReport:
+    """ZAP 2.17's own traditional-json report, from a run against the local fixture.
+
+    ZAP writes the risk as `riskcode` ("0"-"3") and `riskdesc` ("High (Medium)")
+    and the confidence as a code ("2"); it writes no `risk` key at all.
+    """
+
+    def test_reflected_xss_is_high(self):
+        findings = ZapAdapter().parse(REAL_REPORT)
+        xss = [f for f in findings if f.title == "Cross Site Scripting (Reflected)"]
+        assert len(xss) == 1
+        assert xss[0].severity == "HIGH"
+
+    def test_severities_follow_each_alerts_riskcode(self):
+        findings = ZapAdapter().parse(REAL_REPORT)
+        by_title = {f.title: f.severity for f in findings}
+        assert by_title == {
+            "Cross Site Scripting (Reflected)": "HIGH",
+            "Content Security Policy (CSP) Header Not Set": "MEDIUM",
+            "Missing Anti-clickjacking Header": "MEDIUM",
+            'Server Leaks Version Information via "Server" HTTP Response Header Field': "LOW",
+            "X-Content-Type-Options Header Missing": "LOW",
+        }
+
+    def test_confidence_is_named_not_a_code(self):
+        findings = ZapAdapter().parse(REAL_REPORT)
+        xss = next(f for f in findings if f.title.startswith("Cross Site Scripting"))
+        assert "confidence:medium" in xss.tags
+        assert not any(t in ("confidence:2", "confidence:3") for t in xss.tags)
+        assert xss.context["confidence"] == "Medium"
+        assert xss.context["risk"] == "High"
+        csp = next(f for f in findings if f.title.startswith("Content Security"))
+        assert "confidence:high" in csp.tags
+
+
+def _one_alert(tmp_path: Path, **fields) -> object:
+    alert = {"alert": "A", "instances": [{"uri": "http://127.0.0.1/x"}], **fields}
+    path = write_tmp(tmp_path, "zap.json", json.dumps({"site": [{"alerts": [alert]}]}))
+    return ZapAdapter().parse(path)[0]
+
+
+class TestZapRiskTranslation:
+    """`riskcode` is translated to a name before the severity mapper sees it."""
+
+    def test_each_riskcode_has_its_severity(self, tmp_path: Path):
+        got = {
+            code: _one_alert(tmp_path, riskcode=code).severity
+            for code in ("0", "1", "2", "3")
+        }
+        assert got == {"0": "INFO", "1": "LOW", "2": "MEDIUM", "3": "HIGH"}
+
+    def test_an_integer_riskcode_reads_like_a_string(self, tmp_path: Path):
+        assert _one_alert(tmp_path, riskcode=0).severity == "INFO"
+        assert _one_alert(tmp_path, riskcode=3).severity == "HIGH"
+
+    def test_riskdesc_first_word_is_the_fallback(self, tmp_path: Path):
+        assert _one_alert(tmp_path, riskdesc="High (Low)").severity == "HIGH"
+        assert _one_alert(tmp_path, riskdesc="Low (High)").severity == "LOW"
+
+    def test_riskcode_wins_over_riskdesc(self, tmp_path: Path):
+        found = _one_alert(tmp_path, riskcode="1", riskdesc="High (High)")
+        assert found.severity == "LOW"
+
+    def test_no_risk_at_all_is_medium(self, tmp_path: Path):
+        assert _one_alert(tmp_path).severity == "MEDIUM"
+
+    def test_a_key_zap_never_writes_is_ignored(self, tmp_path: Path):
+        assert _one_alert(tmp_path, risk="High").severity == "MEDIUM"
+
+    def test_confidence_codes_are_named(self, tmp_path: Path):
+        got = {
+            code: _one_alert(tmp_path, confidence=code).context["confidence"]
+            for code in ("0", "1", "2", "3", "4")
+        }
+        assert got == {
+            "0": "False Positive",
+            "1": "Low",
+            "2": "Medium",
+            "3": "High",
+            "4": "Confirmed",
+        }
+
+    def test_false_positive_confidence_tag_has_no_space(self, tmp_path: Path):
+        assert "confidence:false-positive" in _one_alert(tmp_path, confidence="0").tags

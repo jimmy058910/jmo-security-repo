@@ -14,9 +14,14 @@ exactly one `ToolRun`, in this order:
    `skipped` with that reason (no Dockerfiles, no IaC files). A
    tool's `precheck` then fails the row for what of that content it cannot
    read (osv-scanner: a lockfile with no offline database), and it runs on
-   the rest, or not at all.
-4. **run**: `ToolRunner`'s result becomes `ran` or `failed:<reason>`, and a
-   tool whose own output says it examined 0 files is `failed` (G2, #1231).
+   the rest, or not at all. zap's, on its URL target with no tree, fails
+   it when java cannot run zap's jar in place of `zap.bat` (`zap_java`);
+   checkov's, a UNC target its `.cmd` cannot scan (`_checkov_unc`).
+4. **run**: a command line a `.bat`/`.cmd` launcher would hand cmd.exe with
+   one of its metacharacters in an argument is `failed` and never runs
+   (#1403). Otherwise `ToolRunner`'s result becomes `ran` or
+   `failed:<reason>`, and a tool whose own output says it examined 0 files is
+   `failed` (G2, #1231).
    An invocation that failed the way its `Fallback` names is replaced by the
    fallback's invocations, run in a second round.
 
@@ -59,6 +64,7 @@ from ...core.tool_descriptors import (
 )
 from ...core.tool_runner import ToolDefinition, ToolResult
 from ..scan_utils import (
+    batch_argv_refusal,
     find_tool,
     gitleaks_config_warning,
     report_tool_failure,
@@ -68,6 +74,7 @@ from ..scan_utils import (
     write_gitleaks_config,
     write_stub,
     write_trufflehog_exclude_file,
+    write_zap_plan,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,6 +87,16 @@ logger = logging.getLogger(__name__)
 MAX_FILE_ARGS = 300
 
 _SKIPPED_DIR_NAMES: frozenset[str] = frozenset(VENDORED_DIRS)
+
+# The walk's glob matches with the platform's own case rule, pathlib's default,
+# passed explicitly. Given none, Python 3.13 matches a pattern's wildcard-free
+# part (the `Dockerfile` of `**/Dockerfile`) with a stat, which follows the
+# filesystem, and returns it spelled as the PATTERN spells it: where the
+# filesystem ignores case (Windows, macOS), a file named `sub/dockerfile` came
+# back as `sub/Dockerfile`, and every exact-name test accepted it (#1421).
+# Given a rule, 3.13 lists each directory, as 3.12 always did, so a path it
+# returns is spelled as it is on disk.
+_GLOB_CASE_SENSITIVE = os.path.normcase("Aa") == "Aa"
 
 
 def _same_tree(candidate: Path, target: Path) -> bool:
@@ -138,7 +155,7 @@ def collect_files(
     """
     seen: set[Path] = set()
     for pattern in patterns:
-        for path in repo.glob(pattern):
+        for path in repo.glob(pattern, case_sensitive=_GLOB_CASE_SENSITIVE):
             # Relative to the repository: a repository that itself lives under
             # `vendor/` or `node_modules/` still has content of its own.
             if set(path.relative_to(repo).parts) & _SKIPPED_DIR_NAMES:
@@ -227,6 +244,17 @@ def _resolve(d: ToolDescriptor, find: Callable[[str], str | None]) -> str | None
     return None
 
 
+def _batch_refusal(invocations: Iterable[Invocation]) -> str | None:
+    """Why one of these command lines, a fallback's included, must not be
+    handed to its `.bat`/`.cmd` launcher (`batch_argv_refusal`, #1403)."""
+    for inv in invocations:
+        for each in (inv, *(inv.fallback.invocations if inv.fallback else ())):
+            why = batch_argv_refusal(each.command)
+            if why:
+                return why
+    return None
+
+
 def _history_off(per_tool_config: Mapping[str, Any], tool: str) -> bool:
     """`per_tool.<tool>.history: false`: keep the tree's scan, skip git
     history, for a repository whose history is too large or too noisy
@@ -246,23 +274,51 @@ def _repository_gitleaks_config(root: Path) -> Path | None:
         return None
 
 
-def _announce_own_config(d: ToolDescriptor, root: Path) -> None:
+# TODO(issue-#1430): own-config announced on the console only, not in results
+def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
     """Say which of the repository's own files `d` reads as its configuration.
 
     The repository then decides part of its own audit (zizmor: a
     `.github/zizmor.yml` disabling two audits took a sample from 3 rule ids to
-    1, unannounced, #1363), so the scan says so at INFO, as it does for
-    gitleaks' `.gitleaks.toml` (#1327). Python 3.12 raises from a probe where
+    1, unannounced, #1363; osv-scanner: an `osv-scanner.toml` ignoring a
+    lockfile's advisories took 4 findings to 0, #1414), so the scan says so at
+    WARNING (INFO is below `jmo scan`'s default level, which left the 4-to-0
+    silent), as it does for gitleaks' `.gitleaks.toml` (#1327). It is not
+    overridden: honouring it is each tool's documented behaviour.
+
+    The directories are the scan root, or where `d` says it looks (osv-scanner:
+    beside each lockfile it is handed). Python 3.12 raises from a probe where
     3.11 returned False (#1163), hence the guard."""
-    for name in d.own_config:
-        try:
-            if not (root / name).is_file():
+    if not d.own_config:
+        return
+    if d.own_config_dirs is not None:
+        dirs = d.own_config_dirs(ctx)
+    elif ctx.target_type == "repo":
+        dirs = [Path(scan_root(ctx.target))]
+    else:
+        return
+    target = Path(scan_root(ctx.target))
+    anchor = target if target.is_dir() else target.parent
+    for directory in dirs:
+        for name in d.own_config:
+            found = directory / name
+            try:
+                if not found.is_file():
+                    continue
+            except OSError:
                 continue
-        except OSError:
-            continue
-        logger.info(
-            "%s: %s reads its %s (its audit settings apply)", root.name, d.name, name
-        )
+            try:
+                shown = found.resolve().relative_to(anchor).as_posix()
+            except (ValueError, OSError):
+                shown = str(found)
+            detail = (
+                d.own_config_detail(found)
+                if d.own_config_detail is not None
+                else "its audit settings apply"
+            )
+            logger.warning(
+                "%s: %s reads its %s (%s)", anchor.name, d.name, shown, detail
+            )
 
 
 def _exclusions(
@@ -560,6 +616,7 @@ def run_tools(
     repo_root: Path | None = None,
     results_name: str | None = None,
     results_tree: Path | None = None,
+    api_spec: str = "",
 ) -> TargetRows:
     """Run every requested tool that applies to this target; one row per tool.
 
@@ -576,6 +633,8 @@ def run_tools(
             targets that are not a tree.
         results_name: The in-tree results directory's name, for the flags.
         results_tree: The same directory, resolved, for JMo's own walk.
+        api_spec: An OpenAPI definition (a file or an http(s) URL) whose
+            operations a plan-reading tool sends to this URL target (#1331).
     """
     find = find_tool_func or find_tool
     stub = write_stub_func or write_stub
@@ -690,6 +749,32 @@ def run_tools(
         tree_excl, history_excl = (
             _exclusions(d, out_dir, results_name, target) if key == "repo" else ((), ())
         )
+        # A plan-reading tool takes this target, and its jobs' budget (the
+        # tool's timeout), from a file written here for this run. Its row
+        # alone fails when that file or zap's home cannot be written: raised,
+        # it failed every tool on the target, nuclei unrun (measured).
+        plan = None
+        if d.automation_plan:
+            try:
+                plan = write_zap_plan(
+                    out_dir,
+                    target=str(target),
+                    report=out_dir / f"{tool}.json",
+                    timeout=tool_timeout(per_tool_config, tool, timeout),
+                    api_spec=api_spec,
+                )
+            except OSError as exc:
+                detail = f"its plan or its home could not be written: {exc}"
+                logger.error(
+                    "%s: %s - it did NOT run and its findings are MISSING from "
+                    "this scan",
+                    tool,
+                    detail,
+                )
+                rows[tool] = ToolRun(
+                    tool, State.FAILED, Reason.COULD_NOT_RUN, detail=detail
+                )
+                continue
         ctx = ScanContext(
             tool=tool,
             target_type=key,
@@ -707,6 +792,7 @@ def run_tools(
             history=history and tool in readers,
             files=files,
             iter_files=walk,
+            plan=plan,
         )
         # Content decides only on a tree. An IaC file target is itself the
         # content checkov reads; walking for it there would find nothing.
@@ -720,13 +806,17 @@ def run_tools(
             stub(tool, ctx.output)
             rows[tool] = ToolRun(tool, State.SKIPPED, reason)
             continue
-        if walk is not None and d.precheck is not None:
+        # Every target: zap's (a URL) has no walk.
+        if d.precheck is not None:
             shortfall = d.precheck(ctx)
             if shortfall is not None:
                 logger.error(
-                    "%s: %s - what it cannot read is MISSING from this scan",
+                    "%s: %s - %s",
                     tool,
                     shortfall.detail,
+                    "what it cannot read is MISSING from this scan"
+                    if shortfall.files
+                    else "it did NOT run and its findings are MISSING from this scan",
                 )
                 if not shortfall.files:
                     rows[tool] = ToolRun(
@@ -736,9 +826,19 @@ def run_tools(
                 ctx = replace(ctx, files=shortfall.files)
                 shortfalls[tool] = shortfall
 
-        if key == "repo":
-            _announce_own_config(d, Path(scan_root(target)))
+        _announce_own_config(d, ctx)
         invocations = builder(ctx)
+        refusal = _batch_refusal(invocations)
+        if refusal:
+            logger.error(
+                "%s: %s - it did NOT run and its findings are MISSING from this scan",
+                tool,
+                refusal,
+            )
+            rows[tool] = ToolRun(
+                tool, State.FAILED, Reason.COULD_NOT_RUN, detail=refusal
+            )
+            continue
         planned[tool] = (d, invocations)
         definitions.extend(definition(tool, inv) for inv in invocations)
 

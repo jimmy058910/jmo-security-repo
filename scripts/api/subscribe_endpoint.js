@@ -25,6 +25,7 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // Initialize Resend client
+// TODO(issue-#1437): create the client lazily; resend 6 throws at load without a key
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // CORS configuration - allow GitHub Pages origin

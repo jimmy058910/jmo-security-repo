@@ -51,9 +51,11 @@ On a repository, Checkov reads only Terraform (`.tf`, `.tf.json`) and CloudForma
 
 Given an IaC file target directly (`--terraform-state`, `--cloudformation`, `--k8s-manifest`), Checkov keeps every framework, so it still evaluates Kubernetes there. Helm was dropped rather than narrowed to: no helm binary exists on the host or in the image, and Checkov disables the framework without a word, so a chart-only repository triggering it read `ran` and found nothing.
 
+Checkov runs from the directory it scans (`-d .`), or from a single IaC file's directory, so a relative path in `per_tool.checkov.flags` (`--external-checks-dir policies`, say) resolves against that directory, a different one for each target, not the directory jmo runs from: give such a path absolute.
+
 Vendored trees are never content: `.git`, `node_modules`, `vendor`, `.venv` and `venv` are excluded before anything is looked for, and so is the results directory when it sits inside the scanned tree.
 
-zizmor reads only the files JMo hands it, since it has no way to exclude a directory itself, and it runs offline, so its audits that call GitHub do not run ([Known limitations](KNOWN_LIMITATIONS.md#zizmor-runs-offline-so-its-online-audits-never-run)). A file it cannot read is named in the log at WARNING and left out, and the row stays `ran`; when it reads none of them (an `action.yml` that belongs to another framework, say) the row is `skipped:no workflow zizmor could read`, not `failed`. It also obeys the scanned repository's own configuration (`zizmor.yml` or `.github/zizmor.yml`, `.yaml` too), which can switch audits off: a scan run at `--log-level INFO` names the file it reads.
+zizmor reads only the files JMo hands it, since it has no way to exclude a directory itself, and it runs offline, so its audits that call GitHub do not run ([Known limitations](KNOWN_LIMITATIONS.md#zizmor-runs-offline-so-its-online-audits-never-run)). A file it cannot read is named in the log at WARNING and left out, and the row stays `ran`; when it reads none of them (an `action.yml` that belongs to another framework, say) the row is `skipped:no workflow zizmor could read`, not `failed`. It also obeys the scanned repository's own configuration (`zizmor.yml` or `.github/zizmor.yml`, `.yaml` too), which can switch audits off: a scan warns, at WARNING (the default level), naming the file it reads. osv-scanner and Checkov do the same: osv-scanner reads an `osv-scanner.toml` beside each lockfile it is handed (not a parent's or a child's, and it has no flag that stops it), and the scan names each one with how many vulnerabilities and packages it ignores (`[[IgnoredVulns]]`, and the `[[PackageOverrides]]` with `ignore = true` or `vulnerability.ignore = true`); Checkov, run from the scanned directory (or a single IaC file's directory), reads a `.checkov.yaml` or `.checkov.yml` there, which can skip checks. None is overridden, and each is named in a WARNING line (zizmor's moved from INFO to WARNING, which a default scan hides).
 
 OSV-Scanner reads only the lockfiles JMo hands it (given a directory on Windows it finds none), and a scan never downloads: it matches them against the offline databases in `~/.jmo/osv-db`. Call analysis is off (`--no-call-analysis=all`), so every vulnerable version is reported whether or not the code calls it, on any machine. A lockfile whose ecosystem has no database there is left out, and the row reads `failed:offline database missing`, naming the ecosystem and the lockfile; the other lockfiles are still read. So is a lockfile it cannot parse: the row fails naming it, and the others' findings are kept. It reads `pom.xml` and `requirements.txt` for their direct dependencies only ([Known limitations](KNOWN_LIMITATIONS.md#osv-scanner-reads-pomxml-and-requirementstxt-for-direct-dependencies-only)). `jmo tools update` (and installing osv-scanner) fills `~/.jmo/osv-db` from OSV's own hosted zips, one ecosystem at a time (~280 MB across all eleven); the image never carries it, so a Docker container needs `jmo tools update` run once against a persistent volume ([Docker: osv-scanner's Offline Databases](DOCKER_README.md#osv-scanners-offline-databases)).
 
@@ -75,7 +77,16 @@ ZAP and Nuclei are DAST scanners: they find vulnerabilities by exercising a **ru
 
 ```bash
 jmo scan --url https://staging.example.com
+jmo scan --url http://127.0.0.1:8080 --api-spec openapi.json
 ```
+
+ZAP runs one automation plan per target, which JMo writes beside its output
+(`.zap-plan.yaml`): it spiders the URL, or, with `--api-spec`, imports the OpenAPI
+definition and sends its operations to `--url`; then it waits for the passive scan, runs
+the active scan and writes `zap.json`. `per_tool.zap.timeout` is the plan's whole budget,
+so zap stops and reports before JMo's timeout. It runs with a ZAP home of JMo's own,
+`~/.jmo/zap-home`, which starts each run without the settings the last one stored, so a
+scan neither reads nor changes your `~/ZAP`.
 
 The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
 

@@ -377,6 +377,8 @@ def test_a_builder_for_a_non_tree_drops_exclusions_it_is_handed(
         out_dir=tmp_path,
         binary=tool,
         exclusion_args=("--EXCLUDED", "sentinel"),
+        # zap's builder splices the plan the loop writes, and refuses none.
+        plan=tmp_path / ".zap-plan.yaml",
     )
 
     for invocation in DESCRIPTORS[tool].invocations[key](ctx):

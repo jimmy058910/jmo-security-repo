@@ -35,8 +35,6 @@ per_tool:
     flags:
     - -config
     - api.disablekey=true
-    - -config
-    - spider.maxDuration=5
   nuclei:
     timeout: 600
     flags:

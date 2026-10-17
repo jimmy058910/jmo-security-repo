@@ -232,16 +232,55 @@ def test_build_url_args_batch_docker(tmp_path):
     assert "/urls.txt" in args
 
 
-def test_build_url_args_api_spec():
-    """Test build_url_args with OpenAPI spec."""
+def _api_target(spec: str, url: str | None = "http://127.0.0.1:8080") -> MagicMock:
     target = MagicMock()
-    target.url = None
+    target.url = url
     target.urls_file = None
-    target.api_spec = "./openapi.yaml"
+    target.api_spec = spec
+    return target
 
-    args = build_url_args(target, use_docker=False)
 
-    assert args == ["--api-spec", "./openapi.yaml"]
+def test_build_url_args_api_spec_carries_the_api_it_attacks():
+    """zap sends the definition's operations to `--url` (#1331)."""
+    args = build_url_args(_api_target("./openapi.yaml"), use_docker=False)
+
+    assert args == [
+        "--url",
+        "http://127.0.0.1:8080",
+        "--api-spec",
+        "./openapi.yaml",
+    ]
+
+
+def test_build_url_args_api_spec_without_a_url_is_refused():
+    """`jmo scan --api-spec` alone exits 2: never build that command."""
+    with pytest.raises(ValueError, match="needs --url"):
+        build_url_args(_api_target("./openapi.yaml", url=None), use_docker=False)
+
+
+def test_build_url_args_api_spec_file_is_mounted_in_docker(tmp_path):
+    """The container sees only its mounts; read-only, as the TSV is."""
+    spec = tmp_path / "openapi.yaml"
+    spec.write_bytes(b"openapi: 3.0.3\n")
+
+    args = build_url_args(_api_target(str(spec)), use_docker=True)
+
+    assert args == [
+        "--url",
+        "http://127.0.0.1:8080",
+        "-v",
+        f"{spec.resolve()}:/api-spec.yaml:ro",
+        "--api-spec",
+        "/api-spec.yaml",
+    ]
+
+
+def test_build_url_args_api_spec_url_is_not_mounted_in_docker():
+    spec = "https://api.example.com/openapi.json"
+
+    args = build_url_args(_api_target(spec), use_docker=True)
+
+    assert args == ["--url", "http://127.0.0.1:8080", "--api-spec", spec]
 
 
 # ========== Category 5: GitLab Arguments ==========

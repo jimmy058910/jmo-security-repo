@@ -38,12 +38,15 @@ def scan_url(
     find_tool_func: Callable[[str], str | None] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
     result_name: str | None = None,
+    api_spec: str = "",
 ) -> tuple[str, TargetRows]:
     """Scan a live URL (http:// or https://).
 
     Args:
         result_name: This URL's results folder, unique within the scan
             (#1312). Defaults to `url_folder_name`.
+        api_spec: The OpenAPI definition `--api-spec` paired with this URL
+            (`--url`): zap imports it and sends its operations here (#1331).
 
     Returns:
         (url, rows by tool)
@@ -73,5 +76,6 @@ def scan_url(
         runner_cls=ToolRunner,
         find_tool_func=find_tool_func,
         write_stub_func=write_stub_func,
+        api_spec=api_spec,
     )
     return url, rows

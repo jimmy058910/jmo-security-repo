@@ -106,8 +106,12 @@ def _run(
     find_tool_func must succeed for every name: an unresolvable tool takes the
     pre-flight branch, which is a different (and already honest) path. Letting
     that happen would make these tests pass without the fix under test.
+    `Path.home()` is redirected: zap's run readies JMo's ZAP home under it.
     """
-    with patch(f"scripts.cli.scan_jobs.{module}.ToolRunner") as MockRunner:
+    with (
+        patch(f"scripts.cli.scan_jobs.{module}.ToolRunner") as MockRunner,
+        patch.object(Path, "home", return_value=tmp_path / "home"),
+    ):
         mock_runner = MagicMock()
         MockRunner.return_value = mock_runner
         mock_runner.run_all_parallel.return_value = [
@@ -294,9 +298,13 @@ def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplo
 def _run_timeout(
     module: str, scan_func, target_kwargs: dict, tool: str, tmp_path: Path
 ):
-    """Run a scan job whose only tool times out, with ToolRunner mocked."""
+    """Run a scan job whose only tool times out, with ToolRunner mocked, and
+    `Path.home()` redirected (zap's run readies JMo's ZAP home under it)."""
     stubbed: list[str] = []
-    with patch(f"scripts.cli.scan_jobs.{module}.ToolRunner") as MockRunner:
+    with (
+        patch(f"scripts.cli.scan_jobs.{module}.ToolRunner") as MockRunner,
+        patch.object(Path, "home", return_value=tmp_path / "home"),
+    ):
         mock_runner = MagicMock()
         MockRunner.return_value = mock_runner
         mock_runner.run_all_parallel.return_value = [

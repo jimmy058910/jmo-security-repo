@@ -62,7 +62,7 @@ from scripts.core.paths import (
     get_isolated_venv_path,
     get_yara_rules_dir,
 )
-from scripts.core.secure_temp import secure_temp_dir
+from scripts.core.secure_temp import remove_tree, secure_temp_dir
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
     ToolInfo,
@@ -296,7 +296,7 @@ class ToolInstaller:
         for attempt in range(3):
             try:
                 if tmpdir.exists():
-                    shutil.rmtree(tmpdir, ignore_errors=True)
+                    remove_tree(tmpdir)
                 break
             except OSError as e:
                 # WinError 32: The process cannot access the file

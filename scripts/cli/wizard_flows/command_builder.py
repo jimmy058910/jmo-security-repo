@@ -113,16 +113,26 @@ def build_url_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
     """Build command arguments for web URL targets."""
     args = []
 
+    if target.api_spec and not target.url:
+        # `jmo scan` exits 2 on it: zap attacks --url with the definition.
+        raise ValueError("--api-spec needs --url: the API zap attacks with it")
     if target.url:
         args.extend(["--url", target.url])
+        if target.api_spec:
+            spec = target.api_spec
+            if use_docker and not spec.startswith(("http://", "https://")):
+                # The container sees only its mounts, so a file is mounted.
+                spec_abs = Path(spec).resolve()
+                inside = f"/api-spec{spec_abs.suffix}"
+                args.extend(["-v", f"{spec_abs}:{inside}:ro"])
+                spec = inside
+            args.extend(["--api-spec", spec])
     elif target.urls_file:
         if use_docker:
             file_abs = str(Path(target.urls_file).resolve())
             args.extend(["-v", f"{file_abs}:/urls.txt", "--urls-file", "/urls.txt"])
         else:
             args.extend(["--urls-file", target.urls_file])
-    elif target.api_spec:
-        args.extend(["--api-spec", target.api_spec])
 
     return args
 

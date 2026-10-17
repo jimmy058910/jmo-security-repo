@@ -35,7 +35,7 @@ import os
 import shutil
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -48,6 +48,32 @@ logger = logging.getLogger(__name__)
 # Owner-only permissions for security
 DIR_PERMISSIONS = stat.S_IRWXU  # 0o700 - rwx------
 FILE_PERMISSIONS = stat.S_IRUSR | stat.S_IWUSR  # 0o600 - rw-------
+
+
+def remove_tree(path: Path | str) -> bool:
+    """Remove a directory tree, including files git or an archive made read-only.
+
+    On Windows ``shutil.rmtree`` cannot delete a read-only file, and git writes
+    pack files and loose objects read-only. A failed removal clears the
+    read-only bit and retries once; anything still left is logged at WARNING
+    naming the path.
+
+    Returns:
+        True when the directory is gone, False when anything remains.
+    """
+
+    def _clear_and_retry(func: Callable[[str], object], name: str, exc: object) -> None:
+        try:
+            # TODO(issue-#1429): sets mode 0o200 on POSIX and follows symlinks
+            os.chmod(name, stat.S_IWRITE)
+            func(name)
+        except OSError as retry_error:
+            logger.warning(
+                f"Could not remove {name}: {type(retry_error).__name__}: {retry_error}"
+            )
+
+    shutil.rmtree(path, onexc=_clear_and_retry)
+    return not Path(path).exists()
 
 
 @contextmanager
@@ -100,10 +126,8 @@ def secure_temp_dir(
         # Always attempt cleanup
         if temp_dir is not None and temp_dir.exists():
             try:
-                # TODO(issue-#1404): on Windows git's read-only pack files survive
-                # this, and ignore_errors hides it: a clone's history stays behind.
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                logger.debug(f"Cleaned up secure temp directory: {temp_dir}")
+                if remove_tree(temp_dir):
+                    logger.debug(f"Cleaned up secure temp directory: {temp_dir}")
             except (
                 Exception
             ) as e:  # Acceptable: cleanup failure must not mask original errors

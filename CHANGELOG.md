@@ -246,11 +246,47 @@ All notable changes to JMo Security will be documented in this file.
 - **`jmo history show` lists the rows about each target** and counts the rest, the
   tools that do not read that kind of target. An image showed twelve rows, ten of them
   such tools. `--json` lists every row (#1316).
-- **`--api-spec` takes a URL, and says what it does with it.** zap runs a URL scan and is
-  never told a spec is one, so a spec's URL is scanned as a plain URL, with a warning that
-  says so. A local spec file became a `file://` URL that the URL job rejected after the
-  scan started; it is refused up front, with that reason. The wizard's API mode asks for
-  a URL (its default was `./openapi.yaml`). The OpenAPI import is #1331 (#1320).
+- **Breaking. Every zap run is one automation plan, and `--api-spec` imports an OpenAPI
+  definition (#1331).** JMo writes the plan beside zap's output (`.zap-plan.yaml`) and runs
+  `zap -cmd -silent -dir ~/.jmo/zap-home -autorun <plan>`. A URL scan spiders, waits for
+  the passive scan, runs the active scan and writes `zap.json`. The spider and the active
+  scan stay inside `--url` as typed, however ZAP spells it, query string and regex
+  characters included: ZAP reads a plan's context URL as an unescaped regex and matches it
+  with the query cut off, so a target such as `/search?q=hello` fell outside its own scope
+  (1 request, nothing attacked, rc 0) and `?q=(x` did not compile (rc 1). The context is
+  the URL, quoted, without its query, and nothing wider. It holds the URL twice: as typed,
+  which the spider matches, and as ZAP names its site-tree nodes, which the active scan
+  matches, without the scheme's default port and with the path percent-decoded. Scoped as
+  typed alone, `http://h:80/app/`, `http://h/my%20app/` and an `--api-spec` scan of
+  `http://h:80` were crawled and attacked nothing, rc 0. With `--api-spec FILE|URL`
+  (a file, or the http(s) URL it is served from) an import of the definition replaces the
+  spider, and its operations are sent to `--url`, kept as typed: zap gives the path
+  meaning (an empty path keeps the definition's base path, any path replaces it). Against
+  a four-operation fixture every operation was requested and the three with parameters
+  attacked, `{id}` included; before, a spec's URL was crawled as a plain page and a local
+  file refused, so none was (#1320). `--api-spec` needs `--url`, or exits 2 naming both:
+  with no target zap attacked the servers the definition names, 1,278 requests to them
+  and none to the API meant. A definition that cannot be read is refused together with
+  its `--url`. The wizard's API mode asks for both, and `jmo schedule` and the GitHub
+  Actions, GitLab CI and cron exports refuse a schedule that names a spec and no URL.
+- **Breaking. `per_tool.zap.timeout` is the whole budget of zap's plan, and `-config
+  spider.maxDuration` limits nothing.** The spider gets a third of the timeout's whole
+  minutes and the active scan the rest less two, at least one minute each, so zap stops
+  and writes its report before JMo's timeout would kill it: at the 900 s floor, 5 and 8,
+  or 13 for a spec scan. A plan's spider reads its own limit: on a site whose crawl
+  outlasts the budget, `-config spider.maxDuration=1` left it crawling for 341 s, killed
+  with no report, so the shipped `jmo.yml` no longer passes it. zap's exit 2 (a job
+  warned, the report written) is a run; exit 1 (a definition it cannot read, no report)
+  is a failure. `-autorun` and `-quickurl` in `per_tool.zap.flags` are refused, as
+  `-quickout` was: either would run something besides JMo's plan.
+- **zap no longer reads or changes your `~/ZAP`.** ZAP stores every `-config` value and
+  plan setting in its home's `config.xml` and applies it to later runs, the GUI's
+  included: a proxy stored there sent a later scan to a dead port, and 0 requests
+  reached its target. zap now runs in `~/.jmo/zap-home`, created on first use (about
+  25 s and 276 MB, once), and each run starts without the `config.xml` the last one
+  left, so a `-config` value applies to the run that passes it and to no later one.
+  Measured no slower, with the same requests and findings. `-silent` stops zap's update
+  check and its other calls home (7 connections a run without it).
 - **History's `scans` row lists every target, and `scans.target_type` is gone.** Every
   scan was typed `repo` and listed only repositories, by folder name: an image scan read
   `repo` with no targets. The row now lists the targets the scan's own rows name, as
@@ -339,6 +375,32 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **Under Python 3.13 on Windows and macOS, a tool that reads names exactly is no longer
+  shown a file under a spelling it does not have (#1421).** Given no case rule, 3.13's
+  glob tests a pattern's wildcard-free part with a stat and returns it spelled as the
+  pattern spells it, and where the filesystem ignores case that matches any spelling: a
+  `sub/dockerfile` came back as `sub/Dockerfile`, so hadolint linted it and GitLab image
+  discovery named its `FROM` image to scan, and a `Package-Lock.json` reached osv-scanner as
+  `package-lock.json` with no WARNING. The walk now gives its glob the platform's own
+  rule, so 3.13 finds each file under its name on disk, as 3.12 does.
+- **A cloned GitLab project no longer survives its scan in `%TEMP%` on Windows (#1404).** git
+  writes pack files and loose objects read-only, `shutil.rmtree` cannot delete a read-only
+  file on Windows, and `ignore_errors=True` hid the failure, so a private project's whole
+  history stayed behind with a DEBUG line saying it was cleaned up. `secure_temp_dir` and the
+  tool installers' temp-directory cleanup now clear the read-only bit and retry; anything
+  still left is logged at WARNING naming the path, and the "cleaned up" line is written
+  only when the directory is gone.
+- **zap's findings carry the severity and the confidence ZAP gave them (#1347).** The
+  adapter read a `risk` key that ZAP 2.17's report never writes, so every finding was
+  MEDIUM, a reflected XSS and `--fail-on HIGH` included. ZAP writes `riskcode` ("0" to
+  "3") and `riskdesc` ("High (Medium)"); the adapter now translates the code (falling
+  back to `riskdesc`'s first word) before rating it. The confidence is a code too ("2"),
+  which became the tag `confidence:2`; it is now named (`confidence:medium`).
+- **A `--url` that is a bare root with a slash (`http://h/`) no longer stops zap's
+  spider at that page (#1348).** `-quickurl` scanned only the page it was given, and a
+  reflected XSS one link away was missed where `http://h` found it. Through the plan
+  (above) `http://h`, `http://h/`, `http://h/app` and `http://h/app/` all find it, and
+  the URL is not rewritten.
 - **`mcp` 2.0.0's CVE-2026-59951 failing the same pip-audit gate.** The advisory
   ([GHSA-84m7-p3x7-pcfv](https://github.com/advisories/GHSA-84m7-p3x7-pcfv), fixed in
   2.2.0) is an unbounded session pool in the SDK's Streamable HTTP transport. `jmo
@@ -542,8 +604,20 @@ All notable changes to JMo Security will be documented in this file.
   drops as invalid is named at WARNING, and the row records it while staying `ran`. A
   repository whose only matching file is invalid (an `action.yml` that belongs to another
   framework) is `skipped`, reason `no workflow zizmor could read`, not `failed` on every
-  scan (#1362). A scan also says, at INFO, when it reads the repository's own `zizmor.yml`
+  scan (#1362). A scan also says, at INFO (WARNING since #1414), when it reads the repository's own `zizmor.yml`
   or `.github/zizmor.yml`, which can switch audits off (#1363).
+- **A scan says when a repository's own osv-scanner or checkov configuration shapes its
+  results.** osv-scanner reads an `osv-scanner.toml` beside each lockfile it is handed,
+  and a file ignoring a lockfile's advisories took a scan from 4 findings to 0 with the
+  row `ran` and nothing logged; checkov, which now runs from its target, reads a
+  `.checkov.yaml` / `.checkov.yml` there (or in a single IaC file's directory). A scan now
+  names each such file at WARNING (INFO is below a scan's default level), with how many
+  vulnerabilities and packages an `osv-scanner.toml` ignores: its `[[IgnoredVulns]]`, and
+  the `[[PackageOverrides]]` with `ignore = true` or `vulnerability.ignore = true` (an
+  override that ignores nothing is not counted, and a file that ignores nothing is named
+  without saying it suppresses findings). zizmor's announcement of its own `zizmor.yml` moves from
+  INFO to WARNING for the same reason, so there is one level for all three. Neither file is overridden:
+  honouring a repository's own settings is each tool's documented behaviour (#1414).
 - **yara_runner's crash exits 2, and never leaves an earlier run's output behind.** It
   exited 1, which is also "matches found", so a crash read as findings over the previous
   scan's file. It now removes that file first and exits 2 (#1382).
@@ -559,6 +633,29 @@ All notable changes to JMo Security will be documented in this file.
   is missing, as it already did when another tool on the target ran; a target where no run
   of any tool worked still exits 1. `scan-timings.json` is schema 4, with a
   `kept_findings` count on each row, null when no run of the row worked (#1369).
+
+### Security
+
+- **On Windows, a path or URL holding `&` no longer runs the rest of it as a command
+  (#1403).** checkov runs as `checkov.cmd` and zap ran as `zap.bat`, and Windows starts a
+  `.bat`/`.cmd` through `cmd.exe`, which reads `& | ^ < > %` in every argument as its own,
+  quoted or not. Measured through `jmo scan` with a harmless `echo` as the injected
+  command: a `--results-dir` named `res&echo.X` cut zap's plan path there and ran `echo.X`
+  (zap.bat exited 0, no report); a repository named `tf&echo.X` did the same to checkov,
+  whose row read `ran` with none of its 10 findings, and so did an IaC file's directory.
+  The URL itself was already safe, since every zap run became a plan. zap on Windows now runs
+  `java -Xmx512m -jar zap-<version>.jar` from its own directory, as `zap.bat` does by
+  default but without cmd.exe; a zap directory without exactly one `zap-*.jar`, or no java, fails
+  the row and names what was found. checkov runs from its target as `-d .` (same findings,
+  paths and exclusions, measured), and an IaC file by its name from its own directory, so
+  a finding's path is now `pod.yaml` where it was relative to wherever jmo ran from, and a
+  relative path in `per_tool.checkov.flags` (`--external-checks-dir policies`, say) now
+  resolves against the directory checkov runs from, each scanned target's (or an IaC
+  file's), not the directory jmo runs from. A run
+  that would still hand one of those characters to a `.bat`/`.cmd` launcher (an IaC file
+  whose own name holds one) fails its row as `could not be run` instead of running. So
+  does checkov on a UNC target (`\\server\share\...`): cmd.exe will not start there, and
+  checkov fails on one named from another drive (rc 2, as before).
 
 ## [1.1.1] - 2026-09-11
 

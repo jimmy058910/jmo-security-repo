@@ -26,12 +26,15 @@ import logging
 import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
+
+import yaml
 
 from scripts.core import osv_database
 from scripts.core.scan_timings import Reason
@@ -88,6 +91,25 @@ def filter_trivy_flags(subcommand: str, flags: Iterable[str]) -> list[str]:
 # shape a tool left in its directory before the tool runs again: their number
 # follows the inputs, and the report reads whatever is there.
 PART_OUTPUT = "{tool}.part{n}.json"
+
+
+def is_batch_launcher(executable: str | Path) -> bool:
+    """Whether Windows runs `executable` through cmd.exe.
+
+    `CreateProcess` cannot execute a `.bat`/`.cmd` file itself: it hands the
+    whole command line to `cmd.exe /c`, which re-reads `& | ^ < > %` in every
+    argument whatever its quoting (#1403). checkov resolves to `checkov.cmd`
+    and zap to `zap.bat` there; every other tool to an `.exe`.
+    """
+    return Path(executable).suffix.lower() in (".bat", ".cmd")
+
+
+def is_unc(path: str | Path) -> bool:
+    """Whether `path` is a UNC path (`\\\\server\\share\\...`), which cmd.exe
+    refuses as its working directory: it starts in `C:\\Windows` instead.
+    Read as a Windows path on every platform; elsewhere no path is one."""
+    # TODO(issue-#1428): reads \\?\C:\x and \\.\C:\x as UNC
+    return PureWindowsPath(str(path)).drive.startswith("\\\\")
 
 
 class ExclusionStyle(StrEnum):
@@ -240,6 +262,9 @@ class ScanContext:
     history: bool = False
     files: tuple[str, ...] = ()
     iter_files: Callable[[], Iterator[Path]] | None = None
+    # The plan the scan loop wrote for a row that reads one
+    # (`ToolDescriptor.automation_plan`): zap's target, jobs and report.
+    plan: Path | None = None
 
     @property
     def output(self) -> Path:
@@ -322,6 +347,7 @@ class Invocation:
     ok_return_codes: tuple[int, ...]
     # zap.bat resolves its jar against the working directory: run from anywhere
     # else, it fails with "Unable to access jarfile zap-2.17.0.jar" (measured).
+    # checkov runs from its target, so the target's path is not an argument.
     cwd: Path | None = None
     # Which of a tool's invocations this is, for a failed row to name.
     label: str = ""
@@ -428,7 +454,9 @@ class ToolDescriptor:
     no_files_reason: Reason | None = None
     trigger: Trigger | None = None
     # Run once the content is known to be there: what the tool cannot read
-    # of it fails the row before it runs (a trigger can only skip).
+    # of it, or what it cannot be run without or on (zap's jar, checkov on a
+    # UNC path; both Windows), fails the row before it runs (a trigger can
+    # only skip).
     precheck: Precheck | None = None
     # The tool was handed files and read none of them: a skip, not a failure.
     nothing_read: NothingRead | None = None
@@ -438,6 +466,13 @@ class ToolDescriptor:
     # configuration. The repository then decides part of its own audit, so the
     # scan says so (#1363, as for gitleaks' `.gitleaks.toml`).
     own_config: tuple[str, ...] = ()
+    # Where `own_config` is looked for, when the tool does not read it from the
+    # scan root alone: osv-scanner reads it beside each lockfile it is handed,
+    # checkov from the directory it runs in.
+    own_config_dirs: Callable[[ScanContext], Sequence[Path]] | None = None
+    # What a found file holds, for the announcement (default: that its settings
+    # apply).
+    own_config_detail: Callable[[Path], str] | None = None
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
     binary: str | None = None  # executable name, where it differs from `name`
@@ -446,6 +481,9 @@ class ToolDescriptor:
     builtin: bool = False
     # Reads a repository's git history too, when `read_history` allows (G1).
     reads_history: bool = False
+    # Takes its target, its jobs and where it reports from a plan file the
+    # scan loop writes for each target (`ScanContext.plan`): zap (#1331).
+    automation_plan: bool = False
     execution_commands: tuple[str, ...] = ()  # what must exist to execute it
     stub: Any = field(default_factory=dict)  # empty-result shape of its output
     # Files examined, read from the output file; None when it cannot tell.
@@ -852,13 +890,36 @@ _CHECKOV_IAC_FRAMEWORKS: tuple[str, ...] = (
 
 
 def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
+    """Run from the target (`-d .`), or from the file's directory (`-f <name>`),
+    so no path reaches the command line: on Windows checkov is `checkov.cmd`,
+    whose arguments cmd.exe re-reads. A repository named `tf&echo.X` ran
+    `echo.X` there and read none of its 10 findings, rc 0, the row `ran`
+    (#1403). `-d .` from the target gave the same ids, paths and `--skip-path`
+    exclusions as the absolute path (measured, 3.3.16). A file's path in a
+    finding is now its name, where it was relative to wherever jmo ran from.
+    A file whose own name holds one of those characters still reaches the
+    command line; the scan loop refuses that run (`batch_argv_refusal`).
+
+    A UNC target (`\\\\server\\share\\...`) is never a working directory here:
+    `_checkov_unc` fails that row first, and built anyway it is the argument,
+    as before #1403, so checkov fails loudly instead of scanning `C:\\Windows`.
+    """
+
     def build(ctx: ScanContext) -> list[Invocation]:
+        target = Path(ctx.target)
+        cwd: Path | None
+        if is_batch_launcher(ctx.binary) and is_unc(target):
+            cwd, operand = None, str(target)
+        elif flag == "-d":
+            cwd, operand = target, "."
+        else:
+            cwd, operand = target.parent, target.name
         return [
             Invocation(
                 command=(
                     ctx.binary,
                     flag,
-                    str(ctx.target),
+                    operand,
                     "-o",
                     "json",
                     *(("--framework", *_CHECKOV_IAC_FRAMEWORKS) if framework else ()),
@@ -868,10 +929,36 @@ def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
                 output_file=ctx.output,
                 capture_stdout=True,
                 ok_return_codes=(0, 1),
+                cwd=cwd,
             )
         ]
 
     return build
+
+
+# TODO(issue-#1424): UNC targets fail; measure checkov via its own python.exe
+def _checkov_unc(ctx: ScanContext) -> Shortfall | None:
+    """checkov.cmd cannot scan a UNC target, from anywhere: the row fails
+    with why, before it runs (measured through `jmo scan`, a
+    `\\\\wsl.localhost\\...` directory holding 10 findings).
+
+    - From the target, cmd.exe will not start there ("UNC paths are not
+      supported. Defaulting to Windows directory."): checkov scanned
+      `C:\\Windows`, row `ran`, exit 0, 0 findings; an IaC file was not found
+      there, rc 2.
+    - From anywhere else, checkov fails on it: its `os.path.relpath` raises
+      across drives ("path is on mount '\\\\wsl.localhost\\...', start on
+      mount 'C:'"), rc 2. That was the scan before #1403.
+    """
+    if not (is_batch_launcher(ctx.binary) and is_unc(ctx.target)):
+        return None
+    return Shortfall(
+        Reason.COULD_NOT_RUN,
+        f"{ctx.target} is a UNC path, which {Path(ctx.binary).name} cannot scan: "
+        "cmd.exe will not start in it, and checkov started on another drive "
+        "fails on it. Map the share to a drive letter, or scan a local copy",
+        (),
+    )
 
 
 def _file_fed(*format_args: str) -> Builder:
@@ -982,8 +1069,6 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
 _OSV_UNREADABLE_LOCKFILE = "extraction failed on specified lockfile"
 
 
-# TODO(issue-#1414): announce a target's own osv-scanner.toml, which can
-# suppress every finding unannounced (#1363's class).
 def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
     # Walk-fed, `-L` per lockfile: given a directory on Windows osv-scanner
     # walks nothing (rc 128, "No package sources found", 2.5.1 and 2.6.0).
@@ -1047,6 +1132,64 @@ def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
     )
     fallback = Fallback((127,), _OSV_UNREADABLE_LOCKFILE, each)
     return [scan(lockfiles, ctx.output, fallback=fallback)]
+
+
+def _osv_own_config_dirs(ctx: ScanContext) -> list[Path]:
+    """osv-scanner reads an `osv-scanner.toml` from the directory of each
+    lockfile it is handed and nowhere else: not a parent, not a child, and no
+    flag stops it (measured, 2.6.0). Each directory once, in the order the
+    lockfiles were handed over."""
+    root, lockfiles = _relative_to_target(ctx)
+    return list(dict.fromkeys((root / f).parent for f in lockfiles))
+
+
+def _osv_own_config_detail(path: Path) -> str:
+    """What an `osv-scanner.toml` suppresses: its `[[IgnoredVulns]]` entries,
+    and the `[[PackageOverrides]]` entries that ignore a package
+    (`ignore = true`) or its vulnerabilities (`vulnerability.ignore = true`).
+    Measured with osv-scanner 2.6.0: those two dropped an advisory, while an
+    override with `ignore = false` or only a license kept it, and was
+    announced as suppressing. A file that ignores nothing is still named, as
+    read, without the word. A file that does not parse is said to be
+    unreadable here, not a crash."""
+    try:
+        document = tomllib.loads(path.read_bytes().decode("utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        return (
+            f"could not be parsed ({type(exc).__name__}): what it suppresses is unknown"
+        )
+
+    def tables(key: str) -> list[dict[str, Any]]:
+        value = document.get(key)
+        return (
+            [e for e in value if isinstance(e, dict)] if isinstance(value, list) else []
+        )
+
+    def ignores(override: dict[str, Any]) -> bool:
+        vulnerability = override.get("vulnerability")
+        return override.get("ignore") is True or (
+            isinstance(vulnerability, dict) and vulnerability.get("ignore") is True
+        )
+
+    n_ignored = len(tables("IgnoredVulns"))
+    # TODO(issue-#1433): expired ignores and nameless overrides overstated
+    n_packages = sum(ignores(o) for o in tables("PackageOverrides"))
+    if not n_ignored and not n_packages:
+        return "it ignores no vulnerability and no package"
+    return (
+        f"{n_ignored} ignored {'vulnerability' if n_ignored == 1 else 'vulnerabilities'}"
+        f" and {n_packages} ignored {'package' if n_packages == 1 else 'packages'}"
+        " suppress findings"
+    )
+
+
+def _checkov_own_config_dirs(ctx: ScanContext) -> list[Path]:
+    """checkov runs from its target (`-d .`), or from a single file's
+    directory (`-f <name>`), and reads `.checkov.yaml` / `.checkov.yml` from the
+    directory it runs in (measured, 3.3.16: not a subdirectory, not a parent
+    of the file)."""
+    target = Path(ctx.target)
+    return [target] if ctx.target_type == "repo" else [target.parent]
 
 
 def _osv_reads(name: str) -> bool:
@@ -1183,26 +1326,260 @@ def _grype_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
-# TODO(issue-#1403): on Windows zap.bat's argv is re-parsed by cmd.exe, so a
-# URL or `-quickout` path holding `&` runs the rest as a command.
+# zap's automation plan, beside the target's outputs. Dot-prefixed scratch, as
+# `.gitleaks.toml`: the report reads every `<tool>.json` there and nothing else.
+ZAP_PLAN = ".zap-plan.yaml"
+
+
+# TODO(issue-#1422): one ZAP home for every run: a second concurrent zap fails; heap fixed
+def zap_home() -> Path:
+    """The ZAP home every zap run uses: JMo's own, reused across runs.
+
+    ZAP stores `-config` values and plan settings in its home's `config.xml`
+    and applies them to every later run: an upstream proxy stored there sent a
+    later scan to a dead port, 0 requests reached the target (measured, ZAP
+    2.17.0). With its own home a scan neither reads nor changes the user's
+    `~/ZAP`. A fresh home costs ~25 s and 276 MB once; a reused one nothing.
+    """
+    return Path.home() / ".jmo" / "zap-home"
+
+
+def zap_minutes(timeout: int, *, spider: bool) -> tuple[int, int]:
+    """The spider's and the active scan's minutes, from the tool's timeout.
+
+    The plan must end, and write its report, before JMo's timeout kills zap: a
+    killed zap writes nothing. So the timeout is the plan's whole budget. Of
+    its whole minutes the spider takes a third, two are held back (the
+    one-minute passive wait; startup, 14-25 s measured; the 5-8 s each capped
+    job runs past its cap; the report), and the active scan takes the rest.
+    Every job gets at least a minute. Without a spider (an OpenAPI import),
+    the active scan takes the spider's share too. At the 900 s floor: 5 and 8,
+    or 0 and 13.
+    """
+    total = max(1, timeout // 60)
+    if not spider:
+        return 0, max(1, total - 2)
+    crawl = max(1, total // 3)
+    return crawl, max(1, total - crawl - 2)
+
+
+# Characters a regex reads specially, other than `.`, which every host holds
+# and which compiles. `?` and `#` cannot reach a path: they end it.
+_REGEX_CHARACTERS = frozenset("\\[](){}|^$*+")
+
+
+def _java_quote(text: str) -> str:
+    """`text` as a literal in a Java regex (`Pattern.quote`): `\\Q...\\E`,
+    with any `\\E` inside it split out of the quote."""
+    return "\\Q" + text.replace("\\E", "\\E\\\\E\\Q") + "\\E"
+
+
+def _zap_node_name(scheme: str, netloc: str, path: str) -> str:
+    """`scheme://netloc/path` as ZAP names its site-tree node: without the
+    scheme's default port, the path percent-decoded."""
+    host, colon, port = netloc.rpartition(":")
+    default = {"http": 80, "https": 443}.get(scheme.lower())
+    if colon and port.isdigit() and int(port) == default:
+        netloc = host
+    # TODO(issue-#1434): unquote widens scope for %2F and %25XX
+    return f"{scheme}://{netloc}{unquote(path)}"
+
+
+# TODO(issue-#1431): a redirect to another host spelling is attacked by nothing
+def _zap_context(target: str) -> dict[str, Any]:
+    """The context the spider and the active scan are confined to: `target`,
+    however ZAP spells it, and nothing wider.
+
+    ZAP 2.17 turns each `urls` entry into the regex `<entry>.*`, nothing
+    escaped (automation-beta-0.58.0's ContextWrapper), and matches a context's
+    regexes against a URL with its query cut off. So with the target itself as
+    the entry, `/search?q=hello` and `/search?q=a+b` fell outside their own
+    context (1 request, nothing attacked, rc 0), `/search?q=(x` did not
+    compile (rc 1, "Invalid URL"), and `http://example.com` also took in
+    `http://example.com.evil.test/` (measured on the first three).
+
+    The spider matches the context against the URL it requests; the active
+    scan against the name ZAP gives each site-tree node, with the scheme's
+    default port dropped and the path percent-decoded (`Context.isInContext`
+    on a `SiteNode`, read from zap-2.17.0.jar). Scoped by the typed spelling
+    alone, `http://h:80/app/`, `http://h/my%20app/` and an `--api-spec` scan
+    of `http://h:80` attacked nothing, rc 0; by the node's spelling alone the
+    spider's seed fell outside and nothing was crawled. So the scope is both.
+
+    - `includePaths`: the target without its query and fragment, as typed or
+      as ZAP names it, quoted, then anything (a target with no path: anything
+      after a `/`, `?` or `#`).
+    - `excludePaths`: every URL that does not match that, so the loose regex
+      ZAP makes of the entry below adds nothing.
+    - `urls` (ZAP requires one, and requests it): the target without its query,
+      with each regex character in its path percent-encoded, so it compiles.
+
+    The spider's `url` and the `openapi` job's `targetUrl` stay as typed.
+    Measured through plans on the spider fixture: every form of `/search?q=`
+    above, `http://h`, `http://h/app/`, `http://h:80/app/` and `/my%20app/`
+    found the reflected XSS, and `/app/` did not reach `/`.
+    """
+    parts = urlsplit(target)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    tail = ".*" if parts.path else "(?:[/?#].*)?"
+    spellings = dict.fromkeys(
+        (origin + parts.path, _zap_node_name(parts.scheme, parts.netloc, parts.path))
+    )
+    scope = "(?:" + "|".join(_java_quote(s) for s in spellings) + ")" + tail
+    path = "".join(
+        f"%{ord(c):02X}" if c in _REGEX_CHARACTERS else c for c in parts.path
+    )
+    return {
+        "name": "target",
+        "urls": [origin + path],
+        "includePaths": [scope],
+        "excludePaths": [f"(?!{scope}$).*"],
+    }
+
+
+def zap_plan(target: str, report: Path, timeout: int, api_spec: str = "") -> str:
+    """The automation plan for one zap run, as YAML.
+
+    One plan for every run: the target and the report path never reach
+    zap's command line, and a bare root (`http://h/`) is spidered like any
+    other URL. `-quickurl` stopped at that page and missed an XSS one link
+    away (#1348); through a plan none of `http://h`, `http://h/`,
+    `http://h/app`, `http://h/app/` did (measured, ZAP 2.17.0).
+
+    - A URL scan spiders `target`. With `api_spec` an `openapi` job imports
+      that definition instead (`apiUrl` for an http(s) URL, `apiFile` for a
+      file) and sends its operations to `target` (#1331). `target` is kept
+      as typed: ZAP gives its path meaning (empty keeps the definition's
+      base path, any path, `/` included, replaces it), and without it zap
+      attacked the server the definition names, 1,278 requests to it.
+    - The spider reads its own `maxDuration` (default: unlimited); a
+      `-config spider.maxDuration` on the command line is stored and not
+      read (341 s of crawling, killed, no report). activeScan reads
+      `maxScanDurationInMins`; `maxDuration` there is "Unrecognised
+      parameter", a warning. Both come from `timeout` (`zap_minutes`).
+    - `traditional-json`, the shape the zap adapter reads, with every risk
+      and confidence.
+
+    `yaml.safe_dump`, not a template: a URL holding `#` or `: ` stays one
+    value, and the output is ASCII, whatever charset the JVM reads it in.
+    """
+    spec = bool(api_spec)
+    crawl, attack = zap_minutes(timeout, spider=not spec)
+    if spec:
+        source = "apiUrl" if api_spec.startswith(("http://", "https://")) else "apiFile"
+        first = {
+            "type": "openapi",
+            "parameters": {source: api_spec, "targetUrl": target, "context": "target"},
+        }
+    else:
+        first = {
+            "type": "spider",
+            "parameters": {"context": "target", "url": target, "maxDuration": crawl},
+        }
+    document = {
+        "env": {
+            "contexts": [_zap_context(target)],
+            # An error (a definition it cannot read) ends the plan, rc 1, with
+            # no report; a warning does not stop it (rc 2, report written).
+            "parameters": {
+                "failOnError": True,
+                "failOnWarning": False,
+                "progressToStdout": True,
+            },
+        },
+        "jobs": [
+            first,
+            {"type": "passiveScan-wait", "parameters": {"maxDuration": 1}},
+            {
+                "type": "activeScan",
+                "parameters": {"context": "target", "maxScanDurationInMins": attack},
+            },
+            {
+                "type": "report",
+                "parameters": {
+                    "template": "traditional-json",
+                    "reportDir": str(report.parent),
+                    "reportFile": report.name,
+                },
+                "risks": ["info", "low", "medium", "high"],
+                "confidences": ["falsepositive", "low", "medium", "high", "confirmed"],
+            },
+        ],
+    }
+    return yaml.safe_dump(document, sort_keys=False)
+
+
+# zap.bat's heap: it reads `%USERPROFILE%\ZAP\.ZAP_JVM.properties` instead when
+# that file exists, `-Xmx512m` otherwise.
+ZAP_HEAP = "-Xmx512m"
+
+
+def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
+    """What runs zap in place of `zap.bat`, beside it: `java -Xmx512m -jar
+    <its directory>/zap-<version>.jar`; or, with no command, why not.
+
+    zap.bat is that same java line followed by its own arguments, so running
+    it puts JMo's arguments through cmd.exe (`is_batch_launcher`): a plan
+    under a `--results-dir` holding `&` ran the rest of the path as a
+    command, rc 0, no report, 0 requests (#1403, measured). java.exe takes
+    them as given: a URL holding `&` reached the target whole (measured, ZAP
+    2.17.0). The jar is the one zap.bat names, so exactly one must be there.
+    java is resolved as `jmo tools check` resolves it for zap.
+    """
+    # tool_utils -> tool_registry -> this module.
+    from scripts.core.tool_utils import find_tool
+
+    jars = sorted(launcher.parent.glob("zap-*.jar"))
+    if len(jars) != 1:
+        found = ", ".join(jar.name for jar in jars) or "none"
+        return (), (
+            f"{launcher.name} is replaced by java -jar zap-<version>.jar from "
+            f"{launcher.parent}, which must hold exactly one zap-*.jar "
+            f"(found: {found})"
+        )
+    java = find_tool("java")
+    if not java:
+        return (), "java, which zap runs on, could not be found"
+    return (java, ZAP_HEAP, "-jar", str(jars[0])), ""
+
+
+def _zap_launch(ctx: ScanContext) -> Shortfall | None:
+    """A `zap.bat` that cannot be replaced by java fails the row: run, it
+    would put JMo's arguments through cmd.exe (`zap_java`)."""
+    if not is_batch_launcher(ctx.binary):
+        return None
+    _, problem = zap_java(Path(ctx.binary))
+    return Shortfall(Reason.COULD_NOT_RUN, problem, ()) if problem else None
+
+
 def _zap_url(ctx: ScanContext) -> list[Invocation]:
+    if ctx.plan is None:
+        raise ValueError("zap runs the plan the scan loop writes, and none was given")
     binary = Path(ctx.binary)
+    launch: tuple[str, ...] = (ctx.binary,)
+    if is_batch_launcher(binary):
+        launch, problem = zap_java(binary)
+        if problem:
+            # `_zap_launch` fails the row before the scan loop builds it.
+            raise ValueError(problem)
     return [
         Invocation(
             command=(
-                ctx.binary,
+                *launch,
                 "-cmd",
-                "-quickurl",
-                str(ctx.target),
-                # Absolute: the working directory is zap's own, not the caller's.
-                "-quickout",
-                str(ctx.output.absolute()),
-                "-quickprogress",
+                # No call home: 7 connections to zaproxy.org a run without it.
+                "-silent",
+                "-dir",
+                str(zap_home()),
+                "-autorun",
+                str(ctx.plan),
                 *ctx.flags,
             ),
             output_file=ctx.output,
             capture_stdout=False,
-            ok_return_codes=(0, 1, 2),
+            # 2: a job warned, and the report was written. 1 is an error: a
+            # definition it cannot read writes no report.
+            ok_return_codes=(0, 2),
             cwd=binary.parent if binary.parent != Path() else None,
         )
     ]
@@ -1386,11 +1763,11 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="checkov",
             invocations={
-                # TODO(issue-#1403): `-d <path>` reaches checkov.cmd's argv, which
-                # cmd.exe re-parses; run with cwd=target and `-d .` instead.
                 "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
             },
+            own_config=(".checkov.yaml", ".checkov.yml"),
+            own_config_dirs=_checkov_own_config_dirs,
             version_probe=VersionProbe(
                 re.compile(r"(?:checkov\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
                 # It imports its whole rule set before printing: 9.1 s cold
@@ -1415,6 +1792,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             short_switches=frozenset({"-h", "-l", "-s", "-v"}),
             trigger=_iac_trigger,
+            precheck=_checkov_unc,
             stub={"results": {"failed_checks": []}},
         ),
         ToolDescriptor(
@@ -1581,6 +1959,11 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             accepts_name=_osv_reads,
             no_files_reason=Reason.NO_LOCKFILE,
             precheck=_osv_databases,
+            # Read beside each lockfile it is handed, and nowhere else; it has
+            # no flag that stops it (measured, 2.6.0), so it is announced.
+            own_config=("osv-scanner.toml",),
+            own_config_dirs=_osv_own_config_dirs,
+            own_config_detail=_osv_own_config_detail,
             flag_grammar=FlagGrammar.GO_FLAG,
             # Where and how it writes: `-format table` took 40 findings to 0
             # (measured, 2.6.0). `--output` is `--output-file`'s deprecated
@@ -1612,10 +1995,16 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             exclusion_style=ExclusionStyle.NOT_FILESYSTEM,
             flag_grammar=FlagGrammar.ZAP,
-            # Where it writes; the file's extension picks the format.
-            reserved_flags=_reserve(OUTPUT=("-quickout",)),
+            # Each would make zap run something besides JMo's plan: another
+            # plan, or a quick scan of another URL written elsewhere.
+            reserved_flags=_reserve(
+                OUTPUT=("-quickout", "-autorun"), TARGET=("-quickurl",)
+            ),
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
+            precheck=_zap_launch,
+            automation_plan=True,
+            # The plan's whole budget (`zap_minutes`).
             timeout_floor=900,
             binary="zap.sh",
             execution_commands=("zap.sh", "java"),

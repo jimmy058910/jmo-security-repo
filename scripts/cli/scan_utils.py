@@ -10,7 +10,7 @@ import json
 import logging
 import re
 import tomllib
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -21,8 +21,12 @@ from scripts.core.tool_descriptors import (  # noqa: F401
     DESCRIPTORS,
     TRIVY_UNSUPPORTED_FLAGS,
     VENDORED_DIRS,
+    ZAP_PLAN,
     ExclusionStyle,
     filter_trivy_flags,
+    is_batch_launcher,
+    zap_home,
+    zap_plan,
 )
 from scripts.core.tool_utils import (  # noqa: F401
     TOOL_INSTALL_HINTS,
@@ -403,9 +407,34 @@ def tool_flags(
         )
         i = end
 
-    if executable and Path(executable).suffix.lower() in (".cmd", ".bat"):
+    # TODO(issue-#1427): zap flags dropped by a zap.bat warning; zap runs java
+    if executable and is_batch_launcher(executable):
         kept = _without_cmd_metacharacters(kept, where, tool, Path(executable).name)
     return kept
+
+
+def batch_argv_refusal(command: Sequence[str]) -> str | None:
+    """Why `command` must not run, or None.
+
+    Its launcher is a `.bat`/`.cmd` (`is_batch_launcher`) and an argument
+    holds one of `_CMD_METACHARS` or a line break, which cmd.exe would read
+    as its own: the rest of the argument runs as a command (#1403). The
+    builders keep JMo's paths and URLs off such a launcher's arguments, and
+    `tool_flags` drops a user's; this is what is left, a file JMo must hand
+    the tool by a name that holds one (checkov's `-f pod&x.yaml`), or a tool
+    found on PATH as a batch file. Nothing quotes its way past cmd.exe, so
+    the run is refused rather than repaired."""
+    if not command or not is_batch_launcher(command[0]):
+        return None
+    for arg in command[1:]:
+        if _CMD_REFUSED.intersection(arg):
+            shown = arg.replace("\r", "\\r").replace("\n", "\\n")
+            return (
+                f"`{shown}` would reach cmd.exe through {Path(command[0]).name}, "
+                f"which reads any of {' '.join(sorted(_CMD_METACHARS))} in it as "
+                "its own and ends the command at a line break"
+            )
+    return None
 
 
 def _value_follows(flags: list[str], i: int) -> bool:
@@ -701,6 +730,45 @@ def write_gitleaks_config(
     ]
     path = (out_dir / ".gitleaks.toml").resolve()
     path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+    return path
+
+
+def write_zap_plan(
+    out_dir: Path, *, target: str, report: Path, timeout: int, api_spec: str = ""
+) -> Path:
+    """Write zap's automation plan for one target and return its absolute path.
+
+    The plan is `zap_plan`'s (scripts/core/tool_descriptors.py), written as
+    dot-prefixed scratch beside the outputs, as bytes (LF, ASCII). Paths are
+    absolute: zap runs from its own directory, not the caller's.
+
+    It also readies JMo's ZAP home (`zap_home`) for the run:
+
+    - **Created, parents too.** ZAP creates a missing home only when its parent
+      exists; otherwise rc 1, "Unable to create home directory" (measured).
+    - **Without `config.xml`.** ZAP stores every `-config` value and plan
+      setting there and applies it to later runs, so a user's
+      `per_tool.zap.flags` proxy, say, would stay behind for every scan after;
+      and a zap killed mid-run left that file unparseable (ZAP then rewrote
+      it). Starting each run without it measured no slower (19.9-20.1 s
+      against 20.3-20.4 s on a reused home) with the same requests, alert
+      instances and payloads. The add-ons beside it, which make a reused home
+      fast, stay.
+    """
+    home = zap_home()
+    home.mkdir(parents=True, exist_ok=True)
+    try:
+        (home / "config.xml").unlink(missing_ok=True)
+    except OSError as exc:
+        logging.getLogger(__name__).warning(
+            "zap: could not remove %s, so settings an earlier run stored there "
+            "apply to this one: %s",
+            home / "config.xml",
+            exc,
+        )
+    path = (out_dir / ZAP_PLAN).absolute()
+    plan = zap_plan(target, report.absolute(), timeout, api_spec)
+    path.write_bytes(plan.encode("utf-8"))
     return path
 
 

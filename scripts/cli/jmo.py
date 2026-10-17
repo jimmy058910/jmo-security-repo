@@ -198,8 +198,8 @@ def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) 
     parser.add_argument("--urls-file", help="File with URLs (one per line)")
     parser.add_argument(
         "--api-spec",
-        help="OpenAPI/Swagger spec URL, scanned as a plain URL: zap cannot import "
-        "a spec yet, and a local file is refused (#1331)",
+        help="OpenAPI definition (a file or an http(s) URL) for zap to import; "
+        "needs --url, the API it attacks with the definition's operations",
     )
 
     # GitLab integration
@@ -3015,6 +3015,17 @@ def cmd_scan(args) -> int:
             "ERROR",
             "--dest only applies to --tsv: it names where --tsv clones the "
             "repositories it lists",
+        )
+        return 2
+    if getattr(args, "api_spec", None) and not getattr(args, "url", None):
+        # Without a target zap attacked the servers the definition names:
+        # 1,278 requests to them, none to the API meant (#1331, measured).
+        _log(
+            args,
+            "ERROR",
+            "--api-spec needs --url: zap imports the definition and sends its "
+            "operations to --url, the API to attack, never to the servers the "
+            "definition names",
         )
         return 2
     try:

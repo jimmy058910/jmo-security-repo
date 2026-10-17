@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import stat
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -479,3 +480,104 @@ class TestIsSecurePermissionsHelper:
         ):
             assert is_secure_permissions(test_file, is_directory=False) is True
             assert is_secure_permissions(test_file, is_directory=True) is False
+
+
+class TestReadOnlyFilesAreRemoved:
+    """git writes pack files and loose objects read-only, and Windows cannot
+    delete a read-only file: a clone's history used to outlive its scan."""
+
+    @staticmethod
+    def _git(*args: str, cwd: Path) -> None:
+        env = {
+            **os.environ,
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@example.invalid",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@example.invalid",
+        }
+        subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            env=env,
+            check=True,
+            capture_output=True,
+            timeout=60,
+        )
+
+    @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
+    def test_git_clone_inside_secure_temp_dir_is_fully_removed(
+        self, tmp_path: Path
+    ) -> None:
+        """A real clone (which writes a pack file) leaves nothing behind."""
+        src = tmp_path / "src"
+        src.mkdir()
+        self._git("init", "-q", cwd=src)
+        (src / "a.txt").write_text("hello\n", encoding="utf-8")
+        self._git("add", "a.txt", cwd=src)
+        self._git("commit", "-q", "-m", "one", cwd=src)
+
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        with secure_temp_dir(prefix="jmo-clone-", parent_dir=parent) as temp_path:
+            # file:// is a transport clone, so git writes a read-only pack
+            self._git("clone", "-q", src.as_uri(), "repo", cwd=temp_path)
+            assert any((temp_path / "repo" / ".git").rglob("*.pack"))
+            kept = temp_path
+
+        assert not kept.exists(), f"left behind: {sorted(kept.rglob('*'))}"
+
+    def test_remove_tree_removes_a_read_only_file(self, tmp_path: Path) -> None:
+        from scripts.core import secure_temp
+
+        target = tmp_path / "tree"
+        (target / "sub").mkdir(parents=True)
+        locked = target / "sub" / "locked.pack"
+        locked.write_text("x", encoding="utf-8")
+        os.chmod(locked, stat.S_IREAD)
+
+        assert secure_temp.remove_tree(target) is True
+        assert not target.exists()
+
+    def test_cleanup_that_leaves_a_file_warns_and_does_not_claim_success(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Whatever cannot be removed is named at WARNING; no 'Cleaned up' line."""
+        import logging
+        from unittest.mock import patch
+
+        def stubborn_rmtree(path, onexc=None, **_kw):
+            def fails(_p: str) -> None:
+                raise PermissionError("still locked")
+
+            leftover = Path(path) / "stuck.pack"
+            leftover.write_text("x", encoding="utf-8")
+            assert onexc is not None
+            onexc(fails, str(leftover), PermissionError("locked"))
+
+        caplog.set_level(logging.DEBUG, logger="scripts.core.secure_temp")
+        with patch("scripts.core.secure_temp.shutil.rmtree", stubborn_rmtree):
+            with secure_temp_dir(parent_dir=tmp_path) as temp_path:
+                pass
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("stuck.pack" in r.getMessage() for r in warnings)
+        assert not any(
+            "Cleaned up secure temp" in r.getMessage() for r in caplog.records
+        )
+        shutil.rmtree(temp_path)
+
+    def test_cleanup_that_succeeds_still_logs_cleaned_up(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        caplog.set_level(logging.DEBUG, logger="scripts.core.secure_temp")
+        with secure_temp_dir(parent_dir=tmp_path) as temp_path:
+            ro = temp_path / "ro.txt"
+            ro.write_text("x", encoding="utf-8")
+            os.chmod(ro, stat.S_IREAD)
+
+        assert not temp_path.exists()
+        assert any("Cleaned up secure temp" in r.getMessage() for r in caplog.records)

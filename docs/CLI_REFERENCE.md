@@ -123,7 +123,7 @@ flag. Two with the same folder name (`alice/app` and `bob/app`, a common case wi
 | `--images-file FILE` | File with one image per line |
 | `--url URL` | Web application URL to scan |
 | `--urls-file FILE` | File with URLs (one per line) |
-| `--api-spec URL` | OpenAPI/Swagger spec URL, scanned as a plain URL: zap cannot import a spec yet, and a local file is refused ([#1331](https://github.com/jimmy058910/jmo-security-repo/issues/1331)) |
+| `--api-spec FILE\|URL` | OpenAPI definition (a file, or the http(s) URL it is served from) for zap to import. Needs `--url`, the API zap sends its operations to; without it, exit 2 |
 | `--terraform-state FILE` | Terraform state file to scan |
 | `--cloudformation FILE` | CloudFormation template to scan |
 | `--k8s-manifest FILE` | Kubernetes manifest file to scan |

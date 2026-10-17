@@ -24,11 +24,11 @@ Scan Types:
 - API Scan: OpenAPI/GraphQL/SOAP API security testing
 - Ajax Spider: JavaScript-heavy application crawling
 
-Risk Levels (ZAP -> CommonFinding):
-- High: HIGH (confirmed exploitable vulnerabilities)
-- Medium: MEDIUM (likely exploitable)
-- Low: LOW (low impact issues)
-- Informational: INFO (security observations)
+Risk Levels (ZAP's `riskcode` -> CommonFinding):
+- 3 High: HIGH (confirmed exploitable vulnerabilities)
+- 2 Medium: MEDIUM (likely exploitable)
+- 1 Low: LOW (low impact issues)
+- 0 Informational: INFO (security observations)
 
 Common Vulnerability Categories:
 - Injection: SQL, XSS, Command, LDAP injection
@@ -67,6 +67,37 @@ from scripts.core.plugin_api import (
     adapter_plugin,
 )
 
+# ZAP writes a risk as `riskcode` ("0"-"3") and `riskdesc` ("High (Medium)": the
+# risk, then the confidence), and a confidence as a code ("0" false positive to
+# "4" confirmed). Neither is a name map_tool_severity knows: it reads "3" as INFO.
+_ZAP_RISK_BY_CODE = {"0": "Informational", "1": "Low", "2": "Medium", "3": "High"}
+_ZAP_CONFIDENCE_BY_CODE = {
+    "0": "False Positive",
+    "1": "Low",
+    "2": "Medium",
+    "3": "High",
+    "4": "Confirmed",
+}
+
+
+def _zap_risk(alert: dict[str, Any]) -> str:
+    """Return the alert's risk as a name: its `riskcode`, else `riskdesc`'s first word.
+
+    An alert carrying neither keeps ZAP's middle risk. A code or word ZAP does not
+    define is passed on as written, so the severity mapper rates it INFO.
+    """
+    code = str(alert.get("riskcode", "")).strip()
+    if code in _ZAP_RISK_BY_CODE:
+        return _ZAP_RISK_BY_CODE[code]
+    desc = str(alert.get("riskdesc") or "").split()
+    return desc[0] if desc else (code or "Medium")
+
+
+def _zap_confidence(alert: dict[str, Any]) -> str:
+    """Return the alert's confidence as a name (ZAP writes a code; a name is kept)."""
+    value = str(alert.get("confidence", "")).strip()
+    return _ZAP_CONFIDENCE_BY_CODE.get(value) or value or "Medium"
+
 
 def _process_zap_instance(
     alert: dict[str, Any],
@@ -90,8 +121,8 @@ def _process_zap_instance(
 
     # Extract alert fields
     alert_name = str(alert.get("alert") or alert.get("name") or "Unknown")
-    risk = str(alert.get("risk") or "Medium")
-    confidence = str(alert.get("confidence") or "Medium")
+    risk = _zap_risk(alert)
+    confidence = _zap_confidence(alert)
     description = str(alert.get("desc") or "")
     solution = str(alert.get("solution") or "")
     reference = str(alert.get("reference") or "")
@@ -185,7 +216,7 @@ def _build_zap_tags(cweid: str, wascid: str, confidence: str) -> list[str]:
         tags.append(f"CWE-{cweid}")
     if wascid:
         tags.append(f"WASC-{wascid}")
-    tags.append(f"confidence:{confidence.lower()}")
+    tags.append("confidence:" + confidence.lower().replace(" ", "-"))
     return tags
 
 
@@ -276,8 +307,9 @@ def _load_zap_internal(path: str | Path) -> list[dict[str, Any]]:
           "alerts": [
             {
               "alert": "SQL Injection",
-              "risk": "High",
-              "confidence": "Medium",
+              "riskcode": "3",
+              "riskdesc": "High (Medium)",
+              "confidence": "2",
               "desc": "...",
               "solution": "...",
               "reference": "...",

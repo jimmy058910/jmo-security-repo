@@ -4,6 +4,7 @@ Unit tests for scripts/cli/scan_orchestrator.py
 Tests the ScanOrchestrator class extracted from cmd_scan() as part of PHASE 1 refactoring.
 """
 
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -1156,37 +1157,133 @@ class TestApiSpecIsDiscovered:
             ScanConfig(tools=["zap"], results_dir=tmp_path / "results")
         )
 
-    def test_remote_spec_becomes_a_url_target(self, tmp_path):
+    API = "http://127.0.0.1:8080"
+
+    def test_a_local_spec_is_paired_with_the_url_it_attacks(self, tmp_path):
+        """zap imports it and sends its operations to `--url` (#1331): the
+        spec is not a target of its own. Absolute, since zap runs from its
+        own directory."""
+        spec = tmp_path / "openapi.json"
+        spec.write_bytes(b'{"openapi": "3.0.3"}')
+
         orch = self._orchestrator(tmp_path)
-        targets = orch.discover_targets(
+        targets = orch.discover_targets(self._args(url=self.API, api_spec=str(spec)))
+
+        assert targets.urls == [self.API]
+        assert targets.api_specs == {self.API: str(spec.absolute())}
+        assert targets.rejected == []
+
+    def test_a_relative_spec_is_made_absolute(self, tmp_path, monkeypatch):
+        (tmp_path / "openapi.json").write_bytes(b"{}")
+        monkeypatch.chdir(tmp_path)
+
+        targets = self._orchestrator(tmp_path).discover_targets(
+            self._args(url=self.API, api_spec="openapi.json")
+        )
+
+        assert targets.api_specs == {self.API: str(tmp_path / "openapi.json")}
+
+    def test_a_spec_served_over_http_is_paired_as_its_url(self, tmp_path):
+        spec = "https://example.com/openapi.json"
+        targets = self._orchestrator(tmp_path).discover_targets(
+            self._args(url=self.API, api_spec=spec)
+        )
+
+        assert targets.urls == [self.API]
+        assert targets.api_specs == {self.API: spec}
+
+    def test_with_a_urls_file_the_spec_pairs_with_url_only(self, tmp_path):
+        urls_file = tmp_path / "urls.txt"
+        urls_file.write_bytes(b"http://other.test\n")
+        spec = "https://example.com/openapi.json"
+
+        targets = self._orchestrator(tmp_path).discover_targets(
+            self._args(url=self.API, urls_file=str(urls_file), api_spec=spec)
+        )
+
+        assert targets.urls == [self.API, "http://other.test"]
+        assert targets.api_specs == {self.API: spec}
+
+    @pytest.mark.parametrize(
+        ("name", "why"),
+        [("gone.json", "spec file does not exist"), ("specs", "is not a file")],
+    )
+    def test_an_unreadable_spec_takes_its_url_with_it(self, tmp_path, name, why):
+        """Scanned without it, the API is a page with no links: nothing the
+        spec lists is requested, and the run reads clean. Both are named."""
+        (tmp_path / "specs").mkdir()
+        spec = str(tmp_path / name)
+
+        targets = self._orchestrator(tmp_path).discover_targets(
+            self._args(url=self.API, api_spec=spec)
+        )
+
+        assert targets.is_empty()
+        assert targets.api_specs == {}
+        assert targets.rejected == [
+            f"--api-spec {spec}: {why}",
+            f"--url {self.API}: not scanned without its --api-spec ({why})",
+        ]
+
+    def test_a_url_the_urls_file_also_lists_is_said_to_be_scanned_without_it(
+        self, tmp_path, caplog
+    ):
+        """The `--urls-file` line asked for a plain scan of the same URL, and
+        it gets one: the log said `--url` was "not scanned" while it was."""
+        urls_file = tmp_path / "urls.txt"
+        urls_file.write_bytes(f"{self.API}\n".encode())
+        spec = str(tmp_path / "gone.json")
+
+        with caplog.at_level(logging.WARNING):
+            targets = self._orchestrator(tmp_path).discover_targets(
+                self._args(url=self.API, urls_file=str(urls_file), api_spec=spec)
+            )
+
+        assert targets.urls == [self.API]
+        assert targets.api_specs == {}
+        assert targets.rejected == [f"--api-spec {spec}: spec file does not exist"]
+        said = [r.getMessage() for r in caplog.records if self.API in r.getMessage()]
+        assert said == [
+            f"--url {self.API}: scanned without its --api-spec (spec file does "
+            "not exist), as --urls-file lists it too"
+        ]
+
+    @pytest.mark.parametrize(
+        ("tools", "warned"), [(["nuclei"], True), (["zap"], False)]
+    )
+    def test_a_spec_no_tool_of_the_scan_reads_is_said_to_be_unused(
+        self, tmp_path, caplog, tools, warned
+    ):
+        """Only zap imports a definition: with `--tools nuclei` the spec was
+        accepted and ignored, nothing said."""
+        spec = "https://example.com/openapi.json"
+        orch = ScanOrchestrator(
+            ScanConfig(tools=tools, results_dir=tmp_path / "results")
+        )
+
+        with caplog.at_level(logging.WARNING):
+            orch.discover_targets(self._args(url=self.API, api_spec=spec))
+
+        said = [r.getMessage() for r in caplog.records if "only zap" in r.getMessage()]
+        assert said == (
+            [
+                f"--api-spec {spec}: only zap imports a definition, and this scan "
+                "does not run zap, so it is not used"
+            ]
+            if warned
+            else []
+        )
+
+    def test_a_spec_without_a_url_is_refused_by_name(self, tmp_path):
+        """`jmo scan` exits 2 on this before discovery; a caller that reaches
+        discovery anyway gets the reason, not a scan of the spec's servers."""
+        targets = self._orchestrator(tmp_path).discover_targets(
             self._args(api_spec="https://example.com/openapi.json")
         )
 
-        assert targets.urls == ["https://example.com/openapi.json"]
-        assert not targets.is_empty()
-
-    def test_local_spec_is_refused_until_zap_can_import_one(self, tmp_path):
-        """It became a `file://` URL the URL job rejects (#1320); zap cannot
-        import a spec until #1331."""
-        spec = tmp_path / "openapi.json"
-        spec.write_text('{"openapi": "3.0.0"}', encoding="utf-8")
-
-        orch = self._orchestrator(tmp_path)
-        targets = orch.discover_targets(self._args(api_spec=str(spec)))
-
-        assert targets.urls == []
         assert targets.is_empty()
         assert len(targets.rejected) == 1
-        assert "#1331" in targets.rejected[0]
-
-    def test_missing_local_spec_is_rejected_rather_than_ignored(self, tmp_path):
-        orch = self._orchestrator(tmp_path)
-        targets = orch.discover_targets(
-            self._args(api_spec=str(tmp_path / "gone.json"))
-        )
-
-        assert targets.is_empty()
-        assert any("--api-spec" in r for r in targets.rejected)
+        assert "needs --url" in targets.rejected[0]
 
 
 class TestTargetFilesAreDecodedAndSplitPortably:

@@ -235,20 +235,7 @@ def configure_url_target(
     )
 
     if mode == "single":
-        while True:
-            url = _prompt_text("Web application URL", default="https://example.com")
-            print(_prompter.colorize("Validating URL...", "blue"))
-            if validate_url(url):
-                print(_prompter.colorize(f"URL is reachable: {url}", "green"))
-                config.url = url
-                break
-            else:
-                print(
-                    _prompter.colorize(f"Warning: URL not reachable: {url}", "yellow")
-                )
-                if _prompter.prompt_yes_no("Use this URL anyway?", default=False):
-                    config.url = url
-                    break
+        config.url = _prompt_url("Web application URL", default="https://example.com")
 
     elif mode == "batch":
         while True:
@@ -271,31 +258,47 @@ def configure_url_target(
             print(_prompter.colorize(f"File not found: {path}", "red"))
 
     else:  # api
-        # zap runs a URL scan and cannot import a spec yet (#1331), so a spec
-        # is scanned as the URL it is served from, and `jmo scan` refuses a
-        # local file (#1320). This asked for a file by default.
+        # zap imports the definition and attacks the API's address with its
+        # operations (#1331). `jmo scan` needs both: a definition alone exits
+        # 2, since zap would attack the servers the definition names.
         while True:
-            spec = _prompt_text("OpenAPI spec URL (http/https)")
+            spec = _prompt_text(
+                "OpenAPI definition (a file, or the http(s) URL it is served from)"
+            )
             if spec.startswith(("http://", "https://")):
                 config.api_spec = spec
                 break
-            print(
-                _prompter.colorize(
-                    "A local spec file is not scanned yet (#1331): zap runs a URL "
-                    "scan. Enter the URL the spec is served from, or choose "
-                    "'single' with the API's address.",
-                    "yellow",
-                )
-            )
+            found = validate_path(spec, must_exist=True) if spec else None
+            if found is not None and found.is_file():
+                config.api_spec = str(found)
+                break
+            print(_prompter.colorize(f"File not found: {spec}", "red"))
+        config.url = _prompt_url("API address zap attacks (its base URL)")
         print(
             _prompter.colorize(
-                f"Will scan {config.api_spec} as a plain URL: zap is not told it "
-                "is an OpenAPI definition (#1331)",
-                "yellow",
+                f"zap will import {config.api_spec} and send its operations to "
+                f"{config.url}",
+                "green",
             )
         )
 
     return config
+
+
+def _prompt_url(question: str, default: str = "") -> str:
+    """An http(s) URL: reachable, or kept anyway when the user says so."""
+    while True:
+        url = _prompt_text(question, default=default)
+        if not url.startswith(("http://", "https://")):
+            print(_prompter.colorize("Enter an http:// or https:// URL", "red"))
+            continue
+        print(_prompter.colorize("Validating URL...", "blue"))
+        if validate_url(url):
+            print(_prompter.colorize(f"URL is reachable: {url}", "green"))
+            return url
+        print(_prompter.colorize(f"Warning: URL not reachable: {url}", "yellow"))
+        if _prompter.prompt_yes_no("Use this URL anyway?", default=False):
+            return url
 
 
 def configure_gitlab_target(

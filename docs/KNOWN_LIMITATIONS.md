@@ -303,18 +303,51 @@ Kubernetes manifest given directly is still checked in full.
 
 ### On Windows, a Checkov or ZAP flag cannot hold cmd.exe's metacharacters
 
-On Windows, Checkov is installed as `checkov.cmd` and ZAP runs as `zap.bat`.
-Windows starts either through `cmd.exe`, which reads the whole command line
-again and treats `& | ^ < > %` as its own: `--skip-check A|B` would pipe into a
-command named `B`. A line break ends its command line, dropping every
-argument after it. No quoting survives that second reading, so a
+On Windows, Checkov is installed as `checkov.cmd` and ZAP's launcher is
+`zap.bat`. Windows starts either through `cmd.exe`, which reads the whole
+command line again and treats `& | ^ < > %` as its own: `--skip-check A|B`
+would pipe into a command named `B`. A line break ends its command line,
+dropping every argument after it. No quoting survives that second reading, so a
 `per_tool.<tool>.flags` entry holding one of the six or a line break, for a
 tool that resolved to a `.cmd` or `.bat` launcher, is dropped (with its value,
 or its flag when the value is a token of its own) and named in a WARNING.
-Linux and macOS are unaffected.
+ZAP's flags are checked this way too, although JMo runs the java command
+`zap.bat` holds rather than `zap.bat` itself.
+
+The paths JMo builds stay off those command lines: Checkov runs from the
+repository it scans, and ZAP's plan and home go to java. One cannot: an IaC
+file (`--terraform-state`, `--cloudformation`, `--k8s-manifest`) whose own
+name holds one of the six must be named to Checkov, so Checkov's row fails as
+`could not be run`, naming it, and Checkov does not run. Linux and macOS are
+unaffected.
 
 **What to do:** where the tool takes a list, give it comma-separated:
-`--skip-check CKV_AWS_1,CKV_AWS_2` for Checkov.
+`--skip-check CKV_AWS_1,CKV_AWS_2` for Checkov. Rename an IaC file whose name
+holds one of the six.
+
+### On Windows, Checkov cannot scan a UNC path
+
+A repository or IaC file on a UNC path (`\\server\share\...`, or a WSL
+directory as `\\wsl.localhost\<distro>\...`) cannot be scanned by
+`checkov.cmd`. cmd.exe will not start in a UNC directory (it starts in
+`C:\Windows` instead), and Checkov started on another drive fails on the path
+(exit 2). So Checkov's row fails as `could not be run`, naming the path, and
+Checkov does not run.
+
+**What to do:** map the share to a drive letter (`net use Z: \\server\share`)
+and scan `Z:\...`, or scan a local copy. From WSL, run JMo inside WSL.
+
+### On Windows, ZAP's heap is always 512 MB
+
+`zap.bat` takes ZAP's JVM options from `%USERPROFILE%\ZAP\.ZAP_JVM.properties`
+when that file exists (a larger heap, say), and uses `-Xmx512m` otherwise. JMo
+does not run `zap.bat` (see the entry on cmd.exe's metacharacters above): it
+runs the same java command with `-Xmx512m` and does not read that file, so a
+heap set there does not apply to a scan. On Linux and macOS JMo runs `zap.sh`,
+and this does not apply.
+
+**What to do:** JMo has no setting for ZAP's heap yet. For a site too large for
+512 MB, run ZAP outside JMo.
 
 ### jmo-native reads one application, at the repository root
 

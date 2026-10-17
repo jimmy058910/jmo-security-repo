@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 
-from scripts.core.schedule_manager import ScanSchedule
+from scripts.core.schedule_manager import ScanSchedule, reject_api_spec_without_url
 
 
 class GitHubActionsGenerator:
@@ -173,8 +173,10 @@ class GitHubActionsGenerator:
         # 4. Web URLs
         if "web" in targets:
             web = targets["web"]
+            reject_api_spec_without_url(web)
             if "urls" in web:
                 for url in web["urls"]:
+                    # TODO(issue-#1423): one --url per URL, jmo scan keeps only the last
                     args.extend(["--url", url])
             if "api_spec" in web:
                 args.extend(["--api-spec", web["api_spec"]])
