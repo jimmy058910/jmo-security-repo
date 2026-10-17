@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import yaml
 
@@ -1227,6 +1227,56 @@ def zap_minutes(timeout: int, *, spider: bool) -> tuple[int, int]:
     return crawl, max(1, total - crawl - 2)
 
 
+# Characters a regex reads specially, other than `.`, which every host holds
+# and which compiles. `?` and `#` cannot reach a path: they end it.
+_REGEX_CHARACTERS = frozenset("\\[](){}|^$*+")
+
+
+def _java_quote(text: str) -> str:
+    """`text` as a literal in a Java regex (`Pattern.quote`): `\\Q...\\E`,
+    with any `\\E` inside it split out of the quote."""
+    return "\\Q" + text.replace("\\E", "\\E\\\\E\\Q") + "\\E"
+
+
+def _zap_context(target: str) -> dict[str, Any]:
+    """The context the spider and the active scan are confined to: `target`
+    as typed, and nothing wider.
+
+    ZAP 2.17 turns each `urls` entry into the regex `<entry>.*`, nothing
+    escaped (automation-beta-0.58.0's ContextWrapper), and matches a context's
+    regexes against a URL with its query cut off. So with the target itself as
+    the entry, `/search?q=hello` and `/search?q=a+b` fell outside their own
+    context (1 request, nothing attacked, rc 0), `/search?q=(x` did not
+    compile (rc 1, "Invalid URL"), and `http://example.com` also took in
+    `http://example.com.evil.test/` (measured on the first three).
+
+    - `includePaths`: the target without its query and fragment, quoted, then
+      anything (a target with no path: anything after a `/`, `?` or `#`).
+    - `excludePaths`: every URL that does not match that, so the loose regex
+      ZAP makes of the entry below adds nothing.
+    - `urls` (ZAP requires one, and requests it): the target without its query,
+      with each regex character in its path percent-encoded, so it compiles.
+
+    The spider's `url` and the `openapi` job's `targetUrl` stay as typed.
+    Measured through plans on the spider fixture: every form of `/search?q=`
+    above and `http://h`, `http://h/app/` found the reflected XSS, and `/app/`
+    did not reach `/`.
+    """
+    parts = urlsplit(target)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    tail = ".*" if parts.path else "(?:[/?#].*)?"
+    scope = _java_quote(origin + parts.path) + tail
+    path = "".join(
+        f"%{ord(c):02X}" if c in _REGEX_CHARACTERS else c for c in parts.path
+    )
+    return {
+        "name": "target",
+        "urls": [origin + path],
+        "includePaths": [scope],
+        "excludePaths": [f"(?!{scope}$).*"],
+    }
+
+
 def zap_plan(target: str, report: Path, timeout: int, api_spec: str = "") -> str:
     """The automation plan for one zap run, as YAML.
 
@@ -1268,7 +1318,7 @@ def zap_plan(target: str, report: Path, timeout: int, api_spec: str = "") -> str
         }
     document = {
         "env": {
-            "contexts": [{"name": "target", "urls": [target]}],
+            "contexts": [_zap_context(target)],
             # An error (a definition it cannot read) ends the plan, rc 1, with
             # no report; a warning does not stop it (rc 2, report written).
             "parameters": {

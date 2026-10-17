@@ -249,7 +249,12 @@ All notable changes to JMo Security will be documented in this file.
 - **Breaking. Every zap run is one automation plan, and `--api-spec` imports an OpenAPI
   definition (#1331).** JMo writes the plan beside zap's output (`.zap-plan.yaml`) and runs
   `zap -cmd -silent -dir ~/.jmo/zap-home -autorun <plan>`. A URL scan spiders, waits for
-  the passive scan, runs the active scan and writes `zap.json`. With `--api-spec FILE|URL`
+  the passive scan, runs the active scan and writes `zap.json`. The spider and the active
+  scan stay inside `--url` as typed, query string and regex characters included: ZAP reads
+  a plan's context URL as an unescaped regex and matches it with the query cut off, so a
+  target such as `/search?q=hello` fell outside its own scope (1 request, nothing
+  attacked, rc 0) and `?q=(x` did not compile (rc 1). The context is the URL, quoted,
+  without its query, and nothing wider. With `--api-spec FILE|URL`
   (a file, or the http(s) URL it is served from) an import of the definition replaces the
   spider, and its operations are sent to `--url`, kept as typed: zap gives the path
   meaning (an empty path keeps the definition's base path, any path replaces it). Against

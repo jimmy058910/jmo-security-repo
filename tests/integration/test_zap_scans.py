@@ -153,3 +153,29 @@ def test_a_url_scan_finds_the_reflected_xss_whatever_the_slash(
     assert rc == 0
     found = [a["pluginid"] for a in _alerts(out / "zap.json")]
     assert REFLECTED_XSS in found, found
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["q=hello", "q=a+b", "q=(x)", "q=(x"],
+    ids=["plain", "plus", "parens", "open"],
+)
+def test_a_url_with_a_query_is_scanned_as_typed(jmo_scan, tmp_path, query) -> None:
+    """ZAP reads a context URL as the regex `<url>.*`, unescaped, and matches
+    it against URLs with their query cut off. Given `/search?q=hello` as the
+    context, the target fell outside its own scope: 1 request, nothing
+    attacked, rc 0; `q=(x` did not compile, rc 1 (measured, ZAP 2.17.0).
+    Its scope is the URL as typed: the page it names, not the site."""
+    log = tmp_path / "requests.jsonl"
+    f = fx.start("spider", log)
+    try:
+        rc, out = jmo_scan("--url", f"{f.url}/search?{query}")
+    finally:
+        f.close()
+
+    assert rc == 0
+    found = [a["pluginid"] for a in _alerts(out / "zap.json")]
+    assert REFLECTED_XSS in found, found
+    reached = Counter(r["op"] for r in fx.read_log(log))
+    # `/` links to the same page: reaching it would mean the scope widened.
+    assert "root" not in reached, reached

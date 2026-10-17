@@ -26,6 +26,7 @@ The real-binary gates are `tests/integration/test_zap_scans.py`.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -95,7 +96,9 @@ class TestAUrlScanPlan:
             "activeScan",
             "report",
         ]
-        assert doc["env"]["contexts"] == [{"name": "target", "urls": [TARGET]}]
+        (context,) = doc["env"]["contexts"]
+        # Its scope: below, `test_the_context_is_the_target_as_typed_and_no_wider`.
+        assert (context["name"], context["urls"]) == ("target", [TARGET])
         # An error fails the plan (rc 1); a warning does not stop it.
         assert doc["env"]["parameters"]["failOnError"] is True
         assert doc["env"]["parameters"]["failOnWarning"] is False
@@ -203,6 +206,115 @@ def test_a_value_yaml_reads_specially_comes_back_as_written(url):
     params = _jobs(plan)["openapi"]["parameters"]
     assert params["targetUrl"] == url
     assert params["apiFile"] == spec
+
+
+# --- the context: what the spider and the active scan may touch --------------
+
+
+def _python(regex: str) -> str:
+    """A context regex in Python's dialect: `re` has no `\\Q...\\E`, so each
+    quoted run is escaped instead."""
+    return re.sub(
+        r"\\Q(.*?)\\E", lambda m: re.escape(m.group(1)), regex, flags=re.DOTALL
+    )
+
+
+def _in_context(context: dict, url: str) -> bool:
+    """ZAP's reading of a plan's context (2.17.0): each `urls` entry becomes
+    the regex `<entry>.*`, unescaped (read from automation-beta-0.58.0's
+    ContextWrapper); every regex matches the whole URL, case ignored, with
+    the URL's query cut off (measured: an include holding the query matched
+    nothing, one without it put the target in scope)."""
+    cut = url.split("?", 1)[0]
+    includes = [f"{u}.*" for u in context["urls"]] + context.get("includePaths", [])
+    excludes = context.get("excludePaths", [])
+
+    def hit(regexes):
+        return any(re.fullmatch(_python(r), cut, re.IGNORECASE) for r in regexes)
+
+    return hit(includes) and not hit(excludes)
+
+
+def _context(url: str) -> dict:
+    return yaml.safe_load(zap_plan(url, REPORT, 900))["env"]["contexts"][0]
+
+
+SCOPES = [
+    # (target, in its scope, out of it)
+    (
+        "http://127.0.0.1:8080/search?q=hello",
+        ["http://127.0.0.1:8080/search?q=hello", "http://127.0.0.1:8080/search?q=x"],
+        ["http://127.0.0.1:8080/", "http://127.0.0.1:8080/app/search?q=hello"],
+    ),
+    (
+        "http://127.0.0.1:8080/search?q=a+b",
+        ["http://127.0.0.1:8080/search?q=a+b"],
+        ["http://127.0.0.1:8080/"],
+    ),
+    (
+        "http://127.0.0.1:8080/search?q=(x",
+        ["http://127.0.0.1:8080/search?q=(x", "http://127.0.0.1:8080/search?q=1"],
+        ["http://127.0.0.1:8080/"],
+    ),
+    (
+        "http://example.com",
+        ["http://example.com", "http://example.com/", "http://example.com/a?b=1"],
+        [
+            "http://example.com.evil.test/",
+            "http://exampleXcom/",
+            "http://example.com:8443/",
+        ],
+    ),
+    (
+        "http://h.test/app/",
+        ["http://h.test/app/", "http://h.test/app/search?q=1"],
+        ["http://h.test/", "http://h.test/search?q=1", "http://hXtest/app/"],
+    ),
+    (
+        "http://h.test/a(b/[c]{1}$",
+        ["http://h.test/a(b/[c]{1}$", "http://h.test/a(b/[c]{1}$/d?e=1"],
+        ["http://h.test/a"],
+    ),
+]
+
+
+@pytest.mark.parametrize(("target", "inside", "outside"), SCOPES)
+def test_the_context_is_the_target_as_typed_and_no_wider(target, inside, outside):
+    """Under 73e80aca the context was `urls: [target]`: `/search?q=hello`
+    put its own target out of scope (1 request, nothing attacked, rc 0),
+    `q=(x` did not compile (rc 1, "Invalid URL"), and `http://example.com`
+    also took in `http://example.com.evil.test/`."""
+    context = _context(target)
+
+    assert [u for u in inside if not _in_context(context, u)] == []
+    assert [u for u in outside if _in_context(context, u)] == []
+
+
+@pytest.mark.parametrize("target", [t for t, _, _ in SCOPES])
+def test_every_context_regex_compiles(target):
+    """A `urls` entry is a regex to ZAP: `q=(x` as one ended the plan at
+    rc 1. The entry is the target without its query, with every regex
+    character in its path percent-encoded."""
+    context = _context(target)
+
+    (entry,) = context["urls"]
+    assert "?" not in entry
+    for regex in [f"{entry}.*", *context["includePaths"], *context["excludePaths"]]:
+        re.compile(_python(regex))
+
+
+def test_a_quoted_target_survives_a_backslash_e_inside_it():
+    """`\\E` ends a Java quote, so one inside the URL is split out of it."""
+    target = "http://h.test/a\\Eb"
+
+    assert _in_context(_context(target), target)
+    assert not _in_context(_context(target), "http://h.test/aXb")
+
+
+def test_the_spider_starts_at_the_target_as_typed():
+    """The context's `urls` entry loses the query; the spider's seed keeps it."""
+    url = "http://127.0.0.1:8080/search?q=(x"
+    assert _jobs(zap_plan(url, REPORT, 900))["spider"]["parameters"]["url"] == url
 
 
 # --- the command line ---------------------------------------------------------
