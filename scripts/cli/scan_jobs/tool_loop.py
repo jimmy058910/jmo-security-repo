@@ -264,23 +264,47 @@ def _repository_gitleaks_config(root: Path) -> Path | None:
         return None
 
 
-def _announce_own_config(d: ToolDescriptor, root: Path) -> None:
+def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
     """Say which of the repository's own files `d` reads as its configuration.
 
     The repository then decides part of its own audit (zizmor: a
     `.github/zizmor.yml` disabling two audits took a sample from 3 rule ids to
-    1, unannounced, #1363), so the scan says so at INFO, as it does for
-    gitleaks' `.gitleaks.toml` (#1327). Python 3.12 raises from a probe where
+    1, unannounced, #1363; osv-scanner: an `osv-scanner.toml` ignoring a
+    lockfile's advisories took 4 findings to 0, #1414), so the scan says so at
+    INFO, as it does for gitleaks' `.gitleaks.toml` (#1327). It is not
+    overridden: honouring it is each tool's documented behaviour.
+
+    The directories are the scan root, or where `d` says it looks (osv-scanner:
+    beside each lockfile it is handed). Python 3.12 raises from a probe where
     3.11 returned False (#1163), hence the guard."""
-    for name in d.own_config:
-        try:
-            if not (root / name).is_file():
+    if not d.own_config:
+        return
+    if d.own_config_dirs is not None:
+        dirs = d.own_config_dirs(ctx)
+    elif ctx.target_type == "repo":
+        dirs = [Path(scan_root(ctx.target))]
+    else:
+        return
+    target = Path(scan_root(ctx.target))
+    anchor = target if target.is_dir() else target.parent
+    for directory in dirs:
+        for name in d.own_config:
+            found = directory / name
+            try:
+                if not found.is_file():
+                    continue
+            except OSError:
                 continue
-        except OSError:
-            continue
-        logger.info(
-            "%s: %s reads its %s (its audit settings apply)", root.name, d.name, name
-        )
+            try:
+                shown = found.resolve().relative_to(anchor).as_posix()
+            except (ValueError, OSError):
+                shown = str(found)
+            detail = (
+                d.own_config_detail(found)
+                if d.own_config_detail is not None
+                else "its audit settings apply"
+            )
+            logger.info("%s: %s reads its %s (%s)", anchor.name, d.name, shown, detail)
 
 
 def _exclusions(
@@ -775,8 +799,7 @@ def run_tools(
                 ctx = replace(ctx, files=shortfall.files)
                 shortfalls[tool] = shortfall
 
-        if key == "repo":
-            _announce_own_config(d, Path(scan_root(target)))
+        _announce_own_config(d, ctx)
         invocations = builder(ctx)
         refusal = _batch_refusal(invocations)
         if refusal:

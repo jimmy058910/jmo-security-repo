@@ -26,6 +26,7 @@ import logging
 import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -464,6 +465,13 @@ class ToolDescriptor:
     # configuration. The repository then decides part of its own audit, so the
     # scan says so (#1363, as for gitleaks' `.gitleaks.toml`).
     own_config: tuple[str, ...] = ()
+    # Where `own_config` is looked for, when the tool does not read it from the
+    # scan root alone: osv-scanner reads it beside each lockfile it is handed,
+    # checkov from the directory it runs in.
+    own_config_dirs: Callable[[ScanContext], Sequence[Path]] | None = None
+    # What a found file holds, for the announcement (default: that its settings
+    # apply).
+    own_config_detail: Callable[[Path], str] | None = None
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
     binary: str | None = None  # executable name, where it differs from `name`
@@ -1059,8 +1067,6 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
 _OSV_UNREADABLE_LOCKFILE = "extraction failed on specified lockfile"
 
 
-# TODO(issue-#1414): announce a target's own osv-scanner.toml, which can
-# suppress every finding unannounced (#1363's class).
 def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
     # Walk-fed, `-L` per lockfile: given a directory on Windows osv-scanner
     # walks nothing (rc 128, "No package sources found", 2.5.1 and 2.6.0).
@@ -1124,6 +1130,45 @@ def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
     )
     fallback = Fallback((127,), _OSV_UNREADABLE_LOCKFILE, each)
     return [scan(lockfiles, ctx.output, fallback=fallback)]
+
+
+def _osv_own_config_dirs(ctx: ScanContext) -> list[Path]:
+    """osv-scanner reads an `osv-scanner.toml` from the directory of each
+    lockfile it is handed and nowhere else: not a parent, not a child, and no
+    flag stops it (measured, 2.6.0). Each directory once, in the order the
+    lockfiles were handed over."""
+    root, lockfiles = _relative_to_target(ctx)
+    return list(dict.fromkeys((root / f).parent for f in lockfiles))
+
+
+def _osv_own_config_detail(path: Path) -> str:
+    """What an `osv-scanner.toml` suppresses: its `[[IgnoredVulns]]` and
+    `[[PackageOverrides]]` entries. A file that does not parse is said to be
+    unreadable here, not a crash."""
+    try:
+        document = tomllib.loads(path.read_bytes().decode("utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        return (
+            f"could not be parsed ({type(exc).__name__}): what it suppresses is unknown"
+        )
+    ignored = document.get("IgnoredVulns")
+    overrides = document.get("PackageOverrides")
+    n_ignored = len(ignored) if isinstance(ignored, list) else 0
+    n_overrides = len(overrides) if isinstance(overrides, list) else 0
+    return (
+        f"{n_ignored} ignored {'vulnerability' if n_ignored == 1 else 'vulnerabilities'}"
+        f" and {n_overrides} package {'override' if n_overrides == 1 else 'overrides'}"
+        " suppress findings"
+    )
+
+
+def _checkov_own_config_dirs(ctx: ScanContext) -> list[Path]:
+    """checkov runs from its target (`-d .`), or from a single file's
+    directory (`-f <name>`), and reads `.checkov.yaml` / `.checkov.yml` from the
+    directory it runs in (measured, 3.3.16: not a subdirectory, not a parent
+    of the file)."""
+    target = Path(ctx.target)
+    return [target] if ctx.target_type == "repo" else [target.parent]
 
 
 def _osv_reads(name: str) -> bool:
@@ -1675,6 +1720,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
             },
+            own_config=(".checkov.yaml", ".checkov.yml"),
+            own_config_dirs=_checkov_own_config_dirs,
             version_probe=VersionProbe(
                 re.compile(r"(?:checkov\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
                 # It imports its whole rule set before printing: 9.1 s cold
@@ -1866,6 +1913,11 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             accepts_name=_osv_reads,
             no_files_reason=Reason.NO_LOCKFILE,
             precheck=_osv_databases,
+            # Read beside each lockfile it is handed, and nowhere else; it has
+            # no flag that stops it (measured, 2.6.0), so it is announced.
+            own_config=("osv-scanner.toml",),
+            own_config_dirs=_osv_own_config_dirs,
+            own_config_detail=_osv_own_config_detail,
             flag_grammar=FlagGrammar.GO_FLAG,
             # Where and how it writes: `-format table` took 40 findings to 0
             # (measured, 2.6.0). `--output` is `--output-file`'s deprecated

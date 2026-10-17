@@ -594,6 +594,14 @@ All notable changes to JMo Security will be documented in this file.
   framework) is `skipped`, reason `no workflow zizmor could read`, not `failed` on every
   scan (#1362). A scan also says, at INFO, when it reads the repository's own `zizmor.yml`
   or `.github/zizmor.yml`, which can switch audits off (#1363).
+- **A scan says when a repository's own osv-scanner or checkov configuration shapes its
+  results.** osv-scanner reads an `osv-scanner.toml` beside each lockfile it is handed,
+  and a file ignoring a lockfile's advisories took a scan from 4 findings to 0 with the
+  row `ran` and nothing logged; checkov, which now runs from its target, reads a
+  `.checkov.yaml` / `.checkov.yml` there (or in a single IaC file's directory). A scan now
+  names each such file at INFO, with osv-scanner's `[[IgnoredVulns]]` and
+  `[[PackageOverrides]]` counts, as it does for zizmor. Neither file is overridden:
+  honouring a repository's own settings is each tool's documented behaviour (#1414).
 - **yara_runner's crash exits 2, and never leaves an earlier run's output behind.** It
   exited 1, which is also "matches found", so a crash read as findings over the previous
   scan's file. It now removes that file first and exits 2 (#1382).
