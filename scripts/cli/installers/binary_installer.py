@@ -43,7 +43,7 @@ from scripts.core.install_config import (
     DOWNLOAD_TIMEOUT_SECONDS,
     MAX_CLEANUP_RETRIES,
 )
-from scripts.core.secure_temp import secure_temp_dir
+from scripts.core.secure_temp import remove_tree, secure_temp_dir
 from scripts.core.tool_utils import tool_exists
 from scripts.core.validation import sanitize_subprocess_output, validate_version
 
@@ -571,7 +571,7 @@ class BinaryInstaller(BaseInstaller):
         for attempt in range(MAX_CLEANUP_RETRIES):
             try:
                 if tmpdir.exists():
-                    shutil.rmtree(tmpdir, ignore_errors=True)
+                    remove_tree(tmpdir)
                 break
             except OSError as e:
                 # WinError 32: The process cannot access the file

@@ -371,6 +371,13 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A cloned GitLab project no longer survives its scan in `%TEMP%` on Windows (#1404).** git
+  writes pack files and loose objects read-only, `shutil.rmtree` cannot delete a read-only
+  file on Windows, and `ignore_errors=True` hid the failure, so a private project's whole
+  history stayed behind with a DEBUG line saying it was cleaned up. `secure_temp_dir` and the
+  tool installers' temp-directory cleanup now clear the read-only bit and retry; anything
+  still left is logged at WARNING naming the path, and the "cleaned up" line is written
+  only when the directory is gone.
 - **zap's findings carry the severity and the confidence ZAP gave them (#1347).** The
   adapter read a `risk` key that ZAP 2.17's report never writes, so every finding was
   MEDIUM, a reflected XSS and `--fail-on HIGH` included. ZAP writes `riskcode` ("0" to
