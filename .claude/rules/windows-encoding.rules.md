@@ -101,10 +101,13 @@ through `jmo scan` with a benign `echo.<MARKER>` as the injected command:
   argument from another drive instead, checkov fails on it (`os.path.relpath`
   across drives, rc 2), so `_checkov_unc` fails a UNC target's row before it
   runs (`is_unc` decides).
-- **Run what the launcher runs.** `zap.bat` is one line, `java -Xmx512m -jar
-  zap-<version>.jar %*`; on Windows JMo runs that java line itself
-  (`zap_java`), so a plan path under a `--results-dir` holding `&` reaches
-  ZAP whole, where through `zap.bat` it ran the rest as a command, rc 0.
+- **Run what the launcher runs.** `zap.bat` sets the heap and runs `java
+  %jvmopts% -jar zap-<version>.jar %*`, where `jvmopts` is `-Xmx512m` unless
+  `%USERPROFILE%\ZAP\.ZAP_JVM.properties` exists, when it is that file's
+  first line. On Windows JMo runs that java line itself, as `zap.bat` does by
+  default (`zap_java`, always `-Xmx512m`), so a plan path under a
+  `--results-dir` holding `&` reaches ZAP whole, where through `zap.bat` it
+  ran the rest as a command, rc 0.
 
 What neither can cover — a file whose own name holds one, a tool found on PATH
 as a `.cmd` shim — the scan loop refuses: `batch_argv_refusal`

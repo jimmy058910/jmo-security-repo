@@ -819,7 +819,7 @@ The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 **ZAP scan timeout:**
 
-- Each zap run is one automation plan, and `per_tool.zap.timeout` (default 900 s) is its whole budget: the spider gets a third of its minutes, the active scan the rest less two (the passive wait and startup), at least a minute each. zap stops itself and writes its report before JMo's timeout would kill it. Raise the timeout to scan deeper: `per_tool: {zap: {timeout: 1800}}`
+- Each zap run is one automation plan, and `per_tool.zap.timeout` (default 900 s) is its whole budget: the spider gets a third of its minutes, the active scan the rest less two (the passive wait and startup), at least a minute each. zap stops itself and writes its report before JMo's timeout would kill it. Raise the timeout to scan deeper: `per_tool: {zap: {timeout: 1800}}`. Do not set it below 300 s: under about 180 s the plan's jobs, at least a minute each, cannot finish in time, and zap is killed before it writes its report
 - `-config spider.maxDuration=N` in `zap.flags` limits nothing: the plan's spider reads its own limit, and the `-config` value is not read
 
 **Nuclei scan issues:**

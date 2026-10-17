@@ -256,7 +256,8 @@ per_tool:
 
 ### 8. ZAP Optimizations
 
-ZAP (DAST) can be very slow. Limit spider depth and scan duration.
+ZAP (DAST) can be very slow. Limit its time: one timeout bounds the spider and
+the active scan.
 
 **In `jmo.yml`:**
 
@@ -269,8 +270,9 @@ per_tool:
     flags:
       - -config
       - api.disablekey=true
-      # The spider's limits are its plan job's own: `-config spider.*` values
-      # are stored and not read (measured for spider.maxDuration).
+      # The spider's time limit is its plan job's own: `-config
+      # spider.maxDuration` is stored and not read (measured for that key
+      # only).
       # Disable slow passive scanners
       - -config
       - pscans.enableAllPassiveScanners=false

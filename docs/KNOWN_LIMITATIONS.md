@@ -337,6 +337,18 @@ Checkov does not run.
 **What to do:** map the share to a drive letter (`net use Z: \\server\share`)
 and scan `Z:\...`, or scan a local copy. From WSL, run JMo inside WSL.
 
+### On Windows, ZAP's heap is always 512 MB
+
+`zap.bat` takes ZAP's JVM options from `%USERPROFILE%\ZAP\.ZAP_JVM.properties`
+when that file exists (a larger heap, say), and uses `-Xmx512m` otherwise. JMo
+does not run `zap.bat` (see the entry on cmd.exe's metacharacters above): it
+runs the same java command with `-Xmx512m` and does not read that file, so a
+heap set there does not apply to a scan. On Linux and macOS JMo runs `zap.sh`,
+and this does not apply.
+
+**What to do:** JMo has no setting for ZAP's heap yet. For a site too large for
+512 MB, run ZAP outside JMo.
+
 ### jmo-native reads one application, at the repository root
 
 jmo-native decides what it reads by path from the scanned root

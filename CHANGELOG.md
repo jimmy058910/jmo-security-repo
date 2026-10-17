@@ -636,11 +636,14 @@ All notable changes to JMo Security will be documented in this file.
   (zap.bat exited 0, no report); a repository named `tf&echo.X` did the same to checkov,
   whose row read `ran` with none of its 10 findings, and so did an IaC file's directory.
   The URL itself was already safe, since every zap run became a plan. zap on Windows now runs
-  `java -Xmx512m -jar zap-<version>.jar` from its own directory, exactly as `zap.bat` did
-  but without cmd.exe; a zap directory without exactly one `zap-*.jar`, or no java, fails
+  `java -Xmx512m -jar zap-<version>.jar` from its own directory, as `zap.bat` does by
+  default but without cmd.exe; a zap directory without exactly one `zap-*.jar`, or no java, fails
   the row and names what was found. checkov runs from its target as `-d .` (same findings,
   paths and exclusions, measured), and an IaC file by its name from its own directory, so
-  a finding's path is now `pod.yaml` where it was relative to wherever jmo ran from. A run
+  a finding's path is now `pod.yaml` where it was relative to wherever jmo ran from, and a
+  relative path in `per_tool.checkov.flags` (`--external-checks-dir policies`, say) now
+  resolves against the directory checkov runs from, each scanned target's (or an IaC
+  file's), not the directory jmo runs from. A run
   that would still hand one of those characters to a `.bat`/`.cmd` launcher (an IaC file
   whose own name holds one) fails its row as `could not be run` instead of running. So
   does checkov on a UNC target (`\\server\share\...`): cmd.exe will not start there, and
