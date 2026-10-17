@@ -511,6 +511,7 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
 
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
                 # Discover all tool outputs using plugin registry
+                # TODO(issue-#1432): a failed row's output still feeds findings.json
                 for tool_output in target.glob("*.json"):
                     # JMo's own scan-phase instrumentation, written by
                     # write_scan_timings into the same directory as the tool

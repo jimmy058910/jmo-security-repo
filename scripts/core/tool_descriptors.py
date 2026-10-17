@@ -108,6 +108,7 @@ def is_unc(path: str | Path) -> bool:
     """Whether `path` is a UNC path (`\\\\server\\share\\...`), which cmd.exe
     refuses as its working directory: it starts in `C:\\Windows` instead.
     Read as a Windows path on every platform; elsewhere no path is one."""
+    # TODO(issue-#1428): reads \\?\C:\x and \\.\C:\x as UNC
     return PureWindowsPath(str(path)).drive.startswith("\\\\")
 
 
@@ -935,6 +936,7 @@ def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
     return build
 
 
+# TODO(issue-#1424): UNC targets fail; measure checkov via its own python.exe
 def _checkov_unc(ctx: ScanContext) -> Shortfall | None:
     """checkov.cmd cannot scan a UNC target, from anywhere: the row fails
     with why, before it runs (measured through `jmo scan`, a
@@ -1170,6 +1172,7 @@ def _osv_own_config_detail(path: Path) -> str:
         )
 
     n_ignored = len(tables("IgnoredVulns"))
+    # TODO(issue-#1433): expired ignores and nameless overrides overstated
     n_packages = sum(ignores(o) for o in tables("PackageOverrides"))
     if not n_ignored and not n_packages:
         return "it ignores no vulnerability and no package"
@@ -1328,6 +1331,7 @@ def _grype_repo(ctx: ScanContext) -> list[Invocation]:
 ZAP_PLAN = ".zap-plan.yaml"
 
 
+# TODO(issue-#1422): one ZAP home for every run: a second concurrent zap fails; heap fixed
 def zap_home() -> Path:
     """The ZAP home every zap run uses: JMo's own, reused across runs.
 
@@ -1377,9 +1381,11 @@ def _zap_node_name(scheme: str, netloc: str, path: str) -> str:
     default = {"http": 80, "https": 443}.get(scheme.lower())
     if colon and port.isdigit() and int(port) == default:
         netloc = host
+    # TODO(issue-#1434): unquote widens scope for %2F and %25XX
     return f"{scheme}://{netloc}{unquote(path)}"
 
 
+# TODO(issue-#1431): a redirect to another host spelling is attacked by nothing
 def _zap_context(target: str) -> dict[str, Any]:
     """The context the spider and the active scan are confined to: `target`,
     however ZAP spells it, and nothing wider.

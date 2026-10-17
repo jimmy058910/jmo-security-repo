@@ -274,6 +274,7 @@ def _repository_gitleaks_config(root: Path) -> Path | None:
         return None
 
 
+# TODO(issue-#1430): own-config announced on the console only, not in results
 def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
     """Say which of the repository's own files `d` reads as its configuration.
 

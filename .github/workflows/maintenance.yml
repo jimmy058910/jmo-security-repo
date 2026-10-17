@@ -166,6 +166,7 @@ jobs:
       - name: Update pre-commit hooks
         run: |
           echo "Updating pre-commit hook versions..."
+          # TODO(issue-#1435): move ruff/mypy hook and lock together (pin-pair guard)
           pre-commit autoupdate
 
           # Apply any formatting changes from updated hooks

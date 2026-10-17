@@ -407,6 +407,7 @@ def tool_flags(
         )
         i = end
 
+    # TODO(issue-#1427): zap flags dropped by a zap.bat warning; zap runs java
     if executable and is_batch_launcher(executable):
         kept = _without_cmd_metacharacters(kept, where, tool, Path(executable).name)
     return kept

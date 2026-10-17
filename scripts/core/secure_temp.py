@@ -64,6 +64,7 @@ def remove_tree(path: Path | str) -> bool:
 
     def _clear_and_retry(func: Callable[[str], object], name: str, exc: object) -> None:
         try:
+            # TODO(issue-#1429): sets mode 0o200 on POSIX and follows symlinks
             os.chmod(name, stat.S_IWRITE)
             func(name)
         except OSError as retry_error:

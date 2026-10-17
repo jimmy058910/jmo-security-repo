@@ -283,6 +283,7 @@ def _guard_real_jmo_install():
         )
 
 
+# TODO(issue-#1425): fires on subprocess e2e U4 with zap and no ZAP home
 @pytest.fixture(autouse=True)
 def _guard_real_zap_home(request):
     """Fail the test that created the real `~/.jmo/zap-home`.

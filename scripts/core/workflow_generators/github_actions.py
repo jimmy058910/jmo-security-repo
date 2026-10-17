@@ -176,6 +176,7 @@ class GitHubActionsGenerator:
             reject_api_spec_without_url(web)
             if "urls" in web:
                 for url in web["urls"]:
+                    # TODO(issue-#1423): one --url per URL, jmo scan keeps only the last
                     args.extend(["--url", url])
             if "api_spec" in web:
                 args.extend(["--api-spec", web["api_spec"]])
