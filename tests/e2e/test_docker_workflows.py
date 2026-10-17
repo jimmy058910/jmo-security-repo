@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -224,8 +225,31 @@ _MATRIX_PROBE = (
 )
 
 
-def image_tool_matrix(image: str) -> tuple[list[str], str]:
-    """The TOOL_MATRIX and POLICY_ENGINE the IMAGE was built with.
+# The release that introduced what this file's v2-only tests check: the tool
+# registry `_MATRIX_PROBE` reads, the image's own `/home/jmo/.jmo`, and
+# osv-scanner's offline-database row. Whether an image predates it is read
+# from its tool registry, never from its version number: until the release
+# bump, an image built from the tree (ci.yml's docker-smoke) reports 1.1.1 as
+# the published v1.1.1 image does (measured), and it must run these tests.
+V2_RELEASE = "2.0.0"
+
+
+def image_version(image: str) -> str:
+    """The version the image reports (`jmo --version`), e.g. `1.1.1`."""
+    result = _docker("run", "--rm", image, "--version", timeout=60)
+    found = re.search(r"\d+\.\d+\.\d+", result.stdout)
+    if result.returncode != 0 or found is None:
+        pytest.fail(
+            f"{image} reported no version (rc={result.returncode}): "
+            f"stdout={result.stdout[:200]!r} stderr={result.stderr.strip()[:300]}"
+        )
+    return found.group(0)
+
+
+def v2_tool_registry(image: str, behaviour: str) -> tuple[list[str], str]:
+    """The TOOL_MATRIX and POLICY_ENGINE the IMAGE was built with, or a skip
+    naming the image's version when it was built before `V2_RELEASE`
+    introduced `behaviour`: a v1 image answers `_MATRIX_PROBE` with `null`.
 
     The expectation comes from the image, never from this checkout -- the same
     source scheduled.yml's validate-image job reads. For an image built from
@@ -233,8 +257,7 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
     against the published image they are not: the image is whatever the last
     `v*` tag built, so a checkout comparison false-alarms whenever main's
     matrix is ahead of that tag, which is exactly how #1039 went red on a
-    correctly built image. A v1 image has no matrix to compare, so the
-    caller's checks are skipped for it (`_MATRIX_PROBE`).
+    correctly built image.
     """
     result = _docker(
         "run",
@@ -257,10 +280,19 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
         pytest.fail(f"{image} printed no [matrix, engine] pair: {result.stdout[:500]}")
     if answer is None:
         pytest.skip(
-            f"{image} is a v1 image (PROFILE_TOOLS, no TOOL_MATRIX): v2's checks "
-            "apply once a v2 image is published"
+            f"{image} is v{image_version(image)}, built before v{V2_RELEASE} "
+            f"introduced {behaviour}: it carries v1's tool registry (scan "
+            "profiles, no TOOL_MATRIX), so this runs once a v2 image is published"
         )
     matrix, engine = answer
+    return matrix, engine
+
+
+def image_tool_matrix(image: str) -> tuple[list[str], str]:
+    """The TOOL_MATRIX and POLICY_ENGINE the IMAGE was built with (see
+    `v2_tool_registry`); a v1 image has no matrix to compare, so the caller's
+    checks are skipped for it."""
+    matrix, engine = v2_tool_registry(image, "the TOOL_MATRIX this checks")
     # Meta-guard: every check built on an empty matrix passes.
     if not matrix:
         pytest.fail(f"{image} reports an empty TOOL_MATRIX")
@@ -573,6 +605,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
         """
         image = f"{DOCKER_REGISTRY}:latest"
         ensure_image(image)
+        v2_tool_registry(image, "osv-scanner's row for a missing offline database")
 
         src_dir = tmp_path / "src"
         src_dir.mkdir()
@@ -911,6 +944,7 @@ class TestDockerNonRootExecution:
         image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
+        v2_tool_registry(image, "a /home/jmo/.jmo the container user owns")
 
         volume = f"jmo-home-e2e-{uuid.uuid4().hex[:12]}"
         created = _docker("volume", "create", volume, timeout=60)
@@ -1623,3 +1657,61 @@ def test_the_matrix_probe_fails_on_an_image_with_neither(tmp_path):
 
     assert result.returncode != 0
     assert "TOOL_MATRIX" in result.stderr
+
+
+def _image_answering(monkeypatch, answer) -> None:
+    """`_docker` as an image answering `_MATRIX_PROBE` with ``answer`` and
+    `--version` as v1.1.1 does, so `v2_tool_registry` is checked without Docker."""
+
+    def docker(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+        out = json.dumps(answer) if "--entrypoint" in args else "JMo Security v1.1.1\n"
+        return subprocess.CompletedProcess(["docker", *args], 0, out, "")
+
+    monkeypatch.setitem(globals(), "_docker", docker)
+
+
+def test_a_v1_image_skips_naming_its_version_and_the_release_it_predates(
+    monkeypatch,
+):
+    """The published image until the v2.0.0 tag: the nightly ran the v2-only
+    tests against it and failed (#1421)."""
+    _image_answering(monkeypatch, None)
+
+    with pytest.raises(pytest.skip.Exception) as skipped:
+        v2_tool_registry("img:latest", "a behaviour")
+
+    assert str(skipped.value).startswith(
+        "img:latest is v1.1.1, built before v2.0.0 introduced a behaviour"
+    )
+
+
+def test_a_v2_image_is_tested_whatever_version_it_reports(monkeypatch):
+    """ci.yml's docker-smoke image, built from the tree before the release
+    bump, reports 1.1.1 as the published v1.1.1 image does (measured): its
+    tool registry decides, so it is tested. A skip here would read as green."""
+    _image_answering(monkeypatch, [["trivy"], "opa"])
+
+    try:
+        registry = v2_tool_registry("img:latest", "a behaviour")
+    except pytest.skip.Exception as skip:
+        pytest.fail(f"a v2 image was skipped: {skip}")
+
+    assert registry == (["trivy"], "opa")
+
+
+def test_an_image_built_from_this_tree_has_the_v2_tool_registry():
+    """docker-smoke builds its image from this checkout (`COPY .` into
+    /opt/jmo-security, installed editable), so `_MATRIX_PROBE` reads this
+    tree's registry there. It must answer a matrix, or the v2-only tests
+    would skip in the one job that tests the image a pull request builds."""
+    result = subprocess.run(
+        [sys.executable, "-c", _MATRIX_PROBE],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) is not None
