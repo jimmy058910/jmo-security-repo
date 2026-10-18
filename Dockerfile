@@ -199,11 +199,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python security tools one by one for better error visibility
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
-RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.175.0 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.181.0 && \
     semgrep --version && \
     echo "✓ semgrep installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.16 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.29 && \
     checkov --version && \
     echo "✓ checkov installed"
 
