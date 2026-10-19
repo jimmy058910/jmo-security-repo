@@ -1,13 +1,13 @@
 schema_version: '1.0'
 python_tools:
   semgrep:
-    version: 1.175.0
+    version: 1.181.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.3.16
+    version: 3.3.29
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
@@ -216,6 +216,22 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-10-18'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.3.16
+    new_version: 3.3.29
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-10-18'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.175.0
+    new_version: 1.181.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-09-09'
   action: Updated kubescape
   tools_updated:
