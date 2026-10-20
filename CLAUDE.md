@@ -169,11 +169,13 @@ The split is mechanical rather than remembered. `.gitignore` carries an explicit
 ### Optional: local knowledge graph (not shipped)
 
 Maintainer-local and **absent from a clone**. Recorded here because a session that
-has it should use it, and because the Windows setup has traps worth writing down once.
+has it should use it.
 
-[Graphify](https://github.com/Graphify-Labs/graphify) (`uv` tool `graphifyy`, currently
-**0.9.50**) indexes the repo into `graphify-out/` — deterministic AST parsing, no LLM,
-no API cost. Git `post-commit` / `post-checkout` hooks rebuild it incrementally.
+[Graphify](https://github.com/Graphify-Labs/graphify) (`uv` tool `graphifyy`;
+`graphify --version` names the installed release) indexes the repo into
+`graphify-out/` — deterministic AST parsing, no LLM, no API cost. The git hooks from
+`graphify hook install` (`post-commit`, `post-checkout`, `post-merge`,
+`post-rewrite`) rebuild it incrementally.
 
 | Task | Command |
 |---|---|
@@ -181,14 +183,15 @@ no API cost. Git `post-commit` / `post-checkout` hooks rebuild it incrementally.
 | Ask a structural question | `graphify query "what connects X to Y?"` |
 | Explain one symbol | `graphify explain "store_scan"` |
 | Path between two symbols | `graphify path "A" "B"` |
+| Check the git hooks | `graphify hook status` |
 | Upgrade (machine-global; affects every repo) | `uv tool upgrade graphifyy && graphify install --platform claude` |
 
 The MCP server is registered in the repo's **`.mcp.json`**, which is gitignored
-because it also carries a `${GH_TOKEN}` entry; `~/.claude.json` has no servers for
-this project. It is deliberately absent from the tracked `.mcp.json.example`, since
-the graph is maintainer-local. So a grep of the *tracked* tree finds nothing, and
-`cat .mcp.json` on the maintainer's machine finds it. Confirm with `/mcp`. (This
-paragraph said the reverse until 2026-09-02.)
+because a copy of the tracked `.mcp.json.example` carries a `${GH_TOKEN}` entry;
+`~/.claude.json` has no servers for this project. It is deliberately absent from
+the example, since the graph is maintainer-local. So a grep of the *tracked* tree
+finds nothing, and `cat .mcp.json` on the maintainer's machine finds it. Confirm
+with `/mcp`. (This paragraph said the reverse until 2026-09-02.)
 
 **Freshness is `built_at_commit` inside `graph.json`, not the file mtime** —
 clustering rewrites `graph.json` without re-extracting, so mtime reads fresher than
@@ -196,15 +199,14 @@ the content is. A hook that fires during a rebase or squash simulation can stamp
 graph with a commit that is not an ancestor of `HEAD`; check with
 `git merge-base --is-ancestor <built_at_commit> HEAD` before trusting it.
 
-**Windows trap.** The hook probes for an interpreter and gives up silently
-(`could not locate a Python with graphify installed`) when every probe fails.
-Under Git Bash all four can fail at once: a hook installed from WSL pins a
-`/home/...` path; MSYS strips `.exe` from `command -v graphify`, so the launcher
-is read as a shebang and rejected; and `graphify` lives in a uv-tool venv the
-default `python` cannot import. The fix is one gitignored file —
-`graphify-out/.graphify_python` containing the absolute interpreter path. Re-run
-`graphify install --platform claude` after **every** upgrade, or the installed
-skill keeps its old `.graphify_version` stamp while the binary moves on.
+**Hooks fail silently.** Git skips a hook that has lost its executable bit, and
+copying the repo between machines can strip it; `graphify hook install` keeps the
+mode of a hook it updates, so check `ls -l .git/hooks/post-commit` and `chmod +x`
+it. Re-run `graphify install --platform claude` after **every** upgrade, or the
+installed skill keeps its old `.graphify_version` stamp while the binary moves on.
+On Windows under Git Bash the hook can also fail to find a Python with graphify;
+the fix there is a gitignored `graphify-out/.graphify_python` holding the absolute
+interpreter path.
 
 ## Architecture Overview
 
