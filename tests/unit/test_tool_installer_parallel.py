@@ -250,6 +250,39 @@ class TestBatchPipInstall:
             assert all(r.method == "pip_batch" for r in results)
 
     @patch("scripts.cli.tool_installer.subprocess.run")
+    def test_a_batch_install_ends_in_each_tools_post_install(self, mock_run):
+        """yara's wheel carries no rules; `_post_install` is what fetches them.
+
+        Every other install path ends in `_post_install`. The batch did not, and
+        yara is the one pip tool outside an isolated venv, so the default
+        parallel `jmo tools install` printed `[OK] yara` and left it with no
+        rules: `jmo tools check` read it not ready, "yara would report every
+        scan clean" (measured 2026-10-21, Debian 13).
+        """
+        from scripts.cli.tool_installer import ToolInstaller
+
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        registry, manager = MagicMock(), MagicMock()
+        registry.get_tool.return_value = MagicMock(
+            pypi_package="yara-python", version="4.5.4"
+        )
+        manager.check_tool.return_value = MagicMock(installed_version="4.5.4")
+        installer = ToolInstaller(registry=registry, manager=manager)
+
+        def fetch_rules(tool_name, result):
+            result.message += " + rules"
+            return result
+
+        with patch.object(installer, "_post_install", side_effect=fetch_rules) as post:
+            results = installer._batch_pip_install(
+                ["yara"], ParallelInstallProgress(total=1)
+            )
+
+        assert [c.args[0] for c in post.call_args_list] == ["yara"]
+        assert results[0].message.endswith(" + rules")
+        manager.invalidate_status_cache.assert_called_with("yara")
+
+    @patch("scripts.cli.tool_installer.subprocess.run")
     def test_batch_pip_install_fallback_on_failure(self, mock_run):
         """Test fallback to individual installs on batch failure."""
         from scripts.cli.tool_installer import ToolInstaller

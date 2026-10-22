@@ -846,8 +846,12 @@ class ToolManager:
         # ZAP is extracted to ~/.jmo/bin/zap/ directory
         # The actual script is at ~/.jmo/bin/zap/zap.sh (Unix) or zap.bat (Windows)
         if binary_name in ("zap.sh", "zap.bat"):
-            # Check both zap.sh and zap.bat (cross-platform support)
-            for script_name in ("zap.bat", "zap.sh"):
+            # The cross-platform zip ships both launchers side by side, so
+            # this platform's comes first: zap.bat cannot run on Linux/macOS.
+            launchers = ("zap.bat", "zap.sh")
+            if self.platform != "windows":
+                launchers = ("zap.sh", "zap.bat")
+            for script_name in launchers:
                 zap_path = home / ".jmo" / "bin" / "zap" / script_name
                 if zap_path.exists():
                     return str(zap_path)

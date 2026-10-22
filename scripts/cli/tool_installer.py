@@ -1069,20 +1069,21 @@ class ToolInstaller:
             )
 
             if result.returncode == 0:
-                # All succeeded - verify each tool
+                # All succeeded - verify each tool, then fetch what its package
+                # does not carry (yara's rules), as every other path does.
                 duration = time.time() - start_time
                 for tool_name in pip_tools:
+                    self.manager.invalidate_status_cache(tool_name)
                     status = self.manager.check_tool(tool_name)
-                    results.append(
-                        InstallResult(
-                            tool_name=tool_name,
-                            success=True,
-                            method="pip_batch",
-                            message=f"Installed via pip batch: {tool_to_package.get(tool_name, '')}",
-                            version_installed=status.installed_version,
-                            duration_seconds=duration / len(pip_tools),
-                        )
+                    installed = InstallResult(
+                        tool_name=tool_name,
+                        success=True,
+                        method="pip_batch",
+                        message=f"Installed via pip batch: {tool_to_package.get(tool_name, '')}",
+                        version_installed=status.installed_version,
+                        duration_seconds=duration / len(pip_tools),
                     )
+                    results.append(self._post_install(tool_name, installed))
             else:
                 # Batch failed - fall back to individual installs
                 logger.warning(
@@ -2042,7 +2043,9 @@ class ToolInstaller:
                         if exe.is_file():
                             exe.chmod(0o755)
 
-                # Verify installation
+                # Verify installation. The manager memoised "not installed"
+                # when the install began; ask again now the files exist.
+                self.manager.invalidate_status_cache(tool_name)
                 status = self.manager.check_tool(tool_name)
                 if status.installed:
                     return InstallResult(
