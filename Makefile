@@ -74,7 +74,7 @@ help:
 	@echo "  verify-badges        - Verify PyPI badges match pyproject.toml version"
 	@echo ""
 	@echo "Metrics Targets (Maintainer-Only):"
-	@echo "  collect-metrics      - Collect weekly metrics (GitHub, PyPI, Docker Hub, telemetry)"
+	@echo "  collect-metrics      - Collect weekly metrics (GitHub, PyPI, Docker Hub)"
 	@echo "  metrics              - Alias for collect-metrics"
 	@echo "  validate-readme-pypi - Check PyPI README only (skip Docker Hub)"
 	@echo "  check-pypi-readme    - Alias for validate-readme"
