@@ -57,6 +57,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          # The PR targets `dev`, so the branch must be cut from `dev`. With no
+          # `ref:` a scheduled run (and a `--ref main` dispatch) gets `main`,
+          # which is normally behind `dev`.
+          ref: dev
           fetch-depth: 0
 
       - name: Set up Python 3.12
@@ -272,6 +276,9 @@ jobs:
         # Each week's PR replaces the last. Without this a stale branch of older
         # bumps stays open next to the new one and the routine has two PRs to
         # judge. The branch pushed in this run is skipped, as are fork PRs.
+        # Housekeeping only: a failure here must not cost this week's PR (a
+        # failed step skips "Create Pull Request" and deletes the new branch),
+        # so every gh call below warns and carries on.
         if: steps.commit.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -282,7 +289,10 @@ jobs:
             --jq '.[]
               | select(.isCrossRepository | not)
               | select(.headRefName | startswith("auto-update-deps-"))
-              | [.number, .headRefName] | @tsv')
+              | [.number, .headRefName] | @tsv') || {
+            echo "::warning::could not list open PRs; superseded PRs were not closed"
+            exit 0
+          }
 
           while IFS=$'\t' read -r number head; do
             [ -n "$number" ] || continue
@@ -290,7 +300,7 @@ jobs:
             echo "Closing #$number ($head): superseded by $BRANCH"
             gh pr close "$number" \
               --comment "Superseded by this week's tool update." \
-              --delete-branch
+              --delete-branch || echo "::warning::could not close #$number"
           done <<< "$stale"
 
       - name: Create Pull Request

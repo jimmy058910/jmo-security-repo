@@ -62,3 +62,22 @@ def test_weekly_tool_pr_targets_dev() -> None:
 
     assert len(create) == 1
     assert "--base dev" in create[0]
+
+
+def test_weekly_tool_branch_is_built_from_dev() -> None:
+    """The weekly branch is cut from `dev`, the branch its PR targets.
+
+    A checkout with no `ref:` gets the default branch on a scheduled run and on
+    the documented `--ref main` dispatch. The tool edits would then be computed
+    against `main`'s `versions.yaml`, `.pre-commit-config.yaml` and `uv.lock`
+    while the PR lands on `dev`, which is normally ahead of `main`: the PR could
+    drag `main`-only commits into `dev`, and the CI run dispatched against it
+    would test the wrong tree.
+    """
+    checkout = next(
+        step
+        for step in _job_steps("auto-update-tools")
+        if step.get("uses", "").startswith("actions/checkout@")
+    )
+
+    assert checkout.get("with", {}).get("ref") == "dev"
