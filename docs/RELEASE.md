@@ -46,9 +46,10 @@ attention:
   outdated tools but does not fail CI (outdated ≠ broken).
 - **Layer 2 — tracking issue dashboard.** `update_versions.py --check-outdated
   --create-issues` opens/updates a single issue listing every outdated tool.
-- **Layer 3 — auto-PR + soak-window auto-merge.** The `auto-update-tools` job
-  opens a PR with patch+minor bumps. A separate job runs every 6 hours and
-  auto-merges the PR once it is ≥ 24 hours old with all required checks green.
+- **Layer 3 — auto-PR, merged by the weekly maintenance routine.** The
+  `auto-update-tools` job opens a PR into `dev` with patch+minor bumps. No
+  workflow merges it: the weekly maintenance routine runs CI against it and
+  merges it once that run is green.
 
 ### What an auto-PR looks like
 
@@ -56,48 +57,32 @@ Every Sunday at 00:00 UTC the `auto-update-tools` job (in
 `.github/workflows/maintenance.yml`) opens a PR like this:
 
 - **Title**: `chore(deps): weekly auto-update 2026-04-19 (level=minor)`
-- **Labels**: `dependencies`, `automated`, `auto-merge-ok`
+- **Base**: `dev`
+- **Labels**: `dependencies`, `automated`
 - **Body**: Embeds the `update_versions.py --classify` JSON so you can see
   every bump and its semver classification (patch / minor / major / unknown)
   in one block.
-- **Merge policy**: Not set to `--auto`. The soak-window job handles merging.
+- **`uv.lock`**: When `pre-commit autoupdate` moves the `ruff`, `mypy` or
+  `bandit` hook rev, the PR relocks those three to the same versions (exact
+  `uv lock --upgrade-package` pins, nothing else moves), so the pin-pair guard
+  in `tests/unit/test_toolchain_version_agreement.py` stays green.
+- **Older PRs**: Any open `auto-update-deps-*` PR is closed as superseded, and
+  its branch deleted, when the new one is opened.
+- **Merge policy**: Not set to `--auto`, and no workflow merges it.
 
 Major and `unknown` bumps are left outdated — they appear as items in the
 weekly tracking issue (Layer 2) so you can investigate when you have time.
 
-### How auto-merge actually fires
+### Who merges it
 
-The `auto-merge-tool-bumps` job (cron `0 */6 * * *`) runs
-`scripts/dev/auto_merge_tool_bumps.py`, which for each open PR labeled
-`auto-merge-ok` decides:
+The weekly maintenance routine owns the merge, after real CI. A PR opened with
+`GITHUB_TOKEN` gets no CI run of its own, and `dev` has no required checks, so
+a timer that merged on age alone would merge an unverified bot PR blind. The
+routine dispatches CI against the PR and merges it only when that run is green.
 
-- **merge** — PR is ≥ 24h old, all required checks green → `gh pr merge --squash`
-- **flip** — A required check failed → remove `auto-merge-ok`, add
-  `needs-review`, post an explanatory comment.
-- **defer** — Anything else (soak window still active, checks running, the
-  maintainer removed `auto-merge-ok`).
+### Hold a tool-update PR
 
-The decision logic is unit-tested in
-`tests/unit/test_auto_merge_tool_bumps.py`.
-
-### Cancel an auto-merge
-
-Remove the `auto-merge-ok` label from the PR. The soak job will never merge
-a PR without that label — full stop. Re-add it to resume.
-
-### Force immediate merge (verification / urgent)
-
-```bash
-# Dispatch the soak job manually with zero soak window
-gh workflow run maintenance.yml --ref main \
-  -f task=auto-merge
-```
-
-For a *truly* zero-wait test of the machinery, run the script locally:
-
-```bash
-python3 scripts/dev/auto_merge_tool_bumps.py --min-age-hours 0 --dry-run
-```
+Close it. Nothing re-opens it; the next weekly run opens a new PR if updates are still available.
 
 ### Manual dispatch with a specific bump level
 
@@ -113,6 +98,11 @@ gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=all
 ```
 
 ### One-time branch-protection setup (required)
+
+> The tool-update PR now targets `dev`, which has no required checks, so
+> this rule does not gate that PR; the routine's own read of the CI run does.
+> `main`'s ruleset (9147592) does not require `tool-contract-tests` either
+> (checked 2026-10-22), so the rule below is not in force today.
 
 The contract-test gate only has teeth when `tool-contract-tests` is a
 required status check:
@@ -134,10 +124,12 @@ required status check:
 ### Known transient behavior
 
 Weekly, a patch/minor bump opens **both** an auto-PR (Sun 00:00) and a
-tracking issue (Sun 02:00). This overlap lasts ~24-26 hours until the PR
-merges; the issue then auto-closes. Not a bug — the issue dashboard is a
-complete picture of outstanding work, and the overlap window is the
-trade-off for not filtering `--create-issues` by bump level.
+tracking issue (Sun 02:00). The version check reads `main`, so the overlap
+lasts at least until the bump reaches `main` (the PR merges into `dev` first).
+The `Update <tool>` issue then stays open until a newer release replaces it:
+`update_versions.py` closes one only when it files a newer one. Not a bug — the
+issue dashboard is a complete picture of outstanding work, and the overlap
+window is the trade-off for not filtering `--create-issues` by bump level.
 
 ---
 

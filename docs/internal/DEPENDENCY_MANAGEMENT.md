@@ -184,7 +184,7 @@ Two details that are easy to get wrong:
 
 ### Dependabot
 
-[.github/dependabot.yml](../../.github/dependabot.yml) runs the **`uv` ecosystem** weekly (Monday 09:00 UTC): it reads `[dependency-groups]` and regenerates `uv.lock` *with uv*. Minor and patch bumps are grouped into one `python-minor-patch` PR; majors arrive individually. Security updates are native.
+[.github/dependabot.yml](../../.github/dependabot.yml) runs the **`uv` ecosystem** weekly (Monday 04:00 UTC): it reads `[dependency-groups]` and regenerates `uv.lock` *with uv*. Minor and patch bumps are grouped into one `python-minor-patch` PR; majors arrive individually. Security updates are native.
 
 Because Dependabot and CI now use the same resolver, bot PRs face the identical `uv lock --check` gate humans do. Review and test them like any other PR.
 

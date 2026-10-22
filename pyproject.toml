@@ -255,7 +255,7 @@ omit = [
     # Path sanitizers utility
     "scripts/cli/path_sanitizers.py",
     # Dev/maintenance scripts: standalone CLI tools used by maintainers
-    # (update_versions, auto_merge_tool_bumps, generate_baseline, etc.).
+    # (update_versions, generate_baseline, etc.).
     # Not imported by runtime code, not shipped to users via the JMo
     # Security CLI. Counting them as "runtime coverage" was distorting
     # the metric — these are tooling for the project's release/dev

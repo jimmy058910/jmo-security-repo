@@ -3,8 +3,8 @@
 The bump-level filter decides which tools `--update-all` actually writes to
 versions.yaml. It's the load-bearing gate that keeps major and `unknown` bumps
 out of the weekly auto-merge PR — getting it wrong would auto-merge a risky
-bump on green CI, which is exactly what the 24h soak window + contract-test
-gate exist to prevent.
+bump on green CI, which is exactly what the contract-test gate and the weekly
+maintenance routine's read of a real CI run exist to prevent.
 
 These tests pin the cumulative semantics:
   --level=patch    → {patch}
