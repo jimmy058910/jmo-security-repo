@@ -2,7 +2,14 @@
 # Part of 5-layer version management system (ROADMAP.md #14, Issue #46)
 # Handles: Python packages, Docker base images, GitHub Actions
 #
-# Schedule: Weekly on Monday at 9 AM UTC (after weekend development settles)
+# Schedule: Weekly on Monday at 04:00 UTC, every ecosystem. The weekly
+#            maintenance routine starts Monday 04:00 America/Detroit (08:00 UTC
+#            in daylight time, an hour later in standard time), so Dependabot
+#            has opened its PRs before the routine looks for them.
+# Cooldown:  `default-days: 7` on every ecosystem. A release is not proposed
+#            until it is a week old, which lets a yanked or broken release be
+#            pulled first. It covers version updates only; security updates are
+#            exempt (checked against GitHub's options reference, 2026-10-22).
 # Rationale: Prevents race conditions where Dependabot creates PRs before
 #            critical commits (e.g., new modules) are merged to main branch
 
@@ -25,7 +32,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "04:00"
+      timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     reviewers:
       - "jimmy058910"
@@ -35,6 +45,16 @@ updates:
     commit-message:
       prefix: "deps(python)"
       include: "scope"
+    # ruff, mypy and bandit are also pinned as pre-commit hook revs, and
+    # tests/unit/test_toolchain_version_agreement.py fails when the two pins
+    # differ. A bump here moves only the lock side, so only the weekly
+    # tool-update job (maintenance.yml), which moves both together, may touch
+    # them (#1435). With `target-branch` set, GitHub does not apply this block
+    # to security updates, which use the default branch.
+    ignore:
+      - dependency-name: "ruff"
+      - dependency-name: "mypy"
+      - dependency-name: "bandit"
     # Group by risk tier to collapse PR volume:
     # - python-minor-patch: non-breaking bumps (all deps, grouped weekly)
     # - python-major: one PR per major bump (stay un-grouped so we can review each)
@@ -56,7 +76,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "04:00"
+      timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     reviewers:
       - "jimmy058910"
@@ -77,7 +100,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "04:00"
+      timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     reviewers:
       - "jimmy058910"
@@ -87,17 +113,18 @@ updates:
     commit-message:
       prefix: "deps(actions)"
       include: "scope"
-    # Group ALL action bumps (patch + minor + major) into one weekly PR.
-    # GitHub Actions tend to have stable APIs and bunch of tiny bumps — a single
-    # PR to review is dramatically lighter than 5-8 separate ones.
+    # Group the patch and minor action bumps into one weekly PR. GitHub Actions
+    # tend to have stable APIs and bunch of tiny bumps — a single PR to review
+    # is dramatically lighter than 5-8 separate ones. A major bump matches no
+    # group, so it arrives as its own PR: a major can change inputs or
+    # permissions, and that is the change to read alone.
     groups:
       github-actions:
         patterns:
           - "*"
         update-types:
-          - "patch"
           - "minor"
-          - "major"
+          - "patch"
 
   # npm dependencies - scripts/dashboard
   - package-ecosystem: "npm"
@@ -109,8 +136,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "04:00"
       timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       dashboard-deps:
@@ -136,6 +165,13 @@ updates:
   #
   # Bot PRs from this ecosystem must NOT be admin-merged: a ruff bump
   # can reflow the codebase, and the reflow is the thing to review.
+  #
+  # ruff, mypy and bandit are ignored below, so this entry no longer proposes
+  # the three revs the guard compares (#1435): a hook-only bump fails the guard
+  # until the lock side is moved by hand, and the weekly tool-update job
+  # (maintenance.yml) moves both together. Here the dependency name is the
+  # repo URL, which is how Dependabot titles these PRs (#1451, #1360). The
+  # other hooks stay with Dependabot.
   - package-ecosystem: "pre-commit"
     directory: "/"
     # Retargeted from the default branch (main) to dev for the v1.1.0
@@ -145,8 +181,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "04:00"
       timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     reviewers:
       - "jimmy058910"
@@ -156,6 +194,10 @@ updates:
     commit-message:
       prefix: "deps(pre-commit)"
       include: "scope"
+    ignore:
+      - dependency-name: "https://github.com/astral-sh/ruff-pre-commit"
+      - dependency-name: "https://github.com/pre-commit/mirrors-mypy"
+      - dependency-name: "https://github.com/PyCQA/bandit"
 
   # npm dependencies - scripts/api
   - package-ecosystem: "npm"
@@ -167,8 +209,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "04:00"
       timezone: "Etc/UTC"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     groups:
       api-deps:
