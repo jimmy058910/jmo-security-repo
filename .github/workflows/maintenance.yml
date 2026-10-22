@@ -18,7 +18,6 @@ on:
     - cron: '0 0 * * 0'  # Sunday 00:00 UTC - tool updates
     - cron: '0 2 * * 0'  # Sunday 02:00 UTC - version checks
     - cron: '0 6 * * 1'  # Monday 06:00 UTC - repo completeness
-    - cron: '0 */6 * * *'  # Every 6h - soak-window auto-merge sweep
   workflow_dispatch:
     inputs:
       task:
@@ -26,7 +25,7 @@ on:
         required: false
         default: 'all'
         type: choice
-        options: [all, tool-update, version-check, completeness, auto-merge]
+        options: [all, tool-update, version-check, completeness]
       create_issues:
         description: 'Create GitHub issues for outdated tools (version-check task only)'
         required: false
@@ -64,6 +63,15 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+
+      - name: Set up uv
+        # Only for `uv lock` in the relock step below. Nothing here installs the
+        # project, so there is no uv cache worth saving (and Python is already
+        # set up above).
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          enable-cache: false
 
       - name: Install dependencies
         run: |
@@ -166,11 +174,60 @@ jobs:
       - name: Update pre-commit hooks
         run: |
           echo "Updating pre-commit hook versions..."
-          # TODO(issue-#1435): move ruff/mypy hook and lock together (pin-pair guard)
           pre-commit autoupdate
 
           # Apply any formatting changes from updated hooks
           pre-commit run --all-files || true
+
+      - name: Relock the tools pre-commit and uv.lock both pin
+        # The pin-pair guard (tests/unit/test_toolchain_version_agreement.py)
+        # fails when a pre-commit hook and uv.lock pin different versions of the
+        # same tool. `pre-commit autoupdate` just moved the hook revs, so move the
+        # lock to the same versions in the same PR. The tool list is that guard's:
+        # every hook whose id is also a package in uv.lock (ruff, mypy, bandit).
+        # Exact `==` pins, so nothing else in the lock moves. `revs[tool]` raises
+        # if a hook is renamed, failing the step loudly.
+        #
+        # Only tools whose rev differs from the lock are relocked, and `uv lock`
+        # is skipped when none does: `uv lock --upgrade-package` re-resolves and
+        # rewrites the file even for an unchanged version, and this job's uv
+        # (0.11.15) writes `revision = 3` over the committed `revision = 5`.
+        # Without the skip every quiet week would carry a one-line lock diff and
+        # open a PR.
+        run: |
+          pins=$(python3 - <<'PY'
+          import re
+          import tomllib
+
+          import yaml
+
+          TOOLS = ("ruff", "mypy", "bandit")
+          with open(".pre-commit-config.yaml", encoding="utf-8") as fh:
+              config = yaml.safe_load(fh)
+          revs = {}
+          for repo in config["repos"]:
+              if repo["repo"] == "local":
+                  continue
+              for hook in repo.get("hooks", []):
+                  revs[hook["id"]] = re.sub(r"^v", "", str(repo["rev"]))
+          with open("uv.lock", "rb") as fh:
+              locked = {p["name"]: p["version"] for p in tomllib.load(fh)["package"]}
+          for tool in TOOLS:
+              if locked[tool] != revs[tool]:
+                  print(f"{tool}=={revs[tool]}")
+          PY
+          )
+          if [ -z "$pins" ]; then
+            echo "uv.lock already matches the hook revs; nothing to relock."
+            exit 0
+          fi
+          echo "Relocking: $pins"
+
+          args=()
+          for pin in $pins; do
+            args+=(--upgrade-package "$pin")
+          done
+          uv lock "${args[@]}"
 
       - name: Commit changes
         id: commit
@@ -183,7 +240,7 @@ jobs:
           git checkout -b "$BRANCH"
 
           # Stage changes
-          git add versions.yaml Dockerfile .pre-commit-config.yaml
+          git add versions.yaml Dockerfile .pre-commit-config.yaml uv.lock
           # Stage any files reformatted by updated hooks
           git add -u -- scripts/ tests/ hooks/
 
@@ -199,6 +256,7 @@ jobs:
           chore(deps): weekly auto-update of security tools and pre-commit hooks
 
           Automated weekly update of security tools and pre-commit hooks.
+          uv.lock moves ruff, mypy and bandit to their new hook revs.
           COMMIT_MSG
 
           # Commit changes
@@ -210,19 +268,30 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Ensure auto-merge-ok label exists
-        # Self-healing: `gh pr create --label auto-merge-ok` hard-fails if the
-        # label is missing from the repo, which broke the weekly tool-update
-        # cron silently for 2+ Sundays in a row before being noticed. `--force`
-        # creates if missing, updates if present — idempotent + cheap.
+      - name: Close superseded tool-update PRs
+        # Each week's PR replaces the last. Without this a stale branch of older
+        # bumps stays open next to the new one and the routine has two PRs to
+        # judge. The branch pushed in this run is skipped, as are fork PRs.
         if: steps.commit.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
         run: |
-          gh label create 'auto-merge-ok' \
-            --description 'PR eligible for soak-window auto-merge (24h soak, requires green CI)' \
-            --color '0E8A16' \
-            --force
+          stale=$(gh pr list --state open --limit 100 \
+            --json number,headRefName,isCrossRepository \
+            --jq '.[]
+              | select(.isCrossRepository | not)
+              | select(.headRefName | startswith("auto-update-deps-"))
+              | [.number, .headRefName] | @tsv')
+
+          while IFS=$'\t' read -r number head; do
+            [ -n "$number" ] || continue
+            [ "$head" != "$BRANCH" ] || continue
+            echo "Closing #$number ($head): superseded by $BRANCH"
+            gh pr close "$number" \
+              --comment "Superseded by this week's tool update." \
+              --delete-branch
+          done <<< "$stale"
 
       - name: Create Pull Request
         if: steps.commit.outputs.has_changes == 'true'
@@ -244,17 +313,16 @@ jobs:
             echo ""
             echo "- **Security tools**: \`update_versions.py --update-all --level=$BUMP_LEVEL\`, Dockerfile synced"
             echo "- **Pre-commit hooks**: \`pre-commit autoupdate\`, formatting applied"
+            echo "- **uv.lock**: ruff, mypy and bandit relocked to their new hook revs"
+            echo "  (\`uv lock --upgrade-package\`), so the two pins agree"
             echo ""
-            echo "### Auto-Merge Policy"
+            echo "### Merge Policy"
             echo ""
-            echo "Labeled \`auto-merge-ok\`. A separate soak-window job runs every 6 hours"
-            echo "and merges this PR once it is at least 24h old, all required status"
-            echo "checks (including \`tool-contract-tests\`) are green, and the"
-            echo "\`auto-merge-ok\` label is still present."
+            echo "Targets \`dev\`. Nothing in GitHub Actions merges this PR, and a PR opened"
+            echo "with \`GITHUB_TOKEN\` gets no CI run of its own. The weekly maintenance"
+            echo "routine runs CI against it and merges it only when that run is green."
             echo ""
-            echo "To cancel auto-merge, remove the \`auto-merge-ok\` label. To force an"
-            echo "immediate merge, run the workflow manually with \`task=auto-merge\` and"
-            echo "\`--min-age-hours 0\`."
+            echo "Any older open \`auto-update-deps-*\` PR was closed as superseded."
             echo ""
             if [ -f classify_before.json ]; then
               echo "<details><summary>Bumps in this PR (from \`--classify\`)</summary>"
@@ -276,15 +344,14 @@ jobs:
           gh pr create \
             --title "chore(deps): weekly auto-update $(date +%Y-%m-%d) (level=$BUMP_LEVEL)" \
             --body-file pr_body.txt \
-            --base main \
+            --base dev \
             --head "$BRANCH" \
             --label "dependencies" \
-            --label "automated" \
-            --label "auto-merge-ok"
+            --label "automated"
 
-          # NOTE: `gh pr merge --auto --squash` is intentionally NOT called
-          # here. The soak-window job (auto-merge-tool-bumps, cron */6h)
-          # owns the merge decision now — see docs/RELEASE.md.
+          # NOTE: auto-merge is intentionally NOT enabled here. The weekly
+          # maintenance routine owns the merge, after a CI run it dispatched
+          # is green — see docs/RELEASE.md.
 
       - name: Clean up branch if PR creation failed
         # Transactional cleanup: if `git push origin "$BRANCH"` succeeded but
@@ -322,9 +389,8 @@ jobs:
               echo "**Pull request opened**"
               echo ""
               echo "- Branch: \`$BRANCH\`"
-              echo "- Labels: \`dependencies\`, \`automated\`, \`auto-merge-ok\`"
-              echo "- Soak window: 24h (soak job runs every 6 hours)"
-              echo "- Required gate: \`tool-contract-tests\` must pass"
+              echo "- Labels: \`dependencies\`, \`automated\`"
+              echo "- Base: \`dev\`; merged by the weekly maintenance routine after its CI run is green"
               echo ""
               if [ "$UPDATES_AVAILABLE" = "true" ]; then
                 echo "- Security tools: updated at level \`${BUMP_LEVEL:-minor}\`"
@@ -640,38 +706,3 @@ jobs:
               repo: context.repo.repo,
               body: summary
             });
-
-  # ─── Soak-Window Auto-Merge ──────────────────────────────────────────────────
-  # Runs: every 6 hours (cron '0 */6 * * *') OR manual dispatch with task=auto-merge
-  #
-  # Finds open PRs labeled `dependencies,automated,auto-merge-ok`, and:
-  #   * merges any that are >= 24h old with all required checks green
-  #   * flips failures to `needs-review` with an explanatory comment
-  #   * leaves everything else alone
-  #
-  # The real decision logic lives in scripts/dev/auto_merge_tool_bumps.py and
-  # is unit-tested in tests/unit/test_auto_merge_tool_bumps.py.
-  auto-merge-tool-bumps:
-    name: Soak-window auto-merge for tool bumps
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    if: >-
-      (github.event_name == 'schedule' && github.event.schedule == '0 */6 * * *') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'auto-merge')
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-
-      - name: Run soak-window sweep
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 scripts/dev/auto_merge_tool_bumps.py --min-age-hours 24
