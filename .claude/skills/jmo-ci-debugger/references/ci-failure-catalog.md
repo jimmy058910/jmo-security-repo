@@ -667,11 +667,11 @@ echo "Pre-push checks passed!"
 Configure Dependabot to run at predictable times (already configured in `.github/dependabot.yml`):
 
 ```yaml
-# Run weekly Monday 9 AM UTC (after weekend development settles)
+# Run weekly Monday 4 AM UTC (before the weekly maintenance routine)
 schedule:
   interval: "weekly"
   day: "monday"
-  time: "09:00"
+  time: "04:00"
 ```
 
 ### Layer 3: Contributor Documentation

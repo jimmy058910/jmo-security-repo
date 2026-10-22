@@ -529,7 +529,7 @@ This ensures scans use exactly the versions specified in `versions.yaml`.
 
 ### Review Process
 
-1. Dependabot creates PR weekly (Monday 09:00 UTC)
+1. Dependabot creates PR weekly (Monday 04:00 UTC)
 2. Auto-labels: `dependencies`, `python|docker|ci`
 3. Auto-requests review from `jimmy058910`
 4. Groups minor/patch updates to reduce noise

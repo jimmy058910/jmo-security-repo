@@ -111,9 +111,9 @@ jobs:
         # `administration: read` which GITHUB_TOKEN doesn't grant by default.
         # If the API call fails (insufficient scope), warn and proceed —
         # `gh pr create`'s own error message is the next layer of defense.
-        # The label-create step (PR #396) and orphan-branch cleanup step
-        # already exist for the latent-failure path; this is purely a UX
-        # improvement on the first 5 seconds of the job.
+        # The orphan-branch cleanup step already exists for the latent-failure
+        # path; this is purely a UX improvement on the first 5 seconds of the
+        # job.
         #
         # Background: run 26347764859 (2026-05-23) hit this — setting was OFF
         # so PR creation failed at step 12. Re-enabling at the UI fixed it.
@@ -260,7 +260,7 @@ jobs:
           chore(deps): weekly auto-update of security tools and pre-commit hooks
 
           Automated weekly update of security tools and pre-commit hooks.
-          uv.lock moves ruff, mypy and bandit to their new hook revs.
+          When a ruff, mypy or bandit hook rev moved, uv.lock moves to match.
           COMMIT_MSG
 
           # Commit changes
@@ -271,37 +271,6 @@ jobs:
 
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-
-      - name: Close superseded tool-update PRs
-        # Each week's PR replaces the last. Without this a stale branch of older
-        # bumps stays open next to the new one and the routine has two PRs to
-        # judge. The branch pushed in this run is skipped, as are fork PRs.
-        # Housekeeping only: a failure here must not cost this week's PR (a
-        # failed step skips "Create Pull Request" and deletes the new branch),
-        # so every gh call below warns and carries on.
-        if: steps.commit.outputs.has_changes == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ steps.commit.outputs.branch }}
-        run: |
-          stale=$(gh pr list --state open --limit 100 \
-            --json number,headRefName,isCrossRepository \
-            --jq '.[]
-              | select(.isCrossRepository | not)
-              | select(.headRefName | startswith("auto-update-deps-"))
-              | [.number, .headRefName] | @tsv') || {
-            echo "::warning::could not list open PRs; superseded PRs were not closed"
-            exit 0
-          }
-
-          while IFS=$'\t' read -r number head; do
-            [ -n "$number" ] || continue
-            [ "$head" != "$BRANCH" ] || continue
-            echo "Closing #$number ($head): superseded by $BRANCH"
-            gh pr close "$number" \
-              --comment "Superseded by this week's tool update." \
-              --delete-branch || echo "::warning::could not close #$number"
-          done <<< "$stale"
 
       - name: Create Pull Request
         if: steps.commit.outputs.has_changes == 'true'
@@ -323,8 +292,8 @@ jobs:
             echo ""
             echo "- **Security tools**: \`update_versions.py --update-all --level=$BUMP_LEVEL\`, Dockerfile synced"
             echo "- **Pre-commit hooks**: \`pre-commit autoupdate\`, formatting applied"
-            echo "- **uv.lock**: ruff, mypy and bandit relocked to their new hook revs"
-            echo "  (\`uv lock --upgrade-package\`), so the two pins agree"
+            echo "- **uv.lock**: when a ruff, mypy or bandit hook rev moved, the lock moves"
+            echo "  to match (\`uv lock --upgrade-package\`), so the two pins agree"
             echo ""
             echo "### Merge Policy"
             echo ""
@@ -332,7 +301,8 @@ jobs:
             echo "with \`GITHUB_TOKEN\` gets no CI run of its own. The weekly maintenance"
             echo "routine runs CI against it and merges it only when that run is green."
             echo ""
-            echo "Any older open \`auto-update-deps-*\` PR was closed as superseded."
+            echo "Any older open \`auto-update-deps-*\` PR is closed as superseded once this"
+            echo "PR is open."
             echo ""
             if [ -f classify_before.json ]; then
               echo "<details><summary>Bumps in this PR (from \`--classify\`)</summary>"
@@ -380,6 +350,47 @@ jobs:
             git push origin --delete "$BRANCH" || \
               echo "::warning::Could not delete branch '$BRANCH' — manual cleanup may be needed"
           fi
+
+      - name: Close superseded tool-update PRs
+        # Each week's PR replaces the last; without this a stale branch of older
+        # bumps stays open next to the new one and the routine has two PRs to
+        # judge. Same `if:` as "Create Pull Request", so it runs only once the
+        # new PR is open: a failed create leaves last week's PR alone instead of
+        # leaving none. It also follows the orphan-branch cleanup, which deletes
+        # the new branch on any earlier failure, so nothing here can reach it.
+        # The branch pushed in this run is skipped, as are fork PRs.
+        # Housekeeping only: a failure here must not turn a good week red, so
+        # every gh call below warns and carries on.
+        if: steps.commit.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+        run: |
+          if new=$(gh pr view "$BRANCH" --json number --jq .number); then
+            by="#$new"
+          else
+            echo "::warning::could not look up the new PR's number"
+            by="this week's tool update"
+          fi
+
+          stale=$(gh pr list --state open --limit 100 \
+            --json number,headRefName,isCrossRepository \
+            --jq '.[]
+              | select(.isCrossRepository | not)
+              | select(.headRefName | startswith("auto-update-deps-"))
+              | [.number, .headRefName] | @tsv') || {
+            echo "::warning::could not list open PRs; superseded PRs were not closed"
+            exit 0
+          }
+
+          while IFS=$'\t' read -r number head; do
+            [ -n "$number" ] || continue
+            [ "$head" != "$BRANCH" ] || continue
+            echo "Closing #$number ($head): superseded by $by"
+            gh pr close "$number" \
+              --comment "Superseded by $by." \
+              --delete-branch || echo "::warning::could not close #$number"
+          done <<< "$stale"
 
       - name: Summary
         if: always()

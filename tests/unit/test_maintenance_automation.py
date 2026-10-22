@@ -107,3 +107,23 @@ def test_only_the_weekly_job_moves_ruff_mypy_and_bandit() -> None:
         (eco,) = _dependabot(ecosystem)
         ignored = {i["dependency-name"] for i in eco.get("ignore", [])}
         assert expected <= ignored, (ecosystem, sorted(expected - ignored))
+
+
+def test_superseded_prs_are_closed_after_the_new_one_opens() -> None:
+    """Last week's PR is closed only once this week's PR exists.
+
+    Closing first leaves no open tool PR at all when `gh pr create` fails. The
+    orphan-branch cleanup must also come before the close step: it fires on any
+    earlier failure and deletes the new branch, which would take the new PR with
+    it if a failure inside the close step could reach it.
+    """
+    runs = [step.get("run", "") for step in _job_steps("auto-update-tools")]
+    create = next(
+        i
+        for i, run in enumerate(runs)
+        if re.search(r"^\s*gh pr create\b", run, re.MULTILINE)
+    )
+    cleanup = next(i for i, run in enumerate(runs) if "git push origin --delete" in run)
+    close = next(i for i, run in enumerate(runs) if "gh pr close" in run)
+
+    assert create < cleanup < close

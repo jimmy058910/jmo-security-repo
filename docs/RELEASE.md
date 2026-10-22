@@ -101,7 +101,8 @@ gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=all
 
 > The tool-update PR now targets `dev`, which has no required checks, so
 > this rule does not gate that PR; the routine's own read of the CI run does.
-> It still gates anything that targets `main`.
+> `main`'s ruleset (9147592) does not require `tool-contract-tests` either
+> (checked 2026-10-22), so the rule below is not in force today.
 
 The contract-test gate only has teeth when `tool-contract-tests` is a
 required status check:
@@ -123,10 +124,12 @@ required status check:
 ### Known transient behavior
 
 Weekly, a patch/minor bump opens **both** an auto-PR (Sun 00:00) and a
-tracking issue (Sun 02:00). This overlap lasts until the routine merges the
-PR; the issue then auto-closes. Not a bug — the issue dashboard is a
-complete picture of outstanding work, and the overlap window is the
-trade-off for not filtering `--create-issues` by bump level.
+tracking issue (Sun 02:00). The version check reads `main`, so the overlap
+lasts at least until the bump reaches `main` (the PR merges into `dev` first).
+The `Update <tool>` issue then stays open until a newer release replaces it:
+`update_versions.py` closes one only when it files a newer one. Not a bug — the
+issue dashboard is a complete picture of outstanding work, and the overlap
+window is the trade-off for not filtering `--create-issues` by bump level.
 
 ---
 
