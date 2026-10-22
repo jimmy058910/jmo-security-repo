@@ -157,9 +157,9 @@ Every CI job that needs the dev environment uses the same block:
 
 ```yaml
 - name: Set up uv
-  uses: astral-sh/setup-uv@v9.0.0
+  uses: astral-sh/setup-uv@v10.3.0
   with:
-    version: "0.11.15"
+    version: "0.13.1"
     python-version: '3.12'
     enable-cache: true
     cache-dependency-glob: "uv.lock"
@@ -206,7 +206,7 @@ Check that `uv.lock` still carries the relevant platform markers and wheels. `te
 
 ### `uv: command not found`
 
-Every Make target installs the pinned version if it is missing. To do it by hand: `python -m pip install uv==0.11.15`.
+Every Make target installs the pinned version if it is missing. To do it by hand: `python -m pip install uv==0.13.1`.
 
 ---
 

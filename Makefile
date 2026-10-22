@@ -255,18 +255,18 @@ upgrade-pip:
 # never merge. A local hard-fail would add a manual step protecting nothing the
 # CI gate does not already cover.
 deps-sync:
-	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.11.15  # pinned (PR #488)
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.13.1  # pinned (PR #488)
 	uv sync --group dev
 
 deps-lock:
-	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.11.15  # pinned (PR #488)
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.13.1  # pinned (PR #488)
 	uv lock
 
 deps-upgrade:
 	@echo "WARNING: This will upgrade ALL locked dependencies to latest compatible versions"
 	@echo "Press Ctrl+C to cancel, or Enter to continue..."
 	@read dummy
-	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.11.15  # pinned (PR #488)
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.13.1  # pinned (PR #488)
 	uv lock --upgrade
 
 pre-commit-install:

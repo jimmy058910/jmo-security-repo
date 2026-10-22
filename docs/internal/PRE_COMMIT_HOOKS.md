@@ -90,7 +90,7 @@ Once installed, hooks run automatically:
 **Behavior:**
 
 1. Triggers when `pyproject.toml` or `uv.lock` is modified
-2. Installs the pinned `uv==0.11.15` if `uv` is not already available
+2. Installs the pinned `uv==0.13.1` if `uv` is not already available
 3. Runs `uv lock --check`
 4. Fails the commit if the lock is stale
 
@@ -262,7 +262,7 @@ make pre-commit-install
 **Fix:**
 
 ```bash
-python -m pip install uv==0.11.15   # pinned: matches every other site
+python -m pip install uv==0.13.1   # pinned: matches every other site
 uv --version
 ```
 
