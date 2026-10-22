@@ -389,11 +389,15 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
+        # -rfER keeps pytest's default summary (f, E) and adds R, which names
+        # every test that needed a rerun. Without it a test that fails and then
+        # passes on retry shows only as "1 rerun" in the totals, with no id.
         run: |
           python -m pytest -q \
             --disable-warnings \
             --reruns 2 \
             --reruns-delay 2 \
+            -rfER \
             --splits ${{ matrix.total-shards }} \
             --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
@@ -412,6 +416,7 @@ jobs:
             --disable-warnings \
             --reruns 2 \
             --reruns-delay 2 \
+            -rfER \
             -p no:xdist \
             -m "not smoke and not requires_tools and not docker"
 
