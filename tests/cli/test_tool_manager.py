@@ -1418,10 +1418,17 @@ class TestInstalledToolWithoutAVersionIsNotOK:
         assert status.execution_warning and "checkov" in status.execution_warning
 
     def test_isolated_tool_with_a_version_is_still_ok(self, monkeypatch):
-        """The guard must not condemn a healthy isolated install."""
-        from scripts.cli.tool_manager import ToolStatusType
+        """The guard must not condemn a healthy isolated install.
 
-        status = self._check(monkeypatch, "checkov", "3.3.16")
+        Healthy means the pinned version, read the way `check_tool` reads it.
+        A literal goes OUTDATED the day versions.yaml moves checkov: #1440's
+        3.3.16 -> 3.3.29 turned this red on main while the guard was fine.
+        """
+        from scripts.cli.tool_manager import ToolManager, ToolStatusType
+
+        info = ToolManager().registry.get_tool("checkov")
+        assert info is not None and info.version, "versions.yaml no longer pins checkov"
+        status = self._check(monkeypatch, "checkov", info.version)
 
         assert status.status_type is ToolStatusType.OK
         assert status.execution_ready is True
