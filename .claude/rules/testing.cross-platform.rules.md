@@ -66,6 +66,7 @@ assert is_command_not_found_error(stderr)  # True if "not found" on Unix, "canno
 | File locking | More aggressive | Close files before deletion |
 | Process spawning | Different error codes | Test `!= 0`, not specific codes |
 | TEMP directory | Uses `%TEMP%` | `Path.home() / "AppData" / "Local" / "Temp"` |
+| Long `--basetemp` | git object paths pass 260 chars: `test_clone_from_tsv.py`'s two push tests failed at a 238-char basetemp, 66 passed at a short one (2026-10-17) | Keep `--basetemp` short |
 
 ## Windows CI Architecture
 
