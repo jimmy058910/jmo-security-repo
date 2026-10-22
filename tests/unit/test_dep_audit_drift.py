@@ -42,7 +42,7 @@ RETIRED_IGNORES = {
 }
 
 # The single pinned uv version. Bump here and at every site in one commit.
-PINNED_UV_VERSION = "0.11.15"
+PINNED_UV_VERSION = "0.13.1"
 
 # Every file that pins a uv version. All must agree.
 UV_PIN_SITES = (
@@ -124,12 +124,12 @@ def test_single_pinned_uv_version_across_all_sites() -> None:
         uses_setup_uv = "astral-sh/setup-uv" in text
 
         for lineno, line in enumerate(text.splitlines(), start=1):
-            # Form 1: `uv==0.11.15` (pip install)
+            # Form 1: `uv==0.13.1` (pip install)
             for found in re.findall(r"uv==(\d+\.\d+\.\d+)", line):
                 if found != PINNED_UV_VERSION:
                     mismatches.append(f"{rel}:{lineno} pins uv=={found}")
 
-            # Form 2: setup-uv's `version: "0.11.15"` input. Only meaningful in
+            # Form 2: setup-uv's `version: "0.13.1"` input. Only meaningful in
             # a file that actually uses setup-uv; other `version:` keys (e.g.
             # tool versions in env blocks) are unrelated.
             m = re.match(r'\s*version:\s*"(\d+\.\d+\.\d+)"\s*(?:#.*)?$', line)

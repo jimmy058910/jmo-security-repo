@@ -74,7 +74,7 @@ jobs:
         # set up above).
         uses: astral-sh/setup-uv@v10.3.0
         with:
-          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           enable-cache: false
 
       - name: Install dependencies
@@ -193,11 +193,10 @@ jobs:
         # if a hook is renamed, failing the step loudly.
         #
         # Only tools whose rev differs from the lock are relocked, and `uv lock`
-        # is skipped when none does: `uv lock --upgrade-package` re-resolves and
-        # rewrites the file even for an unchanged version, and this job's uv
-        # (0.11.15) writes `revision = 3` over the committed `revision = 5`.
-        # Without the skip every quiet week would carry a one-line lock diff and
-        # open a PR.
+        # is skipped when none does, so a quiet week opens no PR and re-resolves
+        # nothing. (Under uv 0.11.15 even an unchanged relock rewrote the header
+        # to `revision = 3`; under the pinned 0.13.1, which writes this lock, it
+        # leaves the file byte-identical.)
         run: |
           pins=$(python3 - <<'PY'
           import re
@@ -604,7 +603,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.3.0
         with:
-          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
           enable-cache: true
           cache-dependency-glob: "uv.lock"

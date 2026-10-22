@@ -178,7 +178,7 @@ repos:
             if command -v "$p" >/dev/null 2>&1 && "$p" --version >/dev/null 2>&1; then PY="$p"; break; fi;
           done;
           [ -z "$PY" ] && { echo "ERROR: Python not found"; exit 1; };
-          command -v uv >/dev/null 2>&1 || $PY -m pip install --quiet uv==0.11.15;
+          command -v uv >/dev/null 2>&1 || $PY -m pip install --quiet uv==0.13.1;
           uv lock --check ||
           { echo "ERROR: uv.lock is out of date with pyproject.toml.
           Run: make deps-lock"; exit 1; }'
