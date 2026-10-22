@@ -922,6 +922,34 @@ class TestFindBinary:
 
         assert result == str(zap_sh)
 
+    @pytest.mark.parametrize(
+        ("platform", "launcher"),
+        [("linux", "zap.sh"), ("macos", "zap.sh"), ("windows", "zap.bat")],
+    )
+    @pytest.mark.parametrize("binary_name", ["zap.sh", "zap.bat"])
+    def test_find_zap_picks_this_platforms_launcher(
+        self, tmp_path, monkeypatch, platform, launcher, binary_name
+    ):
+        """ZAP's cross-platform zip ships both launchers side by side.
+
+        `jmo tools install zap` extracts it to ~/.jmo/bin/zap/, so both are
+        always there. Checking zap.bat first returned it on Linux, where it
+        cannot run: the version probe failed and `jmo tools check` read zap
+        FAILED (measured 2026-10-21, Debian 13, ZAP 2.17.0).
+        """
+        from scripts.cli.tool_manager import ToolManager
+
+        zap_dir = tmp_path / ".jmo" / "bin" / "zap"
+        zap_dir.mkdir(parents=True)
+        for name in ("zap.bat", "zap.sh"):
+            (zap_dir / name).touch()
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        manager = ToolManager()
+        manager.platform = platform
+
+        assert manager._find_binary(binary_name) == str(zap_dir / launcher)
+
 
 # #1283. Two misreads, one symptom. In the image the JVM prints a four-part Java
 # version first, and the zap pattern read "0.20.1" out of "17.0.20.1". On a host,
