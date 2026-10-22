@@ -375,6 +375,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`opentelemetry-api` 1.44.0's CVE-2026-114603 failing the `quick-checks` pip-audit gate.**
+  The advisory ([GHSA-xcq7-p3pf-p88h](https://github.com/advisories/GHSA-xcq7-p3pf-p88h),
+  published 2026-10-22, fixed in 1.45.1) is quadratic-time parsing of a W3C `tracestate`
+  in `TraceState.from_header`. The package reaches the lock only through `mcp`, whose
+  server middleware (on by default in 2.2.0) extracts trace context from every request's
+  `_meta`, so `jmo mcp-server` did reach the parser, though over stdio only the client
+  that launched it can send one. A 100 KB `tracestate` took 6.7 s to parse on 1.44.0;
+  1.45.1 refuses anything over 8192 characters at once. The lock now holds
+  opentelemetry-api 1.45.1; nothing else moved.
 - **Under Python 3.13 on Windows and macOS, a tool that reads names exactly is no longer
   shown a file under a spelling it does not have (#1421).** Given no case rule, 3.13's
   glob tests a pattern's wildcard-free part with a stat and returns it spelled as the
