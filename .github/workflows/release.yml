@@ -350,7 +350,7 @@ jobs:
 
       - name: Install security tools (for pre-release checks)
         env:
-          TRUFFLEHOG_VERSION: "3.97.1"  # Pin per versions.yaml — see release.rules.md
+          TRUFFLEHOG_VERSION: "3.99.4"  # Pin per versions.yaml — see release.rules.md
         run: |
           # Install TruffleHog for secrets scanning
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
@@ -953,7 +953,7 @@ jobs:
 
       - name: Install syft (pinned)
         env:
-          SYFT_VERSION: "1.51.1"
+          SYFT_VERSION: "1.55.0"
         run: |
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
