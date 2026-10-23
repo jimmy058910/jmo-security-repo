@@ -1190,6 +1190,25 @@ def test_a_shortfall_and_a_partly_audited_lockfile_are_both_on_the_row(
     assert "partly audited: package-lock.json (1 npm package" in row.detail
 
 
+def test_a_failed_run_keeps_its_own_detail_beside_the_partly_audited_one(
+    tmp_path, monkeypatch
+) -> None:
+    _cache(tmp_path, monkeypatch, "npm")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "package-lock.json").write_bytes(_lock(OMITTED))
+
+    row = _run(repo, tmp_path, Scripted(lambda d, n: _failed(d, "it broke")))[
+        "osv-scanner"
+    ]
+
+    assert row.state is State.FAILED
+    # The run's own failure first, named by its lockfile; then what it left out.
+    failure, partial = row.detail.split("; partly audited: ")
+    assert failure == "package-lock.json: Return code 127 not in (0, 1)"
+    assert partial.startswith("package-lock.json (1 npm package has no `resolved`")
+
+
 # --- the frozen database and the real binary ----------------------------------
 
 
