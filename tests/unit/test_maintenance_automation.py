@@ -83,6 +83,31 @@ def test_weekly_tool_branch_is_built_from_dev() -> None:
     assert checkout.get("with", {}).get("ref") == "dev"
 
 
+def test_every_step_that_looks_up_releases_has_a_github_token() -> None:
+    """Each tool-update step that asks GitHub for a release carries GH_TOKEN.
+
+    `update_versions.py` looks up GitHub-hosted tools with `gh api`, and `gh`
+    refuses to run in Actions without GH_TOKEN (exit 4). The lookup reports that
+    as "Failed to check latest version", so the job still succeeds and its PR
+    still looks complete: 13 tools failed this way on the 2026-10-18 and
+    2026-10-23 runs, and only PyPI tools ever moved. The token belongs on each
+    step, not on the job, because the job also runs third-party pre-commit hooks.
+    `--sync` reads versions.yaml only and needs no token.
+    """
+    lookups = [
+        step
+        for step in _job_steps("auto-update-tools")
+        if re.search(
+            r"update_versions\.py --(check-latest|classify|update-all)\b",
+            step.get("run", ""),
+        )
+    ]
+
+    assert len(lookups) >= 3, [step.get("name") for step in lookups]
+    for step in lookups:
+        assert "GH_TOKEN" in step.get("env", {}), step["name"]
+
+
 def test_only_the_weekly_job_moves_ruff_mypy_and_bandit() -> None:
     """Dependabot must leave the pin pair to the weekly tool-update job (#1435).
 
