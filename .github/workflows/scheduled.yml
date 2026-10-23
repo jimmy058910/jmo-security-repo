@@ -87,9 +87,15 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      - name: Read tool pins from versions.yaml
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the install below reads it here instead (#1470).
+        id: pins
+        run: python3 scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
       - name: Install security tools
         env:
-          TRUFFLEHOG_VERSION: "3.99.4"  # Pin per versions.yaml — see release.rules.md
+          TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
         run: |
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
@@ -465,16 +471,21 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      - name: Read tool pins from versions.yaml
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the install below reads them here instead (#1470).
+        id: pins
+        run: python3 scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
       - name: Install smoke-test tools
         env:
-          # Pinned to versions.yaml. Update both files together when bumping.
-          # Avoids upstream install.sh GitHub-API "latest" lookups that have
-          # flaked in CI (see PR #350 + release.rules.md).
-          TRIVY_VERSION: "0.74.0"
-          GRYPE_VERSION: "0.118.0"
-          SYFT_VERSION: "1.55.0"
-          TRUFFLEHOG_VERSION: "3.99.4"
-          HADOLINT_VERSION: "2.15.1"
+          # Pinned, which avoids the upstream install.sh GitHub-API "latest"
+          # lookups that have flaked in CI (see PR #350 + release.rules.md).
+          TRIVY_VERSION: ${{ steps.pins.outputs.TRIVY_VERSION }}
+          GRYPE_VERSION: ${{ steps.pins.outputs.GRYPE_VERSION }}
+          SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
+          TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
+          HADOLINT_VERSION: ${{ steps.pins.outputs.HADOLINT_VERSION }}
         run: |
           # Install tools needed for smoke tests
           # Core SAST/SCA tools
@@ -672,9 +683,15 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      - name: Read tool pins from versions.yaml
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the install below reads it here instead (#1470).
+        id: pins
+        run: python3 scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
       - name: Install minimal security tools
         env:
-          TRUFFLEHOG_VERSION: "3.99.4"  # Pin per versions.yaml — see release.rules.md
+          TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
         run: |
           # Install semgrep for SAST testing
           pip install semgrep
@@ -1033,10 +1050,16 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      - name: Read tool pins from versions.yaml
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the install below reads them here instead (#1470).
+        id: pins
+        run: python3 scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
       - name: Install security tools for integration tests
         env:
-          TRIVY_VERSION: "0.74.0"  # Pin per versions.yaml
-          TRUFFLEHOG_VERSION: "3.99.4"
+          TRIVY_VERSION: ${{ steps.pins.outputs.TRIVY_VERSION }}
+          TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
         run: |
           # Semgrep - for SQL injection detection tests
           pip install semgrep
@@ -1130,19 +1153,25 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      - name: Read tool pins from versions.yaml
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the install below reads them here instead (#1470).
+        id: pins
+        run: python3 scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
       - name: Install security tools for contract tests
         env:
-          # Pinned to versions.yaml — kept in sync with ci.yml's
-          # tool-contract-tests block. Any drift means the weekly and
-          # PR gates disagree.
-          TRIVY_VERSION: "0.74.0"
-          TRUFFLEHOG_VERSION: "3.99.4"
-          HADOLINT_VERSION: "2.15.1"
-          GRYPE_VERSION: "0.118.0"
-          SYFT_VERSION: "1.55.0"
-          GITLEAKS_VERSION: "8.30.1"
-          ZIZMOR_VERSION: "1.31.1"
-          OSV_SCANNER_VERSION: "2.7.0"
+          # The same versions as ci.yml's tool-contract-tests, since both read
+          # versions.yaml. The commands are kept in sync with that block by
+          # hand; any drift means the weekly and PR gates disagree.
+          TRIVY_VERSION: ${{ steps.pins.outputs.TRIVY_VERSION }}
+          TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
+          HADOLINT_VERSION: ${{ steps.pins.outputs.HADOLINT_VERSION }}
+          GRYPE_VERSION: ${{ steps.pins.outputs.GRYPE_VERSION }}
+          SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
+          GITLEAKS_VERSION: ${{ steps.pins.outputs.GITLEAKS_VERSION }}
+          ZIZMOR_VERSION: ${{ steps.pins.outputs.ZIZMOR_VERSION }}
+          OSV_SCANNER_VERSION: ${{ steps.pins.outputs.OSV_SCANNER_VERSION }}
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner

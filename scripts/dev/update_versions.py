@@ -22,7 +22,8 @@ Usage:
   # Update specific tool
   python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
-  # Sync all Dockerfiles AND .github/workflows/*.yml env: blocks from versions.yaml
+  # Sync the Dockerfile from versions.yaml (the workflows read it at run time,
+  # through scripts/dev/tool_pins.py, so --sync fails if one carries a copy)
   python3 scripts/dev/update_versions.py --sync
 
   # Generate version consistency report
@@ -55,6 +56,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -82,16 +84,14 @@ if __package__ in (None, ""):  # pragma: no cover - only on direct execution
 
 from scripts.core.unicode_utils import harden_console_streams  # noqa: E402
 
-VERSIONS_YAML = REPO_ROOT / "versions.yaml"
-# versions.yaml key -> the variable stem actually used in the Dockerfile and
-# workflow env: blocks, where `key.upper()` does not produce it. Deriving the
-# name silently misses abbreviations and hyphens: `noseyparker` was pinned as
-# NP_VERSION and `dependency-check` as DC_VERSION, so both were unreachable by
-# --sync and stayed correct only by luck (#797). Both left in v2.0.0.
-# `osv-scanner` uppercases to OSV-SCANNER, which is no shell variable.
-VERSION_VAR_ALIASES: dict[str, str] = {"osv-scanner": "OSV_SCANNER"}
+# The variable stem of each pin, where `key.upper()` does not produce it. It
+# lives with the reader the workflows run, so the Dockerfile and the workflows
+# cannot name a pin two ways.
+from scripts.dev.tool_pins import VERSION_VAR_ALIASES  # noqa: E402
 
-# Registry entries deliberately not pinned in the image or any workflow, so
+VERSIONS_YAML = REPO_ROOT / "versions.yaml"
+
+# Registry entries deliberately not pinned in the image, so
 # having no match is correct rather than a defect. The manual-install tools
 # that needed this left in v2.0.0; every remaining entry ships in the image.
 UNPINNED_BY_DESIGN: set[str] = set()
@@ -99,6 +99,7 @@ UNPINNED_BY_DESIGN: set[str] = set()
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 INSTALL_TOOLS = REPO_ROOT / "scripts" / "dev" / "install_tools.sh"
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
+ACTIONS_DIR = REPO_ROOT / ".github" / "actions"
 
 # ANSI colors
 BLUE = "\033[0;34m"
@@ -737,28 +738,109 @@ def update_tool_version(tool: str, new_version: str) -> bool:
     return True
 
 
+# A version literal in a step that downloads a registry tool's release: how a
+# short alias (`v="3.94.3"`) or an inline URL carries a pin no name gives away.
+_DOTTED_VERSION = re.compile(r"(?<![\w.])v?[0-9]+\.[0-9]+\.[0-9]+(?![\w.])")
+
+
+def _workflow_files() -> list[Path]:
+    """The workflows and local actions, every file that runs a step in CI."""
+    files = sorted(WORKFLOWS_DIR.glob("*.y*ml")) if WORKFLOWS_DIR.exists() else []
+    if ACTIONS_DIR.exists():
+        files += sorted(ACTIONS_DIR.glob("*/action.y*ml"))
+    return files
+
+
+def _step_texts(node: Any, path: str = "") -> Iterator[tuple[str, str]]:
+    """Yield `(location, text)` for every mapping that holds a `run` or `env`.
+
+    The text is the `env` entries as `NAME: value` lines plus the `run` script
+    without its comment lines, so a comment that cites an old version is not a pin.
+    """
+    if isinstance(node, dict):
+        lines = []
+        env = node.get("env")
+        if isinstance(env, dict):
+            lines += [f"{key}: {value}" for key, value in env.items()]
+        run = node.get("run")
+        if isinstance(run, str):
+            lines += [ln for ln in run.splitlines() if not ln.lstrip().startswith("#")]
+        if lines:
+            where = path or "top level"
+            name = node.get("name") if path else None
+            yield (f"{where} ({name})" if name else where), "\n".join(lines)
+        for key, value in node.items():
+            yield from _step_texts(value, f"{path}.{key}" if path else str(key))
+    elif isinstance(node, list):
+        for i, item in enumerate(node):
+            yield from _step_texts(item, f"{path}[{i}]")
+
+
+def find_workflow_literal_pins(
+    versions: dict[str, Any], files: list[Path] | None = None
+) -> list[str]:
+    """Every copy of a versions.yaml pin in a workflow or local action.
+
+    The workflows read their pins at run time through `scripts/dev/tool_pins.py`,
+    because the weekly tool-update job may not push `.github/workflows/` and so
+    can never move a copy (#1470). Three shapes are caught: a variable named for
+    the tool (`TRIVY_VERSION: "0.74.0"`, `TRIVY_VERSION=0.74.0`), a pip pin
+    (`checkov==3.3.30`), and any version literal in a step that downloads a
+    registry tool's GitHub release. Returns one `file: location: text` per copy.
+    """
+    named: list[str] = []
+    downloads: list[str] = []
+    for section in ("python_tools", "binary_tools", "special_tools"):
+        for tool, info in (versions.get(section) or {}).items():
+            stem = VERSION_VAR_ALIASES.get(tool, tool.upper())
+            named.append(rf"\b{re.escape(stem)}_VERSION\s*[:=]\s*[\"']?v?[0-9][\w.]*")
+            pkg = info.get("pypi_package")
+            if isinstance(pkg, str) and pkg:
+                named.append(rf"(?<![\w.-]){re.escape(pkg)}==[0-9][\w.]*")
+            repo = info.get("github_repo")
+            if isinstance(repo, str) and repo:
+                downloads.append(f"github.com/{repo}/releases/download/")
+    named_pin = re.compile("|".join(named)) if named else None
+
+    copies: list[str] = []
+    for wf in files if files is not None else _workflow_files():
+        try:
+            shown = wf.relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            shown = wf.name
+        doc = yaml.safe_load(wf.read_text(encoding="utf-8"))
+        for where, text in _step_texts(doc):
+            hits = [m.group(0) for m in named_pin.finditer(text)] if named_pin else []
+            if any(url in text for url in downloads):
+                # A literal a named hit already shows is the same copy.
+                hits += [
+                    v
+                    for v in _DOTTED_VERSION.findall(text)
+                    if not any(v in hit for hit in hits)
+                ]
+            copies += [f"{shown}: {where}: {hit}" for hit in dict.fromkeys(hits)]
+    return copies
+
+
 def sync_dockerfiles(dry_run: bool = False) -> bool:
-    """Sync the Dockerfile AND .github/workflows/*.yml `env:` blocks with versions.yaml.
+    """Sync the Dockerfile with versions.yaml, and refuse a pin copied into a workflow.
 
-    Two file families are kept in sync:
+    The Dockerfile carries shell-style `TOOL_VERSION="X.Y.Z"` pins and pip
+    `package==X.Y.Z` pins; both are rewritten here.
 
-    1. The `Dockerfile` — shell-style `TOOL_VERSION="X.Y.Z"` (no whitespace
-       around `=`).
-    2. GitHub Actions workflows (`.github/workflows/*.yml`) — YAML mapping form
-       `TOOL_VERSION: "X.Y.Z"` (colon + single space). Pinned env: blocks were
-       added in PR #358 to harden tool installs against upstream `install.sh`
-       GitHub-API "latest" lookup flakes; both files must move together when
-       `versions.yaml` is bumped.
-
-    The two regex patterns are kept distinct because a single permissive
-    pattern that matched both forms would risk corrupting YAML structure.
+    The workflows carry no pins: they read versions.yaml at run time through
+    `scripts/dev/tool_pins.py`. They used to hold copies that this function
+    rewrote, but the weekly tool-update job may not push `.github/workflows/`,
+    so its PR left every workflow-pinned bump behind until someone pushed the
+    edit by hand (#1470). A copy that comes back fails this function, in dry-run
+    and write mode alike, and is never rewritten.
     """
     versions = load_versions()
     all_success = True
     changes_needed = False
 
     log(
-        "Syncing Dockerfiles + workflows with versions.yaml..."
+        "Syncing the Dockerfile with versions.yaml..."
         + (" (dry-run)" if dry_run else "")
     )
 
@@ -829,35 +911,17 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         else:
             ok(f"{dockerfile_path.name} already in sync")
 
-    # Update workflow env: blocks (e.g., TRIVY_VERSION: "0.70.0")
-    workflow_files = (
-        sorted(WORKFLOWS_DIR.glob("*.yml")) if WORKFLOWS_DIR.exists() else []
-    )
-    for workflow_path in workflow_files:
-        content = workflow_path.read_text(encoding="utf-8")
-        original_content = content
-
-        for tool, (var_stem, _pypi, version) in version_map.items():
-            # Pattern: `<indent>TOOL_VERSION: "X.Y.Z"` (canonical YAML — single
-            # space after colon, double-quoted value). yamllint enforces the
-            # canonical spacing so we normalize on replace.
-            pattern = rf'{re.escape(var_stem)}_VERSION:\s+"[0-9.]+"'
-            content, n = re.subn(pattern, f'{var_stem}_VERSION: "{version}"', content)
-            if n:
-                matched.add(tool)
-
-        if content != original_content:
-            changes_needed = True
-            if dry_run:
-                warn(
-                    f".github/workflows/{workflow_path.name} needs updates (dry-run, not writing)"
-                )
-            else:
-                # newline="\n": keep LF on Windows (see #555).
-                workflow_path.write_text(content, encoding="utf-8", newline="\n")
-                ok(f"Updated .github/workflows/{workflow_path.name}")
-        else:
-            ok(f".github/workflows/{workflow_path.name} already in sync")
+    # The workflows read their pins from versions.yaml at run time, so --sync
+    # writes none of them. A copy in one is a pin the weekly job cannot move.
+    copies = find_workflow_literal_pins(versions)
+    if copies:
+        err(
+            f"{len(copies)} tool pin(s) hard-coded under .github/; read them "
+            "from versions.yaml with scripts/dev/tool_pins.py instead (#1470):"
+        )
+        for copy in copies:
+            err(f"  {copy}")
+        all_success = False
 
     # A registry entry that matched nothing anywhere is the failure this
     # function used to report as success. Reporting "already in sync" while a
@@ -866,9 +930,8 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
     unreachable = sorted(set(version_map) - matched - UNPINNED_BY_DESIGN)
     if unreachable:
         err(
-            f"{len(unreachable)} versions.yaml entr(ies) match no pin in any "
-            "Dockerfile or workflow, so --sync can never update them: "
-            + ", ".join(unreachable)
+            f"{len(unreachable)} versions.yaml entr(ies) match no pin in the "
+            "Dockerfile, so --sync can never update them: " + ", ".join(unreachable)
         )
         err(
             "Add the pin, add a VERSION_VAR_ALIASES entry, or list the tool in "
@@ -877,7 +940,7 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         all_success = False
 
     if dry_run and changes_needed:
-        err("Dockerfiles or workflows are out of sync with versions.yaml")
+        err("The Dockerfile is out of sync with versions.yaml")
         return False
 
     return all_success
@@ -1243,7 +1306,7 @@ def main() -> int:
     group.add_argument(
         "--sync",
         action="store_true",
-        help="Sync Dockerfiles AND .github/workflows/*.yml env: blocks with versions.yaml",
+        help="Sync the Dockerfile with versions.yaml; fails if a workflow hard-codes a pin",
     )
     group.add_argument(
         "--report", action="store_true", help="Generate version consistency report"
