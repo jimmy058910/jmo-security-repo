@@ -47,6 +47,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import subprocess
@@ -667,7 +668,10 @@ def _print_classification_json() -> int:
     deps, unreadable versions.yaml). Outdated-ness is not an error.
     """
     versions = load_versions()
-    results = check_latest_versions()
+    # The checks report progress with print(). Send it to stderr so stdout is
+    # the JSON alone: maintenance.yml writes stdout to classify_before.json.
+    with contextlib.redirect_stdout(sys.stderr):
+        results = check_latest_versions()
     manifest: dict[str, dict[str, Any]] = {}
 
     for tool, (current, latest, _is_outdated) in results.items():
