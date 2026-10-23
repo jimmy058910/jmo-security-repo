@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from scripts.core.adapters.zizmor_adapter import ZizmorAdapter
 from scripts.core.plugin_loader import PluginLoader, PluginRegistry
 
@@ -31,7 +33,11 @@ def test_parses_the_golden_document_with_the_binding_tags():
     findings = ZizmorAdapter().parse(GOLDEN)
     assert len(findings) == 217
     assert all(f.tool["name"] == "zizmor" for f in findings)
-    assert all(f.tool["version"] == "1.30.1" for f in findings)
+    # versions.yaml's pin, read rather than restated: the weekly update moves it.
+    pin = yaml.safe_load(Path("versions.yaml").read_text(encoding="utf-8"))
+    assert all(
+        f.tool["version"] == pin["binary_tools"]["zizmor"]["version"] for f in findings
+    )
     assert all({"github-actions", "workflow", "sarif"} <= set(f.tags) for f in findings)
     assert all("://" not in f.location["path"] for f in findings)
     # zizmor/severity, not level: level=note covers both Low and Informational.
