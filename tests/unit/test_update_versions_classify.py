@@ -9,6 +9,7 @@ exactly what the classifier exists to prevent.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -66,3 +67,39 @@ def test_classify_bump_handles_garbage() -> None:
     assert classify_bump("not-a-version", "1.0.0") == "unknown"
     assert classify_bump("1.0.0", "bananas") == "unknown"
     assert classify_bump("", "1.0.0") == "unknown"
+
+
+def test_classify_writes_only_json_to_stdout(monkeypatch, capsys) -> None:
+    """`--classify` prints the JSON alone on stdout; its progress goes to stderr.
+
+    maintenance.yml writes stdout to `classify_before.json` and pastes that file
+    into the weekly PR inside a JSON fence. The version checks report progress
+    with print(), and those lines, colour codes included, used to land in the
+    same file ahead of the JSON, so nothing could parse it (#1467's body).
+    """
+
+    def checks_that_log() -> dict[str, tuple[str, str, bool]]:
+        update_versions.log("Checking latest versions for binary tools...")
+        update_versions.warn("trivy: Failed to check latest version")
+        update_versions.ok("yara: 4.5.4 (latest)")
+        return {"ruff": ("0.16.5", "0.17.2", True)}
+
+    monkeypatch.setattr(update_versions, "check_latest_versions", checks_that_log)
+    monkeypatch.setattr(
+        update_versions,
+        "load_versions",
+        lambda: {"python_tools": {"ruff": {"critical": False}}},
+    )
+
+    assert update_versions._print_classification_json() == 0
+    out, err = capsys.readouterr()
+
+    assert json.loads(out) == {
+        "ruff": {
+            "current": "0.16.5",
+            "latest": "0.17.2",
+            "level": classify_bump("0.16.5", "0.17.2"),
+            "critical": False,
+        }
+    }
+    assert "trivy: Failed to check latest version" in err

@@ -13,7 +13,7 @@ python_tools:
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.16.5
+    version: 0.17.2
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -216,6 +216,14 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-10-23'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.16.5
+    new_version: 0.17.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-10-23'
   action: Updated checkov
   tools_updated:

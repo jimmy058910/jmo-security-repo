@@ -84,6 +84,15 @@ jobs:
 
       - name: Check for tool updates
         id: check
+        # `update_versions.py` looks up every GitHub-hosted tool with `gh api`,
+        # which refuses to run in Actions without GH_TOKEN (exit 4). The lookup
+        # reports that as "Failed to check latest version", so without a token
+        # here only the PyPI tools could ever move: 13 tools failed on the
+        # 2026-10-18 and 2026-10-23 runs. The classify and update steps below
+        # need it for the same reason. The token is per step, not per job,
+        # because `pre-commit run --all-files` runs third-party hook code.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           echo "Checking for available tool updates..."
           python3 scripts/dev/update_versions.py --check-latest > check_output.txt || true
@@ -140,8 +149,10 @@ jobs:
         # MUST run before --update-all, otherwise the manifest sees
         # current==latest for every bumped tool and reports level=patch
         # for all. The PR body reads this file so reviewers see the
-        # actual bump level of each change.
+        # actual bump level of each change. GH_TOKEN: see "Check for tool updates".
         if: steps.check.outputs.updates_available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 scripts/dev/update_versions.py --classify > classify_before.json
           echo "Classification captured:"
@@ -164,9 +175,11 @@ jobs:
           echo "Using bump level: $LEVEL"
 
       - name: Update tools to latest versions (filtered by bump level)
+        # GH_TOKEN: see "Check for tool updates".
         if: steps.check.outputs.updates_available == 'true'
         env:
           BUMP_LEVEL: ${{ steps.level.outputs.bump_level }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           echo "Updating tools at bump level: $BUMP_LEVEL"
           python3 scripts/dev/update_versions.py --update-all --level="$BUMP_LEVEL"
