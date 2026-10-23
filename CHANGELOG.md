@@ -627,6 +627,15 @@ All notable changes to JMo Security will be documented in this file.
   without saying it suppresses findings). zizmor's announcement of its own `zizmor.yml` moves from
   INFO to WARNING for the same reason, so there is one level for all three. Neither file is overridden:
   honouring a repository's own settings is each tool's documented behaviour (#1414).
+- **A scan names the npm packages osv-scanner does not check.** From osv-scanner 2.7.0, a
+  `package-lock.json` or `npm-shrinkwrap.json` entry with no `resolved` URL is taken for a
+  local package and never matched, with rc 0 and nothing said: a bundled dependency, or
+  every registry package of a lockfile npm wrote under `omit-lockfile-registry-resolved`
+  (a real one for `lodash@4.17.20`: 5 findings on 2.6.0, none on 2.7.0). JMo now reads each
+  npm lockfile first and names one holding such packages, with how many, at WARNING; the
+  row stays `ran` and its detail says `partly audited` ([Known
+  limitations](docs/KNOWN_LIMITATIONS.md#osv-scanner-does-not-check-an-npm-package-whose-lockfile-entry-has-no-resolved-url),
+  #1472).
 - **yara_runner's crash exits 2, and never leaves an earlier run's output behind.** It
   exited 1, which is also "matches found", so a crash read as findings over the previous
   scan's file. It now removes that file first and exits 2 (#1382).
