@@ -84,7 +84,13 @@ NPM_LOCK = json.dumps(
         "requires": True,
         "packages": {
             "": {"name": "app", "version": "1.0.0"},
-            "node_modules/left-pad": {"version": "1.0.0"},
+            # `resolved`, as npm writes it for a registry package: from 2.7.0
+            # osv-scanner skips an entry without one as a local package and
+            # finds nothing (osv-scalibr#2414, measured).
+            "node_modules/left-pad": {
+                "version": "1.0.0",
+                "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz",
+            },
         },
     }
 ).encode()
