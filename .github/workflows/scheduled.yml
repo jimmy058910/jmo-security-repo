@@ -1245,6 +1245,7 @@ jobs:
             tests/unit/test_gitleaks_wiring.py \
             tests/unit/test_zizmor_wiring.py \
             tests/unit/test_osv_scanner_wiring.py \
+            tests/unit/test_own_config_announcement.py \
             -v \
             -m "requires_tools" \
             --tb=short \

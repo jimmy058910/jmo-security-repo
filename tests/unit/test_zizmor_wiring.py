@@ -30,6 +30,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 from scripts.cli.scan_jobs import tool_loop
 from scripts.cli.tool_installer import ToolInstaller
@@ -147,7 +148,9 @@ def test_jmo_tools_check_says_there_is_no_windows_arm64_build() -> None:
         status = manager.check_tool("zizmor")
 
     assert status.installed is False
-    assert status.expected_version == "1.30.1"
+    # versions.yaml's pin, read rather than restated: the weekly update moves it.
+    pin = yaml.safe_load(Path("versions.yaml").read_text(encoding="utf-8"))
+    assert status.expected_version == pin["binary_tools"]["zizmor"]["version"]
     assert status.install_hint.startswith("jmo tools install zizmor")
     assert "no Windows arm64 build" in status.install_hint
 

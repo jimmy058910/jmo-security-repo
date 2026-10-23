@@ -1484,6 +1484,7 @@ jobs:
               - 'tests/unit/test_gitleaks_wiring.py'
               - 'tests/unit/test_zizmor_wiring.py'
               - 'tests/unit/test_osv_scanner_wiring.py'
+              - 'tests/unit/test_own_config_announcement.py'
               - 'scripts/core/osv_database.py'
               - 'scripts/core/tool_descriptors.py'
               - 'scripts/cli/scan_utils.py'
@@ -1616,6 +1617,7 @@ jobs:
             tests/unit/test_gitleaks_wiring.py \
             tests/unit/test_zizmor_wiring.py \
             tests/unit/test_osv_scanner_wiring.py \
+            tests/unit/test_own_config_announcement.py \
             -v \
             -m "requires_tools" \
             --tb=short \
