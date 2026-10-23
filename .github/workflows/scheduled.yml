@@ -89,7 +89,7 @@ jobs:
 
       - name: Install security tools
         env:
-          TRUFFLEHOG_VERSION: "3.97.1"  # Pin per versions.yaml — see release.rules.md
+          TRUFFLEHOG_VERSION: "3.99.4"  # Pin per versions.yaml — see release.rules.md
         run: |
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
@@ -472,8 +472,8 @@ jobs:
           # flaked in CI (see PR #350 + release.rules.md).
           TRIVY_VERSION: "0.74.0"
           GRYPE_VERSION: "0.118.0"
-          SYFT_VERSION: "1.51.1"
-          TRUFFLEHOG_VERSION: "3.97.1"
+          SYFT_VERSION: "1.55.0"
+          TRUFFLEHOG_VERSION: "3.99.4"
           HADOLINT_VERSION: "2.15.1"
         run: |
           # Install tools needed for smoke tests
@@ -674,7 +674,7 @@ jobs:
 
       - name: Install minimal security tools
         env:
-          TRUFFLEHOG_VERSION: "3.97.1"  # Pin per versions.yaml — see release.rules.md
+          TRUFFLEHOG_VERSION: "3.99.4"  # Pin per versions.yaml — see release.rules.md
         run: |
           # Install semgrep for SAST testing
           pip install semgrep
@@ -1036,7 +1036,7 @@ jobs:
       - name: Install security tools for integration tests
         env:
           TRIVY_VERSION: "0.74.0"  # Pin per versions.yaml
-          TRUFFLEHOG_VERSION: "3.97.1"
+          TRUFFLEHOG_VERSION: "3.99.4"
         run: |
           # Semgrep - for SQL injection detection tests
           pip install semgrep
@@ -1136,13 +1136,13 @@ jobs:
           # tool-contract-tests block. Any drift means the weekly and
           # PR gates disagree.
           TRIVY_VERSION: "0.74.0"
-          TRUFFLEHOG_VERSION: "3.97.1"
+          TRUFFLEHOG_VERSION: "3.99.4"
           HADOLINT_VERSION: "2.15.1"
           GRYPE_VERSION: "0.118.0"
-          SYFT_VERSION: "1.51.1"
+          SYFT_VERSION: "1.55.0"
           GITLEAKS_VERSION: "8.30.1"
-          ZIZMOR_VERSION: "1.30.1"
-          OSV_SCANNER_VERSION: "2.6.0"
+          ZIZMOR_VERSION: "1.31.1"
+          OSV_SCANNER_VERSION: "2.7.0"
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner

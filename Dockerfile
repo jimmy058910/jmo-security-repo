@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - working tree and git history)
-RUN TRUFFLEHOG_VERSION="3.97.1" && \
+RUN TRUFFLEHOG_VERSION="3.99.4" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -38,7 +38,7 @@ RUN GITLEAKS_VERSION="8.30.1" && \
     chmod +x /usr/local/bin/gitleaks
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.51.1" && \
+RUN SYFT_VERSION="1.55.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -61,7 +61,7 @@ RUN HADOLINT_VERSION="2.15.1" && \
     chmod +x /usr/local/bin/hadolint
 
 # Download shfmt (Shell formatting)
-RUN SHFMT_VERSION="3.14.0" && \
+RUN SHFMT_VERSION="3.14.1" && \
     SHFMT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_${SHFMT_ARCH}" \
     -o /usr/local/bin/shfmt && \
@@ -97,7 +97,7 @@ RUN GRYPE_VERSION="0.118.0" && \
     chmod +x /usr/local/bin/grype
 
 # Download OPA (Policy-as-Code engine)
-RUN OPA_VERSION="1.20.1" && \
+RUN OPA_VERSION="1.21.3" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
     -o /usr/local/bin/opa && \
@@ -114,7 +114,7 @@ RUN SHELLCHECK_VERSION="0.11.0" && \
     chmod +x /usr/local/bin/shellcheck
 
 # Download zizmor (GitHub Actions); assets are named by target triple, no version
-RUN ZIZMOR_VERSION="1.30.1" && \
+RUN ZIZMOR_VERSION="1.31.1" && \
     ZIZMOR_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-${ZIZMOR_ARCH}-unknown-linux-gnu.tar.gz" \
     -o /tmp/zizmor.tar.gz && \
@@ -125,7 +125,7 @@ RUN ZIZMOR_VERSION="1.30.1" && \
 # Download osv-scanner (dependency lockfiles); a raw binary, so it is checked
 # against the release's SHA256SUMS before use. The image carries no offline
 # database: `jmo tools update` fetches it into ~/.jmo/osv-db
-RUN OSV_SCANNER_VERSION="2.6.0" && \
+RUN OSV_SCANNER_VERSION="2.7.0" && \
     OSV_SCANNER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     OSV_SCANNER_ASSET="osv-scanner_linux_${OSV_SCANNER_ARCH}" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/${OSV_SCANNER_ASSET}" \
