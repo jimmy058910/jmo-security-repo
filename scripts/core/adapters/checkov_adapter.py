@@ -188,7 +188,6 @@ def _parse_checkov_report(data: dict[str, Any]) -> list[dict[str, Any]]:
             if not isinstance(it, dict):
                 continue
             rid = str(it.get("check_id") or it.get("check_name") or "CHECKOV")
-            # TODO(issue-#1426): IaC path is pod.yaml on Windows, /pod.yaml on Linux
             file_path = str(it.get("file_path") or it.get("repo_file_path") or "")
             # Line number may be provided as a list range, a scalar, or invalid; default to 0 on errors
             line_val = it.get("file_line_range")
