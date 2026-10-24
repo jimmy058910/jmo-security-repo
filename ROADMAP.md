@@ -46,7 +46,6 @@ what shipped in which release. This file covers only what has *not* shipped yet.
 |---------|----------|--------------|
 | Plugin system for custom adapters | High | [#34](https://github.com/jimmy058910/jmo-security-repo/issues/34) |
 | Homebrew + Winget packaging | High | TBD |
-| Intelligent prioritization (EPSS/KEV scoring) | Medium | [#49](https://github.com/jimmy058910/jmo-security-repo/issues/49) |
 | IDE integration (LSP) | Medium | [#52](https://github.com/jimmy058910/jmo-security-repo/issues/52) |
 | Docker image optimization | Medium | [#48](https://github.com/jimmy058910/jmo-security-repo/issues/48) |
 | Remediation adapter framework | Low | [#53](https://github.com/jimmy058910/jmo-security-repo/issues/53) |

@@ -622,7 +622,7 @@ gh pr create --title "deps(tools): monthly tool updates (Jan 2025)"
 
 Wait for:
 
-- ✅ maintenance.yml's `check-versions` job validates consistency
+- ✅ ci.yml's `quick-checks` runs `update_versions.py --sync --dry-run` (the `Dockerfile` against `versions.yaml`; maintenance.yml's `check-versions` runs it only on Sunday's cron, against `main`)
 - ✅ ci.yml tests pass (Ubuntu/macOS/Windows × Python 3.12/3.13)
 - ✅ Docker builds succeed (multi-arch: amd64, arm64)
 
