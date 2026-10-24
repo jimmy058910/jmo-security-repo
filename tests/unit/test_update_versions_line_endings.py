@@ -1,9 +1,10 @@
 """Regression tests: update_versions.py must write LF line endings, not CRLF.
 
-`update_versions.py` writes three file families — `versions.yaml`
-(`save_versions`), the `Dockerfile` and the `.github/workflows/*.yml`
-`env:` blocks (`sync_dockerfiles`). All three used Python text-mode writes
-(`open(path, "w")` / `Path.write_text(content)`) with no `newline=` argument.
+`update_versions.py` writes two file families — `versions.yaml`
+(`save_versions`) and the `Dockerfile` (`sync_dockerfiles`). Both used Python
+text-mode writes (`open(path, "w")` / `Path.write_text(content)`) with no
+`newline=` argument. (`sync_dockerfiles` also rewrote the workflows' `env:`
+blocks until #1470; the workflows now read versions.yaml at run time.)
 
 On **Windows**, text-mode writes apply universal-newline translation and emit
 `\r\n` for every `\n`. The repo stores LF and does not auto-normalize
@@ -56,7 +57,7 @@ def test_save_versions_writes_lf_not_crlf(tmp_path, monkeypatch):
 
 
 def test_sync_dockerfiles_writes_lf_not_crlf(tmp_path, monkeypatch):
-    """sync_dockerfiles() must write Dockerfiles + workflows with LF (#555)."""
+    """sync_dockerfiles() must write the Dockerfile with LF (#555)."""
     # Stub load_versions so version_map maps TRIVY -> 0.70.0 without a tmp YAML.
     monkeypatch.setattr(
         update_versions,
@@ -70,21 +71,16 @@ def test_sync_dockerfiles_writes_lf_not_crlf(tmp_path, monkeypatch):
     dockerfile.write_text('ENV TRIVY_VERSION="0.69.0"\n', newline="\n")
     monkeypatch.setattr(update_versions, "DOCKERFILE", dockerfile)
 
-    # Workflow env: block, likewise stale, to exercise the second write site.
-    wf_dir = tmp_path / "workflows"
-    wf_dir.mkdir()
-    workflow = wf_dir / "test.yml"
-    workflow.write_text('  TRIVY_VERSION: "0.69.0"\n', newline="\n")
-    monkeypatch.setattr(update_versions, "WORKFLOWS_DIR", wf_dir)
+    # sync_dockerfiles also reads the workflows (for hard-coded pins); point it
+    # at an empty tree so this test depends on nothing in the checkout.
+    monkeypatch.setattr(update_versions, "WORKFLOWS_DIR", tmp_path / "workflows")
+    monkeypatch.setattr(update_versions, "ACTIONS_DIR", tmp_path / "actions")
 
     update_versions.sync_dockerfiles(dry_run=False)
 
     df_raw = dockerfile.read_bytes()
-    wf_raw = workflow.read_bytes()
-    # Rewrite-fired guards: without a real replacement, the files keep the LF we
+    # Rewrite-fired guard: without a real replacement, the file keeps the LF we
     # wrote above and the CRLF assertion would pass even pre-fix (false GREEN).
     assert b'TRIVY_VERSION="0.70.0"' in df_raw, "Dockerfile rewrite did not fire"
-    assert b'TRIVY_VERSION: "0.70.0"' in wf_raw, "workflow rewrite did not fire"
-    # The actual regression assertions:
+    # The actual regression assertion:
     assert b"\r\n" not in df_raw, "Dockerfile must be written with LF, not CRLF (#555)"
-    assert b"\r\n" not in wf_raw, "workflow must be written with LF, not CRLF (#555)"

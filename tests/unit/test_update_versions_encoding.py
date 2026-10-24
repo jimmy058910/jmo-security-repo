@@ -82,8 +82,9 @@ def test_file_ops_emit_no_encoding_warning(tmp_path):
 
     Run in a subprocess under `-X warn_default_encoding -W error::EncodingWarning`
     so any file op missing `encoding=` raises. GREEN therefore proves every site
-    (the write at save_versions, the read in load_versions, and the two
-    read_text/write_text pairs in sync_dockerfiles) is guarded.
+    (the write at save_versions, the read in load_versions, and in
+    sync_dockerfiles the Dockerfile's read_text/write_text pair and the read of
+    each workflow it checks for hard-coded pins) is guarded.
     """
     driver = tmp_path / "driver.py"
     driver.write_text(
@@ -101,9 +102,10 @@ def test_file_ops_emit_no_encoding_warning(tmp_path):
             # write (save_versions) + later read (load_versions) of versions.yaml
             m.save_versions({{"binary_tools": {{"trivy": {{"version": "0.70.0"}}}}}})
 
-            # Dockerfile + workflow pinned stale so sync rewrites (exercises both
-            # read_text and write_text). Driver's own writes set encoding to avoid
-            # tripping the warning on the test scaffolding itself.
+            # Dockerfile pinned stale so sync rewrites it (exercises read_text and
+            # write_text); a workflow with a hard-coded pin, which sync only reads.
+            # Driver's own writes set encoding to avoid tripping the warning on
+            # the test scaffolding itself.
             df = d / "Dockerfile.test"
             df.write_text('ENV TRIVY_VERSION="0.69.0"\\n', encoding="utf-8", newline="\\n")
             m.DOCKERFILE = df
@@ -112,9 +114,10 @@ def test_file_ops_emit_no_encoding_warning(tmp_path):
             wfd = d / "workflows"
             wfd.mkdir()
             (wfd / "t.yml").write_text(
-                '  TRIVY_VERSION: "0.69.0"\\n', encoding="utf-8", newline="\\n"
+                'env:\\n  TRIVY_VERSION: "0.69.0"\\n', encoding="utf-8", newline="\\n"
             )
             m.WORKFLOWS_DIR = wfd
+            m.ACTIONS_DIR = d / "actions"
 
             m.sync_dockerfiles(dry_run=False)
             print("DRIVER_OK")

@@ -348,9 +348,15 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      - name: Read tool pins from versions.yaml
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the install below reads it here instead (#1470).
+        id: pins
+        run: python3 scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
       - name: Install security tools (for pre-release checks)
         env:
-          TRUFFLEHOG_VERSION: "3.99.4"  # Pin per versions.yaml — see release.rules.md
+          TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
         run: |
           # Install TruffleHog for secrets scanning
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
@@ -951,9 +957,20 @@ jobs:
           name: dist-${{ github.ref_name }}
           path: dist
 
+      - name: Read tool pins from versions.yaml
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the install below reads it here instead (#1470). This job has
+        # no project venv, and the runner's python3 is not known to carry
+        # PyYAML, so the reader gets a venv of its own.
+        id: pins
+        run: |
+          python3 -m venv /tmp/pins-env
+          /tmp/pins-env/bin/pip install --quiet pyyaml
+          /tmp/pins-env/bin/python scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
       - name: Install syft (pinned)
         env:
-          SYFT_VERSION: "1.55.0"
+          SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
         run: |
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \

@@ -259,9 +259,14 @@ git commit -m "deps(tools): update trivy to v0.68.0"
 # Dry-run check (CI uses this)
 python3 scripts/dev/update_versions.py --sync --dry-run
 
-# Exit code 0 = in sync, 1 = out of sync
+# Exit code 0 = in sync, 1 = out of sync (or a workflow hard-codes a tool version)
 echo $?
 ```
+
+The GitHub workflows hold no tool versions to keep in sync: their install steps
+read `versions.yaml` at run time through `scripts/dev/tool_pins.py`. The weekly
+tool-update job cannot push changes to `.github/workflows/`, so a version copied
+into a workflow is one it could never update.
 
 ---
 

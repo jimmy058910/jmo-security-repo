@@ -15,6 +15,11 @@ Five further tools were unreachable and correct only by coincidence.
 So this asserts **coverage**, not equality: `--sync` already fails loudly when a
 reachable pin disagrees. What it could not previously notice is an entry it
 never looked at.
+
+Only the Dockerfile counts. The workflows read versions.yaml at run time and
+carry no pins (#1470); `tests/unit/test_workflow_tool_pins.py` keeps it so. A
+workflow copy is deliberately not searched here, or one coming back would
+*satisfy* this coverage check while the weekly PR could never move it.
 """
 
 from __future__ import annotations
@@ -45,26 +50,19 @@ def _registry() -> dict[str, dict]:
 
 
 def _searchable_text() -> str:
-    """Every file `--sync` rewrites, concatenated."""
+    """The one file `--sync` rewrites."""
     dockerfiles = sorted(REPO_ROOT.glob("Dockerfile*"))
     # One image since v2.0.0, and it is the file --sync rewrites. An empty glob
     # would search nothing and fail every entry for the wrong reason; a second
     # Dockerfile would be one --sync never touches.
     assert dockerfiles == [DOCKERFILE], [p.name for p in dockerfiles]
-    parts = [p.read_text(encoding="utf-8") for p in dockerfiles]
-    workflows = REPO_ROOT / ".github" / "workflows"
-    if workflows.exists():
-        parts += [p.read_text(encoding="utf-8") for p in workflows.glob("*.yml")]
-    return "\n".join(parts)
+    return DOCKERFILE.read_text(encoding="utf-8")
 
 
 def _pin_patterns(tool: str, info: dict) -> list[str]:
     """The pin forms `--sync` knows how to rewrite, for one registry entry."""
     var_stem = VERSION_VAR_ALIASES.get(tool, tool.upper())
-    patterns = [
-        rf'{re.escape(var_stem)}_VERSION="[0-9.]+"',  # Dockerfile shell var
-        rf'{re.escape(var_stem)}_VERSION:\s+"[0-9.]+"',  # workflow env: block
-    ]
+    patterns = [rf'{re.escape(var_stem)}_VERSION="[0-9.]+"']  # Dockerfile shell var
     pkg = info.get("pypi_package")
     if isinstance(pkg, str) and pkg:
         patterns.append(rf"{re.escape(pkg)}==[0-9][0-9.]*")  # pip install line
@@ -87,7 +85,7 @@ def test_every_registry_entry_is_reachable_by_sync(tool: str):
         return
 
     pytest.fail(
-        f"'{tool}' matches no pin in any Dockerfile or workflow, so "
+        f"'{tool}' matches no pin in the Dockerfile, so "
         f"`update_versions.py --sync` can never update it and will report "
         f"success while it drifts. Tried: {_pin_patterns(tool, info)}. "
         f"Add the pin, add a VERSION_VAR_ALIASES entry, or add '{tool}' to "

@@ -121,6 +121,10 @@ python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 python3 scripts/dev/update_versions.py --sync
 ```
 
+The GitHub workflows carry no tool versions. Their install steps read them at run
+time with `tool_pins.py`, which prints every pin as `NAME_VERSION=x.y.z` for a
+step's `$GITHUB_OUTPUT`, and `--sync` fails if a workflow hard-codes one.
+
 ---
 
 ## Contributing
