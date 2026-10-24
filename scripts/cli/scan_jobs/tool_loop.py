@@ -704,6 +704,7 @@ def run_tools(
     rows: TargetRows = {}
     planned: dict[str, tuple[ToolDescriptor, list[Invocation]]] = {}
     shortfalls: dict[str, Shortfall] = {}
+    partly: dict[str, str] = {}  # tool -> what of its files it reads in part
     definitions: list[ToolDefinition] = []
     for tool in ordered:
         d = _descriptor(tool)
@@ -839,6 +840,21 @@ def run_tools(
                 tool, State.FAILED, Reason.COULD_NOT_RUN, detail=refusal
             )
             continue
+        # After the shortfall, so a file it is not handed is not named here.
+        if d.partly_read is not None:
+            left_out = d.partly_read(ctx)
+            for name, why in left_out.items():
+                logger.warning(
+                    "%s: %s is only partly audited: %s - what it leaves out is "
+                    "MISSING from this scan",
+                    tool,
+                    name,
+                    why,
+                )
+            if left_out:
+                partly[tool] = "partly audited: " + "; ".join(
+                    f"{name} ({why})" for name, why in left_out.items()
+                )
         planned[tool] = (d, invocations)
         definitions.extend(definition(tool, inv) for inv in invocations)
 
@@ -916,6 +932,11 @@ def run_tools(
                 state=State.FAILED,
                 reason=shortfall.reason,
                 detail="; ".join(filter(None, (shortfall.detail, said))),
+            )
+        if tool in partly:
+            # Decided before the run too, and true whatever the run did.
+            row = replace(
+                row, detail="; ".join(filter(None, (row.detail, partly[tool])))
             )
         if row.state is State.FAILED:
             row = replace(row, kept_findings=_kept_findings(d, by_tool.get(tool, [])))
