@@ -9,8 +9,8 @@ copy at all: `ci.yml`'s quick-checks held trufflehog as `v="3.94.3"` while
 versions.yaml said 3.99.4.
 
 So the workflows read their pins at run time through `scripts/dev/tool_pins.py`,
-and `update_versions.py --sync` refuses a copy. `--sync` runs only in
-maintenance.yml; these tests are the check every pull request gets.
+and `update_versions.py --sync` refuses a copy. These tests, and `--sync
+--dry-run` in ci.yml's quick-checks, are the checks every pull request gets.
 """
 
 from __future__ import annotations
@@ -170,8 +170,8 @@ MUTATIONS = [
     ),
     pytest.param(
         "ci.yml",
-        "pip install semgrep checkov",
-        "pip install semgrep==1.182.1 checkov",
+        'pip install "semgrep==${SEMGREP_VERSION}"',
+        'pip install "semgrep==1.182.1"',
         "semgrep==1.182.1",
         id="pip-pin",
     ),
@@ -244,6 +244,59 @@ jobs:
 """,
     )
     assert copies == []
+
+
+# --- no registry tool installed unpinned ----------------------------------------
+
+
+def _unpinned_installs(text: str) -> list[str]:
+    """Registry Python tools a `pip install` line names with no `==` pin."""
+    packages = {
+        info["pypi_package"]
+        for info in _registry().values()
+        if isinstance(info.get("pypi_package"), str)
+    }
+    return [
+        name
+        for args in re.findall(r"\bpip install\b([^\n]*)", text)
+        for name in (token.strip("\"'") for token in args.split())
+        if name in packages
+    ]
+
+
+def test_no_workflow_installs_a_registry_python_tool_unpinned():
+    """An unpinned install tests whatever PyPI released last, not the pin.
+
+    versions.yaml pins semgrep and checkov, and the image ships those versions,
+    but seven install steps ran a bare `pip install semgrep checkov` (#1479).
+    They resolved to the pins only because nothing newer had been released, so
+    the first release ahead of the weekly bump would have been tested in CI
+    before the version JMo ships.
+    """
+    found = [
+        f"{path.name}: {name}"
+        for path in sorted(WORKFLOWS.glob("*.yml"))
+        for name in _unpinned_installs(path.read_text(encoding="utf-8"))
+    ]
+    assert not found, (
+        "Registry Python tools installed without their versions.yaml pin; use "
+        '`pip install "tool==${TOOL_VERSION}"` with TOOL_VERSION read from the '
+        "job's `id: pins` step:\n  " + "\n  ".join(found)
+    )
+
+
+def test_an_unpinned_install_put_back_is_caught():
+    """The guard above can fail: the original line, put back, is reported."""
+    text = (WORKFLOWS / "scheduled.yml").read_text(encoding="utf-8")
+    pinned = 'pip install "checkov==${CHECKOV_VERSION}"'
+    assert pinned in text, "scheduled.yml changed; update this case"
+
+    assert _unpinned_installs(text.replace(pinned, "pip install checkov", 1)) == [
+        "checkov"
+    ]
+    # `uv pip install` is the same install, and a pinned line is not a hit.
+    assert _unpinned_installs("uv pip install semgrep pyyaml\n") == ["semgrep"]
+    assert _unpinned_installs('pip install "semgrep==1.182.1"\n') == []
 
 
 # --- every pin a step reads is one tool_pins.py writes --------------------------
