@@ -21,6 +21,7 @@ from its declared count, its summary-table row, or the total reddens CI.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,7 @@ from scripts.dev.phase_audit import (
     DEFAULT_PLAN,
     Issue,
     MergedPR,
+    PlanIndex,
     PlanParseError,
     closing_keywords,
     cmd_labels,
@@ -712,3 +714,187 @@ def test_an_issue_nothing_will_close_stays_unclaimed(
     assert cmd_unclaimed(plan) == 1
     assert cmd_verify(plan) == 1
     assert "#301" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# `closers` over a range, and v2.0.0's squash naming (#1250, #1078)
+#
+# `landed_phases` read every subject on `dev`. `dev` keeps the v1.1.0
+# program's fourteen `Phase N -` squashes below `main` for good, so every v2
+# phase 0-13 read as landed and every open rostered issue as fixed: 78 of 78
+# MISSING on 2026-10-23, with `dev` == `main`. And v2's own squashes name their
+# program and their PR (`feat!: v2.0.0 Phase 4 PR API, ...`), which the
+# regex never matched: 0 of the 14 Phase 2-4 squashes. Subjects below are real.
+# --------------------------------------------------------------------------
+
+V2_LANDED_SUBJECTS = {
+    "feat!: v2.0.0 Phase 2, the cut: 12-tool matrix, no profiles, one image (#1292)": 2,
+    "fix: v2.0.0 Phase 3 PR A, generated commands that run and contract tests "
+    "that assert (#1300)": 3,
+    "feat!: v2.0.0 Phase 4 PR API, every zap run is one automation plan, an "
+    "OpenAPI import, and nothing JMo builds reaches cmd.exe (#1439)": 4,
+    f"fix: Phase 1 {DASH} column-aware fingerprint, one formula (3 issues) (#1252)": 1,
+}
+
+V2_MENTION_ONLY_SUBJECTS = [
+    # Bookkeeping and plan commits of the v2 era: each names a phase, none lands one.
+    "docs: leave GitLab's rules/lgpl out of the Phase 5 rule bundle, and roster "
+    "its re-score after the tag (#1466)",
+    "feat(adapters): the generic SARIF importer and three bindings (Phase 1, "
+    "part 1) (#1244)",
+    "docs(plan): schedule #1250 into Phase 10, closers --check reads v1.1.0 "
+    "squashes as v2 landings (#1251)",
+    # The version word is accepted only before `Phase N` and a separator.
+    "docs: v2.0.0 Phase 5 planning notes",
+]
+
+
+def test_recognises_the_v2_squash_naming() -> None:
+    """Each subject alone, for the same reason as the v1.1.0 mention-only test."""
+    for subject, phase in V2_LANDED_SUBJECTS.items():
+        assert phases_in_subjects(subject) == {phase}, subject
+
+
+def test_a_v2_subject_that_merely_mentions_a_phase_has_not_landed_it() -> None:
+    for subject in V2_MENTION_ONLY_SUBJECTS:
+        assert phases_in_subjects(subject) == set(), subject
+
+
+V1_ON_DEV = "\n".join(LANDED_SUBJECTS)
+V2_SINCE_SYNC = (
+    "feat!: v2.0.0 Phase 5 PR A, opengrep replaces semgrep (#1500)\n"
+    "ci: pin semgrep and checkov installs (#1480)\n"
+)
+
+
+def _git_by_range(monkeypatch: pytest.MonkeyPatch, logs: dict[str, str]) -> list:
+    """A `git log` whose answer depends on the range it is asked about."""
+    calls: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str) -> str:
+        calls.append(args)
+        if args[0] == "rev-list":
+            return f"{logs[args[2]].count(chr(10))}\n"
+        return logs[args[1]]
+
+    monkeypatch.setattr(phase_audit, "_git", fake_git)
+    return calls
+
+
+def test_landed_phases_reads_only_the_range(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1250's acceptance: the v1.1.0 squashes outside the range land nothing."""
+    calls = _git_by_range(
+        monkeypatch,
+        {
+            "origin/dev": V2_SINCE_SYNC + V1_ON_DEV,
+            "origin/main..origin/dev": V2_SINCE_SYNC,
+        },
+    )
+    assert phase_audit.landed_phases("origin/main..origin/dev") == {5: 1}
+    assert calls == [("log", "origin/main..origin/dev", "--format=%s")]
+
+
+def test_an_empty_range_lands_nothing_and_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The moment a sync lands, `origin/main..origin/dev` is empty.
+
+    That is the one empty result that is not a broken extractor, so it is not
+    an error. The recognition rule's own guard is the subject tests above.
+    """
+    _git_by_range(monkeypatch, {"origin/main..origin/dev": ""})
+    assert phase_audit.landed_phases("origin/main..origin/dev") == {}
+
+
+def _closers_world(
+    monkeypatch: pytest.MonkeyPatch, range_log: str, prs: list[MergedPR]
+) -> PlanIndex:
+    issues = {n: Issue(number=n, state="OPEN") for n in (100, 101, 200, 201, 202)}
+    _git_by_range(
+        monkeypatch,
+        {"origin/dev": V1_ON_DEV, "origin/main..origin/dev": range_log},
+    )
+    monkeypatch.setattr(phase_audit, "fetch_issues", lambda *a, **k: issues)
+    monkeypatch.setattr(phase_audit, "fetch_merged_prs", lambda *a, **k: prs)
+    return parse_plan(BASE)
+
+
+def test_closers_on_an_empty_range_reports_nothing_missing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """2026-10-23, `dev` == `main`: 78 MISSING before, every one false."""
+    plan = _closers_world(monkeypatch, "", [])
+
+    assert phase_audit.cmd_closers(plan, "origin/main..origin/dev", check=True) == 0
+    out = capsys.readouterr().out
+    assert "no phase squash in origin/main..origin/dev" in out
+    assert "MISSING             : 0" in out
+
+
+def test_closers_lists_a_landed_phase_by_phase_with_its_squash_count(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A v2 phase lands across several PRs, so the first squash in range puts
+    every open issue of the phase on the list. Grouping by phase, with the
+    squash count, is what keeps that list readable rather than alarming."""
+    log = (
+        "feat!: v2.0.0 Phase 1 PR A, the first half (#1)\n"
+        "fix: v2.0.0 Phase 1 PR B, the second half\n\nCloses #200\n"
+    )
+    plan = _closers_world(monkeypatch, log, [])
+
+    assert phase_audit.cmd_closers(plan, "origin/main..origin/dev", check=True) == 1
+    out = capsys.readouterr().out
+    assert "phase 1 (2 squashes): #200 #201 #202" in out
+    assert "MISSING             : 2  #201 #202" in out
+
+
+def test_an_inert_body_keyword_a_commit_keyword_covers_is_not_flagged(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#1078: PR #1077's body named #979 and GitHub linked nothing, but a
+    commit in range carried `Closes #979`, so the sync closes it. The gate
+    reported it as covered and as inert in one run, and went red."""
+    pr = MergedPR(
+        number=1077, base="dev", merged_at="2026-08-31", named={200}, linked=set()
+    )
+    log = (
+        "fix: v2.0.0 Phase 1 PR A, all three\n\nCloses #200\nCloses #201\nCloses #202\n"
+    )
+    plan = _closers_world(monkeypatch, log, [pr])
+
+    assert phase_audit.cmd_closers(plan, "origin/main..origin/dev", check=True) == 0
+    assert "inert keywords      : 0" in capsys.readouterr().out
+    # The control: with nothing in range covering it, the same PR is flagged.
+    assert inert_closers([pr], {200: Issue(number=200, state="OPEN")}) == [(pr, [200])]
+
+
+def test_unclaimed_names_a_plan_outside_the_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`/done` reads origin/dev's plan from a copy under ~/.cache. `unclaimed`
+    formatted its path relative to the repo, raised ValueError, and exited 1,
+    the same code as a real finding (#1250's first rider)."""
+    _unclaimed_world(monkeypatch, tmp_path, Issue(number=302, state="OPEN"))
+    plan = parse_plan(BASE, tmp_path / "plan-on-dev.md")
+
+    assert cmd_unclaimed(plan) == 1
+    assert str(tmp_path / "plan-on-dev.md") in capsys.readouterr().out
+
+
+def test_git_and_gh_are_bounded_by_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hung `gh` held the CI phase-audit job until the job's own timeout
+    (#1250's second rider; python-safety.rules.md asks for `timeout=`)."""
+    seen: list[dict] = []
+
+    def fake_run(cmd, **kwargs):
+        seen.append(kwargs)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(phase_audit.subprocess, "run", fake_run)
+    phase_audit._git("log", "-1")
+    phase_audit._gh("issue", "list")
+    assert len(seen) == 2
+    assert all(kwargs.get("timeout") for kwargs in seen)

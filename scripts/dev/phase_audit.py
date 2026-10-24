@@ -62,6 +62,7 @@ parsed (which is itself a failure, never a skip).
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import re
 import subprocess
@@ -81,6 +82,10 @@ DEFAULT_PLAN = (
 )
 
 LABEL_PREFIX = "phase:"
+
+# Seconds for one `git` or `gh` call. A hung `gh` held the CI phase-audit job
+# until the job's own timeout (#1250); python-safety.rules.md asks for one.
+SUBPROCESS_TIMEOUT = 120
 LABEL_COLOR = "0e8a16"
 
 # The sections of versions.yaml that `update_versions.check_latest_versions`
@@ -371,6 +376,7 @@ def _gh(*args: str) -> str:
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=SUBPROCESS_TIMEOUT,
     )
     if proc.returncode != 0:
         raise RuntimeError(
@@ -444,7 +450,7 @@ def fetch_merged_prs(limit: int = 1000) -> list[MergedPR]:
 
 
 def inert_closers(
-    prs: list[MergedPR], issues: dict[int, Issue]
+    prs: list[MergedPR], issues: dict[int, Issue], covered: set[int] | None = None
 ) -> list[tuple[MergedPR, list[int]]]:
     """Merged PRs whose body named an OPEN issue GitHub never linked.
 
@@ -462,11 +468,19 @@ def inert_closers(
     six merged PRs in this repo say `Closes #N` about another PULL REQUEST,
     GitHub correctly records no closing reference, and `gh issue list` does not
     return PRs - so the map lookup drops all six without a special case.
+
+    `covered` is the set a commit-message keyword in the sync's range already
+    closes. Those issues close at the sync whatever a PR body said, so they are
+    not inert. Without it, one issue was reported as covered and as inert in
+    the same run, and the gate went red on work done right (#1078).
     """
+    covered = covered or set()
     found: list[tuple[MergedPR, list[int]]] = []
     for pr in prs:
         gap = sorted(
-            n for n in pr.named - pr.linked if n in issues and issues[n].state == "OPEN"
+            n
+            for n in pr.named - pr.linked - covered
+            if n in issues and issues[n].state == "OPEN"
         )
         if gap:
             found.append((pr, gap))
@@ -539,6 +553,7 @@ def _git(*args: str) -> str:
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=SUBPROCESS_TIMEOUT,
     )
     if proc.returncode != 0:
         raise RuntimeError(
@@ -570,8 +585,17 @@ def _git(*args: str) -> str:
 # Phases 0 and 1 have both landed, so the resulting SET is unchanged and the
 # defect is invisible in the aggregate. That is why the guard asserts each
 # subject alone.
+#
+# v2.0.0's squashes name their program and their PR, `feat!: v2.0.0 Phase 4 PR
+# API, ...` and `feat!: v2.0.0 Phase 2, the cut: ...`, so a version word may sit
+# before `Phase N`, and `,` or ` PR` may follow it. The v1.1.0 form alone
+# matched 0 of the 14 Phase 2-4 squashes, so no v2 phase could land (#1250).
+# The separator stays required: `Phase 5 rule bundle` and `(Phase 1, part 1)`
+# are prose, and the anchor keeps the parenthesised one out.
 _PHASE_SUBJECT = re.compile(
-    r"^(?:[a-z]+(?:\([^()]*\))?!?:[ \t]*)?Phase (\d+)\s*[—-]", re.MULTILINE
+    r"^(?:[a-z]+(?:\([^()]*\))?!?:[ \t]*)?(?:v\d+(?:\.\d+)*[ \t]+)?"
+    r"Phase (\d+)(?:\s*[—-]|,|[ \t]+PR\b)",
+    re.MULTILINE,
 )
 
 # `Closes #960`, `fixes #12`, `Resolved: #3`. Case-insensitive: a
@@ -600,21 +624,24 @@ def phases_in_subjects(text: str) -> set[int]:
     return {int(m) for m in _PHASE_SUBJECT.findall(text)}
 
 
-def landed_phases(ref: str = "origin/dev") -> set[int]:
-    """Phase numbers whose squash commit is reachable from `ref`.
+def landed_phases(rev_range: str) -> collections.Counter[int]:
+    """Phase number -> how many of its squash commits are in `rev_range`.
 
-    Raises if it finds none: an extractor that silently returns nothing
-    satisfies every assertion built on it, which is the shape that let the
-    unclaimed-issue bar decay in the first place.
+    The range is the keyword scan's own, `origin/main..origin/dev` by default:
+    what the next sync carries. It used to be everything reachable from `dev`,
+    which holds the v1.1.0 program's fourteen `Phase N -` squashes below `main`
+    for good, so every v2 phase 0-13 read as landed and every open rostered
+    issue as fixed: 78 false MISSING on 2026-10-23 (#1250).
+
+    An empty result is not an error. Right after a sync the range is empty, and
+    between syncs it can hold no phase work at all. This used to raise on an
+    empty result, to catch a naming change that left the regex matching
+    nothing; that guard is now the real-subject tests in test_phase_audit.py,
+    v1.1.0's and v2's, each asserted alone.
     """
-    found = phases_in_subjects(_git("log", ref, "--format=%s"))
-    if not found:
-        raise RuntimeError(
-            f"no `Phase N — ...` commit subjects found on {ref}. Either the "
-            "phase-commit naming changed or the ref is wrong - both are real "
-            "failures, not an empty result."
-        )
-    return found
+    return collections.Counter(
+        int(m) for m in _PHASE_SUBJECT.findall(_git("log", rev_range, "--format=%s"))
+    )
 
 
 def closing_keywords(text: str) -> set[int]:
@@ -727,6 +754,18 @@ def cmd_labels(plan: PlanIndex, apply: bool) -> int:
     return 0
 
 
+def _shown(path: Path) -> str:
+    """`path` relative to the repo when it is inside it, else as given.
+
+    `/done` reads origin/dev's plan from a copy under ~/.cache; `relative_to`
+    raised for it and `unclaimed` exited 1, a real finding's code (#1250).
+    """
+    try:
+        return path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def cmd_unclaimed(plan: PlanIndex) -> int:
     issues = fetch_issues(state="open")
     survivors, exempt = _unclaimed(plan, issues)
@@ -742,7 +781,7 @@ def cmd_unclaimed(plan: PlanIndex) -> int:
         print(f"  #{number}")
     print(
         "\nGive each one a home in "
-        f"{plan.path.relative_to(REPO_ROOT).as_posix()} - a phase roster or the "
+        f"{_shown(plan.path)} - a phase roster or the "
         "'After the tag' list - then re-run. A label alone is not a home; the "
         "plan is the source and the labels are derived from it."
     )
@@ -800,39 +839,53 @@ def cmd_verify(plan: PlanIndex) -> int:
     return rc
 
 
-def cmd_closers(plan: PlanIndex, rev_range: str, ref: str, check: bool) -> int:
-    """Issues fixed on `dev` whose closing keyword must reach `main`.
+def cmd_closers(plan: PlanIndex, rev_range: str, check: bool) -> int:
+    """Issues the next sync carries as fixed, whose closing keyword must reach `main`.
 
-    "Fixed" is derived, not asserted: an issue counts if its phase's squash
-    commit is on `dev` and the issue is still OPEN. Phase 0's issues drop out
-    on the second condition, which is what the old raw-count query got wrong in
-    the other direction.
+    "Fixed" is derived, not asserted: an issue counts if a squash of its phase
+    is in `rev_range` and the issue is still OPEN. A v2 phase lands across
+    several PRs, so its first squash in range lists every open issue of the
+    phase; the output groups them by phase, with the squash count, so a
+    half-landed phase reads as one.
     """
-    landed = landed_phases(ref)
+    landed = landed_phases(rev_range)
     issues = fetch_issues()
     have = keywords_in_range(rev_range)
+    commits = int(_git("rev-list", "--count", rev_range).strip() or 0)
 
-    expected: list[int] = []
+    by_phase: dict[int, list[int]] = {}
     for phase in sorted(landed):
-        for number in plan.phases.get(phase, []):
-            issue = issues.get(number)
-            if issue is not None and issue.state == "OPEN":
-                expected.append(number)
-
+        by_phase[phase] = [
+            number
+            for number in plan.phases.get(phase, [])
+            if number in issues and issues[number].state == "OPEN"
+        ]
+    expected = [n for numbers in by_phase.values() for n in numbers]
     missing = [n for n in expected if n not in have]
     covered = [n for n in expected if n in have]
 
-    print(f"landed phases on {ref}: {sorted(landed)}")
-    print(f"keyword range       : {rev_range}  ({len(have)} distinct issues named)")
-    print(f"fixed-but-open      : {len(expected)}  {_fmt(expected)}")
+    print(f"range               : {rev_range}  ({commits} commits)")
+    if landed:
+        print(f"landed phases       : {sorted(landed)}")
+    else:
+        print(f"landed phases       : none (no phase squash in {rev_range})")
+    print(f"keywords in range   : {len(have)} distinct issues named")
+    print(f"fixed-but-open      : {len(expected)}")
+    for phase, numbers in by_phase.items():
+        squashes = landed[phase]
+        print(
+            f"  phase {phase} ({squashes} squash{'es' if squashes != 1 else ''}): "
+            f"{_fmt(numbers) or 'none open'}"
+        )
     print(f"  covered by a keyword: {len(covered)}  {_fmt(covered)}")
     print(f"  MISSING             : {len(missing)}  {_fmt(missing)}")
 
     # The second population, which the phase rosters structurally cannot reach.
     # Run unconditionally rather than behind a flag: the whole finding is that
     # the bookkeeping looked done and was not, and a sweep nobody remembers to
-    # ask for is the same failure with an extra step.
-    inert = inert_closers(fetch_merged_prs(), issues)
+    # ask for is the same failure with an extra step. An issue a commit keyword
+    # in range covers closes at the sync, so it is not inert (#1078).
+    inert = inert_closers(fetch_merged_prs(), issues, have)
     print(f"inert keywords      : {len(inert)} merged PR(s) named an open issue")
     for pr, gap in inert:
         print(f"  PR #{pr.number} (base {pr.base}, {pr.merged_at}) -> {_fmt(gap)}")
@@ -846,8 +899,10 @@ def cmd_closers(plan: PlanIndex, rev_range: str, ref: str, check: bool) -> int:
 
     if missing:
         print(
-            f"\n{len(missing)} issue(s) are fixed on {ref} with no closing "
-            "keyword in its history, so the sync will not close them. Put these "
+            f"\n{len(missing)} issue(s) belong to a phase with a squash in "
+            f"{rev_range} and no closing keyword there, so the sync will not "
+            "close them. If one is not fixed yet (a phase still has PRs to "
+            "come), it is not missing anything. For the rest, put these "
             "in an individual COMMIT message, one `Closes #N` each. A PR body "
             "targeting `dev` is inert - GitHub records no closing reference for "
             "a PR whose base is not the default branch."
@@ -883,10 +938,11 @@ def main(argv: list[str] | None = None) -> int:
     p_closers = sub.add_parser(
         "closers", help="issues fixed on dev whose closing keyword must reach main"
     )
+    # One range for both questions, what landed and which keywords close it:
+    # a separate `--ref` for landing read the v1.1.0 squashes below `main` (#1250).
     p_closers.add_argument(
         "--range", dest="rev_range", default="origin/main..origin/dev"
     )
-    p_closers.add_argument("--ref", default="origin/dev")
     p_closers.add_argument("--check", action="store_true", help="exit 1 if any missing")
     args = parser.parse_args(argv)
 
@@ -903,7 +959,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "unclaimed":
         return cmd_unclaimed(plan)
     if args.command == "closers":
-        return cmd_closers(plan, args.rev_range, args.ref, args.check)
+        return cmd_closers(plan, args.rev_range, args.check)
     return cmd_verify(plan)
 
 
