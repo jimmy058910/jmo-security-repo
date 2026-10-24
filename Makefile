@@ -92,7 +92,7 @@ tools-upgrade:
 
 fmt:
 	@if command -v shfmt >/dev/null 2>&1; then \
-		find scripts -type f -name '*.sh' -print0 | xargs -0 shfmt -w -i 2 -ci -bn ; \
+		find scripts -type f -name '*.sh' -print0 | xargs -0 shfmt -w ; \
 	else echo 'shfmt not found'; fi
 	@if command -v ruff >/dev/null 2>&1; then ruff format . ; else echo 'ruff not found'; fi
 
