@@ -145,7 +145,7 @@ FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite"
 LABEL org.opencontainers.image.description="Terminal-first security audit toolkit: every TOOL_MATRIX scanner plus the OPA policy engine"
-# TODO(issue-#1438): stale image version label; set from the release tag
+# TODO(issue-#1341): stale image version label; set from the release tag
 LABEL org.opencontainers.image.version="1.0.2"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"

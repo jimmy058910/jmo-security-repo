@@ -32,8 +32,6 @@ def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]
             # The TSV read-only; the clones in the destination the wizard asked
             # for, so they persist and a second run fast-forwards them. Not
             # under /results, which a CI job uploads whole.
-            # TODO(issue-#1304): measured on Linux paths only; a Docker Desktop
-            # mount may read as another owner (`dubious ownership`).
             tsv_abs = str(Path(target.tsv_path).resolve())
             dest_abs = str(Path(target.tsv_dest).resolve())
             return [
