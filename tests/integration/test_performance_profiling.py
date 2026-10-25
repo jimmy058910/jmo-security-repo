@@ -493,16 +493,15 @@ def test_timings_json_absent_without_the_profile_flag(tmp_path):
 def test_documented_keys_that_must_not_exist(tmp_path):
     """Guard against the specific fiction that shipped in a published skill.
 
-    jmo-profile-optimizer documented `total_duration_seconds`, `profile` and a
-    `tools` dict, plus per-tool `timeouts`/`executions`. None are produced. If
-    any ever appears, the deleted timeout analysis can be revisited -- until
-    then this keeps the absence explicit rather than assumed.
+    jmo-profile-optimizer (since removed) documented `total_duration_seconds`,
+    `profile` and a `tools` dict, plus per-tool `timeouts`/`executions`. None
+    are produced. If any ever appears, the deleted timeout analysis can be
+    revisited -- until then this keeps the absence explicit rather than assumed.
     """
     timings = _run_report_with_profile(_fabricate_results(tmp_path), tmp_path)
 
     for absent in ("total_duration_seconds", "profile", "tools", "threads", "timeout"):
         assert absent not in timings, (
-            f"'{absent}' now exists in timings.json -- see #722 and the Phase 4 "
-            "note in .claude/skills/jmo-profile-optimizer/references/"
-            "optimization-patterns.md before relying on it"
+            f"'{absent}' now exists in timings.json -- see #722 and 'Which file "
+            "has which timings' in docs/SCAN_OPTIMIZATION.md before relying on it"
         )

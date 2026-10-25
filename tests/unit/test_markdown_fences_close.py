@@ -120,7 +120,9 @@ def _survey() -> dict[str, tuple[int, bool]]:
     docs = sorted(p for p in mod.tracked_paths() if p.endswith(".md"))
     # Coverage from git, so a gitignored file cannot make this red locally and
     # green in CI.
-    assert len(docs) >= 150, f"doc discovery looks wrong: {len(docs)}"
+    # 125 tracked after the contributor skills were retired (2026-10; it was
+    # 186). The floor keeps the same ~80% margin it had then.
+    assert len(docs) >= 100, f"doc discovery looks wrong: {len(docs)}"
     health = {}
     for rel in docs:
         text = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")

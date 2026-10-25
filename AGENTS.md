@@ -33,35 +33,11 @@ Agent definitions: [.claude/agents/](.claude/agents/) — persona conventions in
 
 ## Skills
 
-Skills are invoked with `/skill-name` in Claude Code. These twelve ship with the
-repository; maintainer-only workflows (triage, merges, releases, marketing) are
-deliberately not published — see [.claude/skills/INDEX.md](.claude/skills/INDEX.md)
-for the boundary and how it is enforced.
-
-| Skill | Slash Command | Purpose |
-|-------|--------------|---------|
-| Adapter Generator | `/jmo-adapter-generator` | Generate new security tool adapters |
-| Test Fabricator | `/jmo-test-fabricator` | Generate pytest test suites (85%+ coverage) |
-| CI Debugger | `/jmo-ci-debugger` | Diagnose GitHub Actions CI failures |
-| Target Type Expander | `/jmo-target-type-expander` | Add new scan target types |
-| Compliance Mapper | `/jmo-compliance-mapper` | Map findings to 6 compliance frameworks |
-| Profile Optimizer | `/jmo-profile-optimizer` | Tune threads, timeouts and per-tool flags from scan and report timings |
-| Security Hardening | `/jmo-security-hardening` | Implement OWASP/CWE security fixes |
-| Systematic Debugging | `/jmo-systematic-debugging` | Four-phase debugging framework |
-| Refactoring Assistant | `/jmo-refactoring-assistant` | Complex refactoring with test preservation |
-| Documentation Updater | `/jmo-documentation-updater` | Keep docs synchronized with code |
-| Dashboard Builder | `/jmo-dashboard-builder` | Build React security dashboard |
-| E2E Verifier | `/jmo-e2e-verify` | AI-orchestrated e2e verification with failure categorization and visual dashboard inspection |
-
-The `/jmo-e2e-verify` skill uses **3 parallel research sub-agents** in Phase 2:
-
-| Sub-agent | Purpose |
-|-----------|---------|
-| Codebase Delta | Maps changed files (since `main`) to affected test categories |
-| Test Health | Identifies known-flaky tests, xfail/skip markers, cached failure history |
-| Infrastructure | Verifies fixture directories, jmo CLI, Docker, disk space readiness |
-
-Skill definitions: [.claude/skills/](.claude/skills/)
+No skills ship with the repository at present: the twelve contributor skills were
+retired in 2026-10, and maintainer-only workflows (triage, merges, releases,
+marketing) are deliberately not published. See
+[.claude/skills/INDEX.md](.claude/skills/INDEX.md) for the boundary, how it is
+enforced, and where the retired skills' useful content moved.
 
 ## MCP Server
 

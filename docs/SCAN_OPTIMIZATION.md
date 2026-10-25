@@ -409,6 +409,11 @@ time jmo scan --repo . 2>&1 | tee scan.log
 grep -E "duration|elapsed" results/summaries/*.json
 ```
 
+**Which file has which timings.** Two files record timings, written by different phases:
+
+- `<results-dir>/individual-*/<target>/scan-timings.json`, written by `jmo scan`: one row per requested tool on that target, whether it ran, was skipped or failed (`tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`). The same rows reach the history database's `scan_tool_runs` table. **Tool run times, timeouts and failures live here.** `scripts/core/scan_timings.py` defines the shape; check `schema_version` before reading it.
+- `<results-dir>/summaries/timings.json`, written by `jmo report --profile`: `aggregate_seconds` covers gathering the results, and each `jobs[]` entry times one adapter parsing one tool's output. It measures how long JMo took to read and normalize tool output, not how long the tools ran. Do not infer tool runtime, timeouts or failures from it.
+
 **Add custom timing wrapper:**
 
 ```bash

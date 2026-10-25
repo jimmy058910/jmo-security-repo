@@ -159,6 +159,16 @@ All notable changes to JMo Security will be documented in this file.
   `--tools`, `--skip-tools` or `tools:` is now a usage error (exit 2) that says it was
   removed in v2.0.0; Semgrep covers Go code. The Docker image no longer carries its binary
   (#1310).
+- **The twelve published Claude Code skills are retired.** `.claude/skills/` no longer
+  ships `jmo-adapter-generator`, `jmo-ci-debugger`, `jmo-compliance-mapper`,
+  `jmo-dashboard-builder`, `jmo-documentation-updater`, `jmo-e2e-verify`,
+  `jmo-profile-optimizer`, `jmo-refactoring-assistant`, `jmo-security-hardening`,
+  `jmo-systematic-debugging`, `jmo-target-type-expander` or `jmo-test-fabricator`. None
+  was in use, and several described scripts, adapters and flags that no longer exist.
+  This is contributor tooling only: the CLI, the reports and the MCP server are
+  unchanged. What was still useful moved: the adapter-test categories into the
+  `coverage-gap-finder` agent, the documentation map into `doc-sync-checker`, and the
+  `scan-timings.json` / `timings.json` distinction into `docs/SCAN_OPTIMIZATION.md`.
 
 ### Changed
 

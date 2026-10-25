@@ -113,8 +113,8 @@ docs/COMPLETENESS_ANALYZER.md
 # Claude Code configuration: the public/private boundary
 # ---------------------------------------------------------------------------
 # What ships to a public clone is decided by AUDIENCE, deliberately:
-#   public  - what a CONTRIBUTOR uses: shared rules, contributor skills, and
-#             the read-only analysis agents.
+#   public  - what a CONTRIBUTOR uses: shared rules and the read-only
+#             analysis agents (no skill is published at present).
 #   private - maintainer workflows (issue/PR triage, merging, releases) and
 #             marketing. These stay on the maintainer's disk, in place under
 #             .claude/skills/ so Claude Code still discovers them as slash
@@ -141,24 +141,14 @@ docs/COMPLETENESS_ANALYZER.md
 !.claude/agents/
 !.claude/PERSONA_GUIDELINES.md
 
-# Public: contributor skills. Re-include the directory, re-exclude its
-# contents, then allowlist per skill - anything absent here stays private.
+# Public: skills. Re-include the directory, re-exclude its contents, then
+# allowlist per skill - anything absent here stays private. None is listed:
+# the twelve contributor skills were retired in 2026-10 (unused, and stale).
+# INDEX.md stays as the tooling inventory; add a `!.claude/skills/<name>/`
+# line here to publish a skill again.
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/INDEX.md
-!.claude/skills/references/
-!.claude/skills/jmo-adapter-generator/
-!.claude/skills/jmo-ci-debugger/
-!.claude/skills/jmo-compliance-mapper/
-!.claude/skills/jmo-dashboard-builder/
-!.claude/skills/jmo-documentation-updater/
-!.claude/skills/jmo-e2e-verify/
-!.claude/skills/jmo-profile-optimizer/
-!.claude/skills/jmo-refactoring-assistant/
-!.claude/skills/jmo-security-hardening/
-!.claude/skills/jmo-systematic-debugging/
-!.claude/skills/jmo-target-type-expander/
-!.claude/skills/jmo-test-fabricator/
 
 # Test scan result directories (local testing artifacts)
 test-juice-results/
