@@ -1,0 +1,8 @@
+rules:
+  - id: ftp-request
+    languages: [java]
+    severity: WARNING
+    message: the body GitLab's gl-t has, so a pack rule is dropped as a duplicate like any other
+    metadata:
+      category: security
+    pattern: triple($X)

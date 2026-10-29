@@ -3742,3 +3742,372 @@ rules:
     - vuln
     likelihood: LOW
     impact: HIGH
+- id: problem-based-packs.insecure-transport.go-stdlib.bypass-tls-verification.bypass-tls-verification
+  message: Checks for disabling of TLS/SSL certificate verification. This should only
+    be used for debugging purposes because it leads to vulnerability to MTM attacks.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://stackoverflow.com/questions/12122159/how-to-do-a-https-request-with-bad-certificate
+    subcategory:
+    - vuln
+    technology:
+    - go
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  pattern-either:
+  - pattern: 'tls.Config{..., InsecureSkipVerify: true, ...}
+
+      '
+  - pattern: '$CONFIG = &tls.Config{...}
+
+      ...
+
+      $CONFIG.InsecureSkipVerify = true
+
+      '
+- id: problem-based-packs.insecure-transport.go-stdlib.disallow-old-tls-versions.disallow-old-tls-versions
+  message: Detects creations of tls configuration objects with an insecure MinVersion
+    of TLS. These protocols are deprecated due to POODLE, man in the middle attacks,
+    and other vulnerabilities.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://stackoverflow.com/questions/26429751/java-http-clients-and-poodle
+    subcategory:
+    - vuln
+    technology:
+    - go
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  patterns:
+  - pattern-either:
+    - pattern: 'tls.Config{..., MinVersion: $TLS.$VERSION, ...}
+
+        '
+    - pattern: '$CONFIG = &tls.Config{...}
+
+        ...
+
+        $CONFIG.MinVersion = $TLS.$VERSION
+
+        '
+  - metavariable-regex:
+      metavariable: $VERSION
+      regex: (VersionTLS10|VersionTLS11|VersionSSL30)
+- id: problem-based-packs.insecure-transport.go-stdlib.ftp-request.ftp-request
+  message: Checks for outgoing connections to ftp servers with the ftp package. FTP
+    does not encrypt traffic, possibly leading to PII being sent plaintext over the
+    network. Instead, connect via the SFTP protocol.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://godoc.org/github.com/jlaffaye/ftp#Dial
+    - https://github.com/jlaffaye/ftp
+    subcategory:
+    - vuln
+    technology:
+    - ftp
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  fix-regex:
+    regex: '[fF][tT][pP]://'
+    replacement: sftp://
+    count: 1
+  pattern-either:
+  - pattern: 'ftp.Dial("=~/^[fF][tT][pP]://.*/", ...)
+
+      '
+  - pattern: 'ftp.DialTimeout("=~/^[fF][tT][pP]://.*/", ...)
+
+      '
+  - pattern: 'ftp.Connect("=~/^[fF][tT][pP]://.*/")
+
+      '
+  - pattern: '$URL = "=~/^[fF][tT][pP]://.*/"
+
+      ...
+
+      ftp.Dial($URL, ...)
+
+      '
+  - pattern: '$URL = "=~/^[fF][tT][pP]://.*/"
+
+      ...
+
+      ftp.DialTimeout($URL, ...)
+
+      '
+  - pattern: '$URL = "=~/^[fF][tT][pP]://.*/"
+
+      ...
+
+      ftp.Connect($URL)
+
+      '
+- id: problem-based-packs.insecure-transport.go-stdlib.gorequest-http-request.gorequest-http-request
+  message: Checks for requests to http (unencrypted) sites using gorequest, a popular
+    HTTP client library. This is dangerous because it could result in plaintext PII
+    being passed around the network.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://github.com/parnurzeal/gorequest
+    subcategory:
+    - vuln
+    technology:
+    - gorequest
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  pattern-either:
+  - patterns:
+    - pattern-inside: '$REQ = gorequest.New()
+
+        ...
+
+        $RES = ...
+
+        '
+    - pattern: '$REQ.$FUNC("=~/[hH][tT][tT][pP]://.*/")
+
+        '
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: (Get|Post|Delete|Head|Put|Patch)
+  - patterns:
+    - pattern: gorequest.New().$FUNC("=~/[hH][tT][tT][pP]://.*/")
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: (Get|Post|Delete|Head|Put|Patch)
+- id: problem-based-packs.insecure-transport.go-stdlib.grequests-http-request.grequests-http-request
+  message: Checks for requests to http (unencrypted) sites using grequests, a popular
+    HTTP client library. This is dangerous because it could result in plaintext PII
+    being passed around the network.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://godoc.org/github.com/levigross/grequests#DoRegularRequest
+    - https://github.com/levigross/grequests
+    subcategory:
+    - vuln
+    technology:
+    - grequests
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  patterns:
+  - pattern-either:
+    - pattern: 'grequests.$FUNC(...,"=~/[hH][tT][tT][pP]://.*/", ...)
+
+        '
+    - pattern: '$FUNC(...,"=~/[hH][tT][tT][pP]://.*/", ...)
+
+        '
+  - metavariable-regex:
+      metavariable: $FUNC
+      regex: (Get|Head|Post|Put|Delete|Patch|Options|Req|DoRegularRequest)
+- id: problem-based-packs.insecure-transport.go-stdlib.http-customized-request.http-customized-request
+  message: Checks for requests sent via http.NewRequest to http:// URLS. This is dangerous
+    because the server is attempting to connect to a website that does not encrypt
+    traffic with TLS. Instead, send requests only to https:// URLS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://golang.org/pkg/net/http/#NewRequest
+    subcategory:
+    - vuln
+    technology:
+    - go
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  pattern: 'http.NewRequest(..., "=~/[hH][tT][tT][pP]://.*/", ...)
+
+    '
+- id: problem-based-packs.insecure-transport.go-stdlib.http-request.http-request
+  message: Checks for requests sent via http.$FUNC to http:// URLS. This is dangerous
+    because the server is attempting to connect to a website that does not encrypt
+    traffic with TLS. Instead, send requests only to https:// URLS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://golang.org/pkg/net/http/#Get
+    subcategory:
+    - vuln
+    technology:
+    - go
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  patterns:
+  - pattern-either:
+    - pattern: 'http.$FUNC("=~/[hH][tT][tT][pP]://.*/", ...)
+
+        '
+    - patterns:
+      - pattern-inside: '$CLIENT := &http.Client{...}
+
+          ...
+
+          '
+      - pattern: 'client.$FUNC("=~/[hH][tT][tT][pP]://.*/", ...)
+
+          '
+  - pattern-not: http.$FUNC("=~/[hH][tT][tT][pP]://127.0.0.1.*/", ...)
+  - pattern-not: client.$FUNC("=~/[hH][tT][tT][pP]://127.0.0.1.*/", ...)
+  - pattern-not: http.$FUNC("=~/[hH][tT][tT][pP]://localhost.*/", ...)
+  - pattern-not: client.$FUNC("=~/[hH][tT][tT][pP]://localhost.*/", ...)
+  - metavariable-regex:
+      metavariable: $FUNC
+      regex: (Get|Post|Head|PostForm)
+- id: problem-based-packs.insecure-transport.go-stdlib.sling-http-request.sling-http-request
+  message: Checks for requests to http (unencrypted) sites using gorequest, a popular
+    HTTP client library. This is dangerous because it could result in plaintext PII
+    being passed around the network.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://godoc.org/github.com/dghubble/sling#Sling.Add
+    - https://github.com/dghubble/sling
+    subcategory:
+    - vuln
+    technology:
+    - sling
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  pattern-either:
+  - patterns:
+    - pattern-inside: '$REQ = sling.New()
+
+        ...
+
+        $RES = ...
+
+        '
+    - pattern: '$REQ.$FUNC("=~/[hH][tT][tT][pP]://.*/")
+
+        '
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: (Get|Post|Delete|Head|Put|Options|Patch|Base|Connect)
+  - patterns:
+    - pattern: sling.New().$FUNC("=~/[hH][tT][tT][pP]://.*/")
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: (Get|Post|Delete|Head|Put|Options|Patch|Base|Connect)
+  - patterns:
+    - pattern-inside: '$REQ = sling.New()
+
+        ...
+
+        $URL = "=~/[hH][tT][tT][pP]://.*/"
+
+        ...
+
+        $RES = ...
+
+        '
+    - pattern: '$REQ.$FUNC($URL)
+
+        '
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: (Get|Post|Delete|Head|Put|Options|Patch|Base|Connect)
+  - patterns:
+    - pattern-inside: '$URL = "=~/[hH][tT][tT][pP]://.*/"
+
+        ...
+
+        $RES = ...
+
+        '
+    - pattern: 'sling.New().$FUNC($URL)
+
+        '
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: (Get|Post|Delete|Head|Put|Options|Patch|Base|Connect)
+- id: problem-based-packs.insecure-transport.go-stdlib.telnet-request.telnet-request
+  message: Checks for attempts to connect to an insecure telnet server using the package
+    telnet. This is bad because it can lead to man in the middle attacks.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://godoc.org/github.com/reiver/go-telnet
+    subcategory:
+    - vuln
+    technology:
+    - go-telnet
+    vulnerability: Insecure Transport
+  languages:
+  - go
+  pattern: 'telnet.DialToAndCall(...)
+
+    '

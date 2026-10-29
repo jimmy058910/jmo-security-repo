@@ -1,0 +1,8 @@
+rules:
+  - id: using-http-server
+    languages: [javascript]
+    severity: WARNING
+    message: the one pack rule that is left out by id
+    metadata:
+      category: security
+    pattern: jsserver($X)

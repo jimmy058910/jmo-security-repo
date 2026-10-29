@@ -1,0 +1,8 @@
+rules:
+  - id: http-request
+    languages: [go]
+    severity: WARNING
+    message: a pack rule is filed by its languages key, here go.yaml, and its bare id repeats in js-node
+    metadata:
+      category: security
+    pattern: goreq($X)

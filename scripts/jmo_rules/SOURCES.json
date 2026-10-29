@@ -430,13 +430,6 @@
     },
     {
       "kind": "directory",
-      "path": "problem-based-packs",
-      "reason": "not a language directory: a problem-based layout outside the bundle's per-language scope; its security rules are all insecure-transport rules for Java, Go, JavaScript/TypeScript and Ruby",
-      "rules": 37,
-      "source": "opengrep-rules"
-    },
-    {
-      "kind": "directory",
       "path": "scripts",
       "reason": "repository tooling, not rules",
       "rules": 0,
@@ -456,6 +449,12 @@
       "source": "0xdea"
     },
     {
+      "id": "problem-based-packs.insecure-transport.js-node.using-http-server.using-http-server",
+      "kind": "id",
+      "reason": "matches any call on Node's http module, so it flags every plaintext server behind a TLS-terminating proxy, and double-reports the line http-request reports (measured on probes, 2026-10-29)",
+      "source": "opengrep-rules"
+    },
+    {
       "id": "java.lang.security.audit.xss.no-direct-response-writer.no-direct-response-writer",
       "kind": "license",
       "reason": "metadata.license declares a proprietary license, \"proprietary license - copyright \u00a9 Semgrep, Inc.\", which the bundle's notices do not grant",
@@ -465,7 +464,7 @@
       "id": "elttam.generic.jsp-likely-xss.jsp-likely-xss",
       "kind": "mode",
       "mode": "join",
-      "reason": "opengrep 1.31.0 does not load mode: join rules ('missing languages'), and one in a merged file fails the whole file",
+      "reason": "opengrep scan --validate rejects mode: join rules (\"Rule parse error ... missing languages\") on 1.31.0 and 1.32.0, and every bundle file must validate; a scan itself loads and runs the one measured (elttam's jsp-likely-xss)",
       "source": "elttam"
     }
   ],
@@ -499,20 +498,20 @@
       "sha256": "c7d60559147266c73d206aa23412c466cd165ff4e6a9245ca0632b77fb302f49"
     },
     "go.yaml": {
-      "rules": 74,
-      "sha256": "b31f72a0f5460f69ca4cec5a3057a37335c63efe6b2d48b423bfee47b580ef3f"
+      "rules": 83,
+      "sha256": "76e53bf1662239d191bced27d3627d449acfaecde67238847c533dc686f289a2"
     },
     "html.yaml": {
       "rules": 4,
       "sha256": "4cd074c925f7811f1d31da9d8b56d3326ff68051b5ff648f8d561368fc23b12c"
     },
     "java.yaml": {
-      "rules": 163,
-      "sha256": "e925ff5293515444abc28babc6cac99a2b47ffd12e3758b49d5d18d633d782b0"
+      "rules": 178,
+      "sha256": "17618a036467ff5a77a47997337e05d74a91b2d2cee58fe46bc33269127d26c1"
     },
     "javascript.yaml": {
-      "rules": 170,
-      "sha256": "befd2fe6c65b0e7d0c0a9627a34c2fef211055fecd2c67ac39b4778e48dd0dee"
+      "rules": 177,
+      "sha256": "5cea5bce7fb20954aee7fbb8bbf0c11af6bb6df0de76bf34a5ad46babac59ce1"
     },
     "json.yaml": {
       "rules": 4,
@@ -539,8 +538,8 @@
       "sha256": "2ef09576b5c5682adce70ddcedd124ffbfb4aa883ba18f98c817d3d1621b0fde"
     },
     "ruby.yaml": {
-      "rules": 98,
-      "sha256": "6ecebfc45ed5b36debbb6c1e768803d126d5fa30f1f65717cc3d72d58983dcfd"
+      "rules": 103,
+      "sha256": "63651e6182426c7d037ad86a383b62305eb585c8bde78154950f923e9117a616"
     },
     "rust.yaml": {
       "rules": 10,
@@ -599,7 +598,7 @@
     "opengrep-rules": {
       "pin": "f1d2b562b414783763fd02a6ed2736eaed622efa",
       "prefix": "",
-      "rules": 1250,
+      "rules": 1286,
       "rules_root": "",
       "sha256": "9a5f1cd5c625418cc1c776120123e2d4371df9bb66e099426b17c3488e13619d",
       "url": "https://github.com/opengrep/opengrep-rules/archive/f1d2b562b414783763fd02a6ed2736eaed622efa.tar.gz"

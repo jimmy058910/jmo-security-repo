@@ -11,7 +11,7 @@ Nothing here parametrizes over the bundle's contents. A bundle that is missing
 would make that zero tests, which pytest reports as a skip, and the guard would
 read green exactly when it matters. Each test loads the bundle in its body.
 
-The counts (25 files, 1,420 rules) are the builder's output for today's pins.
+The counts (25 files, 1,456 rules) are the builder's output for today's pins.
 They appear in no assertion: a source bump changes both, and `--check` is the
 guard that the numbers are the sources'. The manifest is the reference here.
 """
@@ -168,6 +168,55 @@ def test_no_rule_declares_a_proprietary_license() -> None:
     assert not wrong, f"{len(wrong)} rule(s) with a proprietary license:\n" + "\n".join(
         wrong[:20]
     )
+
+
+_PACK = "problem-based-packs.insecure-transport."
+
+
+def test_the_insecure_transport_rules_are_filed_by_their_languages_key() -> None:
+    """R26: opengrep-rules' `problem-based-packs/` is laid out by problem, so
+    the builder files each rule by its own `languages:` key. A scan finds a
+    language's rules by file name, so a rule filed anywhere else, or in a
+    `problem-based-packs.yaml` that no scan selects, would be shipped and never
+    run. `[javascript, typescript]` goes to javascript.yaml, which a TypeScript
+    scan reads too (opengrep runs a JavaScript rule on `.ts`)."""
+    manifest = _manifest()
+    assert not [
+        e
+        for e in manifest["exclusions"]
+        if e["kind"] == "directory" and e["path"] == "problem-based-packs"
+    ], "the manifest still excludes the problem-based-packs directory"
+
+    homes: dict[str, set[str]] = {}
+    for p in _bundle_files():
+        for rule in _rules(p.name):
+            if rule["id"].startswith(_PACK):
+                homes.setdefault(p.name, set()).add(rule["id"])
+                assert p.name == f"{rule['languages'][0]}.yaml", (
+                    f"{rule['id']} (languages {rule['languages']}) is in {p.name}"
+                )
+    assert set(homes) == {"go.yaml", "java.yaml", "javascript.yaml", "ruby.yaml"}, (
+        f"insecure-transport rules are in {sorted(homes)}"
+    )
+
+
+def test_using_http_server_is_the_one_insecure_transport_rule_left_out() -> None:
+    """R26: it matches any call on Node's http module, so it flags every plaintext
+    server behind a TLS-terminating proxy and reports the line `http-request`
+    reports. It is a single-id exclusion, recorded with that reason."""
+    excluded = f"{_PACK}js-node.using-http-server.using-http-server"
+    records = [
+        e
+        for e in _manifest()["exclusions"]
+        if e["kind"] == "id" and e["id"] == excluded
+    ]
+    assert len(records) == 1 and "TLS-terminating proxy" in records[0]["reason"], (
+        f"the manifest does not record {excluded} as excluded, with its reason"
+    )
+    ids = {rule["id"] for p in _bundle_files() for rule in _rules(p.name)}
+    assert excluded not in ids
+    # and its siblings from the same directory are in
+    assert f"{_PACK}js-node.http-request.http-request" in ids
 
 
 def test_the_wheel_carries_the_bundle() -> None:

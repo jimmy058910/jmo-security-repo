@@ -1,0 +1,8 @@
+rules:
+  - id: http-request
+    languages: [javascript]
+    severity: WARNING
+    message: the same bare id as go-stdlib's, so only the path keeps the two apart
+    metadata:
+      category: security
+    pattern: jsreq($X)

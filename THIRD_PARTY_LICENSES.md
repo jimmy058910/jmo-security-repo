@@ -4,7 +4,7 @@ JMo Security is licensed `MIT OR Apache-2.0` ([LICENSE](LICENSE)). One directory
 
 | Source | Pinned at | License | Rules in the bundle | Id prefix |
 |--------|-----------|---------|---------------------|-----------|
-| [opengrep-rules](#opengrep-rules) | commit `f1d2b562` | LGPL-2.1 with the Commons Clause | 1,250 | none |
+| [opengrep-rules](#opengrep-rules) | commit `f1d2b562` | LGPL-2.1 with the Commons Clause | 1,286 | none |
 | [GitLab sast-rules, `rules/lgpl-cc`](#gitlab-sast-rules-ruleslgpl-cc) | tag `v2.10.1` | LGPL-2.1 with the Commons Clause; three rules name another license | 100 | `lgpl-cc.` |
 | [0xdea/semgrep-rules, `rules/c`](#0xdeasemgrep-rules-rulesc) | commit `e0121ac1` | MIT | 48 | `0xdea.` |
 | [elttam/semgrep-rules, `rules/`](#elttamsemgrep-rules-rules) | commit `24426856` | MIT | 22 | `elttam.` |
@@ -18,7 +18,7 @@ A rule's source shows in its id: an id that starts `lgpl-cc.`, `0xdea.` or `eltt
 - It keeps only rules with `metadata.category: security`.
 - It drops a rule whose `metadata.license` says "proprietary", from any source (one rule so far, under opengrep-rules below).
 - It prefixes each rule `id` with the path of the file the rule came from, and for the last three sources above with the source's prefix as well.
-- It merges the rules into one file per language and writes the YAML again. The sources' comments are not carried over, including the license header some rule files carry; the rules that named a license other than their directory's are listed below.
+- It merges the rules into one file per language (the rules of opengrep-rules' `problem-based-packs/`, which is laid out by problem, go to the file named by their own `languages:` key) and writes the YAML again. The sources' comments are not carried over, including the license header some rule files carry; the rules that named a license other than their directory's are listed below.
 - It drops a rule when a source it ranks higher has a rule with the same body.
 
 No pattern, message or metadata field of a kept rule is edited.
@@ -668,4 +668,4 @@ SOFTWARE.
 
 ## Sources that are not in the bundle
 
-None of the following is in the bundle, so there is no notice to carry: GitLab's `rules/lgpl` (LGPL-3.0) and `rules/gitlab` (GitLab Enterprise Edition license), Trail of Bits' rules (AGPL-3.0), Semgrep's registry (Semgrep Rules License v1.0), elttam's `rules-audit/` and all of dgryski/semgrep-go (both MIT), and opengrep-rules' `generic/secrets/` and `problem-based-packs/` directories. The builder reads `rules/lgpl-cc/` of GitLab's archive, `rules/` of the 0xdea and elttam archives and every language directory of the opengrep-rules archive. It skips the two opengrep-rules directories above, and it never reads the rest of the list. [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md) says why each is left out.
+None of the following is in the bundle, so there is no notice to carry: GitLab's `rules/lgpl` (LGPL-3.0) and `rules/gitlab` (GitLab Enterprise Edition license), Trail of Bits' rules (AGPL-3.0), Semgrep's registry (Semgrep Rules License v1.0), elttam's `rules-audit/` and all of dgryski/semgrep-go (both MIT), and opengrep-rules' `generic/secrets/` directory. The builder reads `rules/lgpl-cc/` of GitLab's archive, `rules/` of the 0xdea and elttam archives, and every language directory of the opengrep-rules archive together with its `problem-based-packs/`. It skips `generic/secrets/`, and it never reads the rest of the list. [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md) says why each is left out.

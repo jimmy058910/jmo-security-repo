@@ -20,11 +20,16 @@ What is kept: rules with `metadata.category: security`, from `*.yaml` / `*.yml`
 files that are not `*.test.yaml` test targets and have a `rules` list (the
 GitLab glob is `rule-*.yml` only). A rule's language is the top directory under
 its source's rules root, and it goes to `<language>.yaml`; sources that share a
-language directory merge into one file. Ids are namespaced by path so that ids
-repeating across frameworks stay distinct: the path under the rules root, minus
-the extension, with its parts joined by "." (never the OS separator, so a
-Windows build gives the same ids), then the rule's own id, with the source's
-prefix in front when it has one. A repeated namespaced id fails the build.
+language directory merge into one file. The one exception is configured per
+source (`route_by_languages`): opengrep-rules' `problem-based-packs/` is laid out
+by problem, so its top directory names no language, and a rule there goes to the
+file named by the first entry of its own `languages:` list (`[javascript,
+typescript]` goes to `javascript.yaml`, which a TypeScript scan reads too). Ids
+are namespaced by path so that ids repeating across frameworks stay distinct: the
+path under the rules root, minus the extension, with its parts joined by "."
+(never the OS separator, so a Windows build gives the same ids), then the rule's
+own id, with the source's prefix in front when it has one. A repeated namespaced
+id fails the build.
 
 What is left out is recorded with its reason in the manifest: whole directories,
 rules by `mode`, single namespaced ids (all three configured in each `Source`),
@@ -100,8 +105,9 @@ FETCH_TIMEOUT_S = 120
 DEFAULT_CACHE = Path.home() / ".cache" / "jmo-rule-sources"
 
 _JOIN_REASON = (
-    "opengrep 1.31.0 does not load mode: join rules ('missing languages'), and one in a "
-    "merged file fails the whole file"
+    'opengrep scan --validate rejects mode: join rules ("Rule parse error ... missing '
+    'languages") on 1.31.0 and 1.32.0, and every bundle file must validate; a scan itself '
+    "loads and runs the one measured (elttam's jsp-likely-xss)"
 )
 
 
@@ -116,7 +122,8 @@ class Source:
     `THIRD_PARTY_LICENSES.md` gives the license, written into the header of every
     file this source contributes to. The three `skip_` maps give each
     exclusion its reason: a directory under `rules_root`, a rule's `mode:`, and
-    a namespaced id.
+    a namespaced id. `route_by_languages` lists directories under `rules_root`
+    whose rules are filed by their own `languages:` key, not by the directory.
     """
 
     name: str
@@ -130,6 +137,7 @@ class Source:
     skip_dirs: dict[str, str] = field(default_factory=dict)
     skip_modes: dict[str, str] = field(default_factory=dict)
     skip_ids: dict[str, str] = field(default_factory=dict)
+    route_by_languages: tuple[str, ...] = ()
 
 
 SOURCES: dict[str, Source] = {
@@ -160,16 +168,19 @@ SOURCES: dict[str, Source] = {
                     "secret detection is gitleaks' and trufflehog's class; with these rules the "
                     "bundle trips JMo's own secret scanning (private-key and Slack-webhook patterns)"
                 ),
-                "problem-based-packs": (
-                    "not a language directory: a problem-based layout outside the bundle's per-language "
-                    "scope; its security rules are all insecure-transport rules for Java, Go, "
-                    "JavaScript/TypeScript and Ruby"
-                ),
                 "scripts": "repository tooling, not rules",
                 "stats": "coverage statistics, not rules",
                 ".github": "the rules repository's CI workflows, not rules",
             },
             skip_modes={"join": _JOIN_REASON},
+            skip_ids={
+                "problem-based-packs.insecure-transport.js-node.using-http-server.using-http-server": (
+                    "matches any call on Node's http module, so it flags every plaintext server behind "
+                    "a TLS-terminating proxy, and double-reports the line http-request reports "
+                    "(measured on probes, 2026-10-29)"
+                ),
+            },
+            route_by_languages=("problem-based-packs",),
         ),
         Source(
             name="0xdea",
@@ -268,6 +279,22 @@ def _under(parts: tuple[str, ...], directory: str) -> bool:
     return parts[: len(wanted)] == wanted
 
 
+def _language(
+    rule: dict[str, Any], parts: tuple[str, ...], source: Source, label: str
+) -> str:
+    """The language file a rule goes to: its top directory, or its first `languages:` entry."""
+    if not any(_under(parts, directory) for directory in source.route_by_languages):
+        return parts[0]
+    languages = rule.get("languages")
+    if not (
+        isinstance(languages, list) and languages and isinstance(languages[0], str)
+    ):
+        raise ValueError(
+            f"{label}: rule {rule['id']!r} has no `languages:` list to file it by"
+        )
+    return languages[0]
+
+
 def collect(
     root: Path, source: Source, exclusions: list[dict[str, Any]] | None = None
 ) -> dict[str, list[dict[str, Any]]]:
@@ -344,7 +371,9 @@ def collect(
                     }
                 )
             else:
-                by_language[rel.parts[0]].append({**rule, "id": rule_id})
+                by_language[_language(rule, rel.parts, source, label)].append(
+                    {**rule, "id": rule_id}
+                )
 
     for directory, count in dir_rules.items():
         if (base / directory).is_dir():

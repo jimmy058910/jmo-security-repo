@@ -241,14 +241,14 @@ does not read this bundle; read this entry, and its advice on an empty result, a
 applying from v2.0.0.
 
 JMo's code scanner reads the rule bundle in `scripts/jmo_rules/`
-([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,250 of its 1,420 rules come from one
+([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,286 of its 1,456 rules come from one
 snapshot of opengrep-rules whose commit is dated 2025-01-26. Nothing refreshes
 it: a rule written since is not in the bundle until someone moves the pin and
 rebuilds. GitLab's `lgpl-cc` rules (v2.10.1, 100 rules) are maintained and
 cover Java, Ruby, PHP and Python, with one rule each for JavaScript, YAML and
 `.properties` files. Every other language is the snapshot's alone.
 
-That includes JavaScript and TypeScript: `javascript.yaml` holds 169 snapshot
+That includes JavaScript and TypeScript: `javascript.yaml` holds 176 snapshot
 rules and 1 from GitLab, and `typescript.yaml` holds 18 snapshot rules. GitLab's
 maintained JavaScript set, `rules/lgpl`, is not in the bundle. It is LGPL-3.0,
 and its rules are to be scored one at a time after v2.0.0

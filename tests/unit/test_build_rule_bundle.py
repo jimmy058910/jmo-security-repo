@@ -12,8 +12,12 @@ Fixture contents (what each file is for is in its own `message:`):
   opengrep-rules   r2, gen, s-pair, t1, t2, wf kept; r (body twin of gl-r) and
                    s-t (body twin of gl-t) and s-prop (twin of gl-p, in another language
                    file) dropped as duplicates; c (correctness),
-                   nometa, a.test.yaml, not-rules.yaml, template.yaml, generic/secrets
-                   and problem-based-packs contribute nothing
+                   nometa, a.test.yaml, not-rules.yaml, template.yaml and generic/secrets
+                   contribute nothing. problem-based-packs/insecure-transport is filed by
+                   each rule's `languages:` key, not by its directory: go-stdlib's
+                   http-request (go), js-node's http-request (javascript) and ftp-request
+                   (javascript, typescript) kept; js-node's using-http-server dropped by
+                   id; java-stdlib's ftp-request dropped as a twin of gl-t
   0xdea            ok-rule kept; p-pair, p-t duplicates; raptor-use-after-free
                    (an excluded id) and noisy/ (an excluded directory) dropped
   elttam           e-ok kept; jsp-join (mode: join) and yaml/kubernetes dropped
@@ -40,12 +44,13 @@ from scripts.dev import build_rule_bundle as bb
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "rule_bundle" / "sources"
 
-# 7 files, 12 rules: the fixture's expected bundle.
+# 8 files, 15 rules: the fixture's expected bundle.
 EXPECTED_FILES = {
     "c.yaml": 2,
     "generic.yaml": 1,
+    "go.yaml": 1,
     "java.yaml": 2,
-    "javascript.yaml": 3,
+    "javascript.yaml": 5,
     "properties.yaml": 1,
     "python.yaml": 2,
     "yaml.yaml": 1,
@@ -315,17 +320,108 @@ def test_join_rules_are_dropped_with_their_reason(trees, tmp_path):
     (record,) = _exclusions(manifest, "mode")
     assert (record["source"], record["mode"]) == ("elttam", "join")
     assert record["id"] == "elttam.generic.jsp.jsp-join"
-    assert "opengrep" in record["reason"]
     assert "elttam.generic.jsp.jsp-join" not in _ids(tmp_path / "out")
+    # R27: the measured reason. A join rule fails `opengrep scan --validate`, which
+    # test_every_file_validates requires of every bundle file; `scan` itself loads it.
+    reason = record["reason"]
+    assert "opengrep" in reason
+    assert "--validate" in reason
+    assert "missing languages" in reason
+    assert "whole file" not in reason  # the 1.31.0 claim that 1.32.0 did not reproduce
+
+
+def _id_records(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {e["id"]: e for e in _exclusions(manifest, "id")}
 
 
 def test_an_excluded_id_is_dropped_with_its_reason(trees, tmp_path):
     manifest = bb.build(trees, tmp_path / "out")
-    (record,) = _exclusions(manifest, "id")
+    record = _id_records(manifest)["0xdea.c.use-after-free.raptor-use-after-free"]
     assert record["source"] == "0xdea"
-    assert record["id"] == "0xdea.c.use-after-free.raptor-use-after-free"
     assert "stack" in record["reason"]
     assert not any("raptor-use-after-free" in i for i in _ids(tmp_path / "out"))
+
+
+PACK = "problem-based-packs.insecure-transport"
+
+
+def test_using_http_server_is_dropped_by_id_with_its_reason(trees, tmp_path):
+    # R26: the one pack rule that is left out. It matches any call on Node's http
+    # module, so it flags every plaintext server behind a TLS-terminating proxy and
+    # reports the line http-request reports; the reason says so.
+    manifest = bb.build(trees, tmp_path / "out")
+    record = _id_records(manifest)[
+        f"{PACK}.js-node.using-http-server.using-http-server"
+    ]
+    assert record["source"] == "opengrep-rules"
+    assert "TLS-terminating proxy" in record["reason"]
+    assert "http-request" in record["reason"]
+    assert not any("using-http-server" in i for i in _ids(tmp_path / "out"))
+
+
+# --- the problem-based packs are filed by `languages:` (R26) -----------------
+
+
+def test_a_pack_rule_goes_to_the_file_named_by_its_languages_key(trees, tmp_path):
+    # The packs are laid out by problem, so the top directory names no language.
+    # `[javascript]` and `[javascript, typescript]` both go to javascript.yaml (a
+    # TypeScript scan reads it too), and no file is added for the pack itself.
+    out = _build(trees, tmp_path)
+    by_file = _rules_by_file(out)
+    assert f"{PACK}.go-stdlib.http-request.http-request" in {
+        r["id"] for r in by_file["go.yaml"]
+    }
+    assert {
+        f"{PACK}.js-node.http-request.http-request",
+        f"{PACK}.js-node.ftp-request.ftp-request",
+    } <= {r["id"] for r in by_file["javascript.yaml"]}
+    assert set(by_file) == set(EXPECTED_FILES)  # 25 files in the real bundle stay 25
+
+
+def test_pack_ids_stay_distinct_where_the_bare_id_repeats(trees, tmp_path):
+    # 27 bare ids are shared by the real pack's 37 rules: the path is what keeps
+    # `http-request` of Go and of Node apart.
+    ids = _ids(_build(trees, tmp_path))
+    assert f"{PACK}.go-stdlib.http-request.http-request" in ids
+    assert f"{PACK}.js-node.http-request.http-request" in ids
+
+
+def test_a_pack_rule_is_still_checked_for_body_duplicates(trees, tmp_path):
+    # The pack is the snapshot's, so a GitLab rule with the same body wins (D16).
+    manifest = bb.build(trees, tmp_path / "out")
+    dropped = f"{PACK}.java-stdlib.ftp-request.ftp-request"
+    assert dropped not in _ids(tmp_path / "out")
+    record = next(
+        e for e in _exclusions(manifest, "body-duplicate") if e["id"] == dropped
+    )
+    assert (record["source"], record["kept_source"]) == ("opengrep-rules", "lgpl-cc")
+    assert record["kept_id"] == "lgpl-cc.java.rule-t.gl-t"
+
+
+def test_a_pack_rule_with_no_language_fails_the_build(trees, tmp_path):
+    # A routed rule that names no language has no file to go to: say so rather than
+    # file it under the pack's directory name.
+    planted = trees["opengrep-rules"] / "problem-based-packs" / "insecure-transport"
+    (planted / "go-stdlib" / "no-language.yaml").write_bytes(
+        b"rules:\n  - id: nolang\n    pattern: x\n    metadata: {category: security}\n"
+    )
+    with pytest.raises(ValueError, match=r"no-language\.yaml.*nolang"):
+        bb.build(trees, tmp_path / "out")
+
+
+def test_only_a_configured_directory_is_filed_by_languages(trees, tmp_path):
+    # Everywhere else the top directory is the language, whatever `languages:` says.
+    stray = trees["opengrep-rules"] / "python" / "lang" / "elsewhere.yaml"
+    stray.write_bytes(
+        b"rules:\n  - id: elsewhere\n    languages: [go]\n    pattern: x\n    metadata: {category: security}\n"
+    )
+    by_file = _rules_by_file(_build(trees, tmp_path))
+    assert "python.lang.elsewhere.elsewhere" in {
+        r["id"] for r in by_file["python.yaml"]
+    }
+    assert "python.lang.elsewhere.elsewhere" not in {
+        r["id"] for r in by_file["go.yaml"]
+    }
 
 
 def test_a_proprietary_rule_is_dropped_with_its_reason(trees, tmp_path):
@@ -452,7 +548,6 @@ def test_the_fixtures_excluded_directories_are_all_recorded(trees, tmp_path):
     }
     assert got == {
         ("opengrep-rules", "generic/secrets"): 1,
-        ("opengrep-rules", "problem-based-packs"): 1,
         ("0xdea", "noisy"): 1,
         ("elttam", "yaml/kubernetes"): 1,
     }
@@ -466,6 +561,16 @@ def test_the_configured_exclusions_are_the_decided_ones():
         "elttam",
     ]  # D16's precedence
     assert "generic/secrets" in bb.SOURCES["opengrep-rules"].skip_dirs
+    # R26: the packs are in, filed by `languages:`, minus one rule left out by id
+    assert "problem-based-packs" not in bb.SOURCES["opengrep-rules"].skip_dirs
+    assert bb.SOURCES["opengrep-rules"].route_by_languages == ("problem-based-packs",)
+    assert [s.name for s in bb.SOURCES.values() if s.route_by_languages] == [
+        "opengrep-rules"
+    ]
+    assert (
+        f"{PACK}.js-node.using-http-server.using-http-server"
+        in bb.SOURCES["opengrep-rules"].skip_ids
+    )
     assert "yaml/kubernetes" in bb.SOURCES["elttam"].skip_dirs
     assert "noisy" in bb.SOURCES["0xdea"].skip_dirs
     assert (
@@ -676,7 +781,7 @@ def test_the_manifest_records_each_file(trees, tmp_path):
         )
     assert {n: s["rules"] for n, s in manifest["sources"].items()} == {
         "lgpl-cc": 4,
-        "opengrep-rules": 6,
+        "opengrep-rules": 9,
         "0xdea": 1,
         "elttam": 1,
     }
@@ -688,7 +793,7 @@ def test_the_manifest_records_each_file(trees, tmp_path):
         "body-duplicate",
     }
     assert all(e["reason"] and e["source"] for e in manifest["exclusions"])
-    assert len(_exclusions(manifest, "body-duplicate")) == 5
+    assert len(_exclusions(manifest, "body-duplicate")) == 6
 
 
 def test_sources_json_is_deterministic_json_matching_the_manifest(trees, tmp_path):
@@ -819,7 +924,7 @@ def cli(trees, tmp_path, monkeypatch) -> Callable[..., int]:
 def test_main_builds_into_out(cli, tmp_path, capsys):
     assert cli() == 0
     assert set(_bytes_of(tmp_path / "bundle")) == {*EXPECTED_FILES, "SOURCES.json"}
-    assert "7 files, 12 rules" in capsys.readouterr().out
+    assert "8 files, 15 rules" in capsys.readouterr().out
 
 
 def test_check_passes_on_an_unchanged_bundle(cli, tmp_path):

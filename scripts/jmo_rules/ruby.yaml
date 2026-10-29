@@ -2236,6 +2236,187 @@ rules:
     - rails
     references:
     - https://github.com/semgrep/semgrep-rules/blob/develop/ruby/rails/security/audit/xss/manual-template-creation.yaml
+- id: problem-based-packs.insecure-transport.ruby-stdlib.http-client-requests.http-client-requests
+  message: Checks for requests to http (unencrypted) sites using some of ruby's most
+    popular REST/HTTP libraries, including httparty and restclient.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://github.com/rest-client/rest-client
+    - https://github.com/jnunemaker/httparty/tree/master/docs
+    subcategory:
+    - vuln
+    technology:
+    - httparty
+    - rest-client
+    vulnerability: Insecure Transport
+  languages:
+  - ruby
+  pattern-either:
+  - pattern: 'HTTParty.$PARTYVERB("=~/[hH][tT][tT][pP]://.*/", ...)
+
+      '
+  - pattern: '$STRING = "=~/[hH][tT][tT][pP]://.*/"
+
+      ...
+
+      HTTParty.$PARTYVERB($STRING, ...)
+
+      '
+  - pattern: 'RestClient.$RESTVERB "=~/[hH][tT][tT][pP]://.*/", ...
+
+      '
+  - pattern: 'RestClient::Request.execute(..., url: "=~/[hH][tT][tT][pP]://.*/", ...)
+
+      '
+- id: problem-based-packs.insecure-transport.ruby-stdlib.net-ftp-request.net-ftp-request
+  message: Checks for outgoing connections to ftp servers with the 'net/ftp' package.
+    FTP does not encrypt traffic, possibly leading to PII being sent plaintext over
+    the network. Instead, connect via the SFTP protocol.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://docs.ruby-lang.org/en/2.0.0/Net/FTP.html
+    subcategory:
+    - vuln
+    technology:
+    - ruby
+    vulnerability: Insecure Transport
+  languages:
+  - ruby
+  pattern-either:
+  - pattern: '$FTP = Net::FTP.new(''...'')
+
+      ...
+
+      $FTP.login
+
+      '
+  - pattern: "Net::FTP.open('...') do |ftp|\n  ...\n  ftp.login\nend\n"
+- id: problem-based-packs.insecure-transport.ruby-stdlib.net-http-request.net-http-request
+  message: Checks for requests sent to http:// URLs. This is dangerous as the server
+    is attempting to connect to a website that does not encrypt traffic with TLS.
+    Instead, only send requests to https:// URLs.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://ruby-doc.org/stdlib-2.6.5/libdoc/net/http/rdoc/Net/
+    subcategory:
+    - vuln
+    technology:
+    - ruby
+    vulnerability: Insecure Transport
+  languages:
+  - ruby
+  patterns:
+  - pattern-either:
+    - pattern: '$URI = URI(''=~/[hH][tT][tT][pP]://.*/'')
+
+        ...
+
+        Net::HTTP::$FUNC.new $URI
+
+        '
+    - pattern: '$URI = URI(''=~/[hH][tT][tT][pP]://.*/'')
+
+        ...
+
+        Net::HTTP.$FUNC($URI, ...)
+
+        '
+    - pattern: 'Net::HTTP.$FUNC(URI(''=~/[hH][tT][tT][pP]://.*/''), ...)
+
+        '
+  - metavariable-regex:
+      metavariable: $FUNC
+      regex: ([gG]et|post_form|[pP]ost|get_response|get_print|Head|Patch|Put|Proppatch|Lock|Unlock|Options|Propfind|Delete|Move|Copy|Trace|Mkcol)
+- id: problem-based-packs.insecure-transport.ruby-stdlib.net-telnet-request.net-telnet-request
+  message: Checks for creation of telnet servers or attempts to connect through telnet.
+    This is insecure as the telnet protocol supports no encryption, and data passes
+    through unencrypted.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://docs.ruby-lang.org/en/2.2.0/Net/Telnet.html
+    - https://www.rubydoc.info/gems/net-ssh-telnet2/0.1.0/Net/SSH/Telnet
+    subcategory:
+    - vuln
+    technology:
+    - ruby
+    vulnerability: Insecure Transport
+  languages:
+  - ruby
+  pattern-either:
+  - pattern: 'Net::Telnet::new(...)
+
+      '
+  - pattern: 'Net::SSH::Telnet.new(...)
+
+      '
+- id: problem-based-packs.insecure-transport.ruby-stdlib.openuri-request.openuri-request
+  message: Checks for requests to http and ftp (unencrypted) sites using OpenURI.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://ruby-doc.org/stdlib-2.6.3/libdoc/open-uri/rdoc/OpenURI.html
+    subcategory:
+    - vuln
+    technology:
+    - open-uri
+    vulnerability: Insecure Transport
+  languages:
+  - ruby
+  pattern-either:
+  - pattern: 'URI.open(''=~/[hH][tT][tT][pP]://.*/'', ...)
+
+      '
+  - pattern: '$URI = URI.parse(''=~/[hH][tT][tT][pP]://.*/'', ...)
+
+      ...
+
+      $URI.open
+
+      '
+  - pattern: 'URI.open(''=~/^[fF][tT][pP]://.*/'', ...)
+
+      '
+  - pattern: '$URI = URI.parse(''=~/^[fF][tT][pP]://.*/'', ...)
+
+      ...
+
+      $URI.open
+
+      '
 - id: ruby.aws-lambda.security.activerecord-sqli.activerecord-sqli
   languages:
   - ruby
