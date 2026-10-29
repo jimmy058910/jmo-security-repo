@@ -286,3 +286,42 @@ def write_scan_timings(
         )
         return None
     return path
+
+
+def read_scan_root(timings: Path) -> str | None:
+    """The directory a tree's tools scanned, from its `scan-timings.json`.
+
+    None when the scan recorded none: no file (a results directory from
+    elsewhere, a golden), or `root: null` (an image, a URL, an IaC file, a
+    cluster have no tree). A file that is there and cannot be read is also
+    None, but it is named in a warning: it is not a scan that recorded no
+    root, and without a root the report keeps the host's directory in every
+    path and a relative path cannot be opened for its code context.
+
+    The report (`scan_roots`) and the adapters whose paths are relative to the
+    target read the root through this one function.
+    """
+    try:
+        document = json.loads(timings.read_bytes())
+    except FileNotFoundError:
+        return None
+    # `UnicodeDecodeError` is a `ValueError`, not a `JSONDecodeError`.
+    except (OSError, ValueError) as e:
+        logger.warning("Could not read the scan root from %s: %s", timings, e)
+        return None
+    if not isinstance(document, dict):
+        logger.warning(
+            "Could not read the scan root from %s: it is not a JSON object", timings
+        )
+        return None
+    root = document.get("root")
+    if root is None:
+        return None
+    if isinstance(root, str) and root:
+        return root
+    logger.warning(
+        "Could not read the scan root from %s: root is %r, not a directory",
+        timings,
+        root,
+    )
+    return None

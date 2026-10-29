@@ -40,7 +40,7 @@ from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 # Priority calculation (v0.9.0 Feature #5: EPSS/KEV)
 from scripts.core.priority_calculator import PriorityCalculator
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
-from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
+from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME, read_scan_root
 from scripts.core.tool_diagnostics import (
     ToolDiagnostic,
     extract_tool_diagnostics,
@@ -209,11 +209,8 @@ def scan_roots(results_dir: Path) -> tuple[str, ...]:
     if isinstance(raw, list):
         roots.extend(entry for entry in raw if isinstance(entry, str) and entry)
     for timings in sorted(results_dir.glob(f"individual-*/*/{SCAN_TIMINGS_FILENAME}")):
-        try:
-            root = json.loads(timings.read_bytes()).get("root")
-        except (OSError, json.JSONDecodeError, AttributeError):
-            continue
-        if isinstance(root, str) and root:
+        root = read_scan_root(timings)
+        if root:
             roots.append(root)
     return tuple(dict.fromkeys(roots))
 

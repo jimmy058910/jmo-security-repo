@@ -633,10 +633,19 @@ def test_the_golden_holds_no_source_text():
 # --- a path relative to the target (R35) -----------------------------------------
 
 
+ANOTHER_REPOSITORYS_LINES = "".join(
+    f"line {n} of another repository\n" for n in range(9)
+)
+
+
 def _relative_output(tmp_path: Path):
     """An output as the row now writes it: paths relative to the target, beside a
-    `scan-timings.json` that records the target's root. The working directory
-    holds no copy of the file, so the relative path alone reads nothing."""
+    `scan-timings.json` that records the target's root. The tests run from
+    `tmp_path`, which holds ANOTHER file at the same relative name (`src/a.py`,
+    another repository's, as a report run from inside a checkout would find),
+    so a path read against the working directory reads the wrong file."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text(ANOTHER_REPOSITORYS_LINES, encoding="utf-8")
     root = tmp_path / "work" / "app"
     (root / "src").mkdir(parents=True)
     (root / "src" / "a.py").write_text(
@@ -677,14 +686,20 @@ def test_the_context_is_read_from_under_the_root_the_scan_recorded(
     assert finding.location["path"] == "src/a.py"
     assert finding.context is not None
     assert "os.system(cmd)" in finding.context["snippet"]
+    assert "another repository" not in finding.context["snippet"]
     assert finding.context["startLine"] == 3
 
 
-def test_without_a_recorded_root_the_path_is_read_as_given(tmp_path: Path, monkeypatch):
+def test_without_a_recorded_root_a_relative_path_is_not_read(
+    tmp_path: Path, monkeypatch
+):
     """A bare output (a golden, a results directory from elsewhere) names no
-    root: the context is read from the path as given, or is absent."""
+    root, and a relative path means nothing without one: it is not opened
+    against the working directory, where it would attach another repository's
+    lines to the finding as its code context."""
     _, out = _relative_output(tmp_path)
     monkeypatch.chdir(tmp_path)
+    assert (Path("src") / "a.py").is_file(), "the decoy is what makes this fail"
 
     (finding,) = OpengrepAdapter().parse(out / "opengrep.json")
 
@@ -692,15 +707,53 @@ def test_without_a_recorded_root_the_path_is_read_as_given(tmp_path: Path, monke
     assert finding.context is None
 
 
-@pytest.mark.parametrize("timings", ["not json", "[]", '{"root": 7}', '{"root": ""}'])
-def test_an_unreadable_scan_timings_file_is_no_root(
-    tmp_path: Path, monkeypatch, timings: str
+def test_an_absolute_path_needs_no_recorded_root(tmp_path: Path, monkeypatch):
+    """An absolute path names its file whatever the root: an output from before
+    the row ran inside the target, or a tool that writes absolute paths."""
+    root, out = _relative_output(tmp_path)
+    document = json.loads((out / "opengrep.json").read_text(encoding="utf-8"))
+    document["results"][0]["path"] = str(root / "src" / "a.py")
+    (out / "opengrep.json").write_text(json.dumps(document), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    (finding,) = OpengrepAdapter().parse(out / "opengrep.json")
+
+    assert finding.context is not None
+    assert "os.system(cmd)" in finding.context["snippet"]
+
+
+UNREADABLE_TIMINGS = ["not json", "[]", '{"root": 7}', '{"root": ""}']
+
+
+@pytest.mark.parametrize("timings", UNREADABLE_TIMINGS)
+def test_an_unreadable_scan_timings_file_is_no_root_and_is_named(
+    tmp_path: Path, monkeypatch, caplog, timings: str
 ):
     _, out = _relative_output(tmp_path)
     (out / "scan-timings.json").write_text(timings, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    (finding,) = OpengrepAdapter().parse(out / "opengrep.json")
+    with caplog.at_level("WARNING"):
+        (finding,) = OpengrepAdapter().parse(out / "opengrep.json")
 
     assert finding.location["path"] == "src/a.py"
     assert finding.context is None
+    # Dropped silently, the cause of a finding with no code context was a file
+    # nobody was told about.
+    assert [
+        str(out / "scan-timings.json") in r.getMessage() for r in caplog.records
+    ] == [True]
+
+
+@pytest.mark.parametrize("timings", [None, '{"root": null}'])
+def test_no_recorded_root_is_not_a_warning(tmp_path: Path, caplog, timings):
+    """No file, or `root: null` (an image, a URL: the scan has no tree), is a
+    scan that recorded none, not a damaged one."""
+    _, out = _relative_output(tmp_path)
+    if timings is not None:
+        (out / "scan-timings.json").write_text(timings, encoding="utf-8")
+
+    with caplog.at_level("WARNING"):
+        OpengrepAdapter().parse(out / "opengrep.json")
+
+    assert caplog.records == []

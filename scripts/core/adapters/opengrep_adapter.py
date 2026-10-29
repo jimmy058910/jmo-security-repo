@@ -50,7 +50,6 @@ See Also:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -65,7 +64,7 @@ from scripts.core.plugin_api import (
     PluginMetadata,
     adapter_plugin,
 )
-from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
+from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME, read_scan_root
 
 
 def _scan_root(output_path: Path) -> Path | None:
@@ -74,16 +73,12 @@ def _scan_root(output_path: Path) -> Path | None:
     The row runs opengrep from inside its target (R35), so a result's ``path``
     is relative to it and names no file the report phase could open from where
     it runs. The scan records the root beside every tree's outputs. None when
-    there is no such file (a golden, a results directory from elsewhere), and
-    the path is then read as given.
+    there is no such file (a golden, a results directory from elsewhere) or it
+    cannot be read (``read_scan_root`` names it), and a relative path is then
+    not opened at all.
     """
-    try:
-        root = json.loads(
-            (output_path.parent / SCAN_TIMINGS_FILENAME).read_text(encoding="utf-8")
-        ).get("root")
-    except (OSError, ValueError, AttributeError):
-        return None
-    return Path(root) if isinstance(root, str) and root else None
+    root = read_scan_root(output_path.parent / SCAN_TIMINGS_FILENAME)
+    return Path(root) if root else None
 
 
 @adapter_plugin(
@@ -226,14 +221,22 @@ class OpengrepAdapter(AdapterPlugin):
             # Code context. ``path`` stays as opengrep wrote it: the report
             # phase strips a root from an absolute path and has nothing to strip
             # from a relative one, which is already the repository-relative form.
+            # A relative path is opened only under the root the scan recorded:
+            # against the working directory it would read whatever file of that
+            # name the report happens to run beside, and attach another
+            # repository's lines to the finding.
             context = None
             if path_str and start_line:
-                readable = (
-                    str(root / path_str)
-                    if root is not None and not Path(path_str).is_absolute()
-                    else path_str
-                )
-                context = extract_code_snippet(readable, start_line, context_lines=2)
+                if Path(path_str).is_absolute():
+                    readable: str | None = path_str
+                elif root is not None:
+                    readable = str(root / path_str)
+                else:
+                    readable = None
+                if readable:
+                    context = extract_code_snippet(
+                        readable, start_line, context_lines=2
+                    )
 
             # Create Finding object
             finding = Finding(
