@@ -21,7 +21,9 @@ A rule's source shows in its id: an id that starts `lgpl-cc.`, `0xdea.` or `eltt
 - It merges the rules into one file per language and writes the YAML again. The sources' comments are not carried over, including the license header some rule files carry; the rules that named a license other than their directory's are listed below.
 - It drops a rule when a source it ranks higher has a rule with the same body.
 
-No pattern, message or metadata field of a kept rule is edited. [`SOURCES.json`](scripts/jmo_rules/SOURCES.json) records each source's pinned archive and sha256, every file's rule count, and each rule or directory the builder left out, with the reason.
+No pattern, message or metadata field of a kept rule is edited.
+
+Each generated file opens with a comment that carries the notices with it. It says the file is generated and not to be edited by hand, names the sources that gave that file rules with the commit or tag each is pinned at and its license (as the table above names it), lists the changes above and gives the date they were last made, and points to this file. So the notices travel in every rule file, not only in the wheel's license files, and a file copied out of the wheel on its own still says what it is and under what terms. [`SOURCES.json`](scripts/jmo_rules/SOURCES.json) records each source's pinned archive and sha256, every file's rule count, and each rule or directory the builder left out, with the reason.
 
 ## opengrep-rules
 

@@ -431,7 +431,7 @@
     {
       "kind": "directory",
       "path": "problem-based-packs",
-      "reason": "not a language directory: a problem-based layout outside the bundle's per-language scope",
+      "reason": "not a language directory: a problem-based layout outside the bundle's per-language scope; its security rules are all insecure-transport rules for Java, Go, JavaScript/TypeScript and Ruby",
       "rules": 37,
       "source": "opengrep-rules"
     },
@@ -472,103 +472,103 @@
   "files": {
     "apex.yaml": {
       "rules": 11,
-      "sha256": "ef4bf29f641d827174e8cf72b35c374df31dd46b21e7426cded29f1bfa01252c"
+      "sha256": "83a9622770a49fe611d966914c75c6208c6b63987d95483846243428b4e15435"
     },
     "bash.yaml": {
       "rules": 3,
-      "sha256": "461a187429e53249b33467aa468346c8237d4aa8364894a9c047649ab2296c7d"
+      "sha256": "3f0a97abb4f6ea5be4ad37733242e913347c4a478b5a3e0d9bf429a78c75f762"
     },
     "c.yaml": {
       "rules": 60,
-      "sha256": "b8782f51eae7ad4af6e90a93a7aea936031718393d73f8a97d71ac1db15414ca"
+      "sha256": "e9ceabf8611a3cee2e0069f1224d9b13920f8f530fd6c303b1a62a926428b8ee"
     },
     "clojure.yaml": {
       "rules": 5,
-      "sha256": "1b25d2db790251b5b3ca39df6c7bb29cb6ab94f681900c0a0df4d1e7466ae450"
+      "sha256": "08af00ed325ca091c01f352a35f3177307372dcfcf48119165c10a35f0cee1ad"
     },
     "csharp.yaml": {
       "rules": 48,
-      "sha256": "00fa1a655852e1c9d00e806fcaf7429523565d3feb627a8786e5d6b3eb6f5a8a"
+      "sha256": "64d3da48615feebf144c98534da8da45461829e4154d00ebf3435593588de322"
     },
     "dockerfile.yaml": {
       "rules": 6,
-      "sha256": "bd2efcdb08c472a02d305284458d51ae37ed95b8773ecd210efc8e4fe3ac22eb"
+      "sha256": "156c91613b2a589ae026daa75a4019529d4f6c7fcea3eb6f429545a099a89ce9"
     },
     "generic.yaml": {
       "rules": 23,
-      "sha256": "731813abc00a483aaaa7e9f17b401c7286100ff3f6b857171d21248873bf712b"
+      "sha256": "c7d60559147266c73d206aa23412c466cd165ff4e6a9245ca0632b77fb302f49"
     },
     "go.yaml": {
       "rules": 74,
-      "sha256": "58c29042bb2abbeb2326995dea51d571962c79277a571f33174fd7487a7e6140"
+      "sha256": "b31f72a0f5460f69ca4cec5a3057a37335c63efe6b2d48b423bfee47b580ef3f"
     },
     "html.yaml": {
       "rules": 4,
-      "sha256": "c95d85416ad091e02cb2bfdb1a550e18cf29f0b354a8c9b657578cc1e3299f5a"
+      "sha256": "4cd074c925f7811f1d31da9d8b56d3326ff68051b5ff648f8d561368fc23b12c"
     },
     "java.yaml": {
       "rules": 163,
-      "sha256": "0c073070505ed6e54e7a349c8b1a047fd225461ecfce5543b493daa16439b0ad"
+      "sha256": "e925ff5293515444abc28babc6cac99a2b47ffd12e3758b49d5d18d633d782b0"
     },
     "javascript.yaml": {
       "rules": 170,
-      "sha256": "7c42a52bab457229b3f095936975d2759f91f87d2bc9e16c3d0cde7145274142"
+      "sha256": "befd2fe6c65b0e7d0c0a9627a34c2fef211055fecd2c67ac39b4778e48dd0dee"
     },
     "json.yaml": {
       "rules": 4,
-      "sha256": "3989b566d72fedc0423b6b035a582dc46be304f83a563c4082cee2aa658ffeb1"
+      "sha256": "04ecbdff2377352947b2781c05e55380055cace08d05e1cf5df96ea6bcd3e7b8"
     },
     "kotlin.yaml": {
       "rules": 14,
-      "sha256": "4693636a12f9738b0289a4cfa9d918d60aaefaad299b19e05c0784b5e06909d1"
+      "sha256": "5cfa7819301b17eb86e7519067c72b76d499c00c51fef6983667e2d817f99e90"
     },
     "ocaml.yaml": {
       "rules": 7,
-      "sha256": "c0b0196815c955ecbbc4028439fb1966715e861c6d8c1c90efb1d7bae205d753"
+      "sha256": "99d388d798d16b0f89cae4eb48ea76111be37a3daa6df5684fe5b3abf266f217"
     },
     "php.yaml": {
       "rules": 62,
-      "sha256": "e6d6190690938414262f8187cb73fb63df24c1257ea47a1de3f9915def148bf2"
+      "sha256": "7fc40c9ffedce338e0b314704ed4903aa9a97e0a58423194aacb9dcb369f1c40"
     },
     "properties.yaml": {
       "rules": 1,
-      "sha256": "2365de7ba9a6c5eecdd69aaecf3064468e191db433f9248d6ab770323a316eb1"
+      "sha256": "9cb3023c7d8bc7c6f241eaae963a689adcb7208616766738090923729ca1c17d"
     },
     "python.yaml": {
       "rules": 273,
-      "sha256": "dfd709e5ecf99a926170b42973c3999058f20bcac6e3f23520f0f8d070e48fae"
+      "sha256": "2ef09576b5c5682adce70ddcedd124ffbfb4aa883ba18f98c817d3d1621b0fde"
     },
     "ruby.yaml": {
       "rules": 98,
-      "sha256": "5430db9050692c19080687364c85642adb3c242dfb8dde764f391984ba2dc2ce"
+      "sha256": "6ecebfc45ed5b36debbb6c1e768803d126d5fa30f1f65717cc3d72d58983dcfd"
     },
     "rust.yaml": {
       "rules": 10,
-      "sha256": "3f564bf87c6306b5a3acec95a252510c45578f800b4a77294390bae3f1468d96"
+      "sha256": "f820b86f7633675776646bba7c5251e426291a9056d1e432230a56c6d12bc30b"
     },
     "scala.yaml": {
       "rules": 26,
-      "sha256": "6b7f97615d12abd1c67a7b3b2c50729541c5ad6cf6a634d16cfd937094642840"
+      "sha256": "5dcc83cb863ee39a1b999a145ffe348a4728700d8997d67faee5b35b945600c8"
     },
     "solidity.yaml": {
       "rules": 35,
-      "sha256": "cbb5efecfece817c099aeaa1cb5295eabbbcf769d68a721fba4c26a6b0e5e39e"
+      "sha256": "060a15b96deeb17932cf620e2a0df4da985aa5f65d722461bfc12a0a0fd34055"
     },
     "swift.yaml": {
       "rules": 4,
-      "sha256": "8a8247cb5899f37f4350172398b1e464c90af035d199bffd34faccb9d34a8230"
+      "sha256": "d52ed55333ac12582b6656f332be3e35c24dbed87e008e14e8043415ffdd4010"
     },
     "terraform.yaml": {
       "rules": 260,
-      "sha256": "27b681ea865726bdcf24198808e82cf4d8151c9c8f13364875a65519ef631c19"
+      "sha256": "3d816349a28907f2a8d67f389508e588f0fdacd27c430c4b3f61c4dcb3dd0957"
     },
     "typescript.yaml": {
       "rules": 18,
-      "sha256": "8dd3903a699ce782781304e475733baa8e3e28f72b5dfeed1c83fd09a6b8ea6f"
+      "sha256": "ee487f8482102db59e406e78ed4ef6418a5e40b1039646d59000971e08ee6b87"
     },
     "yaml.yaml": {
       "rules": 41,
-      "sha256": "06fb2dba98efd43b1dbda03b225dfbc5efc81b4027cf1d56a28299c733256885"
+      "sha256": "7744ef10d5bf1dbe6ca0cf8209b87337ee70147ab6252b68de85df9c0382ccc0"
     }
   },
   "sources": {
