@@ -385,6 +385,19 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`dnspython` 2.8.0's CVE-2026-114605 failing the `quick-checks` pip-audit gate, and
+  `virtualenv` 21.14.12's CVE-2026-115586.** The dnspython advisory
+  ([GHSA-45c3-73f7-pv4m](https://github.com/advisories/GHSA-45c3-73f7-pv4m), published
+  2026-10-27, fixed in 2.9.0) is excessive CPU use in `dns.name.from_wire_parser()`. It
+  reaches the lock through `sigstore` → `sigstore-rekor-types` → `pydantic[email]` →
+  `email-validator`, whose only caller, pydantic, validates with
+  `check_deliverability=False`, so no DNS response is ever parsed; pip-audit reads the whole
+  lock, so the 2026-10-28 nightly on `main` failed at it anyway (#1497). The virtualenv one
+  ([GHSA-cx6f-vjhg-g3cc](https://github.com/advisories/GHSA-cx6f-vjhg-g3cc), fixed in
+  21.14.13) is an unescaped `--prompt` in the Bash activator; virtualenv is a development
+  dependency through `pre-commit`, which does not use the activator, and pip-audit does not
+  report it, only Dependabot. The lock now holds dnspython 2.9.0 and virtualenv 21.14.13,
+  the patch release rather than the 21.15.1 published the same day; nothing else moved.
 - **`opentelemetry-api` 1.44.0's CVE-2026-114603 failing the `quick-checks` pip-audit gate.**
   The advisory ([GHSA-xcq7-p3pf-p88h](https://github.com/advisories/GHSA-xcq7-p3pf-p88h),
   published 2026-10-22, fixed in 1.45.1) is quadratic-time parsing of a W3C `tracestate`
