@@ -199,6 +199,21 @@ def test_the_wheel_carries_the_bundle() -> None:
     )
 
 
+def test_the_wheel_ships_the_third_party_notices() -> None:
+    """The wheel ships the rules, so it ships their notices (R10). setuptools
+    copies each `license-files` match into `*.dist-info/licenses/`; without the
+    entry a pip-installed JMo carries the rules and none of the LGPL-2.1,
+    Commons Clause or MIT texts they came under. The entry needs the file at the
+    repository root to match anything."""
+    config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    listed = config["tool"]["setuptools"]["license-files"]
+    assert "THIRD_PARTY_LICENSES.md" in listed, (
+        f"[tool.setuptools] license-files = {listed} does not name THIRD_PARTY_LICENSES.md"
+    )
+    notices = REPO_ROOT / "THIRD_PARTY_LICENSES.md"
+    assert notices.is_file(), f"{notices} does not exist, so the entry matches nothing"
+
+
 def test_the_bundle_keeps_its_line_endings_on_checkout() -> None:
     """`.gitattributes` marks `scripts/jmo_rules/**` as `-text`. GitHub's Windows
     runners check out with `core.autocrlf=true`, which would rewrite every
