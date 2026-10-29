@@ -1,0 +1,8 @@
+rules:
+  - id: gl-t
+    languages: [java]
+    severity: ERROR
+    message: the body that three sources share, GitLab's copy
+    metadata:
+      category: security
+    pattern: triple($X)

@@ -1,0 +1,8 @@
+rules:
+  - id: e-ok
+    languages: [java]
+    severity: WARNING
+    message: a pack rule in a .yml file that stays
+    metadata:
+      category: security
+    pattern: elttam($X)

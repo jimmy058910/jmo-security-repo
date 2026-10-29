@@ -1,0 +1,8 @@
+rules:
+  - id: from-a-test-target
+    languages: [javascript]
+    severity: ERROR
+    message: a .test.yaml file is a test target, not a rule file
+    metadata:
+      category: security
+    pattern: test($X)

@@ -1,0 +1,14 @@
+rules:
+  - id: wf
+    languages: [yaml]
+    severity: WARNING
+    message: a bare on key is a string, not true (YAML 1.2 booleans)
+    metadata:
+      category: security
+    on: [pull_request_target]
+    options:
+      on: true
+      off: no
+      Flag: TRUE
+      other: False
+    pattern: uses

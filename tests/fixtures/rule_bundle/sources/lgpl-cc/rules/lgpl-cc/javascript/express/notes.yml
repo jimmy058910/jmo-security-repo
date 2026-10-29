@@ -1,0 +1,8 @@
+rules:
+  - id: not-a-rule-file
+    languages: [javascript]
+    severity: ERROR
+    message: GitLab files are read only as rule-*.yml
+    metadata:
+      category: security
+    pattern: never($X)

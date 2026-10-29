@@ -1,0 +1,8 @@
+rules:
+  - id: p-t
+    languages: [java]
+    severity: ERROR
+    message: the body that three sources share, the pack's copy
+    metadata:
+      category: security
+    pattern: triple($X)

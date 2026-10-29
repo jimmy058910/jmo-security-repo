@@ -1,0 +1,8 @@
+rules:
+  - id: template-rule
+    languages: [python]
+    severity: ERROR
+    message: a file at the root has no language directory, so it is never read
+    metadata:
+      category: security
+    pattern: root($X)

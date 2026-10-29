@@ -1,0 +1,29 @@
+rules:
+  - id: r
+    languages: [javascript]
+    severity: ERROR
+    message: snapshot wording of the shared body
+    metadata:
+      category: security
+    pattern: dangerous($X)
+  - id: r2
+    languages: [javascript]
+    severity: ERROR
+    message: same first pattern as GitLab's gl-r2, a different not-pattern
+    metadata:
+      category: security
+    patterns:
+      - pattern: dangerous($X)
+      - pattern-not: dangerous(safe)
+  - id: c
+    languages: [javascript]
+    severity: WARNING
+    message: a correctness rule is not a security rule
+    metadata:
+      category: correctness
+    pattern: sloppy($X)
+  - id: nometa
+    languages: [javascript]
+    severity: WARNING
+    message: a rule with no metadata has no category
+    pattern: bare($X)

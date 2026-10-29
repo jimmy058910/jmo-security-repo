@@ -1,0 +1,8 @@
+rules:
+  - id: k8s-rule
+    languages: [yaml]
+    severity: WARNING
+    message: anchors on different lines from the snapshot's same-named rule
+    metadata:
+      category: security
+    pattern: privileged

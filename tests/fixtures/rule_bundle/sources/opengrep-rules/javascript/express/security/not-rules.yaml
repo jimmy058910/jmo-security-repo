@@ -1,0 +1,3 @@
+# a YAML file that is not a rule file: no rules list
+name: express
+tags: [a, b]

@@ -1,0 +1,17 @@
+rules:
+  - id: gl-r
+    languages: [javascript]
+    severity: WARNING
+    message: GitLab wording of the shared body
+    metadata:
+      category: security
+    pattern: dangerous($X)
+  - id: gl-r2
+    languages: [javascript]
+    severity: WARNING
+    message: same first pattern as the snapshot's r2, a different not-pattern
+    metadata:
+      category: security
+    patterns:
+      - pattern: dangerous($X)
+      - pattern-not: dangerous(trusted)

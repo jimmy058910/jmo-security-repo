@@ -1,0 +1,8 @@
+rules:
+  - id: raptor-use-after-free
+    languages: [c]
+    severity: WARNING
+    message: overflows opengrep's stack on its own test file
+    metadata:
+      category: security
+    pattern: freed($X)

@@ -1,0 +1,8 @@
+rules:
+  - id: s-t
+    languages: [java]
+    severity: WARNING
+    message: the body that three sources share, the snapshot's copy
+    metadata:
+      category: security
+    pattern: triple($X)

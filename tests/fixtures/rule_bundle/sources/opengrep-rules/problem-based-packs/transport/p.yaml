@@ -1,0 +1,8 @@
+rules:
+  - id: pack-rule
+    languages: [go]
+    severity: WARNING
+    message: problem-based-packs is not a language directory
+    metadata:
+      category: security
+    pattern: transport($X)

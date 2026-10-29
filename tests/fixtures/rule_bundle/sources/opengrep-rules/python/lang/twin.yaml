@@ -1,0 +1,15 @@
+rules:
+  - id: t1
+    languages: [python]
+    severity: WARNING
+    message: first twin
+    metadata:
+      category: security
+    pattern: twin($X)
+  - id: t2
+    languages: [python]
+    severity: ERROR
+    message: second twin, same body in the same source
+    metadata:
+      category: security
+    pattern: twin($X)
