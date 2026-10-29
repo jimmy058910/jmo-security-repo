@@ -5,6 +5,9 @@
 #   lgpl-cc         pinned at v2.10.1  LGPL-2.1 with the Commons Clause
 #   opengrep-rules  pinned at f1d2b562b414783763fd02a6ed2736eaed622efa  LGPL-2.1 with the Commons Clause
 #
+# lgpl-cc rules in this file that name another license in their own source file: 3 (GNU Lesser General Public License v2.1; MIT (c) GitLab Inc.).
+# THIRD_PARTY_LICENSES.md lists them.
+#
 # Changed from those sources on 2026-10-29. The builder kept only the rules with
 # `metadata.category: security`, put the path of the file a rule came from (and its
 # source's prefix, where it has one) in front of the rule's id, left out the rules

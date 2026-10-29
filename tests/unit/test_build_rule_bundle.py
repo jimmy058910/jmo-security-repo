@@ -7,8 +7,11 @@ configuration runs against it, so a dropped exclusion fails a test here rather
 than shipping a secret scanner's rules in a committed bundle.
 
 Fixture contents (what each file is for is in its own `message:`):
-  lgpl-cc          gl-r, gl-r2, gl-t, gl-p kept; notes.yml (not `rule-*.yml`) and
-                   rules/gitlab (outside the rules root) never read
+  lgpl-cc          gl-r, gl-r2, gl-t, gl-p, gl-mit, gl-spaced, gl-meta kept; notes.yml
+                   (not `rule-*.yml`) and rules/gitlab (outside the rules root) never
+                   read. gl-mit's file says `# License: MIT`, which is another license
+                   than the source's; gl-spaced's spells the source's own with a space
+                   and gl-meta's metadata spells it plainly, so neither is
   opengrep-rules   r2, gen, s-pair, t1, t2, wf kept; r (body twin of gl-r) and
                    s-t (body twin of gl-t) and s-prop (twin of gl-p, in another language
                    file) dropped as duplicates; c (correctness),
@@ -20,7 +23,8 @@ Fixture contents (what each file is for is in its own `message:`):
                    id; java-stdlib's ftp-request dropped as a twin of gl-t
   0xdea            ok-rule kept; p-pair, p-t duplicates; raptor-use-after-free
                    (an excluded id) and noisy/ (an excluded directory) dropped
-  elttam           e-ok kept; jsp-join (mode: join) and yaml/kubernetes dropped
+  elttam           e-ok, f-lic kept (f-lic's metadata names Apache-2.0); jsp-join
+                   (mode: join) and yaml/kubernetes dropped
 """
 
 from __future__ import annotations
@@ -45,15 +49,15 @@ from scripts.dev import build_rule_bundle as bb
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "rule_bundle" / "sources"
 
-# 8 files, 15 rules: the fixture's expected bundle.
+# 8 files, 19 rules: the fixture's expected bundle.
 EXPECTED_FILES = {
     "c.yaml": 2,
     "generic.yaml": 1,
     "go.yaml": 1,
-    "java.yaml": 2,
+    "java.yaml": 3,
     "javascript.yaml": 5,
     "properties.yaml": 1,
-    "python.yaml": 2,
+    "python.yaml": 5,
     "yaml.yaml": 1,
 }
 
@@ -155,6 +159,7 @@ def test_a_rule_goes_to_the_file_named_by_its_top_directory(trees, tmp_path):
     assert {r["id"] for r in by_file["java.yaml"]} == {
         "lgpl-cc.java.rule-t.gl-t",  # GitLab's java merges into java.yaml
         "elttam.java.lang.e.e-ok",
+        "elttam.java.lang.f.f-lic",
     }
     assert {r["id"] for r in by_file["c.yaml"]} == {"c.s.s-pair", "0xdea.c.ok.ok-rule"}
 
@@ -578,6 +583,7 @@ def test_the_configured_exclusions_are_the_decided_ones():
         "0xdea.c.use-after-free.raptor-use-after-free" in bb.SOURCES["0xdea"].skip_ids
     )
     for source in bb.SOURCES.values():
+        assert source.declared_license, source.name
         assert "join" in source.skip_modes, source.name
         for exclusion in (source.skip_dirs, source.skip_modes, source.skip_ids):
             assert all(reason.strip() for reason in exclusion.values()), source.name
@@ -756,6 +762,70 @@ def test_each_header_says_it_is_generated_what_changed_when_and_where_the_notice
         assert yaml.safe_load(path.read_bytes().decode("utf-8"))["rules"]
 
 
+_OTHER_LICENSE = re.compile(
+    r"^# (\S+) rules in this file that name another license in their own source file: "
+    r"(\d+) \((.*)\)\.$"
+)
+
+
+def _other_license_notes(path: Path) -> dict[str, tuple[int, str]]:
+    """source name -> (rule count, licenses) as the header's notes give them."""
+    return {
+        m.group(1): (int(m.group(2)), m.group(3))
+        for line in _header(path)
+        if (m := _OTHER_LICENSE.match(line))
+    }
+
+
+def test_a_file_says_when_some_of_a_sources_rules_name_another_license(trees, tmp_path):
+    # The header names a source's license (GitLab's lgpl-cc as LGPL-2.1 with the
+    # Commons Clause), but a rule's own file, or its metadata, can name another
+    # (MIT, plain LGPL-2.1). Where that is true of a rule in the file, the header
+    # says so and points at THIRD_PARTY_LICENSES.md. Not a python special case: the
+    # head comment of a GitLab python file and the metadata of an elttam java rule
+    # are both read, and a file with no such rule gets no note.
+    out = _build(trees, tmp_path)
+    assert _other_license_notes(out / "python.yaml") == {
+        "lgpl-cc": (1, "MIT (c) GitLab Inc.")  # gl-mit, not gl-spaced or gl-meta
+    }
+    assert _other_license_notes(out / "java.yaml") == {"elttam": (1, "Apache-2.0")}
+    for name in EXPECTED_FILES.keys() - {"python.yaml", "java.yaml"}:
+        assert _other_license_notes(out / name) == {}, name
+    for name in ("python.yaml", "java.yaml"):
+        assert "THIRD_PARTY_LICENSES.md" in "\n".join(_header(out / name)), name
+
+
+def test_the_note_counts_the_rules_and_lists_each_other_license_once(trees, tmp_path):
+    extra = trees["lgpl-cc"] / "rules" / "lgpl-cc" / "python" / "rule-plain.yml"
+    extra.write_bytes(
+        b"# License: GNU Lesser General Public License v2.1\n---\nrules:\n"
+        b"  - id: gl-plain\n    languages: [python]\n    pattern: plain($X)\n"
+        b"    metadata: {category: security}\n"
+        b"  - id: gl-plain2\n    languages: [python]\n    pattern: plain2($X)\n"
+        b"    metadata: {category: security}\n"
+    )
+    notes = _other_license_notes(_build(trees, tmp_path) / "python.yaml")
+    assert notes == {
+        "lgpl-cc": (3, "GNU Lesser General Public License v2.1; MIT (c) GitLab Inc.")
+    }
+
+
+def test_a_license_text_cannot_break_out_of_the_header(trees, tmp_path):
+    # The note quotes text from a rule's metadata. A line break in it must not end
+    # the comment and start YAML of its own.
+    path = trees["elttam"] / "rules" / "java" / "lang" / "f.yml"
+    path.write_bytes(
+        path.read_bytes().replace(
+            b"license: Apache-2.0", b'license: "Apache-2.0\n- id: injected"'
+        )
+    )
+    out = _build(trees, tmp_path)
+    assert _other_license_notes(out / "java.yaml") == {
+        "elttam": (1, "Apache-2.0 - id: injected")
+    }
+    assert not any("injected" in r["id"] for r in _rules_by_file(out)["java.yaml"])
+
+
 def test_the_header_changes_only_with_the_sources_and_the_date(
     trees, tmp_path, monkeypatch
 ):
@@ -802,10 +872,10 @@ def test_the_manifest_records_each_file(trees, tmp_path):
             source.prefix,
         )
     assert {n: s["rules"] for n, s in manifest["sources"].items()} == {
-        "lgpl-cc": 4,
+        "lgpl-cc": 7,
         "opengrep-rules": 9,
         "0xdea": 1,
-        "elttam": 1,
+        "elttam": 2,
     }
 
     assert {e["kind"] for e in manifest["exclusions"]} == {
@@ -946,7 +1016,7 @@ def cli(trees, tmp_path, monkeypatch) -> Callable[..., int]:
 def test_main_builds_into_out(cli, tmp_path, capsys):
     assert cli() == 0
     assert set(_bytes_of(tmp_path / "bundle")) == {*EXPECTED_FILES, "SOURCES.json"}
-    assert "8 files, 15 rules" in capsys.readouterr().out
+    assert "8 files, 19 rules" in capsys.readouterr().out
 
 
 def test_check_passes_on_an_unchanged_bundle(cli, tmp_path):

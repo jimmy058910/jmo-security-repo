@@ -361,6 +361,51 @@ def test_every_file_opens_with_the_license_header() -> None:
     assert not wrong, "\n".join(wrong)
 
 
+_OTHER_LICENSE_NOTE = re.compile(
+    r"^# (\S+) rules in this file that name another license in their own source file: (\d+) \("
+)
+
+
+def test_a_file_with_rules_under_another_license_says_so() -> None:
+    """A header names each source's license, but THIRD_PARTY_LICENSES.md lists the
+    rules whose own files name another one (MIT, plain LGPL-2.1: three GitLab rules,
+    all in python.yaml). The file that holds them says so, with the right count and
+    a pointer to that list, and no other file does. The test reads the list from
+    the notices, so a rule added to or removed from it must be followed by a
+    rebuild, and a note with no rule behind it fails too."""
+    notices = (REPO_ROOT / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    listed = set(re.findall(r"`(lgpl-cc\.[^`]+\.[^`]+)`", notices))
+    assert listed, (
+        "THIRD_PARTY_LICENSES.md lists no lgpl-cc rule that names another license"
+    )
+
+    expected: dict[str, dict[str, int]] = {}
+    found = set()
+    for p in _bundle_files():
+        here = listed & {rule["id"] for rule in _rules(p.name)}
+        found |= here
+        if here:
+            expected[p.name] = {"lgpl-cc": len(here)}
+    assert found == listed, (
+        f"listed in the notices but not in the bundle: {sorted(listed - found)}"
+    )
+
+    noted = {}
+    for p in _bundle_files():
+        header = _header(p.name)
+        notes = {
+            m.group(1): int(m.group(2))
+            for line in header
+            if (m := _OTHER_LICENSE_NOTE.match(line))
+        }
+        if notes:
+            noted[p.name] = notes
+            assert "THIRD_PARTY_LICENSES.md" in "\n".join(header), p.name
+    assert noted == expected, (
+        f"files with the note: {noted}; files that hold a listed rule: {expected}"
+    )
+
+
 def test_the_bundle_keeps_its_line_endings_on_checkout() -> None:
     """`.gitattributes` marks `scripts/jmo_rules/**` as `-text`. GitHub's Windows
     runners check out with `core.autocrlf=true`, which would rewrite every

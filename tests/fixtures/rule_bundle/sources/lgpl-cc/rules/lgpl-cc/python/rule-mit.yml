@@ -1,0 +1,12 @@
+# yamllint disable
+# License: MIT (c) GitLab Inc.
+# yamllint enable
+---
+rules:
+  - id: gl-mit
+    languages: [python]
+    severity: WARNING
+    message: a GitLab rule whose own file names another license than its directory's
+    metadata:
+      category: security
+    pattern: mitlicensed($X)

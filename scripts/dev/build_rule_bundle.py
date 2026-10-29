@@ -48,12 +48,14 @@ bare `on:` key stays the string "on" and not True. It is written with
 as UTF-8 with LF endings, byte for byte, so two builds are identical.
 
 Each rule file begins with a fixed comment header (`file_header`): that the file
-is generated, which sources gave it rules (each with its pin and license), what
-the builder changed and on what date (`BUNDLE_DATE`), and a pointer to
-`THIRD_PARTY_LICENSES.md`. LGPL-2.1 asks that notices referring to the license
-stay with the files (section 1) and that a modified file say that it was
-changed, and when (section 2(b)). The header has no build-time input, so
-`--check` still compares byte for byte.
+is generated, which sources gave it rules (each with its pin and license), how many
+of a source's rules in it name another license in their own source files (a
+`metadata.license`, else the file's head `# License:` comment, spelled differently
+from the source's `declared_license`), what the builder changed and on what date
+(`BUNDLE_DATE`), and a pointer to `THIRD_PARTY_LICENSES.md`. LGPL-2.1 asks that
+notices referring to the license stay with the files (section 1) and that a
+modified file say that it was changed, and when (section 2(b)). The header has no
+build-time input, so `--check` still compares byte for byte.
 
 `SOURCES.json`, the manifest (JSON, sorted keys, indent 2, trailing newline):
 
@@ -120,7 +122,9 @@ class Source:
     that directory); `globs` match rule file names; `prefix` goes in front of
     every namespaced id ("" for none); `license` is the name
     `THIRD_PARTY_LICENSES.md` gives the license, written into the header of every
-    file this source contributes to. The three `skip_` maps give each
+    file this source contributes to; `declared_license` is how this source's own
+    files spell it (in a `# License:` head comment or `metadata.license`), so
+    a rule that names anything else can be told apart. The three `skip_` maps give each
     exclusion its reason: a directory under `rules_root`, a rule's `mode:`, and
     a namespaced id. `route_by_languages` lists directories under `rules_root`
     whose rules are filed by their own `languages:` key, not by the directory.
@@ -134,6 +138,7 @@ class Source:
     globs: tuple[str, ...]
     prefix: str
     license: str
+    declared_license: str
     skip_dirs: dict[str, str] = field(default_factory=dict)
     skip_modes: dict[str, str] = field(default_factory=dict)
     skip_ids: dict[str, str] = field(default_factory=dict)
@@ -152,6 +157,7 @@ SOURCES: dict[str, Source] = {
             globs=("rule-*.yml",),
             prefix="lgpl-cc",
             license="LGPL-2.1 with the Commons Clause",
+            declared_license="Commons Clause License Condition v1.0[LGPL-2.1-only]",
             skip_modes={"join": _JOIN_REASON},
         ),
         Source(
@@ -163,6 +169,7 @@ SOURCES: dict[str, Source] = {
             globs=("*.yaml", "*.yml"),
             prefix="",
             license="LGPL-2.1 with the Commons Clause",
+            declared_license="Commons Clause License Condition v1.0[LGPL-2.1-only]",
             skip_dirs={
                 "generic/secrets": (
                     "secret detection is gitleaks' and trufflehog's class; with these rules the "
@@ -191,6 +198,7 @@ SOURCES: dict[str, Source] = {
             globs=("*.yaml", "*.yml"),
             prefix="0xdea",
             license="MIT",
+            declared_license="MIT",
             skip_dirs={
                 "noisy": "the pack's own noisy tier, 'potentially too noisy and unsuitable for general use' (its README)",
             },
@@ -208,6 +216,7 @@ SOURCES: dict[str, Source] = {
             globs=("*.yaml", "*.yml"),
             prefix="elttam",
             license="MIT",
+            declared_license="MIT",
             skip_dirs={
                 "yaml/kubernetes": (
                     "anchors on different lines from the snapshot's same-named Kubernetes rules, so one "
@@ -255,22 +264,49 @@ def _is_security(rule: dict[str, Any]) -> bool:
     return isinstance(metadata, dict) and metadata.get("category") == "security"
 
 
-def _proprietary_license(rule: dict[str, Any]) -> str | None:
-    """The rule's `metadata.license` text when it declares a proprietary license."""
+def _license_text(rule: dict[str, Any]) -> str | None:
+    """The rule's `metadata.license` as text, or None when it has none."""
     metadata = rule.get("metadata")
     value = metadata.get("license") if isinstance(metadata, dict) else None
-    if value is None:
-        return None
-    # Only a substring is matched, so a value JSON cannot hold (a YAML date) is stringified.
-    dumped = json.dumps(value, sort_keys=True, default=str)
-    text = value if isinstance(value, str) else dumped
-    return text if "proprietary" in text.lower() else None
+    if value is None or isinstance(value, str):
+        return value
+    # Only a substring or a spelling is compared, so a value JSON cannot hold (a YAML
+    # date) is stringified rather than refused.
+    return json.dumps(value, sort_keys=True, default=str)
 
 
-def _load_rules(path: Path, label: str) -> list[dict[str, Any]] | None:
-    """The `rules` list of a rule file, or None for a YAML file that has none."""
+def _proprietary_license(rule: dict[str, Any]) -> str | None:
+    """The rule's `metadata.license` text when it declares a proprietary license."""
+    text = _license_text(rule)
+    return text if text is not None and "proprietary" in text.lower() else None
+
+
+_HEAD_LICENSE = re.compile(r"#\s*License:\s*(.+)", re.IGNORECASE)
+
+
+def _head_license(text: str) -> str | None:
+    """The `# License:` comment in a rule file's head, before its first YAML line."""
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            return None
+        if match := _HEAD_LICENSE.fullmatch(line):
+            return match.group(1).strip()
+    return None
+
+
+def _spelling(text: str) -> str:
+    """A license's name with its case and spacing ignored, to compare spellings."""
+    return "".join(text.split()).casefold()
+
+
+def _load_rules(
+    path: Path, label: str
+) -> tuple[list[dict[str, Any]], str | None] | None:
+    """A rule file's `rules` list and head `# License:`, or None for a YAML file with no rules."""
     try:
-        doc: Any = yaml.load(path.read_bytes().decode("utf-8"), Loader=_Yaml12Loader)
+        text = path.read_bytes().decode("utf-8")
+        doc: Any = yaml.load(text, Loader=_Yaml12Loader)
     except (yaml.YAMLError, UnicodeDecodeError) as exc:
         raise ValueError(f"{label}: cannot read as YAML: {exc}") from exc
     if not isinstance(doc, dict) or not isinstance(doc.get("rules"), list):
@@ -279,7 +315,7 @@ def _load_rules(path: Path, label: str) -> list[dict[str, Any]] | None:
     for rule in rules:
         if not isinstance(rule, dict) or not isinstance(rule.get("id"), str):
             raise ValueError(f"{label}: a rule without a string id")
-    return rules
+    return rules, _head_license(text)
 
 
 def _under(parts: tuple[str, ...], directory: str) -> bool:
@@ -304,12 +340,17 @@ def _language(
 
 
 def collect(
-    root: Path, source: Source, exclusions: list[dict[str, Any]] | None = None
+    root: Path,
+    source: Source,
+    exclusions: list[dict[str, Any]] | None = None,
+    other_licenses: dict[str, str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """The kept rules of one extracted tree, by language, with namespaced ids.
 
     `exclusions`, when given, receives a record for each directory, mode and id
-    the source's configuration dropped.
+    the source's configuration dropped. `other_licenses`, when given, receives
+    rule id -> license text for each kept rule that names a license other than the
+    source's: in its `metadata.license`, else in its file's head `# License:` comment.
     """
     base = root / source.rules_root
     if not base.is_dir():  # a moved rules root must not read as a source with no rules
@@ -332,9 +373,10 @@ def collect(
         ):
             continue
         label = f"{source.name}:{rel.as_posix()}"
-        rules = _load_rules(path, label)
-        if rules is None:
+        loaded = _load_rules(path, label)
+        if loaded is None:
             continue
+        rules, head_license = loaded
         skipped_dir = next((d for d in source.skip_dirs if _under(rel.parts, d)), None)
         if skipped_dir is not None:
             dir_rules[skipped_dir] += sum(_is_security(r) for r in rules)
@@ -382,6 +424,13 @@ def collect(
                 by_language[_language(rule, rel.parts, source, label)].append(
                     {**rule, "id": rule_id}
                 )
+                declared = _license_text(rule) or head_license
+                if (
+                    other_licenses is not None
+                    and declared is not None
+                    and _spelling(declared) != _spelling(source.declared_license)
+                ):
+                    other_licenses[rule_id] = " ".join(declared.split())
 
     for directory, count in dir_rules.items():
         if (base / directory).is_dir():
@@ -397,13 +446,24 @@ def collect(
     return dict(by_language)
 
 
-def file_header(sources: list[Source]) -> str:
+def file_header(
+    sources: list[Source], other_licenses: dict[str, list[str]] | None = None
+) -> str:
     """The comment block that opens a generated rule file.
 
-    `sources` are the ones that gave the file a rule, in precedence order. The
-    text depends on them and on `BUNDLE_DATE` alone, so a rebuild reproduces it.
+    `sources` are the ones that gave the file a rule, in precedence order.
+    `other_licenses` maps a source name to the license text of each of its rules in
+    this file that names a license other than the source's; the header says how
+    many, which licenses, and where they are listed. The text depends on these and
+    on `BUNDLE_DATE` alone, so a rebuild reproduces it.
     """
     width = max(len(source.name) for source in sources)
+    notes = [
+        f"# {source.name} rules in this file that name another license in their own "
+        f"source file: {len(found)} ({'; '.join(sorted(set(found)))})."
+        for source in sources
+        if (found := (other_licenses or {}).get(source.name))
+    ]
     lines = [
         "# Generated by scripts/dev/build_rule_bundle.py. Do not edit by hand: the next",
         "# rebuild replaces this file, and CI's rule-bundle-reproducible job rejects an edit.",
@@ -413,6 +473,7 @@ def file_header(sources: list[Source]) -> str:
             f"#   {source.name:<{width}}  pinned at {source.pin}  {source.license}"
             for source in sources
         ),
+        *(["#", *notes, "# THIRD_PARTY_LICENSES.md lists them."] if notes else []),
         "#",
         f"# Changed from those sources on {BUNDLE_DATE}. The builder kept only the rules with",
         "# `metadata.category: security`, put the path of the file a rule came from (and its",
@@ -440,8 +501,9 @@ def build(trees: dict[str, Path], out_dir: Path) -> dict[str, Any]:
         raise ValueError(f"no extracted tree for: {', '.join(missing)}")
 
     exclusions: list[dict[str, Any]] = []
+    other_licenses: dict[str, str] = {}  # rule id -> a license other than its source's
     collected = {
-        name: collect(trees[name], source, exclusions)
+        name: collect(trees[name], source, exclusions, other_licenses)
         for name, source in SOURCES.items()
     }
 
@@ -461,6 +523,8 @@ def build(trees: dict[str, Path], out_dir: Path) -> dict[str, Any]:
     winners: dict[str, tuple[str, str]] = {}
     kept: dict[str, list[dict[str, Any]]] = defaultdict(list)
     contributors: dict[str, list[str]] = defaultdict(list)  # language -> source names
+    # language -> source name -> the other license of each kept rule that has one
+    elsewhere: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     kept_per_source: dict[str, int] = {}
     for name, by_language in collected.items():
         own: dict[str, tuple[str, str]] = {}
@@ -491,6 +555,8 @@ def build(trees: dict[str, Path], out_dir: Path) -> dict[str, Any]:
             kept[language].append(rule)
             if name not in contributors[language]:
                 contributors[language].append(name)
+            if rule["id"] in other_licenses:
+                elsewhere[language][name].append(other_licenses[rule["id"]])
             kept_per_source[name] += 1
             own.setdefault(body, (name, rule["id"]))
         # Only a later source is compared with this one's bodies, so twins inside
@@ -508,7 +574,9 @@ def build(trees: dict[str, Path], out_dir: Path) -> dict[str, Any]:
     files: dict[str, dict[str, Any]] = {}
     for language in sorted(kept):
         rules = sorted(kept[language], key=lambda rule: rule["id"])
-        header = file_header([SOURCES[name] for name in contributors[language]])
+        header = file_header(
+            [SOURCES[name] for name in contributors[language]], elsewhere[language]
+        )
         data = (
             header
             + yaml.safe_dump({"rules": rules}, sort_keys=False, allow_unicode=True)
