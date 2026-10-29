@@ -159,9 +159,10 @@ def test_the_wheel_carries_the_bundle() -> None:
     `index.html` was in the same position, #862).
 
     This resolves the declared patterns the way setuptools does, against the
-    `scripts` package directory, and wants every bundle file covered. The check
-    on a built wheel is `dashboard-smoke`'s, which no unit test can replace for
-    the dashboard either; this is the half that runs on every shard.
+    `scripts` package directory, and wants every bundle file covered. It never
+    runs setuptools; the check on a built wheel is `dashboard-smoke`'s step
+    "Verify the wheel carries the built dashboard and the rule bundle". This is
+    the half that runs on every shard.
     """
     config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     patterns = config["tool"]["setuptools"]["package-data"]["scripts"]
@@ -177,6 +178,32 @@ def test_the_wheel_carries_the_bundle() -> None:
     missing = sorted(wanted - shipped)
     assert not missing, (
         f"[tool.setuptools.package-data] scripts = {patterns} does not carry: {missing}"
+    )
+
+
+def test_the_bundle_keeps_its_line_endings_on_checkout() -> None:
+    """`.gitattributes` marks `scripts/jmo_rules/**` as `-text`. GitHub's Windows
+    runners check out with `core.autocrlf=true`, which would rewrite every
+    file's LF to CRLF and change the bytes the manifest hashes. If the line is
+    deleted, the only failure is on the `windows-2022` shard, which is
+    `continue-on-error` and reports green over failures, so it is asserted here
+    on every shard, from git's own resolution of the attribute."""
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not on PATH")
+    if not (REPO_ROOT / ".git").exists():
+        pytest.skip("not a git checkout")
+    result = subprocess.run(
+        [git, "check-attr", "text", "--", "scripts/jmo_rules/SOURCES.json"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "scripts/jmo_rules/SOURCES.json: text: unset", (
+        f"`text` is not unset for the bundle, so a CRLF checkout would change its "
+        f"bytes; check the scripts/jmo_rules/** line in .gitattributes: {result.stdout!r}"
     )
 
 

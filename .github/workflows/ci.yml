@@ -1095,7 +1095,7 @@ jobs:
       #                          declaration was deleted -- this check passed
       #                          against a pyproject.toml with no
       #                          [tool.setuptools.package-data] at all
-      - name: Verify the wheel carries the built dashboard
+      - name: Verify the wheel carries the built dashboard and the rule bundle
         run: |
           set -euo pipefail
           rm -rf build dist ./*.egg-info
@@ -1128,6 +1128,26 @@ jobs:
               print("::error::the wheel's dashboard differs from the tracked one")
               sys.exit(1)
           print("OK: the wheel ships the tracked dashboard bundle verbatim")
+
+          # The opengrep rule bundle ships the same way, and a pip-installed jmo
+          # with none of it has no rule to scan with. Every file in the tree is a
+          # member with the same bytes, and the wheel holds nothing else there.
+          in_tree = {f"scripts/jmo_rules/{p.name}": p for p in pathlib.Path("scripts/jmo_rules").iterdir() if p.is_file()}
+          if not in_tree:
+              print("::error::scripts/jmo_rules/ holds no file in the tree")
+              sys.exit(1)
+          with zipfile.ZipFile(wheel) as zf:
+              members = {n for n in zf.namelist() if n.startswith("scripts/jmo_rules/")}
+              missing = sorted(set(in_tree) - members)
+              extra = sorted(members - set(in_tree))
+              differing = sorted(n for n, p in in_tree.items() if n in members and zf.read(n) != p.read_bytes())
+          print(f"rule bundle: {len(in_tree)} files in the tree, {len(members)} members in the wheel")
+          if missing or extra or differing:
+              print(f"::error::the wheel's scripts/jmo_rules/ is not the tree's: missing {missing}, "
+                    f"unexpected {extra}, differing {differing}. "
+                    "Check [tool.setuptools.package-data] in pyproject.toml.")
+              sys.exit(1)
+          print("OK: the wheel ships the tracked rule bundle verbatim")
           PY
 
       - name: Set up Node.js 22
