@@ -122,6 +122,15 @@ RUN ZIZMOR_VERSION="1.31.1" && \
     tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor && \
     chmod +x /usr/local/bin/zizmor
 
+# Download opengrep (SAST); a static binary named by flavour and arch, no
+# archive, no version in the name. No checksum file is published: each asset
+# has a cosign .sig and .cert beside it, which this build does not check.
+RUN OPENGREP_VERSION="1.32.0" && \
+    OPENGREP_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86") && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_${OPENGREP_ARCH}" \
+    -o /usr/local/bin/opengrep && \
+    chmod +x /usr/local/bin/opengrep
+
 # Download osv-scanner (dependency lockfiles); a raw binary, so it is checked
 # against the release's SHA256SUMS before use. The image carries no offline
 # database: `jmo tools update` fetches it into ~/.jmo/osv-db
@@ -199,10 +208,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python security tools one by one for better error visibility
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
-RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.182.1 && \
-    semgrep --version && \
-    echo "✓ semgrep installed"
-
 RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.30 && \
     checkov --version && \
     echo "✓ checkov installed"
@@ -231,6 +236,7 @@ COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
 COPY --from=builder /usr/local/bin/zizmor /usr/local/bin/zizmor
+COPY --from=builder /usr/local/bin/opengrep /usr/local/bin/opengrep
 COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 
@@ -276,7 +282,8 @@ RUN echo "=== Verifying tools ===" && \
     jmo --help > /dev/null && \
     jmo tools --help > /dev/null && \
     trufflehog --version && \
-    semgrep --version && \
+    XDG_CACHE_HOME=/tmp/opengrep-cache opengrep --version && \
+    rm -rf /tmp/opengrep-cache /root/.opengrep && \
     syft version && \
     trivy --version && \
     checkov --version && \

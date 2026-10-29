@@ -1577,7 +1577,7 @@ jobs:
           GITLEAKS_VERSION: ${{ steps.pins.outputs.GITLEAKS_VERSION }}
           ZIZMOR_VERSION: ${{ steps.pins.outputs.ZIZMOR_VERSION }}
           OSV_SCANNER_VERSION: ${{ steps.pins.outputs.OSV_SCANNER_VERSION }}
-          SEMGREP_VERSION: ${{ steps.pins.outputs.SEMGREP_VERSION }}
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
           CHECKOV_VERSION: ${{ steps.pins.outputs.CHECKOV_VERSION }}
         run: |
           # Same install block as scheduled.yml:tool-contract-tests. Both read
@@ -1592,7 +1592,7 @@ jobs:
             -o /tmp/trivy.tar.gz
           gzip -t /tmp/trivy.tar.gz
           tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
-          pip install "semgrep==${SEMGREP_VERSION}" "checkov==${CHECKOV_VERSION}"
+          pip install "checkov==${CHECKOV_VERSION}"
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
             -o /usr/local/bin/hadolint
@@ -1620,6 +1620,12 @@ jobs:
           gzip -t /tmp/zizmor.tar.gz
           tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor
           chmod +x /usr/local/bin/zizmor
+          # opengrep: a static binary, no archive; assets are named by flavour
+          # and arch.
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            -o /usr/local/bin/opengrep
+          chmod +x /usr/local/bin/opengrep
           # osv-scanner: a raw binary, checked in /tmp against the release's
           # SHA256SUMS before it is installed, as the Dockerfile does. No
           # offline database is fetched: its tests read the frozen one in
@@ -1648,7 +1654,7 @@ jobs:
 
           echo "Installed tools:"
           trivy --version || echo "trivy not available"
-          semgrep --version || echo "semgrep not available"
+          opengrep --version || echo "opengrep not available"
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
           gitleaks version || echo "gitleaks not available"

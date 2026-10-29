@@ -128,18 +128,22 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         ],
         "description": "Vulnerability scanner with Results array structure",
     },
-    "semgrep": {
+    "opengrep": {
         "required_keys": ["results"],
         "result_item_keys": ["check_id", "path", "extra"],
         "sample_target": "python-vulnerable",
-        # The file, not the directory: with no .semgrepignore, semgrep's
-        # built-in one skips `tests/`, so the directory scanned 0 files and
-        # `result_item_keys` was never checked. The file: 1 scanned, 4 results.
+        # The file, not the directory: with no .semgrepignore, opengrep's
+        # built-in one skips `tests/` as semgrep's did, so the directory
+        # scanned 0 files and `result_item_keys` was never checked. The file:
+        # 1 scanned, 6 results (v1.32.0, 2026-10-29). The rules are the
+        # committed bundle's Python file, so nothing is fetched.
         "command": [
-            "semgrep",
+            "opengrep",
+            "scan",
             "--config",
-            "auto",
+            "scripts/jmo_rules/python.yaml",
             "--json",
+            "--no-rewrite-rule-ids",
             "{target}/vulnerable_app.py",
         ],
         "ok_return_codes": (0,),
@@ -654,7 +658,7 @@ class TestContractInfrastructure:
 
     def test_contracts_cover_key_adapters(self):
         """Verify contracts exist for critical adapters."""
-        critical_tools = ["trivy", "semgrep", "trufflehog", "checkov"]
+        critical_tools = ["trivy", "opengrep", "trufflehog", "checkov"]
 
         missing = [t for t in critical_tools if t not in TOOL_CONTRACTS]
 

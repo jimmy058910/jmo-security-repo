@@ -486,12 +486,19 @@ jobs:
           SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
           TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
           HADOLINT_VERSION: ${{ steps.pins.outputs.HADOLINT_VERSION }}
-          SEMGREP_VERSION: ${{ steps.pins.outputs.SEMGREP_VERSION }}
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
           CHECKOV_VERSION: ${{ steps.pins.outputs.CHECKOV_VERSION }}
         run: |
           # Install tools needed for smoke tests
           # Core SAST/SCA tools
-          pip install "semgrep==${SEMGREP_VERSION}" "checkov==${CHECKOV_VERSION}"
+          pip install "checkov==${CHECKOV_VERSION}"
+
+          # Opengrep - SAST. A static binary, no archive; assets are named by
+          # flavour and arch.
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            -o /usr/local/bin/opengrep
+          chmod +x /usr/local/bin/opengrep
 
           # Trivy - vulnerability scanner
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
@@ -535,7 +542,7 @@ jobs:
 
           # Verify installations
           echo "Installed tools:"
-          semgrep --version || echo "semgrep not available"
+          opengrep --version || echo "opengrep not available"
           trivy --version || echo "trivy not available"
           grype version || echo "grype not available"
           syft version || echo "syft not available"
@@ -694,10 +701,13 @@ jobs:
       - name: Install minimal security tools
         env:
           TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
-          SEMGREP_VERSION: ${{ steps.pins.outputs.SEMGREP_VERSION }}
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
         run: |
-          # Install semgrep for SAST testing
-          pip install "semgrep==${SEMGREP_VERSION}"
+          # Install opengrep for SAST testing (a static binary, no archive)
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            -o /usr/local/bin/opengrep
+          chmod +x /usr/local/bin/opengrep
           # Install trufflehog for secrets testing
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
@@ -973,10 +983,21 @@ jobs:
           # Binary tools have no per-version Homebrew formulae, so they stay
           # unpinned -- but the install may no longer fail quietly. Pinning
           # these too is a real remaining gap, tracked separately.
-          brew install semgrep trivy syft hadolint
+          brew install trivy syft hadolint
+
+          # opengrep: a static binary, no archive, pinned from versions.yaml
+          # like checkov above. macos-14 is arm64, whose assets say "arm64";
+          # Homebrew's bin is on PATH and writable by the runner.
+          OPENGREP_VERSION="$(python3 -c \
+            "import yaml; print(yaml.safe_load(open('versions.yaml'))['binary_tools']['opengrep']['version'])")"
+          echo "opengrep pin from versions.yaml: ${OPENGREP_VERSION}"
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_osx_arm64" \
+            -o "$(brew --prefix)/bin/opengrep"
+          chmod +x "$(brew --prefix)/bin/opengrep"
 
           missing=0
-          for t in checkov semgrep trivy syft hadolint; do
+          for t in checkov opengrep trivy syft hadolint; do
             if command -v "$t" >/dev/null 2>&1; then
               echo "  $t -> $(command -v "$t")"
             else
@@ -1063,11 +1084,14 @@ jobs:
         env:
           TRIVY_VERSION: ${{ steps.pins.outputs.TRIVY_VERSION }}
           TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
-          SEMGREP_VERSION: ${{ steps.pins.outputs.SEMGREP_VERSION }}
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
           CHECKOV_VERSION: ${{ steps.pins.outputs.CHECKOV_VERSION }}
         run: |
-          # Semgrep - for SQL injection detection tests
-          pip install "semgrep==${SEMGREP_VERSION}"
+          # Opengrep - for SQL injection detection tests (a static binary, no archive)
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            -o /usr/local/bin/opengrep
+          chmod +x /usr/local/bin/opengrep
 
           # Trivy - for CVE detection tests
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
@@ -1090,7 +1114,7 @@ jobs:
 
           # Verify installations
           echo "Installed tools:"
-          semgrep --version || echo "semgrep not available"
+          opengrep --version || echo "opengrep not available"
           trivy --version || echo "trivy not available"
           trufflehog --version || echo "trufflehog not available"
           checkov --version || echo "checkov not available"
@@ -1177,7 +1201,7 @@ jobs:
           GITLEAKS_VERSION: ${{ steps.pins.outputs.GITLEAKS_VERSION }}
           ZIZMOR_VERSION: ${{ steps.pins.outputs.ZIZMOR_VERSION }}
           OSV_SCANNER_VERSION: ${{ steps.pins.outputs.OSV_SCANNER_VERSION }}
-          SEMGREP_VERSION: ${{ steps.pins.outputs.SEMGREP_VERSION }}
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
           CHECKOV_VERSION: ${{ steps.pins.outputs.CHECKOV_VERSION }}
         run: |
           # Install tools needed for contract validation
@@ -1188,8 +1212,12 @@ jobs:
           gzip -t /tmp/trivy.tar.gz
           tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
-          # Semgrep - SAST scanner
-          pip install "semgrep==${SEMGREP_VERSION}"
+          # opengrep: a static binary, no archive; assets are named by flavour
+          # and arch.
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            -o /usr/local/bin/opengrep
+          chmod +x /usr/local/bin/opengrep
 
           # Hadolint - Dockerfile linter
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
@@ -1259,7 +1287,7 @@ jobs:
           # Verify installations
           echo "Installed tools:"
           trivy --version || echo "trivy not available"
-          semgrep --version || echo "semgrep not available"
+          opengrep --version || echo "opengrep not available"
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
           gitleaks version || echo "gitleaks not available"

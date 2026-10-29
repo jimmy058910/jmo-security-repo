@@ -555,7 +555,7 @@ jobs:
       - name: Check PyPI for security tool updates
         run: |
           # Check if Python security tools have updates
-          for tool in semgrep checkov ruff; do
+          for tool in checkov ruff; do
             echo "Checking $tool..."
             CURRENT=$(grep -oP "${tool}==[0-9.]+" Dockerfile | head -n1 | cut -d'=' -f3 || echo "unknown")
             LATEST=$(pip index versions "$tool" 2>/dev/null | grep -oP '(?<=Available versions: )[0-9.]+' | head -n1 || echo "unknown")

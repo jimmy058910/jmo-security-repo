@@ -31,7 +31,7 @@ from scripts.core.install_config import ISOLATED_TOOLS
 # Spelled out rather than derived from ISOLATED_TOOLS: a parametrize over the
 # constant under test cannot fail when that constant empties (#1061). The
 # canary below is what fails if the config and this literal drift apart.
-ISOLATED = ("semgrep", "checkov")
+ISOLATED = ("checkov",)
 
 
 def test_the_literal_matches_the_config():

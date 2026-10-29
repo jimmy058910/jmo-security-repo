@@ -978,7 +978,7 @@ class TestUninstallTools:
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool = MagicMock()
-        mock_tool.pypi_package = "semgrep"
+        mock_tool.pypi_package = "checkov"
 
         mock_registry = MagicMock()
         mock_registry.get_tool.return_value = mock_tool
@@ -991,7 +991,7 @@ class TestUninstallTools:
             # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
             with patch("shutil.rmtree"), patch("builtins.print"):
                 errors = []
-                _uninstall_tools([("semgrep", "pip")], errors)
+                _uninstall_tools([("checkov", "pip")], errors)
 
         assert len(errors) == 0
         mock_run.assert_called()
@@ -3008,7 +3008,7 @@ class TestUninstallToolsExecution:
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = "semgrep"
+        mock_tool_info.pypi_package = "checkov"
 
         mock_result = MagicMock()
         mock_result.returncode = 1
@@ -3022,7 +3022,7 @@ class TestUninstallToolsExecution:
             mock_registry_cls.return_value = mock_registry
 
             with patch("subprocess.run", return_value=mock_result):
-                _uninstall_tools([("semgrep", "pip")], errors)
+                _uninstall_tools([("checkov", "pip")], errors)
 
         # Partial failure should show warning but not add to errors
         captured = capsys.readouterr()
@@ -3033,7 +3033,7 @@ class TestUninstallToolsExecution:
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = "semgrep"
+        mock_tool_info.pypi_package = "checkov"
 
         errors = []
 
@@ -3045,7 +3045,7 @@ class TestUninstallToolsExecution:
             with patch("subprocess.run", side_effect=Exception("Network error")):
                 # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
                 with patch("shutil.rmtree"):
-                    _uninstall_tools([("semgrep", "pip")], errors)
+                    _uninstall_tools([("checkov", "pip")], errors)
 
         assert len(errors) == 1
         assert "pip uninstall" in errors[0]
