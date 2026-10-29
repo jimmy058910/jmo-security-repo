@@ -375,6 +375,13 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **The subscribe API answers a bad request body with 4xx, not 500.** Its catch-all
+  error handler answered every error with 500, so malformed JSON, a body over the 100 KB
+  limit and an unsupported charset, which the body parsers reject as 400, 413 and 415,
+  reached the client as `internal_server_error` and were logged as unhandled. The handler
+  now keeps a 4xx status (`invalid_request`, or `payload_too_large` for 413); any other
+  error is still a 500. `scripts/api` is deployed by hand with the Vercel CLI, so the live
+  endpoint changes at the next `vercel` deploy.
 - **`dnspython` 2.8.0's CVE-2026-114605 failing the `quick-checks` pip-audit gate, and
   `virtualenv` 21.14.12's CVE-2026-115586.** The dnspython advisory
   ([GHSA-45c3-73f7-pv4m](https://github.com/advisories/GHSA-45c3-73f7-pv4m), published
