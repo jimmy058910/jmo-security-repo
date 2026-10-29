@@ -133,8 +133,10 @@ jmo = "scripts.cli.jmo:main"
 [tool.setuptools]
 include-package-data = true
 
-# Ensure LICENSE files are included in the sdist/wheel
-license-files = ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE"]
+# Ensure LICENSE files are included in the sdist/wheel. THIRD_PARTY_LICENSES.md is
+# the notice for the rule bundle (scripts/jmo_rules/), which the wheel ships, so the
+# wheel ships its notices too.
+license-files = ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "THIRD_PARTY_LICENSES.md"]
 
 [tool.setuptools.packages.find]
 include = ["scripts*"]

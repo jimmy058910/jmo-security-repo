@@ -254,8 +254,9 @@ numbers stand. The dumper is safe: `yaml.safe_dump({"on": 1})` writes `'on': 1`.
 15. **Exclusions are data, each with its reason, all in `SOURCES.json`:** directories
     (`generic/secrets/`; elttam `yaml/kubernetes`; 0xdea `noisy`), modes (`join`: opengrep
     1.31.0 does not load it), and single ids (0xdea `raptor-use-after-free`: stack overflow
-    in opengrep 1.31.0 on its own test). The packs' unused trees (elttam `rules-audit/`,
-    all of dgryski) are never fetched, and `docs/RULE_BUNDLE.md` says why.
+    in opengrep 1.31.0 on its own test). The packs' unused trees are never read, and
+    `docs/RULE_BUNDLE.md` says why: all of dgryski is never fetched, and elttam's
+    `rules-audit/` is fetched with the pack and never read.
 16. **Body-duplicate precedence: `lgpl-cc`, then the snapshot, then the MIT packs.** A
     rule whose body equals a higher source's is dropped (50 expected, all snapshot rules;
     the packs have 0).
