@@ -667,7 +667,7 @@ class RepositoryAnalyzer:
                     "priority": "HIGH",
                     "action": "Conduct comprehensive documentation review",
                     "count": total_issues,
-                    "details": "Consider using jmo-documentation-updater skill for systematic cleanup",
+                    "details": "Consider using the doc-sync-checker agent for systematic cleanup",
                 }
             )
 
@@ -678,7 +678,7 @@ class RepositoryAnalyzer:
                     "priority": "MEDIUM",
                     "action": "Expand test coverage",
                     "count": len(self.findings["test_gaps"]),
-                    "details": "Use jmo-test-fabricator skill to add missing test files",
+                    "details": "Use the coverage-gap-finder agent to plan the missing test files",
                 }
             )
 
@@ -761,7 +761,7 @@ def main():
     print("Next steps:")
     print("  1. Review REPO_COMPLETENESS_ANALYSIS.json")
     print("  2. Address CRITICAL priority items first")
-    print("  3. Use jmo-documentation-updater skill for systematic fixes")
+    print("  3. Use the doc-sync-checker agent for systematic fixes")
     print(
         "  4. Consider integrating this analyzer into CI/CD for continuous monitoring"
     )

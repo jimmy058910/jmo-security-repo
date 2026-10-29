@@ -76,7 +76,7 @@ Run this analyzer before submitting PRs to ensure your changes are properly docu
 2. **Weekly maintenance:**
    - Run analyzer to catch accumulated drift
    - Address high-priority items first
-   - Use `jmo-documentation-updater` skill for systematic fixes
+   - Use the `doc-sync-checker` agent for systematic fixes
 
 3. **Future: CI/CD integration:**
    - Could be added to GitHub Actions to run on PRs

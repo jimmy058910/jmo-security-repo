@@ -802,7 +802,7 @@ To prevent technical debt accumulation and nightly CI failures, maintainers shou
    gh run view <run-id> --log-failed
 
    # Categorize failures (actionlint, markdownlint, mypy, uv-lock)
-   # Follow jmo-ci-debugger skill pattern #14
+   # See "CI Troubleshooting" below for the common patterns
    ```
 
 3. **Apply Technical Debt Principle:**
@@ -840,7 +840,7 @@ Thursday: Nightly CI fails with 13 violations across 4 tools
 1. **Enhanced pre-push hook** (blocks bad commits locally)
 2. **Lint Preview in CI** (catches 80% of issues in PRs)
 3. **Weekly Monday check** (fixes anything that slipped through)
-4. **jmo-ci-debugger skill** (documents proven fix patterns)
+4. **CI Troubleshooting** (below: documents proven fix patterns)
 
 ### Quick Commands
 

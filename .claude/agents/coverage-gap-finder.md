@@ -59,7 +59,7 @@ tests/
     └── test_jmo_args.py
 ```
 
-### Required Test Categories (per jmo-test-fabricator skill)
+### Required Test Categories
 
 Every adapter test must have 5 categories:
 
@@ -68,6 +68,28 @@ Every adapter test must have 5 categories:
 3. **Schema v1.1.0 Features** - Remediation structure, risk fields
 4. **Schema v1.2.0 Features** - Compliance enrichment
 5. **Tool-Specific Edge Cases** - Multiple findings, severity mapping, etc.
+
+Each category starts with a standardized header, which is how to tell which
+categories a test file has:
+
+```python
+# ========== Category 1: Basic Valid Input ==========
+def test_tool_basic(tmp_path: Path): ...
+def test_tool_multiple_findings(tmp_path: Path): ...
+
+# ========== Category 2: Error Handling ==========
+def test_tool_empty_file(tmp_path: Path): ...
+def test_tool_malformed_json(tmp_path: Path): ...
+
+# ========== Category 3: Schema v1.1.0 Features (Risk, Context, Autofix) ==========
+def test_tool_v110_risk_fields(tmp_path: Path): ...
+
+# ========== Category 4: Schema v1.2.0 metadata ==========
+def test_tool_schema_and_tool_metadata(tmp_path: Path): ...
+
+# ========== Category 5: Tool-Specific Edge Cases ==========
+def test_tool_nested_paths(tmp_path: Path): ...
+```
 
 ---
 
@@ -190,7 +212,7 @@ To bring every adapter to ≥85% coverage:
 
 **Your Process:**
 
-1. **Read jmo-test-fabricator skill** to understand 5 categories
+1. **Use the 5 categories and their headers** under "Required Test Categories" above
 
 2. **For each adapter test file:**
    - Read the test file

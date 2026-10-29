@@ -204,7 +204,9 @@ class TestDocLinks:
             if p.endswith(".md") and not p.startswith(mod.ARCHIVAL_PREFIXES)
         }
         assert checked == expected
-        assert len(checked) > 100, "coverage collapsed to a small subset"
+        # 100 checked after the contributor skills were retired (2026-10; it
+        # was 161). The floor keeps the same ~60% margin it had then.
+        assert len(checked) > 60, "coverage collapsed to a small subset"
 
         # Archival records are exempt by design; they name deleted paths on purpose.
         assert not any(p.startswith(mod.ARCHIVAL_PREFIXES) for p in checked)

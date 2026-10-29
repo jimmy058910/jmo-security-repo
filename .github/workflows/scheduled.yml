@@ -1892,9 +1892,9 @@ jobs:
   # WEEKLY BACKLOG SUMMARY
   # Runs Monday 1PM UTC (after weekend Dependabot batch settles).
   # Posts a visibility-only snapshot of Issues / PRs / Dependabot alerts to
-  # the workflow run's Step Summary. No actions taken; the human triages
-  # via the relevant skill (jmo-issue-triage / jmo-dependabot-triage /
-  # jmo-tool-update-triage). Solo-dev longevity bias: visibility, not bots.
+  # the workflow run's Step Summary. No actions taken; the human triages,
+  # by hand or with the maintainer's jmo-dependabot-triage skill.
+  # Solo-dev longevity bias: visibility, not bots.
   # ==============================================================================
   backlog-summary:
     name: Weekly Backlog Summary
@@ -1969,10 +1969,10 @@ jobs:
             echo "| Metric | Count | Triage Skill |"
             echo "|--------|-------|--------------|"
             echo "| Open issues (total) | **$ISSUES_TOTAL** | |"
-            echo "| Tool-update issues (\`app/github-actions\`) | $ISSUES_TOOL_UPDATE | \`/jmo-tool-update-triage\` |"
-            echo "| \`bug\` | $ISSUES_BUG | \`/jmo-issue-triage\` |"
-            echo "| \`enhancement\` | $ISSUES_ENH | \`/jmo-issue-triage\` |"
-            echo "| \`technical-debt\` | $ISSUES_TECHDEBT | \`/jmo-issue-triage\` |"
+            echo "| Tool-update issues (\`app/github-actions\`) | $ISSUES_TOOL_UPDATE | Manual triage |"
+            echo "| \`bug\` | $ISSUES_BUG | Manual triage |"
+            echo "| \`enhancement\` | $ISSUES_ENH | Manual triage |"
+            echo "| \`technical-debt\` | $ISSUES_TECHDEBT | Manual triage |"
             echo "| \`good first issue\` | $ISSUES_GFI | Curate more if <5 |"
             echo ""
             echo "---"
