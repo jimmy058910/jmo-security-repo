@@ -54,8 +54,8 @@ Copied from the program plan and the Phase 3 task plan; every task includes thes
 - **Never edit tool versions in `Dockerfile` by hand**: `versions.yaml`, then
   `python3 scripts/dev/update_versions.py --sync`.
 - **Nothing about a private repository goes into this public repository** beyond
-  timings and counts. bracketforge, BetHedgeSlider and jmoadaptivegolf are measured on
-  `git archive` exports in a scratch directory, never in place.
+  timings and counts. app A (Next.js), app B (React SPA) and app C (React + Express)
+  are measured on `git archive` exports in a scratch directory, never in place.
 - **Backslash edits via Edit/Write, never a heredoc** (measured again 2026-09-27: a
   quoted-delimiter heredoc turned `\\` into `\`). A markdown line starting `#NNNN` is a
   heading (MD018).
@@ -99,7 +99,7 @@ evidence archive; osv-scanner 2.6.0 downloaded, sha256 equal to the release's
 | Claim | Measured |
 |---|---|
 | Where the flags live | The descriptor, `_trivy("fs", "--scanners", "vuln,secret,misconfig")`; the program plan's `jmo.yml:45-46` is stale |
-| jmoadaptivegolf as shipped | **0**: the coverage review's "golf 0" reproduced (dev dependencies are skipped by default) |
+| app B as shipped | **0**: the coverage review's "app B 0" reproduced (dev dependencies are skipped by default) |
 | With `--scanners vuln,misconfig,license --include-dev-deps --offline-scan` | raw **47 vulnerabilities + 408 license entries**; the report keeps **38**. The 47 are 38 distinct (package, id): **the same CVE in two installed versions of a package shares one id**, because trivy's message is the advisory title |
 | osv-scanner on the same export | **47 raw, 47 post-dedup** (its message names the version). The same 38 (package, id) as trivy: no id is unique to either tool |
 | Both together | **85 post-dedup, 0 clusters.** `dedup_enhanced.py:396-397` returns location similarity 0.0 when either finding has no line, and a dependency finding never has one, so two dependency scanners reach at most 0.25 + 0.25 = 0.50 against the 0.65 threshold. **No two dependency scanners have ever clustered** (trivy and grype included) |
@@ -114,8 +114,8 @@ evidence archive; osv-scanner 2.6.0 downloaded, sha256 equal to the release's
 | The fifth check | The spec's Firebase rule (`allow read, write: if true`) was **never prototyped** |
 | Rebuilt fixture (scratch): RLS in three states, a public-prefix secret in `.env.example` and in source, `service_role` in client code and in an API route, `dangerouslyAllowBrowser`, open and closed Firebase rules | 8 expected findings |
 | The three archived rules through `jmo scan` (`per_tool.semgrep.configs`) | **5 = 4 expected + 1 false positive**: `pattern-regex: 'service_role'` matched a comment. No Firebase rule, so the open `firestore.rules` is missed. `rls_check.py`: 3 of 3 states right |
-| The three real apps (`git archive` of HEAD) | bracketforge `d616391`, BetHedgeSlider `e30ef6d`, jmoadaptivegolf `95753ba`: **0, 0, 0 findings, 0 errors**, 805 + 294 + 71 files. None has `supabase/migrations` or a `*.rules` file, so the RLS and Firebase checks **have no real-app negative control** |
-| Planted `NEXT_PUBLIC_STRIPE_SECRET_KEY=placeholder` in bracketforge's `.env.example` (scratch copy) | **caught, 1 finding** (line 148) |
+| The three real apps (`git archive` of HEAD) | app A `d616391`, app C `e30ef6d`, app B `95753ba`: **0, 0, 0 findings, 0 errors**, 805 + 294 + 71 files. None has `supabase/migrations` or a `*.rules` file, so the RLS and Firebase checks **have no real-app negative control** |
+| Planted `NEXT_PUBLIC_STRIPE_SECRET_KEY=placeholder` in app A's `.env.example` (scratch copy) | **caught, 1 finding** (line 148) |
 | An engine-free Python runner of all five checks | **8 of 8** on the fixture (comments stripped, so no false positive; Firebase included); the planted key 1; the other two apps 0; 0.2–4 s. The engine choice is open (Decisions) |
 
 ### Short output flags (#1335) and trivy's JSON (#1221)
@@ -152,8 +152,8 @@ JMo's own `ToolRunner` with chosen `--skip-path` values, and on Linux in
 | The root-prefix defect | real, Windows and Linux: a repository under `vendor/`, under `vendor-portal/`, or under `results/` with its results inside it, scans **nothing**: `resource_count: 0`, exit 0, row `ran` |
 | #1313's proposed `(^\|[\\/])NAME([\\/]\|$)` | **crashes checkov.** On Windows, cmd.exe re-parses the `\|` and `^` of a `.cmd` tool's arguments (Python's `list2cmdline` quotes only arguments with spaces): rc 255 in 0.15 s. On every platform an unguarded `re.compile` (`module_finder.py:63`) raises: rc 2, no output |
 | **`[\\/]NAME$`, the name escaped** | works on 8 roots, through cmd.exe, through a real `jmo scan` with only the rendering patched, and on Linux. checkov tests `<walked dir>\<entry>` as it walks, so an end-anchored pattern can only match the entry itself, never a folder of the scan root |
-| Actions under checkov | **never read under JMo**, because `.git` also skipped `.github`. On bracketforge checkov runs 293 s, triggered only by 5 workflows, and finds nothing |
-| `--framework terraform cloudformation helm` | space-, comma- and repeat-separated all work. bracketforge **8.7 s instead of 246.8 s**; the `secrets` framework alone took 195.8 s |
+| Actions under checkov | **never read under JMo**, because `.git` also skipped `.github`. On app A checkov runs 293 s, triggered only by 5 workflows, and finds nothing |
+| `--framework terraform cloudformation helm` | space-, comma- and repeat-separated all work. App A **8.7 s instead of 246.8 s**; the `secrets` framework alone took 195.8 s |
 | `helm` | **dead in both environments**: no helm binary on the host or in the image, and checkov disables the framework without a word. `.tf.json` is read only by `terraform_json`, which the narrowed list drops while the trigger still fires on it. trivy reads charts, Kubernetes, Dockerfiles and `.tf.json` |
 
 ### zap and nuclei with an OpenAPI definition (#1331)
@@ -198,7 +198,7 @@ newer Go than is installed.
 
 | Claim | Measured |
 |---|---|
-| #1243 | `diff_engine.py:698` still reads `cvss.baseScore`. osv-scanner findings now carry `cvss.score` (47 of 47 on golf, through the SARIF importer); **trivy findings carry no `cvss` at all**, though trivy's raw output has `CVSS` |
+| #1243 | `diff_engine.py:698` still reads `cvss.baseScore`. osv-scanner findings now carry `cvss.score` (47 of 47 on app B, through the SARIF importer); **trivy findings carry no `cvss` at all**, though trivy's raw output has `CVSS` |
 | #1311 | `gitlab_scanner.py:352`, `scan_image(  # type: ignore[call-arg]` with `tool_exists_func`, unchanged. Only GitLab targets discover images; a `--repo` scan never has |
 | #1328 | trufflehog + gitleaks on juice-shop: **76 post-dedup, 1 cluster**. Five places where both tools report one line stay apart: `PrivateKey`/`private-key` ×2, `JWT`/`jwt` ×2, `JWT`/`jwt`/`generic-api-key` ×1. `rule_equivalence.py` lists `aws-access-token` and `github-pat`, which are **gitleaks** rule ids, under the tool name `trufflehog`, so they can never match |
 | CI's "Tool Smoke Tests (Juice-Shop Fixture)" | **22 skipped, 0 passed** in the dispatched nightly at `292d3cff`: `tests/integration/juice_shop_fixture/` is **gitignored** (`.gitignore:245`, since `70900945`, 2026-02-01), so no checkout has it and every test skips. It exists on this machine only, as juice-shop 16.0.0. No issue has it |
@@ -216,7 +216,7 @@ below replaces a number that would fail, or pass for the wrong reason:
 | "zizmor on this repository = 217" | zizmor through `jmo scan` on a `git archive` of `3098c766` (the golden's commit) = **217 raw, 216 post-dedup, ids equal to the golden's**; on HEAD, the number measured at the PR, recorded |
 | "osv-scanner = the Phase 1 golden count" | through `jmo scan` on NodeGoat `c5cb68a7`: every one of the golden's 303 results present, and post-dedup = **291 + the advisories published since 2026-09-12** (292 on 2026-09-27, the one named). An online count only grows; the offline database is dated |
 | "native pack 5/5 on the fixture" | the rebuilt, tracked fixture: **8 of 8**, one per check and state, with a named negative for each (an API route, a closed rule file, a comment) |
-| "jmoadaptivegolf = 38 … dedup → 38" | **47** (package, version, id; decision 4), **from trivy, from osv-scanner, and from both together**; today both together are 85 |
+| "app B = 38 … dedup → 38" | **47** (package, version, id; decision 4), **from trivy, from osv-scanner, and from both together**; today both together are 85 |
 | "trivy `vuln,secret,misconfig` (`jmo.yml:45-46`)" | the flags live in the descriptor |
 
 ## Decided from measurement (veto any in review)
@@ -350,7 +350,7 @@ files, recorded with its command).
 - [ ] Read `score` (the schema's required key, and what `history_db.py` and the SARIF
   importer use).
 - [ ] trivy's vulnerabilities write `cvss.score` from their `CVSS` block (NVD's V3
-  score first, then the vendor's). Measured: 0 of 38 trivy findings on golf carry
+  score first, then the vendor's). Measured: 0 of 38 trivy findings on app B carry
   `cvss` today, against 47 of 47 osv-scanner findings.
 - [ ] Mutation: restore `baseScore`; the 98 case fails.
 
@@ -444,7 +444,7 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
   **Not helm**: no helm binary exists on the host or in the image, and checkov
   disables the framework silently (measured); trivy reads charts. `terraform_json`
   because the trigger fires on `.tf.json`, which only that framework reads.
-- [ ] Gate: bracketforge's export through `jmo scan --tools checkov zizmor`: checkov
+- [ ] Gate: app A's export through `jmo scan --tools checkov zizmor`: checkov
   `skipped:no IaC files` (it spent 293 s there for nothing), zizmor `ran`.
 
 ## Task Z3: checkov's exclusions (#1313)
@@ -665,8 +665,8 @@ O, N and G) failed in two classes. Lint, and so pip-audit, passed.
 | 1 | gosec (#1310): fix or remove | **Remove.** It has examined 0 files on every run, so no user has ever had a finding from it; semgrep covers Go until Phase 5, then the bundle's 71 `go` security rules. Fixing meant ~58–72 MB of Go in the image, `go` natively, and module and toolchain downloads mid-scan by default |
 | 2 | GitLab image discovery (#1311): fix or remove | **Fix, GitLab only** (recommended was remove). Each discovered image is scanned as an image target with its own rows; this pulls images from registries mid-scan, and only GitLab targets discover images (`--repo` never has) |
 | 3 | The native pack's engine | **A Python runner**, `jmo-native`, as `yara_runner` is: 8 of 8 on the fixture with no false positive, all five checks, no engine dependency |
-| 4 | A dependency finding's identity | **(package, version, id)**: golf = **47** from trivy, from osv-scanner, and together, each finding detected by both. A vulnerable installed version is its own finding; the spec's 38 was the review's (package, id) key |
-| 5 | trivy's license scanner | **Dropped**: the adapter ignores license results (408 raw entries and 0 findings on golf). trivy's repository scan is `--scanners vuln,misconfig`, a deviation from the spec's §3 recorded here |
+| 4 | A dependency finding's identity | **(package, version, id)**: app B = **47** from trivy, from osv-scanner, and together, each finding detected by both. A vulnerable installed version is its own finding; the spec's 38 was the review's (package, id) key |
+| 5 | trivy's license scanner | **Dropped**: the adapter ignores license results (408 raw entries and 0 findings on app B). trivy's repository scan is `--scanners vuln,misconfig`, a deviation from the spec's §3 recorded here |
 | 6 | osv-scanner's offline database | **All ten ecosystems (~280 MB)**, fetched by `jmo tools update` and when osv-scanner is installed; **the image does not carry it** and fetches on first use. Consequence, carried to the Docker docs: a container without a persistent `~/.jmo` volume has no database, so its osv-scanner row reads `failed:offline database missing` until `jmo tools update` runs in it |
 | 7 | #1331's scope | **zap only**, through an automation plan. nuclei stays a plain `-u` scan; its spec import is filed after the tag |
 | 8 | The new defects | **Filed as proposed** (the table below), immediately before PR A is pushed |
@@ -678,7 +678,7 @@ O, N and G) failed in two classes. Lint, and so pip-audit, passed.
 | Defect | Routing (decided) |
 |---|---|
 | trivy misconfigurations lose their lines (40 of 87 on juice-shop), and trivy findings report `tool.version` `unknown` | into #1221's body (same file, same fixture, PR A) |
-| No two dependency scanners can ever cluster (golf: 85 post-dedup, 0 clusters, 38 shared CVEs) | #1346, Phase 4, PR O |
+| No two dependency scanners can ever cluster (app B: 85 post-dedup, 0 clusters, 38 shared CVEs) | #1346, Phase 4, PR O |
 | CI's "Tool Smoke Tests (Juice-Shop Fixture)" has passed on 22 skips since 2026-02-01: its fixture is gitignored for push protection | #1349, Phase 6 (golden fixtures and silent adapter failure are that phase's); its keys generated at test time as G1's are |
 | Every zap finding is MEDIUM (`zap_adapter.py:93`), so `--fail-on HIGH` misses a High XSS | #1347, Phase 4, PR API |
 | A trailing slash on `--url` stops zap's spider (an XSS missed) | #1348, Phase 4, PR API |
@@ -716,7 +716,7 @@ Through `jmo scan`, every spawned run with `--history-db` and `--results-dir` in
 zizmor on a `git archive` of `3098c766` = 217 raw, 216 post-dedup, the golden's ids;
 osv-scanner on NodeGoat `c5cb68a7` ⊇ the golden's 303, post-dedup 291 + the named
 newer advisories; the native pack 8 of 8 on its fixture, 0 on three real apps, the
-planted `NEXT_PUBLIC_STRIPE_SECRET_KEY` caught; jmoadaptivegolf = 47 from trivy, from
+planted `NEXT_PUBLIC_STRIPE_SECRET_KEY` caught; app B = 47 from trivy, from
 osv-scanner, and from both together, each detected by both; juice-shop's osv-scanner
 row `skipped:no lockfile`; checkov `skipped:no IaC files` on a workflow-only repository
 and all four #1313 findings kept at both roots; the flags fixture refuses every
@@ -818,17 +818,17 @@ a new `scripts/core/osv_database.py`, `Dockerfile`, tests beside each.
   osv-scanner row reads `failed:offline database missing`; the Docker e2e case asserts
   exactly that row on a fresh container, so the behaviour is pinned, not assumed.
 - [ ] Gate: with the cache populated and no network (a firewall rule or an unroutable
-  proxy), `jmo scan` on golf gives the same 47.
+  proxy), `jmo scan` on app B gives the same 47.
 
 ## Task O3: trivy's dependency flags
 
 **Files:** `scripts/core/tool_descriptors.py` (`trivy`'s `repo` and `image` builders),
 tests beside it.
 
-- [ ] Red first: golf reads 0 through `jmo scan --tools trivy` today.
+- [ ] Red first: app B reads 0 through `jmo scan --tools trivy` today.
 - [ ] `repo`: `--scanners vuln,misconfig` (no `license`: decision 5), `--include-dev-deps`,
   `--offline-scan`. `image`: `--scanners vuln,secret,misconfig`, unchanged.
-- [ ] Gate: golf's trivy findings equal osv-scanner's (package, version, id) set: 47.
+- [ ] Gate: app B's trivy findings equal osv-scanner's (package, version, id) set: 47.
 - [ ] Gate: a repository scan reports 0 trivy secret findings (its secret pass is off),
   so a trivy secret reaches a repo report only through an image scan.
 
@@ -841,7 +841,7 @@ tests beside it.
 `scripts/core/dedup_enhanced.py` (dependency findings match on identity, not on
 lines), tests beside each.
 
-- [ ] Red first, through `jmo report` on golf's two outputs: 85 post-dedup and 0
+- [ ] Red first, through `jmo report` on app B's two outputs: 85 post-dedup and 0
   clusters today, all 38 CVE ids in both tools.
 - [ ] osv-scanner's binding reads `name@version` from its message template and the
   aliases from `rules[].deprecatedIds` (SARIF carries nothing structured, measured);
@@ -849,7 +849,7 @@ lines), tests beside each.
 - [ ] Two dependency findings are the same finding when their lockfile, name and version
   match and their id sets (id plus aliases) intersect. That bypasses location
   similarity, which is 0 for every dependency finding.
-- [ ] Gate: golf through `jmo scan --tools trivy osv-scanner` = **47** (decision 4), each
+- [ ] Gate: app B through `jmo scan --tools trivy osv-scanner` = **47** (decision 4), each
   finding detected by both tools; trivy alone 47 (was 38: two installed versions no
   longer share an id); NodeGoat's osv-scanner number unchanged.
 
@@ -881,5 +881,5 @@ lines), tests beside each.
   `.server.`, `/api/`, `/server/`, `/actions/`, `supabase/functions/`); `.env*` lines
   that start with `#` skipped.
 - [ ] Gates: the fixture **8 of 8** and no finding on the four negatives; `git archive`
-  exports of bracketforge, BetHedgeSlider and jmoadaptivegolf **0 each** (counts
+  exports of app A, app B and app C **0 each** (counts
   only); the planted `NEXT_PUBLIC_STRIPE_SECRET_KEY` caught; the row under 5 s on each.
