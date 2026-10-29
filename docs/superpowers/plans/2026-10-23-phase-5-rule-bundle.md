@@ -612,8 +612,9 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 - Create: `scripts/dev/fetch_rule_fixture.py` (the four files by commit, sha256-checked,
   into `tests/fixtures/rule_bundle/juice-shop/`, which `.gitignore` lists)
 - Create: `tests/integration/test_rule_bundle_fixture.py` (`requires_tools`)
-- Modify: `ci.yml` and `scheduled.yml` `tool-contract-tests` (fetch step; the new file
-  and `test_opengrep_wiring.py` in the path filter and the pytest list)
+- Modify: `ci.yml` and `scheduled.yml` `tool-contract-tests` (fetch step; the new file,
+  `test_opengrep_wiring.py` and `tests/unit/test_jmo_rules_bundle.py` in the path filter
+  and the pytest list)
 
 - [ ] **Step 1: Failing tests**, through `tool_loop.run_tools` as
   `tests/unit/test_osv_scanner_wiring.py::_real_scan` does:
@@ -626,6 +627,9 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   - `test_a_scan_makes_no_network_call`: proxies at `127.0.0.1:9`, `NO_PROXY` empty;
     rc 0, the four findings, no connection error in stderr.
 - [ ] **Step 2:** Implement the fetch script; CI runs it before the job's pytest.
+  Put `tests/unit/test_jmo_rules_bundle.py` in the path filter and the pytest list too:
+  its `test_every_file_validates` (`requires_tools`) runs in no CI job until PR B
+  installs opengrep, so without this entry it never runs against the engine in CI.
   `docs/RULE_BUNDLE.md` swap step 4 names the guard's test path
   (`tests/integration/test_rule_bundle_fixture.py`); until this step it names none.
 - [ ] **Step 3:** Commit `test: the juice-shop fixture keeps the R3 rules firing`.
@@ -637,6 +641,10 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   the parity target's peak ≤ 600 MB (record it; 467 MB measured for its 8 files at
   `-j 4`); the TS application's opengrep findings whose rule is not `category: security`
   = 0; juice-shop's peak recorded for Phase 7.
+- [ ] **Step 2b: The `problem-based-packs` rules.** Measure opengrep-rules' 37
+  `problem-based-packs` insecure-transport rules (Java 15, Go 9, JS/TS 8 (`js-node`),
+  Ruby 5; none a body duplicate of a bundle rule) on the targets, and include them by
+  their `languages:` key if they are precise. PR A's counts do not change.
 - [ ] **Step 3: No network, proven:** `unshare -rn` around the same `jmo scan` gives the
   same finding set as the networked run.
 - [ ] **Step 4: Windows (`.218`):** `jmo tools install opengrep` fetches
