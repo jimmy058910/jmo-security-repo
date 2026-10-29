@@ -451,8 +451,20 @@ app.use((req, res) => {
   });
 });
 
-// Error handler
+// Error handler. The body parsers reject a bad request with a 4xx status on the
+// error (400 malformed, 413 too large, 415 unsupported charset); keep it, since
+// that is the client's mistake, not ours. Anything else is a 500.
 app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode;
+  if (Number.isInteger(status) && status >= 400 && status < 500) {
+    console.log(`Rejected request body: ${err.type || status}`);
+    return res.status(status).json({
+      success: false,
+      error: status === 413 ? 'payload_too_large' : 'invalid_request',
+      message: status === 413 ? 'Request body is too large.' : 'Invalid request body.'
+    });
+  }
+
   console.error('Unhandled error:', err);
   res.status(500).json({
     success: false,
