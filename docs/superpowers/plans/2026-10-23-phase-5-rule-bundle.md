@@ -210,9 +210,6 @@ numbers stand. The dumper is safe: `yaml.safe_dump({"on": 1})` writes `'on': 1`.
   overflows opengrep's stack. Their precision on C, C++, Java and Go is unmeasured.
 - Program plan, Phase summary: Phase 4's State "open" becomes "on `dev` and `main` as
   `d2baed26` `c56e201d` `4f253e24` `5847d94b` `63f2f0e9` `6881e0e4`".
-- Program plan, Phase 9 acceptance: "a tool count other than 14" becomes 15. The
-  descriptor table holds 15 tools (measured 2026-10-29), and opengrep replaces semgrep one
-  for one.
 - Program plan, After the tag: "and changes this count to 25" and the summary row's
   "becomes 25 in Phase 0" read as pending. Put both in the past tense ("took this count to
   25"), with today's 29 beside them.
