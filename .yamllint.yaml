@@ -14,9 +14,11 @@ rules:
     min-spaces-from-content: 1
   comments-indentation: disable
 
+# scripts/jmo_rules/ is generated (long message lines); opengrep validates it
 ignore: |
   build/
   dist/
   .venv/
   results/
   scripts/api/node_modules/
+  scripts/jmo_rules/

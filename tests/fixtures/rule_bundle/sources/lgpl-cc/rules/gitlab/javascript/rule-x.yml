@@ -1,0 +1,8 @@
+rules:
+  - id: outside-the-rules-root
+    languages: [javascript]
+    severity: ERROR
+    message: lives under rules/gitlab, not rules/lgpl-cc
+    metadata:
+      category: security
+    pattern: outside($X)

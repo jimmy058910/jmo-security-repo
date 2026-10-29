@@ -42,6 +42,7 @@ def test_each(value):
 def _run_pytest(tmp_path: Path, values: str) -> subprocess.CompletedProcess[str]:
     test_file = tmp_path / "test_throwaway.py"
     test_file.write_bytes(_TEST_BODY.format(values=values).encode("utf-8"))
+    # TODO(issue-#1501): drop PYTEST_ADDOPTS from the child's env.
     return subprocess.run(
         [
             sys.executable,

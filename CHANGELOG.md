@@ -125,6 +125,16 @@ All notable changes to JMo Security will be documented in this file.
   ([Known limitations](docs/KNOWN_LIMITATIONS.md#jmo-native-reads-one-application-at-the-repository-root)).
   CI's docker-smoke job now also builds and checks its image when
   `scripts/core/tool_descriptors.py` changes, not only the Dockerfile or the registry.
+- **An offline opengrep rule bundle, and its third-party notices, ship in the wheel.**
+  `scripts/jmo_rules/` holds 1,420 security-only rules in 25 files, one per language,
+  built by `scripts/dev/build_rule_bundle.py` from four pinned sources (opengrep-rules,
+  GitLab's `lgpl-cc` set and two MIT packs); `SOURCES.json` beside them records each
+  source's pin and sha256 and everything the builder left out, and each file opens with
+  a header giving its sources, their licenses and the changes made. The wheel also
+  carries `THIRD_PARTY_LICENSES.md`, the licenses of those sources. Scans do not use the
+  bundle yet: it is read when v2.0.0 replaces Semgrep with opengrep. What is in it, what
+  is left out and how to rebuild or replace it:
+  [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md).
 
 ### Removed
 

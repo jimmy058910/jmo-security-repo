@@ -1,0 +1,8 @@
+rules:
+  - id: p-pair
+    languages: [c]
+    severity: ERROR
+    message: the pack's copy of the body the snapshot also has
+    metadata:
+      category: security
+    pattern: pair($X)

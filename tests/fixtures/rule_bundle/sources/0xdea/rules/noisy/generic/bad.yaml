@@ -1,0 +1,8 @@
+rules:
+  - id: noisy-rule
+    languages: [generic]
+    severity: INFO
+    message: the pack's noisy tier is not taken
+    metadata:
+      category: security
+    pattern: BAD

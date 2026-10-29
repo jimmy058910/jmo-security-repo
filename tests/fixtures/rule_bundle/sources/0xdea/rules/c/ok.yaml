@@ -1,0 +1,8 @@
+rules:
+  - id: ok-rule
+    languages: [c, cpp]
+    severity: WARNING
+    message: a pack rule that stays
+    metadata:
+      category: security
+    pattern: fine($X)

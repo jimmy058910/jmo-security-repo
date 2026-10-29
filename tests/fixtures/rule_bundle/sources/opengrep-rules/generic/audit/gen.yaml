@@ -1,0 +1,8 @@
+rules:
+  - id: gen
+    languages: [generic]
+    severity: INFO
+    message: a generic rule outside generic/secrets stays
+    metadata:
+      category: security
+    pattern: GENERIC

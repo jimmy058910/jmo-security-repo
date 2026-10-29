@@ -1,0 +1,8 @@
+rules:
+  - id: gl-p
+    languages: [generic]
+    severity: WARNING
+    message: GitLab has a properties directory and the snapshot has none
+    metadata:
+      category: security
+    pattern: prop($X)

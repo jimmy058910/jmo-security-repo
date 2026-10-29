@@ -1,0 +1,8 @@
+rules:
+  - id: s-prop
+    languages: [generic]
+    severity: WARNING
+    message: the snapshot's twin of gl-p lives in a different language file
+    metadata:
+      category: security
+    pattern: prop($X)

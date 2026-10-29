@@ -1,0 +1,8 @@
+rules:
+  - id: s-pair
+    languages: [c]
+    severity: WARNING
+    message: the body that the snapshot and 0xdea share
+    metadata:
+      category: security
+    pattern: pair($X)
