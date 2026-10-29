@@ -17,7 +17,8 @@ semgrep everywhere. The juice-shop fixture is fetched at a pinned commit at test
 never committed.
 
 **Tech Stack:** Python 3.12, pytest (+xdist), opengrep 1.31.0 (static binary, new),
-opengrep-rules `f1d2b56`, GitLab `sast-rules` v2.10.1, GitHub Actions, Docker.
+opengrep-rules `f1d2b56`, GitLab `sast-rules` v2.10.1, the MIT packs 0xdea `e0121ac1` and
+elttam `24426856` (added 2026-10-29, D13), GitHub Actions, Docker.
 
 **Spec:** [2026-09-12-v2.0.0-program-design.md](../specs/2026-09-12-v2.0.0-program-design.md)
 §3, §4.2 R3 and R4, §5, §12; program plan
@@ -154,6 +155,40 @@ listed in B4 and B6. `jmo tools install` verifies no checksum (only the Dockerfi
 osv-scanner block does); no URL placeholder renders `x86`; `jmo-native` (Phase 4,
 `5847d94b`) is Python, and no opengrep-format JMo rule exists in the tree.
 
+**The MIT packs (measured 2026-10-29, `.199`).** Jimmy chose to measure and add them in
+Phase 5. All three are MIT and not archived:
+
+| Pack | Pin | Rules | `category: security` | opengrep `--test` | Taken |
+|---|---|---|---|---|---|
+| 0xdea/semgrep-rules `main` | `e0121ac19d9fa259a44f3a24d3e42c95719b17c7` (2026-10-18) | `rules/c` 49 (`[c, cpp]`), `rules/noisy` 1 | 50 of 50 | 48/49: `raptor-use-after-free` overflows opengrep 1.31.0's stack on its own test file | `rules/c` minus that one: **48** |
+| elttam/semgrep-rules `main` | `244268562cc92d33f54b8a60a187df5520f91b26` (2026-08-03; pushed 2026-10-27) | `rules/` 29, `rules-audit/` 78 | 107 of 107 | `rules/` 28/28 (the join rule excluded) | `rules/` minus the join rule and `yaml/kubernetes`: **22** (java 16, go 3, yaml/github-actions 2, php 1) |
+| dgryski/semgrep-go `master` | `db0227c03f4b3c4e71d900188d51db4c81d66932` (2024-11-17) | 66, all `go` | **0 of 66** (no `category` key) | no tests | none |
+
+- elttam's one `mode: join` rule (`jsp-likely-xss`) does not load in opengrep 1.31.0
+  ("missing languages"); every other rule of all three packs validates, 0 errors.
+- elttam's six `yaml/kubernetes` rules anchor on different lines from the snapshot's
+  same-named rules (on both projects' synthetic test manifests: `allow-privilege-escalation`
+  147 elttam vs 62 snapshot lines, 0 shared), so one pod spec would report twice; the
+  snapshot's 20 k8s rules plus checkov and trivy already cover manifests.
+- `rules-audit/` is, by elttam's README, for "enumerating entrypoints, to augment manual
+  source code review". Measured through opengrep `-j 4`: juice-shop 149 findings (111
+  `express-app-router-handler`, 19 + 19 Prisma rules on Sequelize `where` calls, the same
+  line under both rules); the TS application 6 (the same two Prisma rules, 3 lines each,
+  0 real on review); jmoadaptivegolf 0. 0 real of 155.
+- On the three JS/TS targets elttam `rules/`, 0xdea and dgryski give 0 findings; 0xdea and
+  dgryski scan 0 files (language selection never loads them there).
+- **Unmeasured:** precision on C, C++, Java and Go. No such code exists on `.199`. The
+  rules cost nothing on the target archetype; whether they are precise is not known.
+- The two packs taken: gitleaks 0, trufflehog 0, private-key lines 0; body-identical to
+  a snapshot or `lgpl-cc` rule: 0. Four elttam k8s ids collide bare with the snapshot's,
+  which namespacing resolves (and the k8s rules are not taken).
+
+**The YAML 1.1 boolean trap (measured 2026-10-29).** `yaml.safe_load` resolves a bare
+`on`, `off`, `yes` or `no` as a boolean, so a `join` rule's `on:` key became `true:` and
+opengrep rejected the merged file. Across all 2,330 rules of the five sources, exactly one
+rule parses differently under YAML 1.1 and 1.2 booleans (that join rule), so the 10-23
+numbers stand. The dumper is safe: `yaml.safe_dump({"on": 1})` writes `'on': 1`.
+
 ## Program-plan and spec corrections (land in PR A, Task A1)
 
 - Spec §2 decision 2 and §4.2 R3: no rewrite; the eight fire in opengrep once the merge
@@ -168,6 +203,19 @@ osv-scanner block does); no URL placeholder renders `x86`; `jmo-native` (Phase 4
   triples (two of the six are in the fixture's files, four in `data/static/codefixes/`);
   "peak < 600 MB" is on jmoadaptivegolf with language selection at `-j 4`, and
   juice-shop's 1.4–1.85 GB is recorded for Phase 7 by name.
+- Spec §5, the MIT row: 0xdea `rules/c` 48 (C/C++) and elttam `rules/` 22 (Java 16, Go 3,
+  GitHub Actions 2, PHP 1) are in; dgryski is excluded (none of its 66 rules carries
+  `category`), as are elttam's `rules-audit/` (0 real of 155 measured) and its
+  Kubernetes rules, 0xdea's `rules/noisy/`, the one `join` rule and the one rule that
+  overflows opengrep's stack. Their precision on C, C++, Java and Go is unmeasured.
+- Program plan, Phase summary: Phase 4's State "open" becomes "on `dev` and `main` as
+  `d2baed26` `c56e201d` `4f253e24` `5847d94b` `63f2f0e9` `6881e0e4`".
+- Program plan, Phase 9 acceptance: "a tool count other than 14" becomes 15. The
+  descriptor table holds 15 tools (measured 2026-10-29), and opengrep replaces semgrep one
+  for one.
+- Program plan, After the tag: "and changes this count to 25" and the summary row's
+  "becomes 25 in Phase 0" read as pending. Put both in the past tense ("took this count to
+  25"), with today's 29 beside them.
 
 ## Decided from measurement (veto any in review)
 
@@ -198,6 +246,22 @@ osv-scanner block does); no URL placeholder renders `x86`; `jmo-native` (Phase 4
 12. **`semgrep` joins `REMOVED_TOOLS`.** A config still carrying `per_tool.semgrep` gets
     one warning naming `per_tool.opengrep`. "bandit's config" in the program plan is
     already gone (Phase 2); the `bandit` dev linter on JMo's own code stays.
+13. **The MIT packs: 0xdea `rules/c` (48) and elttam `rules/` (22) are in** (Jimmy,
+    2026-10-29, on the measurement above). Ids are namespaced by path like every other
+    source's, prefixed `0xdea.` and `elttam.`; each rule goes to the bundle file named by
+    its top directory under the pack's rules root (`c`, `java`, `go`, `php`, `yaml`), so
+    the file count stays 25.
+14. **YAML 1.2 booleans.** The builder loads with a `SafeLoader` whose boolean resolver
+    matches only `true`/`false` in their three casings; a bare `on:` stays the string
+    `on`.
+15. **Exclusions are data, each with its reason, all in `SOURCES.json`:** directories
+    (`generic/secrets/`; elttam `yaml/kubernetes`; 0xdea `noisy`), modes (`join`: opengrep
+    1.31.0 does not load it), and single ids (0xdea `raptor-use-after-free`: stack overflow
+    in opengrep 1.31.0 on its own test). The packs' unused trees (elttam `rules-audit/`,
+    all of dgryski) are never fetched, and `docs/RULE_BUNDLE.md` says why.
+16. **Body-duplicate precedence: `lgpl-cc`, then the snapshot, then the MIT packs.** A
+    rule whose body equals a higher source's is dropped (50 expected, all snapshot rules;
+    the packs have 0).
 
 ## PR sequence
 
@@ -231,6 +295,12 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 
 - [ ] **Step 1:** Apply the corrections section above, one edit per bullet. Cite
   commits by sha in prose; a `#NNNN` the plan does not roster reddens `phase_audit`.
+- [ ] **Step 1b:** Roster #1501 (filed 2026-10-29: `tests/unit/test_empty_parameter_set_fails.py`'s
+  child pytest inherits `PYTEST_ADDOPTS`, so a `--basetemp` given that way fails its 2
+  tests) in Phase 9, beside #1475's dev-tooling paragraph: the roster line and its
+  `**N issues:**` count (32 → 33), the summary-table row (32 → 33) and `before tag`
+  (166 → 167), and one sentence of prose. Add `# TODO(issue-#1501): drop PYTEST_ADDOPTS from the child's env.`
+  above `_run_pytest`'s `subprocess.run`. No other change to that test.
 - [ ] **Step 2:** `python3 scripts/dev/phase_audit.py derive | tail -2` → "all four
   plan checksums agree"; `verify` → `unclaimed: 0`.
 - [ ] **Step 3:** Commit `docs: Phase 5 task plan, and what its measurement corrected`.
@@ -244,10 +314,17 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   a few rules each, written for the tests; no real rule corpus)
 
 **Interfaces:**
-- Produces: `SOURCES: dict[str, Source]` where `Source(url: str, sha256: str, rules_root: str)`
-  names the two tarballs (`https://github.com/opengrep/opengrep-rules/archive/f1d2b562…tar.gz`,
-  `https://gitlab.com/gitlab-org/security-products/sast-rules/-/archive/v2.10.1/…tar.gz`;
-  record each sha256 on first fetch).
+- Produces: `SOURCES: dict[str, Source]` where `Source` carries `url`, `sha256`,
+  `rules_root`, the file glob, the id prefix, and the exclusions of D15 (directories,
+  modes and ids, each with its reason). Four tarballs, in D16's precedence order:
+  GitLab `lgpl-cc` (`https://gitlab.com/gitlab-org/security-products/sast-rules/-/archive/v2.10.1/…tar.gz`,
+  `rules/lgpl-cc`, `rule-*.yml`, prefix `lgpl-cc`), opengrep-rules
+  (`https://github.com/opengrep/opengrep-rules/archive/f1d2b562b414783763fd02a6ed2736eaed622efa.tar.gz`,
+  the repository root, no prefix), 0xdea
+  (`https://github.com/0xdea/semgrep-rules/archive/e0121ac19d9fa259a44f3a24d3e42c95719b17c7.tar.gz`,
+  `rules/`, prefix `0xdea`) and elttam
+  (`https://github.com/elttam/semgrep-rules/archive/244268562cc92d33f54b8a60a187df5520f91b26.tar.gz`,
+  `rules/`, prefix `elttam`). Record each sha256 on first fetch.
 - Produces: `rule_body(rule: dict) -> str`, `collect(root: Path, kind: str) -> dict[str, list[dict]]`
   (language → rules), `build(trees: dict[str, Path], out_dir: Path) -> dict` (the manifest).
 - Produces: CLI `python scripts/dev/build_rule_bundle.py --out scripts/jmo_rules [--cache ~/.cache/jmo-rule-sources] [--check]`;
@@ -263,6 +340,13 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   - `test_gitlab_wins_a_body_duplicate`: same body, different id and message → only the
     GitLab rule remains; a different `patterns` keeps both.
   - `test_a_colliding_id_fails_the_build` (`ValueError` naming the id).
+  - `test_a_bare_on_key_stays_a_string` (D14): a rule with `on:` keeps the key `"on"`
+    through `collect` and the written file.
+  - `test_join_rules_are_dropped_with_their_reason`, `test_an_excluded_id_is_dropped_with_its_reason`
+    and `test_an_excluded_directory_is_dropped_with_its_reason` (D15): each shows up in
+    the manifest's exclusions, never in a bundle file.
+  - `test_precedence_follows_the_source_order` (D16): a body shared by three sources
+    keeps only the highest source's rule.
   - `test_two_builds_are_byte_identical` and `test_files_are_lf`.
   - `test_the_manifest_records_each_file`: per file, sha256 and rule count; per source,
     url, sha256 and commit or tag; the exclusions with their reasons.
@@ -283,8 +367,8 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 - Modify: `.github/workflows/ci.yml` (a path-filtered `rule-bundle-reproducible` job)
 
 - [ ] **Step 1:** Build: `python scripts/dev/build_rule_bundle.py --out scripts/jmo_rules`.
-  Expect 25 files and 1,351 rules (1,401 − 50). A different number is a finding to
-  explain in the PR, not to absorb.
+  Expect 25 files and 1,421 rules (1,401 − 50 + 48 + 22). A different number is a
+  finding to explain in the PR, not to absorb.
 - [ ] **Step 2: Offline tests** in `test_jmo_rules_bundle.py`:
   - `test_every_file_matches_its_manifest_entry` (sha256 and count).
   - `test_every_rule_is_security`, `test_ids_are_unique_across_the_bundle`.
@@ -304,13 +388,23 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 
 **Files:**
 - Create: `THIRD_PARTY_LICENSES.md` (each source's notice and license text, copied from
-  the fetched tarballs: opengrep-rules LGPL-2.1 + Commons Clause, GitLab `lgpl-cc`)
+  the fetched tarballs: opengrep-rules LGPL-2.1 + Commons Clause, GitLab `lgpl-cc`, and
+  the MIT notices of 0xdea and elttam)
 - Create: `docs/RULE_BUNDLE.md`: what is in it (from `SOURCES.json`), what is excluded
   and why (`generic/secrets/`, `rules/lgpl` → #1465, `rules/gitlab`, Trail of Bits, the
-  Semgrep registry), the freeze (R4: JavaScript and TypeScript rules are the snapshot's),
+  Semgrep registry, and D15's pack exclusions: elttam `rules-audit/` and its Kubernetes
+  rules, all of dgryski, 0xdea `noisy`, the `join` rule, `raptor-use-after-free`), that the
+  MIT packs' precision on C, C++, Java and Go is unmeasured, the freeze (R4: JavaScript
+  and TypeScript rules are the snapshot's),
   the rebuild command, and the swap path (replace `scripts/jmo_rules/`, keep the file
   names, run the fixture guard and `--validate`).
-- Modify: `docs/KNOWN_LIMITATIONS.md` (R4's freeze, one entry)
+- Modify: `docs/KNOWN_LIMITATIONS.md` (R4's freeze, one entry). In the same file, the
+  "Defects shipping in v1.1.0" section is a release behind: v1.1.1 is the latest release,
+  and #1156, which it still lists, closed on 2026-09-09, before v1.1.1's tag
+  (2026-09-11). Retitle it "Defects shipping in v1.1.1", say v1.1.1 in its first
+  paragraph, drop the #1156 bullet, and replace "What remains is the after-tag set" with
+  "What remains is scheduled in the v2.0.0 program, or after its tag". The #1082 and
+  #1007 bullets stay.
 
 - [ ] **Step 1:** Write them; `python scripts/dev/check_doc_links.py` green.
 - [ ] **Step 2:** Commit `docs: third-party rule licenses and the rule bundle's swap path`.
@@ -362,7 +456,8 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 - Produces: `BUNDLE_DIR: Path` (`scripts/jmo_rules`, resolved from `__file__`),
   `LANGUAGE_PATTERNS: dict[str, tuple[str, ...]]` (bundle file stem → the file patterns
   that select it, e.g. `"typescript": ("*.ts", "*.tsx")`, `"dockerfile": ("Dockerfile", "Dockerfile.*", "*.Dockerfile")`,
-  `"terraform": ("*.tf", "*.hcl")`), and
+  `"terraform": ("*.tf", "*.hcl")`; `"c"` includes the C++ extensions `*.cpp`, `*.cc`,
+  `*.cxx`, `*.hpp`, `*.hh`, because 0xdea's rules are `[c, cpp]` and live in `c.yaml`), and
   `select_configs(files: Iterable[Path]) -> list[Path]` (sorted; always `generic.yaml`).
 
 - [ ] **Step 1: Failing tests:** `test_typescript_selects_javascript_too`;
@@ -528,16 +623,16 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 - `THIRD_PARTY_LICENSES.md` and `docs/RULE_BUNDLE.md` exist; `check_doc_links.py` green.
 - #1228 and #1229 closed by PR B's commit; `jmo scan --tools semgrep` names the removal.
 
+## Decided by Jimmy (2026-10-29)
+
+1. **The MIT packs:** measured and added in Phase 5, on the terms of D13 and D15.
+2. **Signature checks for binary downloads:** opengrep joins #1374's scope (Phase 8),
+   not an opengrep-only mechanism. opengrep publishes cosign `.sig`/`.cert` and no
+   checksums; `jmo tools install` verifies nothing for any tool today.
+3. **`-j` is fixed at 4,** and Phase 7's scheduler owns tuning it. juice-shop needs 1.4 GB
+   at `-j 4`; only `-j 1` fits 800 MB, and it loses findings to timeouts.
+
 ## Unresolved (Jimmy)
 
-1. **The MIT packs** (0xdea, elttam, dgryski) in spec §5 were never fetched or
-   measured. Recommendation: leave them out of Phase 5 and file one after-the-tag issue,
-   since none covers the target archetype's languages.
-2. **Signature checks for binary downloads.** opengrep publishes cosign `.sig`/`.cert`
-   and no checksums; `jmo tools install` verifies nothing for any tool, which #1374
-   (Phase 8) already tracks. Recommendation: opengrep joins #1374's scope, not an
-   opengrep-only mechanism.
-3. **`-j` is fixed at 4.** juice-shop needs 1.4 GB at `-j 4`; only `-j 1` fits 800 MB and
-   loses findings to timeouts. Recommendation: Phase 7's scheduler owns it.
-4. **Reporting upstream** that opengrep's debug log records matched source text.
+1. **Reporting upstream** that opengrep's debug log records matched source text.
    Recommendation: after B5 shows which variable moves it.
