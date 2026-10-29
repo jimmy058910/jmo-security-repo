@@ -51,10 +51,11 @@ logger = logging.getLogger(__name__)
 # Deliberately absent: `dist`, `build`, `target`, and any tool's output
 # directory. Those hold the repository's own build output, and a user who
 # points JMo at a release tree means it. (opengrep skips `build/`, `dist/`,
-# `test/` and `tests/` anyway, by a built-in list: measured on 1.32.0, a tree
-# holding each beside `src/` and `docs/` scanned only those two, and a target
-# whose own path holds a `tests/` component scanned 0 files, rc 0. Its
-# `--x-ignore-semgrepignore-files` turns the list off.)
+# `test/` and `tests/` inside the target anyway, by a built-in list: measured
+# on 1.32.0, a tree holding each beside `src/` and `docs/` scanned only those
+# two. Its `--x-ignore-semgrepignore-files` turns the list off. The list is
+# matched against the path opengrep is handed, so its row runs from inside the
+# target, which it names `.`: an ancestor of the target is then in no path.)
 VENDORED_DIRS: tuple[str, ...] = (
     ".git",
     "node_modules",
@@ -668,9 +669,10 @@ def _load(path: Path) -> Any:
 def _opengrep_scanned(path: Path) -> int | None:
     """`paths.scanned`: 0 when its walk found nothing to read, which it reports
     as a run that worked (rc 0, no results). Measured on 1.32.0 for a target
-    whose own path holds a `tests/` component (its built-in ignore list), and
-    on semgrep for a git-based walk that resolved to an enclosing repository
-    with no tracked files (#1231, 0 vs 4)."""
+    whose path was handed with a `tests/` component (its built-in ignore list;
+    the row now hands it `.`), and on semgrep for a git-based walk that
+    resolved to an enclosing repository with no tracked files (#1231, 0 vs 4).
+    The row's own run names its files relative to the target."""
     data = _load(path)
     if not isinstance(data, dict):
         return None
@@ -810,12 +812,38 @@ def _opengrep_configs(ctx: ScanContext) -> list[str]:
     letters), else the bundle's files for the languages present."""
     own = ctx.tool_config.get("configs")
     if own:
-        return [str(c) for c in ([own] if isinstance(own, str) else own)]
+        return [
+            _absolute_if_a_file(c) for c in ([own] if isinstance(own, str) else own)
+        ]
     return [str(p) for p in rule_bundle.select_configs(_opengrep_files(ctx))]
+
+
+def _absolute_if_a_file(config: Any) -> str:
+    """A config that names a file or directory here, made absolute: it is
+    relative to where JMo runs, and opengrep starts in the target. Anything
+    else (a registry pack, a URL, a typo) is the user's to spell."""
+    text = str(config)
+    try:
+        return str(Path(text).resolve()) if Path(text).exists() else text
+    except OSError:
+        return text
 
 
 def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
     config_args = [arg for cfg in _opengrep_configs(ctx) for arg in ("--config", cfg)]
+    # Run from inside the target and name it `.` (R35). opengrep matches its
+    # default ignore list (`tests/`, `test/`, `build/`, `dist/`, ...) against the
+    # path it is handed, so a target with such an ancestor scanned 0 files
+    # (measured on 1.32.0), as did one under `vendor/`, `node_modules/` or
+    # `venv/` through JMo's own `--exclude`: a repository cloned under
+    # `~/build/` read `failed:examined 0 files`. Handed `.`, nothing above the
+    # target is in any path it matches, and its output names files relative to
+    # the target, whatever directory JMo was started in (a relative target used
+    # to put its own spelling in every path, and so in every finding id). Every
+    # other path JMo builds is absolute, since the directory moves; a relative
+    # path the user writes in `per_tool.opengrep.flags` is theirs, and is now
+    # relative to the target (a relative `configs` entry is made absolute).
+    root = Path(scan_root(ctx.target))
     return [
         Invocation(
             command=(
@@ -827,7 +855,7 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
                 "--no-rewrite-rule-ids",
                 "--json",
                 "--output",
-                str(ctx.output),
+                str(ctx.output.resolve()),
                 # No call home to check for a newer release.
                 "--disable-version-check",
                 # Fixed (the program plan's decision): the parity target needs
@@ -837,10 +865,11 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
                 # per_tool entry still wins; repeatable forms accumulate.
                 *ctx.exclusion_args,
                 *ctx.flags,
-                str(ctx.target),
+                ".",
             ),
             output_file=ctx.output,
             capture_stdout=False,
+            cwd=root,
             # Measured on 1.32.0 (2026-10-29): a run whose files carry errors
             # (a syntax error, a Timeout, a Stack overflow) is rc 0, with every
             # other file's results in the output and the errors in `errors`. An

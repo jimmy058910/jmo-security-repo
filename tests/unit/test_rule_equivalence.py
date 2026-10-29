@@ -265,29 +265,38 @@ class TestNoRowNamesARuleTheBundleLeftOut:
         ]
         assert not named, named
 
-    def test_the_opengrep_row_resolves_a_rule_the_bundle_ships(self):
-        """`python.lang.security.audit.hardcoded-password` is not an id in
-        python.yaml (the bundle has `...-default-argument`), so the row works
-        by the boundary fallback: the shipped id carries it as a prefix at a
-        `-`. The test is that a real shipped id resolves, so a rebuild that
-        drops the rule fails here and the row can be removed."""
+    def test_the_hardcoded_password_row_matches_a_rule_the_bundle_ships(self):
+        """R36. The row's id, `python.lang.security.audit.hardcoded-password`,
+        is not an id in python.yaml: the bundle has `...-default-argument`, and
+        the row matches it by the equivalence code's boundary fallback (the id
+        carries the row's as a prefix, at a `-`). So every id python.yaml ships
+        is put through `get_canonical_rule_id`, the function a finding's rule
+        goes through, and at least one must resolve to the row's class: a
+        rebuild that drops the rule fails here, and the row is then dead."""
+        assert ("opengrep", "python.lang.security.audit.hardcoded-password") in (
+            RULE_EQUIVALENCE["code-hardcoded-password"]
+        )
+        bundle = Path(__file__).resolve().parents[2] / "scripts" / "jmo_rules"
         shipped = [
             line.removeprefix("- id: ").strip()
-            for line in (
-                Path(__file__).resolve().parents[2]
-                / "scripts"
-                / "jmo_rules"
-                / "python.yaml"
-            )
+            for line in (bundle / "python.yaml")
             .read_text(encoding="utf-8")
             .splitlines()
-            if line.startswith("- id: python.lang.security.audit.hardcoded-password")
+            if line.startswith("- id: ")
         ]
-        assert shipped, "python.yaml ships no hardcoded-password rule"
-        for rule_id in shipped:
-            assert get_canonical_rule_id("opengrep", rule_id) == (
-                "code-hardcoded-password"
-            ), rule_id
+        assert len(shipped) > 100, "read no ids from python.yaml"
+
+        matching = [
+            rule_id
+            for rule_id in shipped
+            if get_canonical_rule_id("opengrep", rule_id) == "code-hardcoded-password"
+        ]
+
+        assert matching, (
+            "no rule in scripts/jmo_rules/python.yaml resolves to "
+            "code-hardcoded-password: the opengrep row matches nothing the "
+            "bundle ships, and should be removed"
+        )
 
 
 class TestGitleaksSecretEquivalence:

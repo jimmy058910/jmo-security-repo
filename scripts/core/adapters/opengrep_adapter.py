@@ -24,7 +24,8 @@ Exit Codes: 0 (the run worked, errors per file included), 7 (an invalid
 
 Rule ids are exactly the bundle YAML's (``--no-rewrite-rule-ids``), namespaced
 by the rule's source path (``javascript.express.security.audit...``), so they
-do not depend on the directory the scan ran from.
+do not depend on the directory the scan ran from. Nor do the paths: the row runs
+opengrep from inside its target, so ``path`` is relative to it.
 
 Severity Mapping (opengrep -> CommonFinding), from ``extra.severity``:
 - ERROR: HIGH
@@ -49,6 +50,7 @@ See Also:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +65,25 @@ from scripts.core.plugin_api import (
     PluginMetadata,
     adapter_plugin,
 )
+from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
+
+
+def _scan_root(output_path: Path) -> Path | None:
+    """The target the scan ran in, from the ``scan-timings.json`` beside the output.
+
+    The row runs opengrep from inside its target (R35), so a result's ``path``
+    is relative to it and names no file the report phase could open from where
+    it runs. The scan records the root beside every tree's outputs. None when
+    there is no such file (a golden, a results directory from elsewhere), and
+    the path is then read as given.
+    """
+    try:
+        root = json.loads(
+            (output_path.parent / SCAN_TIMINGS_FILENAME).read_text(encoding="utf-8")
+        ).get("root")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return Path(root) if isinstance(root, str) and root else None
 
 
 @adapter_plugin(
@@ -103,6 +124,7 @@ class OpengrepAdapter(AdapterPlugin):
             return []
 
         findings: list[Finding] = []
+        root = _scan_root(output_path)
         tool_version = str(
             (data.get("version") if isinstance(data, dict) else None) or "unknown"
         )
@@ -201,10 +223,17 @@ class OpengrepAdapter(AdapterPlugin):
                 if impact in ["HIGH", "MEDIUM", "LOW"]:
                     risk["impact"] = impact
 
-            # Code context
+            # Code context. ``path`` stays as opengrep wrote it: the report
+            # phase strips a root from an absolute path and has nothing to strip
+            # from a relative one, which is already the repository-relative form.
             context = None
             if path_str and start_line:
-                context = extract_code_snippet(path_str, start_line, context_lines=2)
+                readable = (
+                    str(root / path_str)
+                    if root is not None and not Path(path_str).is_absolute()
+                    else path_str
+                )
+                context = extract_code_snippet(readable, start_line, context_lines=2)
 
             # Create Finding object
             finding = Finding(

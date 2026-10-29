@@ -274,13 +274,16 @@ def test_the_command_line(tmp_path) -> None:
         "--no-rewrite-rule-ids",
         "--json",
         "--output",
-        str(out / "opengrep.json"),
+        str((out / "opengrep.json").resolve()),
         "--disable-version-check",
         "-j",
         "4",
         *(f"--exclude={d}" for d in (*VENDORED_DIRS, "results")),
-        str(repo),
+        # Run from inside the target, which is named `.`: see
+        # `test_a_target_under_a_directory_the_default_ignore_list_names_is_scanned`.
+        ".",
     ]
+    assert definition.cwd == repo.resolve()
     assert definition.output_file == out / "opengrep.json"
     assert definition.capture_stdout is False
     assert definition.ok_return_codes == (0,)
@@ -307,6 +310,56 @@ def test_user_configs_replace_the_bundle(tmp_path) -> None:
     ]
     assert command[6] == "--no-rewrite-rule-ids"
     assert str(BUNDLE_DIR) not in " ".join(command)
+
+
+def test_it_runs_from_inside_the_target_with_every_other_path_absolute(
+    tmp_path, monkeypatch
+) -> None:
+    """The target is `.` and the working directory is the target (R35), so the
+    command must not hold a path that means something only from where JMo is
+    run: a relative repository and a relative results directory, as `jmo scan
+    --repo app --results-dir out` gives, are made absolute before the
+    directory changes."""
+    monkeypatch.chdir(tmp_path)
+    _plant(Path("repo"), ["app.py"])
+    Path("out").mkdir()
+
+    _, (definition,) = _recorded(Path("repo"), Path("out"))
+
+    command = definition.command
+    assert definition.cwd == (tmp_path / "repo").resolve()
+    assert command[-1] == "."
+    assert command[command.index("--output") + 1] == str(
+        (tmp_path / "out" / "opengrep.json").resolve()
+    )
+    configs = [command[i + 1] for i, tok in enumerate(command) if tok == "--config"]
+    assert configs and all(Path(c).is_absolute() for c in configs), configs
+    # Nothing else names where the scan was started.
+    assert str(Path("repo")) not in command
+
+
+def test_a_relative_user_config_is_made_absolute_before_the_directory_changes(
+    tmp_path, monkeypatch
+) -> None:
+    """A user's `configs: [rules.yaml]` is relative to where JMo runs, and
+    opengrep now starts in the target. A file that exists is made absolute; a
+    name that is no file here (a registry pack, a URL) is the user's to
+    spell."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "rules.yaml").write_text("rules: []\n", encoding="utf-8")
+    _plant(Path("repo"), ["app.py"])
+    Path("out").mkdir()
+    mine = ["rules.yaml", "p/python", "https://example.invalid/r.yaml"]
+
+    _, (definition,) = _recorded(
+        Path("repo"), Path("out"), {"opengrep": {"configs": mine}}
+    )
+
+    assert definition.command[2:8] == [
+        *("--config", str((tmp_path / "rules.yaml").resolve())),
+        *("--config", "p/python"),
+        *("--config", "https://example.invalid/r.yaml"),
+    ]
 
 
 def test_a_single_user_config_is_one_config_not_its_characters(tmp_path) -> None:
@@ -426,7 +479,7 @@ def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
     assert not any(tok.startswith(("--jobs", "-j8")) for tok in command)
     # What is not JMo's is the user's, spliced in before the target.
     assert command[-3:-1] == ["--timeout", "9"]
-    assert command[-1] == str(repo)
+    assert command[-1] == "."  # the target, from inside it
     for refused in ("-j 2", "--jobs=3", "-j8"):
         assert f"Ignoring `{refused}` in per_tool.opengrep.flags" in caplog.text
     assert Reserved.PASSED.value in caplog.text
@@ -595,3 +648,185 @@ def test_a_second_jobs_flag_is_rc_2_and_writes_nothing(tmp_path) -> None:
     assert done.returncode == 2
     assert "cannot be repeated" in done.stderr
     assert not (tmp_path / "o.json").exists()
+
+
+# --- the real binary, through the scan loop (R35) --------------------------------
+
+# opengrep matches its default ignore list against the path it is given, so a
+# target with an ancestor so named scanned 0 files (rc 0, measured on 1.32.0):
+# the row read `failed:examined 0 files`, for a repository merely cloned under
+# `~/build/` or `~/work/tests/`. JMo's own `--exclude=vendor` and the like hid
+# an ancestor of that name the same way. Measured at the commit before R35,
+# through this row: each of these hid its target, and `work`, `results` and
+# `target` did not.
+HIDING_ANCESTORS = [
+    "tests",
+    "test",
+    "build",
+    "dist",
+    "vendor",
+    "node_modules",
+    "venv",
+    ".venv",
+]
+
+TWO_FINDINGS = b"import os\nos.system(input())\neval(input())\n"
+
+
+def _real_scan(repo: Path, out: Path):
+    """The row, run for real through `run_tools`, as `jmo scan` runs it."""
+    from scripts.core.tool_runner import ToolRunner
+
+    if shutil.which("opengrep") is None:
+        pytest.skip("opengrep is not on PATH")
+    out.mkdir(parents=True, exist_ok=True)
+    return tool_loop.run_tools(
+        tools=["opengrep"],
+        target_type="repo",
+        target=repo,
+        target_label="app",
+        out_dir=out,
+        timeout=300,
+        retries=0,
+        per_tool_config={},
+        allow_missing_tools=False,
+        runner_cls=ToolRunner,
+        repo_root=repo,
+    )["opengrep"]
+
+
+def _hits(out: Path) -> list[tuple[str, str, int]]:
+    document = json.loads((out / "opengrep.json").read_bytes())
+    return sorted(
+        (r["check_id"].rsplit(".", 1)[-1], r["path"], r["start"]["line"])
+        for r in document["results"]
+    )
+
+
+@pytest.mark.requires_tools
+@pytest.mark.parametrize("ancestor", HIDING_ANCESTORS)
+def test_a_target_under_a_directory_the_default_ignore_list_names_is_scanned(
+    tmp_path, ancestor
+) -> None:
+    """The row runs from inside the target, so what lies above it is not matched
+    against anything. The files are named relative to the target."""
+    repo = tmp_path / ancestor / "app"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "a.py").write_bytes(TWO_FINDINGS)
+    out = tmp_path / "out"
+
+    row = _real_scan(repo, out)
+
+    assert row.state is State.RAN, row
+    document = json.loads((out / "opengrep.json").read_bytes())
+    assert document["paths"]["scanned"] == ["src/a.py"]
+    assert {path for _, path, _ in _hits(out)} == {"src/a.py"}
+    assert len(_hits(out)) >= 2
+
+
+@pytest.mark.requires_tools
+def test_the_same_scan_from_another_working_directory_gives_the_same_ids(
+    tmp_path, monkeypatch
+) -> None:
+    """A relative target used to be named in every path (`app/src/a.py`,
+    `../../app/src/a.py`), and the path is hashed into the finding's id, so one
+    repository had an id for each directory it was scanned from. Run from
+    inside the target, the paths are the target's own."""
+    from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
+
+    work = tmp_path / "work"
+    (work / "app" / "src").mkdir(parents=True)
+    (work / "app" / "src" / "a.py").write_bytes(TWO_FINDINGS)
+
+    def ids_from(cwd: Path, repo: Path, out: Path) -> tuple[list, list[str]]:
+        monkeypatch.chdir(cwd)
+        assert _real_scan(repo, out).state is State.RAN
+        found = OpengrepAdapter().parse(out / "opengrep.json")
+        return _hits(out), sorted(f.id for f in found)
+
+    absolute = ids_from(Path("/"), work / "app", tmp_path / "out-a")
+    relative = ids_from(work, Path("app"), Path("out-b"))
+    nested = ids_from(work / "app" / "src", Path("../../app"), tmp_path / "out-c")
+
+    assert absolute[0], "no findings to compare"
+    assert absolute == relative == nested
+
+
+@pytest.mark.requires_tools
+def test_the_report_keeps_repo_relative_paths_and_the_code_context(
+    tmp_path, monkeypatch
+) -> None:
+    """Through the report phase, as `jmo scan` runs it. Before R35 the raw path
+    was absolute (an absolute target) and the report stripped the scan root; now
+    the raw path is relative and there is nothing to strip, and the finding must
+    still read as `src/a.py`, id and all, and still carry its code context:
+    the adapter finds the file under the root the scan recorded."""
+    from scripts.core.normalize_and_report import gather_results
+
+    repo = tmp_path / "tests" / "app"  # hidden before R35
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "a.py").write_bytes(TWO_FINDINGS)
+    results = tmp_path / "results"
+    out = results / "individual-repos" / "app"
+    (results / ".scan_metadata.json").parent.mkdir(parents=True)
+    (results / ".scan_metadata.json").write_text(
+        json.dumps({"repo_paths": [str(repo.resolve())]}), encoding="utf-8"
+    )
+    # Not the target's own directory, so reading the file by its relative path
+    # from here would find nothing.
+    monkeypatch.chdir(tmp_path)
+
+    assert _real_scan(repo, out).state is State.RAN
+    findings = gather_results(results)
+
+    assert findings
+    assert {f["location"]["path"] for f in findings} == {"src/a.py"}
+    assert all(f["context"] for f in findings), "the code context was lost"
+    assert "os.system" in findings[0]["context"]["snippet"]
+
+
+@pytest.mark.requires_tools
+def test_the_exclusions_and_the_examined_count_hold_from_inside_the_target(
+    tmp_path,
+) -> None:
+    """`--exclude=NAME` is a name, so it needs no path to be right: vendored
+    trees and JMo's own in-tree results directory are still left out, and
+    `paths.scanned` (what the examined-files reader counts) lists only what was
+    read, relative to the target."""
+    from scripts.core.tool_runner import ToolRunner
+
+    repo = tmp_path / "build" / "app"  # an ancestor the default list would hide
+    for rel in (
+        "src/a.py",
+        "node_modules/dep/n.py",
+        "vendor/v.py",
+        ".venv/lib/v.py",
+        "results/individual-repos/old/r.py",
+    ):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(TWO_FINDINGS)
+    out = repo / "results" / "individual-repos" / "app"
+    out.mkdir(parents=True, exist_ok=True)
+    if shutil.which("opengrep") is None:
+        pytest.skip("opengrep is not on PATH")
+
+    row = tool_loop.run_tools(
+        tools=["opengrep"],
+        target_type="repo",
+        target=repo,
+        target_label="app",
+        out_dir=out,
+        timeout=300,
+        retries=0,
+        per_tool_config={},
+        allow_missing_tools=False,
+        runner_cls=ToolRunner,
+        repo_root=repo,
+        results_name="results",
+        results_tree=(repo / "results").resolve(),
+    )["opengrep"]
+
+    assert row.state is State.RAN, row
+    document = json.loads((out / "opengrep.json").read_bytes())
+    assert document["paths"]["scanned"] == ["src/a.py"]
+    assert DESCRIPTORS["opengrep"].scanned_count(out / "opengrep.json") == 1

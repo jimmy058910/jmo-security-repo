@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 
 
@@ -626,3 +628,79 @@ def test_the_golden_holds_no_source_text():
     for result in document["results"]:
         assert not {"lines", "dataflow_trace", "metavars"} & set(result["extra"])
         assert not Path(result["path"]).is_absolute()
+
+
+# --- a path relative to the target (R35) -----------------------------------------
+
+
+def _relative_output(tmp_path: Path):
+    """An output as the row now writes it: paths relative to the target, beside a
+    `scan-timings.json` that records the target's root. The working directory
+    holds no copy of the file, so the relative path alone reads nothing."""
+    root = tmp_path / "work" / "app"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "a.py").write_text(
+        "import os\n\n\ndef run(cmd):\n    os.system(cmd)\n    return 1\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "results" / "individual-repos" / "app"
+    out.mkdir(parents=True)
+    sample = {
+        "version": "1.32.0",
+        "results": [
+            {
+                "check_id": "python.lang.security.audit.dangerous-system-call-audit",
+                "path": "src/a.py",
+                "start": {"line": 5},
+                "extra": {"message": "system call", "severity": "WARNING"},
+            }
+        ],
+    }
+    (out / "opengrep.json").write_text(json.dumps(sample), encoding="utf-8")
+    return root, out
+
+
+def test_the_context_is_read_from_under_the_root_the_scan_recorded(
+    tmp_path: Path, monkeypatch
+):
+    """The path stays as opengrep wrote it, relative to the target (the report
+    phase would only strip a root from it), and the adapter finds the file for
+    its code context under the root that `scan-timings.json` records."""
+    root, out = _relative_output(tmp_path)
+    (out / "scan-timings.json").write_text(
+        json.dumps({"root": str(root)}), encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    (finding,) = OpengrepAdapter().parse(out / "opengrep.json")
+
+    assert finding.location["path"] == "src/a.py"
+    assert finding.context is not None
+    assert "os.system(cmd)" in finding.context["snippet"]
+    assert finding.context["startLine"] == 3
+
+
+def test_without_a_recorded_root_the_path_is_read_as_given(tmp_path: Path, monkeypatch):
+    """A bare output (a golden, a results directory from elsewhere) names no
+    root: the context is read from the path as given, or is absent."""
+    _, out = _relative_output(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    (finding,) = OpengrepAdapter().parse(out / "opengrep.json")
+
+    assert finding.location["path"] == "src/a.py"
+    assert finding.context is None
+
+
+@pytest.mark.parametrize("timings", ["not json", "[]", '{"root": 7}', '{"root": ""}'])
+def test_an_unreadable_scan_timings_file_is_no_root(
+    tmp_path: Path, monkeypatch, timings: str
+):
+    _, out = _relative_output(tmp_path)
+    (out / "scan-timings.json").write_text(timings, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    (finding,) = OpengrepAdapter().parse(out / "opengrep.json")
+
+    assert finding.location["path"] == "src/a.py"
+    assert finding.context is None

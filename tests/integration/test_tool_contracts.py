@@ -132,14 +132,18 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_keys": ["results"],
         "result_item_keys": ["check_id", "path", "extra"],
         "sample_target": "python-vulnerable",
-        # The file, not the directory: the sample sits under `tests/`, which
-        # opengrep's built-in ignore list skips, so the directory scanned 0
-        # files (rc 0, 0 results, measured on v1.32.0, 2026-10-29) and
-        # `result_item_keys` was never checked. The file: 1 scanned, 6 results.
-        # The command is the descriptor row's for this file (the configs its
-        # languages select, `-j 4`, no version check) minus `--output`, since
-        # this harness reads stdout; TestContractInfrastructure holds the two
-        # equal. Nothing is fetched: the rules are the committed bundle's.
+        # Run from inside the sample, which the command names `.`, as the row
+        # does (R35). The sample sits under `tests/`, which opengrep's built-in
+        # ignore list skips when it is part of the path opengrep is handed: the
+        # directory by its path scanned 0 files (rc 0, 0 results, measured on
+        # v1.32.0, 2026-10-29) and `result_item_keys` was never checked, so this
+        # contract used to name the one file. Run this way both files are read
+        # (2 scanned, 6 results). The command is the descriptor row's (the
+        # configs its languages select, `-j 4`, no version check) minus
+        # `--output`, since this harness reads stdout; TestContractInfrastructure
+        # holds the two equal. Nothing is fetched: the rules are the committed
+        # bundle's.
+        "cwd": "{target}",
         "command": [
             "opengrep",
             "scan",
@@ -152,7 +156,7 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
             "--disable-version-check",
             "-j",
             "4",
-            "{target}/vulnerable_app.py",
+            ".",
         ],
         "ok_return_codes": (0,),
         "description": "SAST scanner with results array structure",
@@ -356,7 +360,9 @@ def run_tool_on_sample(
         encoding="utf-8",
         errors="replace",
         timeout=180,  # 3 minute timeout
-        cwd=PROJECT_ROOT,
+        cwd=contract["cwd"].replace("{target}", str(sample_target))
+        if "cwd" in contract
+        else PROJECT_ROOT,
         # Merged over the inherited environment, as ToolRunner merges a
         # definition's (osv-scanner's database directory).
         env={**os.environ, **contract["env"]} if "env" in contract else None,
@@ -671,25 +677,24 @@ class TestContractInfrastructure:
         from scripts.core.tool_descriptors import DESCRIPTORS, ScanContext
 
         contract = TOOL_CONTRACTS["opengrep"]
-        sample = SAMPLES_DIR / contract["sample_target"] / "vulnerable_app.py"
+        sample = SAMPLES_DIR / contract["sample_target"]
         ctx = ScanContext(
             tool="opengrep",
             target_type="repo",
             target=sample,
             out_dir=tmp_path,
             binary="opengrep",
-            files=(str(sample),),
+            files=(str(sample / "vulnerable_app.py"),),
         )
         (invocation,) = DESCRIPTORS["opengrep"].invocations["repo"](ctx)
         row = list(invocation.command)
         at = row.index("--output")
         del row[at : at + 2]
 
-        spelled = [
-            part.replace("{target}", str(SAMPLES_DIR / contract["sample_target"]))
-            for part in contract["command"]
-        ]
-        assert spelled == row
+        assert [p.replace("{target}", str(sample)) for p in contract["command"]] == row
+        assert Path(contract["cwd"].replace("{target}", str(sample))).resolve() == (
+            invocation.cwd
+        )
 
     def test_contracts_cover_key_adapters(self):
         """Verify contracts exist for critical adapters."""

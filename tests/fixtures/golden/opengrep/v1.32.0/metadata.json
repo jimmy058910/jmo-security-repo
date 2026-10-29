@@ -17,6 +17,6 @@
       "views/promotionVideo.pug": "d9c4ab0b3a96c832fbde18346f900df727ab20cd0d4ce229e7a8ef3d0bd0c285"
     }
   },
-  "command": "opengrep scan --config scripts/jmo_rules/generic.yaml --config scripts/jmo_rules/javascript.yaml --config scripts/jmo_rules/typescript.yaml --no-rewrite-rule-ids --json --output raw-output.json --disable-version-check -j 4 --exclude=.git --exclude=node_modules --exclude=vendor --exclude=.venv --exclude=venv .  (cwd: the four files above, fetched by commit into a scratch directory; the configs are the ones the descriptor row selects for them, absolute in the real run)",
+  "command": "opengrep scan --config scripts/jmo_rules/generic.yaml --config scripts/jmo_rules/javascript.yaml --config scripts/jmo_rules/typescript.yaml --no-rewrite-rule-ids --json --output raw-output.json --disable-version-check -j 4 --exclude=.git --exclude=node_modules --exclude=vendor --exclude=.venv --exclude=venv .  (cwd: the target, a scratch directory holding the four files above, fetched by commit; the target argument is `.`. That is how the descriptor row runs opengrep since R35, so the paths are relative to the target as a scan writes them. The configs are the ones the row selects for them, absolute in the real run)",
   "stripped": "extra.lines, extra.dataflow_trace and extra.metavars are removed from every result: they copy juice-shop source text into the output, and one metavariable holds lib/insecurity.ts's RSA private key. No other field is changed."
 }
