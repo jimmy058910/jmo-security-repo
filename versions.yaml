@@ -20,7 +20,7 @@ python_tools:
     critical: false
 binary_tools:
   trufflehog:
-    version: 3.99.4
+    version: 3.99.7
     github_repo: trufflesecurity/trufflehog
     description: Secrets scanner (working tree and git history)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
@@ -163,7 +163,7 @@ special_tools:
 
       '
   opa:
-    version: 1.21.3
+    version: 1.21.4
     github_repo: open-policy-agent/opa
     description: Open Policy Agent (policy-as-code engine)
     release_pattern: opa_linux_{arch}_static
@@ -216,6 +216,22 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-10-25'
+  action: Updated opa
+  tools_updated:
+  - tool: opa
+    old_version: 1.21.3
+    new_version: 1.21.4
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-10-25'
+  action: Updated trufflehog
+  tools_updated:
+  - tool: trufflehog
+    old_version: 3.99.4
+    new_version: 3.99.7
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-10-23'
   action: Updated opa
   tools_updated:
