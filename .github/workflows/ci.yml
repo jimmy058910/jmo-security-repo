@@ -102,7 +102,7 @@ jobs:
           python-version: '3.12'
 
       - name: Validate GitHub workflows (actionlint)
-        uses: reviewdog/action-actionlint@v1.80.2
+        uses: reviewdog/action-actionlint@v1.80.4
         with:
           actionlint_flags: -color
           level: error
