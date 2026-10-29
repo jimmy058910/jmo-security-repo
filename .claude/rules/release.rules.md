@@ -14,24 +14,7 @@ references:
 
 **What this covers:** GitHub Actions workflows, release process, Docker multi-arch builds, version management, and release troubleshooting.
 
-## GitHub Actions Example
-
-```yaml
-- run: jmo scan --repo . --results-dir results-baseline
-- run: jmo scan --repo . --results-dir results-current
-- run: jmo diff results-baseline/ results-current/ --format md > diff.md
-```
-
-## GitHub Actions Workflows (4-Workflow Structure)
-
-Consolidated from 8 workflows:
-
-| Workflow | File | Trigger | Purpose |
-|----------|------|---------|---------|
-| **CI** | `ci.yml` | PR / push to main | Lint, unit tests, adapter tests, coverage |
-| **Scheduled** | `scheduled.yml` | Cron / manual | Nightly e2e, tool-update checks, security scans |
-| **Release** | `release.yml` | Tag push (`v*`) | Build images, publish to registries, GitHub release |
-| **Maintenance** | `maintenance.yml` | Manual / cron | Dependency updates, Docker image pruning |
+## GitHub Actions Workflows
 
 **Scheduled job pattern:** All `scheduled.yml` jobs that run pytest MUST use the canonical install block — `astral-sh/setup-uv@v10.3.0` (with `version: "0.13.1"`, `python-version: '3.12'`, `cache-dependency-glob: "uv.lock"`), then `uv sync --locked --group dev`, then the venv-on-PATH step. Reference pattern: the `e2e-tool-integration` job. Omitting dev deps causes `--json-report` to fail silently. Anything pytest must *import* (plugins like `pytest-playwright`) has to enter `.venv` via `uv sync --extra <name>` — uv venvs ship no pip, so a bare `pip install` lands in the runner's system Python and the plugin is invisible to `.venv`'s pytest. Bare `pip install` of a standalone CLI tool (semgrep, checkov, yamllint...) invoked as its own binary is unaffected.
 

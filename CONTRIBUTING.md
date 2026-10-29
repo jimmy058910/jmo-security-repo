@@ -1029,6 +1029,33 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 - YAML: `yamllint` via pre-commit; GitHub Actions validated by `actionlint` (also enforced in CI).
 - Keep public CLI flags and outputs stable; update docs/tests when behavior changes.
 
+## Architecture and key files
+
+JMo Security runs in two phases:
+
+1. **Scan Phase:** Invokes tools in parallel, writes raw JSON to `results/individual-{type}/`
+2. **Report Phase:** Normalizes to CommonFinding schema, deduplicates, then enriches all findings with compliance frameworks via single-pass `enrich_findings_with_compliance()`, and outputs
+
+**Enrichment Architecture:** Compliance enrichment (OWASP, CWE, CIS, NIST, PCI DSS, MITRE ATT&CK) is handled centrally in `normalize_and_report.py` after all findings are collected. Adapters return raw findings without enrichment.
+
+| File | Purpose |
+|------|---------|
+| `scripts/cli/jmo.py` | Main CLI entry point |
+| `scripts/cli/tool_installer.py` + `installers/` | Tool installation orchestrator; Strategy-pattern installers (pip, npm, brew, binary) |
+| `scripts/cli/ui/` | UI components (progress reporters) |
+| `scripts/core/normalize_and_report.py` | Aggregation engine |
+| `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
+| `scripts/core/schema_validator.py` | JSON schema validation for findings |
+| `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
+| `scripts/core/adapters/*.py` | Tool output parsers (15 adapters; four are SARIF bindings over `sarif_common.py`) |
+| `scripts/core/reporters/` | Output formatters |
+| `scripts/jmo_mcp/jmo_server.py` | MCP server (see [mcp.rules.md](.claude/rules/mcp.rules.md)) |
+| `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
+| `jmo.yml` / `versions.yaml` | Main configuration / tool version registry |
+| `Dockerfile` | The one image (tagged `:latest` and the release version): the 15 scanners plus OPA |
+
+`tests/` holds 8,000+ tests across unit/adapters/reporters/integration; `.github/workflows/` holds CI/CD.
+
 ## Adding Tool Adapters (Plugin System)
 
 JMo Security uses a plugin-based architecture for all 15 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.

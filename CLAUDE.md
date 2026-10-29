@@ -13,14 +13,11 @@ JMo Security is a terminal-first security audit toolkit orchestrating 15 scanner
 
 **Version:** v1.1.1 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
-**Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Raised from 80% under #756 after measuring 86.87%. Nothing sets `--cov-fail-under`; measure current coverage rather than quoting a figure from this file
-
-**Key v1.0 Features:** SQLite historical storage, machine-readable diffs, Mann-Kendall trend analysis, CSV export, dual-mode HTML dashboard, cross-tool deduplication (similarity clustering into consensus findings).
 
 ## Mandatory Guardrails
 
 1. **One formatter:** `ruff format` (Black left with #1179). The `ruff` lint hook runs before `ruff-format` in `.pre-commit-config.yaml`; never add a second formatter
-2. **Test Coverage:** CI's only enforced floor is **85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`, so there is still no *local* gate. Cite the step, never a line number: it has moved three times (#756)
+2. **Test Coverage:** CI's only enforced floor is **85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`, so there is still no *local* gate. Cite the step, never a line number: it has moved three times (#756). Measure current coverage rather than quoting a figure from this file
 3. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`. **No AI-attribution markers of any kind, in commit messages or PR bodies** — not `Co-Authored-By: Claude`, not `Generated with Claude Code`, and **not a `Claude-Session:` link**. Decided 2026-09-11, and it applies to every repo in the workspace, not only this public one. **This has to be stated here, in the repo's own `CLAUDE.md`, or it does not hold**: Claude Code's harness injects an instruction to append the trailer **every single session** and defers only to a `CLAUDE.md`, so the workspace-level ban in `C:\Projects\CLAUDE.md` sat one directory above this repo and lost silently — **0 trailers in the ~250 commits before 2026-09-02, near-universal after**, with that prohibition unchanged the whole time. A rule that competes with something re-injected on every turn has to live where the harness reads it
 4. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). **Never** modify identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`) without explicit user authorization. **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
 
@@ -56,8 +53,8 @@ beyond its stated scope. For many PRs (a dependency bump) the honest answer is
 > **structurally could not perform**. That is the thing worth requiring.
 >
 > **Unattended runs are different.** The weekly-maintenance routine's auto-merge
-> tier is a separate, narrower carve-out — see `C:\Projects\CLAUDE.md`. Do not
-> read this section as widening it.
+> tier is a separate, narrower carve-out — see the maintainer's workspace
+> `ROUTINES.md` (outside this repo). Do not read this section as widening it.
 
 **The two verifications this repo has learned it needs** (see
 [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md)):
@@ -123,25 +120,9 @@ make test-fast                         # Fast parallel tests (recommended for de
 
 ### Essential Commands
 
-| Command | Purpose |
-|---------|---------|
-| `jmo wizard` | Interactive setup wizard |
-| `jmo scan --repo .` | Production scan (the target's content decides which of the 15 scanners run; narrow with `--tools` / `--skip-tools`) |
-| `jmo scan --image nginx:latest` | Container image scan |
-| `jmo report ./results` | Generate reports from scan |
-| `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
-| `jmo tools check` | Check tool installation status |
-| `jmo tools install` | Install tools (parallel by default, 3-4x faster; `--sequential` to debug, `--jobs N` default 4, max 8) |
-| `jmo tools clean --force` | Remove isolated venvs (pip conflict tools) |
-| `jmo diff results-A/ results-B/` | Compare scans |
-| `jmo history list` | View scan history |
-| `jmo validate` / `jmo validate --tier full` | Pre-release validation scorecard (quick / with real tools) |
-| `make deps-sync` / `make deps-lock` | Install from `uv.lock` / regenerate after a `pyproject.toml` change |
-| `make fmt` / `make lint` / `make typecheck` | Format (ruff format + shfmt) / lint / mypy |
-| `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
-| `make test-parallel` / `make test` | Parallel with coverage (CI-like) / sequential with coverage |
-| `make test-e2e` / `-visual` / `-report` | E2E (pytest-native) / Playwright dashboard / JSON report |
-| `python scripts/dev/test_wizard_tools.py` | Test wizard tool detection (non-interactive). Run before `jmo wizard` — it tests isolated venvs, version detection, and the Java dependency |
+`jmo` subcommands and flags: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md). Make targets: `make help` (the test targets are explained in [TEST.md](TEST.md)).
+
+One command neither lists: run `python scripts/dev/test_wizard_tools.py` before `jmo wizard`. It tests wizard tool detection non-interactively — isolated venvs, version detection, and the Java dependency.
 
 ### Version Management (CRITICAL)
 
@@ -210,32 +191,7 @@ interpreter path.
 
 ## Architecture Overview
 
-### Two-Phase Workflow
-
-1. **Scan Phase:** Invokes tools in parallel, writes raw JSON to `results/individual-{type}/`
-2. **Report Phase:** Normalizes to CommonFinding schema, deduplicates, then enriches all findings with compliance frameworks via single-pass `enrich_findings_with_compliance()`, and outputs
-
-**Enrichment Architecture:** Compliance enrichment (OWASP, CWE, CIS, NIST, PCI DSS, MITRE ATT&CK) is handled centrally in `normalize_and_report.py` after all findings are collected. Adapters return raw findings without enrichment.
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `scripts/cli/jmo.py` | Main CLI entry point |
-| `scripts/cli/tool_installer.py` + `installers/` | Tool installation orchestrator; Strategy-pattern installers (pip, npm, brew, binary) |
-| `scripts/cli/ui/` | UI components (progress reporters) |
-| `scripts/core/normalize_and_report.py` | Aggregation engine |
-| `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
-| `scripts/core/schema_validator.py` | JSON schema validation for findings |
-| `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
-| `scripts/core/adapters/*.py` | Tool output parsers (15 adapters; four are SARIF bindings over `sarif_common.py`) |
-| `scripts/core/reporters/` | Output formatters |
-| `scripts/jmo_mcp/jmo_server.py` | MCP server (see [mcp.rules.md](.claude/rules/mcp.rules.md)) |
-| `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
-| `jmo.yml` / `versions.yaml` | Main configuration / tool version registry |
-| `Dockerfile` | The one image (tagged `:latest` and the release version): the 15 scanners plus OPA |
-
-`tests/` holds 8,000+ tests across unit/adapters/reporters/integration; `.github/workflows/` holds CI/CD.
+The phase walkthrough and the key-files map are in [CONTRIBUTING.md](CONTRIBUTING.md#architecture-and-key-files). The rule that applies everywhere: compliance enrichment happens once, centrally, in `normalize_and_report.py` — **adapters return raw findings and never enrich**.
 
 ## Path-Scoped Rules
 
@@ -259,36 +215,20 @@ files, so scope a rule to the code it actually governs.
 
 | File | Purpose |
 |------|---------|
-| `jmo.yml` | Main JMo config (referenced throughout codebase) |
-| `jmo.suppress.yml` | Suppression rules |
 | `pyproject.toml` | Single declaration of all deps — runtime, extras, and `[dependency-groups] dev` (PEP 735) |
 | `uv.lock` | The only lockfile. Universal, tracked, generated (NEVER hand-edit; use `make deps-lock`) |
 | `versions.yaml` | Tool versions (NEVER edit manually; use `update_versions.py`) |
-| `.pre-commit-config.yaml` | Pre-commit hooks (ruff lint before ruff-format) |
 
 ### jmo.yml Key Settings
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `tools` | list | Tools to run (default: the whole `TOOL_MATRIX`); `--tools` / `--skip-tools` override it |
-| `threads` | int or `auto` | Parallel scan workers |
-| `timeout` | int | Per-tool timeout in seconds (`per_tool.<tool>.timeout` overrides it) |
-| `fail_on` | string | Severity threshold for CI failures |
-| `retries` | int | Retries for failed tool invocations |
-| `per_tool` | object | Per-tool configuration overrides |
-| `outputs` | object | Output/reporting settings |
-| `profiling` | object | Scan/report timing instrumentation |
-| `policy` | object | Policy-as-code settings |
-| `deduplication.similarity_threshold` | float | Cross-tool clustering threshold (0.5-1.0, default: 0.65) |
+The shipped `jmo.yml` and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) are the key reference.
 
 > There is **no `email` and no `schedule` key**, and no SMTP anywhere in the
 > product — email goes through the Resend HTTP API
 > (`scripts/core/email_service.py`) and schedules live in `~/.jmo/schedules.json`,
 > managed by `jmo schedule`. Both keys were documented here in error and the "SMTP"
 > wording had already propagated into a session handoff as a real hazard to plan
-> around. The table above is what the shipped `jmo.yml` actually has.
-
-See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.
+> around.
 
 ## Troubleshooting (Quick Lookup)
 
@@ -323,8 +263,6 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 ## Notes
 
-- CommonFinding v1.2.0 includes compliance mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
-- Cross-tool dedup uses similarity clustering (`deduplication.similarity_threshold`, default 0.65)
 - Agent threads reset cwd between bash calls — use absolute paths
 - Avoid emojis unless explicitly requested
 - Only create documentation with long-term value; use `.claude/` for temporary work
