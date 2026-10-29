@@ -65,7 +65,7 @@ opengrep-rules `f1d2b562b414783763fd02a6ed2736eaed622efa`, GitLab `sast-rules` v
 `53bf5cf6df3c51b6c02110f5a638b5e6213666cd`, juice-shop
 `401393872069a1cedc8cdd26e89f2f8e05fe0dab` (2025-12-22). semgrep 1.181.0 for comparison.
 
-**Parity.** jmoadaptivegolf `src/`, unfiltered JavaScript + TypeScript rules: the
+**Parity.** The parity target's `src/`, unfiltered JavaScript + TypeScript rules: the
 identical 212-finding set, keyed `(rule, path, line, col)`, across ten runs (merged or
 per-directory configs, semgrep or opengrep, `-j 8/4/1`). With the `category: security`
 filter the same target gives **0 findings**: all 212 were non-security rules.
@@ -109,10 +109,10 @@ snapshot security rule: ruby 32, php 9, java 6, python 2, properties 1.
 
 | Run | `-j 8` | `-j 4` | `-j 2` | `-j 1` |
 |---|---|---|---|---|
-| golf, unfiltered js+ts, per-directory configs | 1,068–1,084 MB, 14 procs, 6 s | | | |
-| golf, unfiltered js+ts merged | 575–598 MB, 3.3 s | 451 MB | | 306 MB |
-| golf, 8 bundle files (js, ts, generic, json, yaml, html, bash, dockerfile) | 601 MB, 4.0 s | **467 MB**, 3.9 s | | |
-| golf, all 25 bundle files | 822 MB, 11.4 s | 683 MB, 11.5 s | | |
+| parity target, unfiltered js+ts, per-directory configs | 1,068–1,084 MB, 14 procs, 6 s | | | |
+| parity target, unfiltered js+ts merged | 575–598 MB, 3.3 s | 451 MB | | 306 MB |
+| parity target, 8 bundle files (js, ts, generic, json, yaml, html, bash, dockerfile) | 601 MB, 4.0 s | **467 MB**, 3.9 s | | |
+| parity target, all 25 bundle files | 822 MB, 11.4 s | 683 MB, 11.5 s | | |
 | juice-shop, 8 bundle files | 1,853 MB, 28.0 s | 1,492 MB, 27.3 s | 1,410 MB | 791 MB, 53.5 s, 20 `three.js` findings lost to timeouts |
 
 `--exclude-minified-files` does not help juice-shop (1,557 MB at `-j 4`, same 211
@@ -174,7 +174,7 @@ Phase 5. All three are MIT and not archived:
   source code review". Measured through opengrep `-j 4`: juice-shop 149 findings (111
   `express-app-router-handler`, 19 + 19 Prisma rules on Sequelize `where` calls, the same
   line under both rules); the TS application 6 (the same two Prisma rules, 3 lines each,
-  0 real on review); jmoadaptivegolf 0. 0 real of 155.
+  0 real on review); the parity target 0. 0 real of 155.
 - On the three JS/TS targets elttam `rules/`, 0xdea and dgryski give 0 findings; 0xdea and
   dgryski scan 0 files (language selection never loads them there).
 - **Unmeasured:** precision on C, C++, Java and Go. No such code exists on `.199`. The
@@ -201,7 +201,7 @@ numbers stand. The dumper is safe: `yaml.safe_dump({"on": 1})` writes `'on': 1`.
   merged bundle, which is committed; "the seven taint rules (R3) are rewritten" goes;
   acceptance "the fixture fires `tainted-sql-string` ×6" becomes the four fixture
   triples (two of the six are in the fixture's files, four in `data/static/codefixes/`);
-  "peak < 600 MB" is on jmoadaptivegolf with language selection at `-j 4`, and
+  "peak < 600 MB" is on the parity target with language selection at `-j 4`, and
   juice-shop's 1.4–1.85 GB is recorded for Phase 7 by name.
 - Spec §5, the MIT row: 0xdea `rules/c` 48 (C/C++) and elttam `rules/` 22 (Java 16, Go 3,
   GitHub Actions 2, PHP 1) are in; dgryski is excluded (none of its 66 rules carries
@@ -227,7 +227,7 @@ numbers stand. The dumper is safe: `yaml.safe_dump({"on": 1})` writes `'on': 1`.
 5. **Body duplicates: GitLab wins.** A snapshot rule whose body equals an `lgpl-cc` rule's
    is dropped (50 expected).
 6. **One config file per language present, plus `generic`; `-j 4`, reserved.** All 25
-   files cost golf 683 MB at `-j 4`, the selected ones 467 MB. TypeScript selects
+   files cost the parity target 683 MB at `-j 4`, the selected ones 467 MB. TypeScript selects
    `javascript.yaml` too: opengrep runs `languages: [javascript]` rules on `.ts`
    (31 of 31 hits on a TS app were JavaScript rules, 2026-10-22). Phase 7 owns tuning.
 7. **JSON output; `semgrep_adapter.py` becomes `opengrep_adapter.py`.** SARIF has no
@@ -618,7 +618,7 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 
 - [ ] **Step 1:** Suite in three parts; ID-set diff against `origin/dev`.
 - [ ] **Step 2: Through `jmo scan`** on `git archive` exports, `--tools opengrep`:
-  jmoadaptivegolf peak ≤ 600 MB (record it; 467 MB measured for its 8 files at
+  the parity target's peak ≤ 600 MB (record it; 467 MB measured for its 8 files at
   `-j 4`); the TS application's opengrep findings whose rule is not `category: security`
   = 0; juice-shop's peak recorded for Phase 7.
 - [ ] **Step 3: No network, proven:** `unshare -rn` around the same `jmo scan` gives the
@@ -635,7 +635,7 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   rule `category: security`, 0 gitleaks / 0 trufflehog / 0 private-key lines, 25/25
   validate, `--check` reproduces it.
 - The four fixture triples in `tool-contract-tests`, on Linux and on the laptop.
-- jmoadaptivegolf through `jmo scan`: opengrep peak ≤ 600 MB at `-j 4`; no network
+- the parity target through `jmo scan`: opengrep peak ≤ 600 MB at `-j 4`; no network
   call (`unshare -rn` equality).
 - No match text written under the user's home by a scan.
 - `THIRD_PARTY_LICENSES.md` and `docs/RULE_BUNDLE.md` exist; `check_doc_links.py` green.
