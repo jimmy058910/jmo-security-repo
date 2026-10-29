@@ -236,6 +236,10 @@ naming `verified`, in TruffleHog's flags counts as asking to verify.
 
 ### Most of the rule bundle is a frozen snapshot, JavaScript and TypeScript included
 
+**This describes v2.0.0.** Until v2.0.0 ships, JMo's code scanner is Semgrep, which
+does not read this bundle; read this entry, and its advice on an empty result, as
+applying from v2.0.0.
+
 JMo's code scanner reads the rule bundle in `scripts/jmo_rules/`
 ([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,250 of its 1,420 rules come from one
 snapshot of opengrep-rules whose commit is dated 2025-01-26. Nothing refreshes

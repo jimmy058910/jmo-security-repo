@@ -33,7 +33,9 @@ body duplicates, and proprietary licenses. A rule's body is the rule minus `id`,
 both stay. The license guard is general, not configured: a rule whose
 `metadata.license` contains "proprietary" (any casing), from any source, is not
 shipped, because the bundle's notices (`THIRD_PARTY_LICENSES.md`) grant only the
-open-source licenses of its sources. The reason quotes the license text.
+open-source licenses of its sources. The reason quotes the license text. The match
+is a deliberately broad substring, so a "non-proprietary" license would be dropped
+too; that is the conservative direction.
 
 YAML is read with 1.2 booleans (only true/false, in their three casings), so a
 bare `on:` key stays the string "on" and not True. It is written with

@@ -260,6 +260,18 @@ numbers stand. The dumper is safe: `yaml.safe_dump({"on": 1})` writes `'on': 1`.
 16. **Body-duplicate precedence: `lgpl-cc`, then the snapshot, then the MIT packs.** A
     rule whose body equals a higher source's is dropped (50 expected, all snapshot rules;
     the packs have 0).
+17. **Proprietary rules leave the bundle (R9).** The builder drops any rule whose
+    `metadata.license` contains "proprietary" (case-insensitive), from any source, and
+    records it in `SOURCES.json` as a `license` exclusion whose reason quotes the license
+    text. One rule measured: the snapshot's Java `no-direct-response-writer`
+    (`proprietary license - copyright © Semgrep, Inc.`). Of the other 1,420, 1,311 carry no
+    `metadata.license` and 109 say Commons Clause + LGPL-2.1 (measured). So 1,421 becomes
+    1,420. The match is a deliberately broad substring. Guards:
+    `test_a_proprietary_rule_is_dropped_with_its_reason` (builder) and
+    `test_no_rule_declares_a_proprietary_license` (the committed bundle).
+18. **The wheel ships the notices (R10).** `pyproject.toml`'s `license-files` carries
+    `THIRD_PARTY_LICENSES.md`: the wheel ships the rules, so it ships their notices.
+    Guarded by `test_the_wheel_ships_the_third_party_notices`.
 
 ## PR sequence
 
@@ -372,6 +384,9 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   - `test_every_file_matches_its_manifest_entry` (sha256 and count).
   - `test_every_rule_is_security`, `test_ids_are_unique_across_the_bundle`.
   - `test_no_generic_secrets_rule_ships`.
+  - `test_no_rule_declares_a_proprietary_license` (D17).
+  - `test_the_wheel_ships_the_third_party_notices` (D18): `license-files` names
+    `THIRD_PARTY_LICENSES.md`, which exists at the repository root.
   - `test_the_wheel_carries_the_bundle`: extend the test that guards
     `dashboard/dist/index.html`'s package-data entry (`grep -rn "dashboard/dist/index.html" tests/`).
   - `@requires_tools test_every_file_validates`: `opengrep scan --validate --config <f>`
@@ -562,7 +577,9 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 - Docs: `UPGRADE.md` (breaking: semgrep → opengrep, `per_tool.semgrep.configs` →
   `per_tool.opengrep.configs`, every SAST finding id changes), `CHANGELOG.md`,
   `docs/TOOLS.md`, `docs/USER_GUIDE.md:1615-1623`, `docs/SCAN_OPTIMIZATION.md:154`.
-  The tool-count sweep across the other docs is Phase 9's.
+  The tool-count sweep across the other docs is Phase 9's. Also remove the v2.0.0 status
+  lines from `docs/RULE_BUNDLE.md` and the KNOWN_LIMITATIONS bundle entry (R12), which
+  say the scanner is still Semgrep until v2.0.0 ships.
 
 - [ ] **Step 1: Failing test** `test_a_v1_semgrep_config_is_named_not_dropped`: a config
   with `per_tool.semgrep.configs: [p/python]` produces one warning naming
@@ -593,6 +610,8 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   - `test_a_scan_makes_no_network_call`: proxies at `127.0.0.1:9`, `NO_PROXY` empty;
     rc 0, the four findings, no connection error in stderr.
 - [ ] **Step 2:** Implement the fetch script; CI runs it before the job's pytest.
+  `docs/RULE_BUNDLE.md` swap step 4 names the guard's test path
+  (`tests/integration/test_rule_bundle_fixture.py`); until this step it names none.
 - [ ] **Step 3:** Commit `test: the juice-shop fixture keeps the R3 rules firing`.
 
 ## Task B8: Gates, then PR B
