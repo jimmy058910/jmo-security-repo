@@ -25,6 +25,20 @@ The descriptor row (task B3), measured on v1.32.0 the same day:
   twice) exits 2 and writes nothing. rc 1 comes only from `--error` and rc 3
   only from `--strict`, which a user may not set.
 - It has no `--metrics` flag, so nothing in the command turns telemetry off.
+
+Its debug log (task B5), measured on v1.32.0 the same day under a scratch
+`HOME`:
+
+- Every run truncates and rewrites `$HOME/.opengrep/semgrep.log`, and the log
+  holds each match's source text: a line `KEY = "<a PEM header and its body>"`
+  matched by a rule appears whole, in a `semgrep.rule_match` line.
+- `SEMGREP_LOG_FILE` moves it. It names the file itself, opengrep creates the
+  missing parent directories, and with it set nothing at all is written under
+  `HOME`. `OPENGREP_LOG_FILE`, `SEMGREP_USER_DATA_FOLDER` and
+  `OPENGREP_USER_DATA_FOLDER` change nothing: the log stayed in `~/.opengrep`.
+- A relative value is opened from the working directory, which is the target
+  (R35): `SEMGREP_LOG_FILE=rel.log` left `rel.log` in the scanned repository.
+  An empty value is rc 1 and no output.
 """
 
 from __future__ import annotations
@@ -336,6 +350,46 @@ def test_it_runs_from_inside_the_target_with_every_other_path_absolute(
     assert configs and all(Path(c).is_absolute() for c in configs), configs
     # Nothing else names where the scan was started.
     assert str(Path("repo")) not in command
+
+
+LOG = ".opengrep/semgrep.log"
+
+
+def test_its_debug_log_is_written_into_the_scans_scratch(tmp_path) -> None:
+    """opengrep logs each match's source text to `$HOME/.opengrep/semgrep.log`
+    (measured), so a scan of code that holds a key left the key in the user's
+    home. `SEMGREP_LOG_FILE` is the one variable that moves it, and the log goes
+    where the scan keeps its other scratch: a dot-prefixed name beside the
+    outputs, which the report does not read as a tool's."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    _, (definition,) = _recorded(repo, out)
+
+    assert definition.env == {"SEMGREP_LOG_FILE": str((out / LOG).resolve())}
+    # The scratch directory is dot-prefixed, as every tool's is.
+    assert Path(definition.env["SEMGREP_LOG_FILE"]).parent.name == ".opengrep"
+
+
+def test_the_log_path_is_absolute_because_the_scan_runs_in_the_target(
+    tmp_path, monkeypatch
+) -> None:
+    """opengrep starts in the target, and opens a relative `SEMGREP_LOG_FILE`
+    from there: the log, with its matched code, would be written into the
+    repository being scanned (measured). A relative results directory, as
+    `jmo scan --results-dir out` gives, must be made absolute first."""
+    monkeypatch.chdir(tmp_path)
+    _plant(Path("repo"), ["app.py"])
+    Path("out").mkdir()
+
+    _, (definition,) = _recorded(Path("repo"), Path("out"))
+
+    log = Path(definition.env["SEMGREP_LOG_FILE"])
+    assert log == (tmp_path / "out" / LOG).resolve()
+    assert log.is_absolute()
+    assert (tmp_path / "repo").resolve() not in log.parents
 
 
 def test_a_relative_user_config_is_made_absolute_before_the_directory_changes(
@@ -830,3 +884,39 @@ def test_the_exclusions_and_the_examined_count_hold_from_inside_the_target(
     document = json.loads((out / "opengrep.json").read_bytes())
     assert document["paths"]["scanned"] == ["src/a.py"]
     assert DESCRIPTORS["opengrep"].scanned_count(out / "opengrep.json") == 1
+
+
+def _stat_of(path: Path) -> tuple[int, int] | None:
+    """(mtime in ns, size) of a file, or None when it is not there."""
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return stat.st_mtime_ns, stat.st_size
+
+
+@pytest.mark.requires_tools
+def test_a_scan_leaves_no_log_in_the_home_directory(tmp_path) -> None:
+    """opengrep's debug log holds the source text of every match, and its
+    default home is the user's `~/.opengrep` (measured, v1.32.0): the log of a
+    scan of a repository holding a key sat there after the scan, outside the
+    scan, outliving it. It is the scan's scratch now, under the results
+    directory. The cache that holds its 255 MB extraction stays in the home."""
+    repo = tmp_path / "app"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "a.py").write_bytes(TWO_FINDINGS)
+    out = tmp_path / "out"
+    home_log = Path.home() / ".opengrep" / "semgrep.log"
+    before = _stat_of(home_log)
+
+    row = _real_scan(repo, out)
+
+    assert row.state is State.RAN, row
+    assert _hits(out), "the scan found nothing, so there was nothing to log"
+    assert _stat_of(home_log) == before, f"{home_log} was written by the scan"
+    log = out / ".opengrep" / "semgrep.log"
+    assert log.is_file(), sorted(p.name for p in out.rglob("*"))
+    # The log of THIS scan: its debug lines name the file it matched.
+    assert "src/a.py" in log.read_text(encoding="utf-8", errors="replace")
+    # Nothing was left in the repository either.
+    assert sorted(p.name for p in repo.iterdir()) == ["src"]

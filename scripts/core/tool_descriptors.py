@@ -829,6 +829,11 @@ def _absolute_if_a_file(config: Any) -> str:
         return text
 
 
+# opengrep's debug log, in the scan's scratch beside the outputs: dot-prefixed,
+# as `.zap-plan.yaml` is, so the report reads no `<tool>.json` out of it.
+OPENGREP_LOG = ".opengrep/semgrep.log"
+
+
 def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
     config_args = [arg for cfg in _opengrep_configs(ctx) for arg in ("--config", cfg)]
     # Run from inside the target and name it `.` (R35). opengrep matches its
@@ -870,6 +875,17 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
             output_file=ctx.output,
             capture_stdout=False,
             cwd=root,
+            # Its debug log holds the source text of every match, and defaults
+            # to `~/.opengrep/semgrep.log`, outside the scan and outliving it
+            # (measured on 1.32.0, 2026-10-29: a scan of a key left the key in
+            # the home). `SEMGREP_LOG_FILE` is the one variable that moves it;
+            # `OPENGREP_LOG_FILE` and the two `*_USER_DATA_FOLDER` do nothing.
+            # opengrep creates the missing directories, and opens a relative
+            # path from the working directory, which is the target: so it is
+            # absolute, as `--output` is. The 255 MB extraction cache
+            # (`~/.cache/opengrep`) stays where it is: moving it into every
+            # scan would cost that much per scan.
+            env={"SEMGREP_LOG_FILE": str((ctx.out_dir / OPENGREP_LOG).resolve())},
             # Measured on 1.32.0 (2026-10-29): a run whose files carry errors
             # (a syntax error, a Timeout, a Stack overflow) is rc 0, with every
             # other file's results in the output and the errors in `errors`. An
