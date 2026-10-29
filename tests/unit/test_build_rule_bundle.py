@@ -51,11 +51,29 @@ EXPECTED_FILES = {
 }
 
 
+# The repository's .gitignore drops every `*secret*` data file (a deliberate net),
+# so this fixture cannot be committed under generic/secrets/ and is written into
+# each test's copy of the tree instead.
+SECRETS_RULE = b"""\
+rules:
+  - id: leak
+    languages: [generic]
+    severity: ERROR
+    message: secret detection is gitleaks' and trufflehog's class
+    metadata:
+      category: security
+    pattern: LEAKED
+"""
+
+
 @pytest.fixture
 def trees(tmp_path: Path) -> dict[str, Path]:
     """A writable copy of the synthetic sources, keyed like SOURCES."""
     dest = tmp_path / "sources"
     shutil.copytree(FIXTURES, dest)
+    leak = dest / "opengrep-rules" / "generic" / "secrets" / "leak.yaml"
+    leak.parent.mkdir()
+    leak.write_bytes(SECRETS_RULE)
     return {name: dest / name for name in bb.SOURCES}
 
 
@@ -108,6 +126,7 @@ def test_test_targets_and_non_rule_yaml_are_skipped(trees, tmp_path):
 
 
 def test_generic_secrets_is_excluded(trees, tmp_path):
+    assert (trees["opengrep-rules"] / "generic" / "secrets" / "leak.yaml").is_file()
     out = _build(trees, tmp_path)
     generic = [r["id"] for r in _rules_by_file(out)["generic.yaml"]]
     assert generic == ["generic.audit.gen.gen"]
