@@ -69,7 +69,7 @@ Usage:
     build_rule_bundle.py --out scripts/jmo_rules --check    # exit 1 naming any file that differs
 
 Exit code 0 = built (or identical under --check), 1 = --check found differences,
-2 = a source could not be fetched, verified or unpacked.
+2 = a source could not be fetched, verified or unpacked, or its rules could not be read.
 """
 
 from __future__ import annotations
@@ -77,6 +77,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import http.client
 import json
 import re
 import sys
@@ -617,7 +618,13 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 manifest = build(trees, args.out)
                 problems = []
-    except (ValueError, OSError, tarfile.TarError) as exc:  # OSError covers URLError
+    except (
+        ValueError,
+        TypeError,  # a rule value JSON cannot hold, such as a YAML date, in rule_body
+        OSError,  # covers URLError
+        http.client.HTTPException,  # a truncated download is IncompleteRead, not an OSError
+        tarfile.TarError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

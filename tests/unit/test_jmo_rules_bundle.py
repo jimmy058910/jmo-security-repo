@@ -293,24 +293,36 @@ def test_the_bundle_keeps_its_line_endings_on_checkout() -> None:
     file's LF to CRLF and change the bytes the manifest hashes. If the line is
     deleted, the only failure is on the `windows-2022` shard, which is
     `continue-on-error` and reports green over failures, so it is asserted here
-    on every shard, from git's own resolution of the attribute."""
+    on every shard, from git's own resolution of the attribute, for the
+    manifest and for a rule file (the `**` has to reach both). The same line
+    carries `linguist-generated`, which makes GitHub collapse the generated
+    diff in a pull request."""
     git = shutil.which("git")
     if git is None:
         pytest.skip("git is not on PATH")
     if not (REPO_ROOT / ".git").exists():
         pytest.skip("not a git checkout")
+    paths = [
+        f"scripts/jmo_rules/{MANIFEST.name}",
+        f"scripts/jmo_rules/{_bundle_files()[0].name}",
+    ]
     result = subprocess.run(
-        [git, "check-attr", "text", "--", "scripts/jmo_rules/SOURCES.json"],
+        [git, "check-attr", "text", "linguist-generated", "--", *paths],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         timeout=30,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "scripts/jmo_rules/SOURCES.json: text: unset", (
-        f"`text` is not unset for the bundle, so a CRLF checkout would change its "
-        f"bytes; check the scripts/jmo_rules/** line in .gitattributes: {result.stdout!r}"
-    )
+    got = set(result.stdout.splitlines())
+    for path in paths:
+        assert f"{path}: text: unset" in got, (
+            f"`text` is not unset for {path}, so a CRLF checkout would change its "
+            f"bytes; check the scripts/jmo_rules/** line in .gitattributes: {result.stdout!r}"
+        )
+        assert f"{path}: linguist-generated: set" in got, (
+            f"`linguist-generated` is not set for {path}: {result.stdout!r}"
+        )
 
 
 @pytest.mark.requires_tools

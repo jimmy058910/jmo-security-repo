@@ -21,5 +21,6 @@ scripts/dashboard/dist/index.html -text -diff linguist-generated
 # `rule-bundle-reproducible` rebuilds and compares byte for byte. GitHub's
 # Windows runners check out CRLF (core.autocrlf=true), which would change every
 # file's bytes and fail the sha256 test there for a reason that has nothing to
-# do with the rules. `-text` turns the conversion off for this directory.
-scripts/jmo_rules/** -text
+# do with the rules. `-text` turns the conversion off for this directory;
+# `linguist-generated` makes GitHub collapse the generated diff in a pull request.
+scripts/jmo_rules/** -text linguist-generated

@@ -1702,6 +1702,8 @@ jobs:
   #
   # Same pattern as tool-contract-tests: always runs, so the check name is
   # stable, and does real work only when the bundle or its builder changed.
+  # uv.lock is in the filter too: the builder writes the YAML with PyYAML, and a
+  # PyYAML bump can change those bytes.
   #
   # NOTE: advisory -- not in ruleset 9147592's required set (see the list at
   # the top of this file).
@@ -1727,6 +1729,7 @@ jobs:
               - 'scripts/jmo_rules/**'
               - 'scripts/dev/build_rule_bundle.py'
               - 'tests/unit/test_build_rule_bundle.py'
+              - 'uv.lock'
 
       - name: Set up uv
         if: steps.changes.outputs.bundle == 'true'
@@ -1768,7 +1771,7 @@ jobs:
         if: steps.changes.outputs.bundle != 'true'
         run: |
           echo "No rule bundle changes -- reproducibility check not required."
-          echo "Paths watched: scripts/jmo_rules/, its builder, and the builder's test"
+          echo "Paths watched: scripts/jmo_rules/, its builder, the builder's test, and uv.lock"
 
   # ==========================================================================
   # phase-audit -- is every open issue scheduled, and do the labels agree?

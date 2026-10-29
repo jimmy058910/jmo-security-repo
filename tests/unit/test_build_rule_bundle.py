@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import http.client
 import io
 import json
 import re
@@ -855,6 +856,54 @@ def test_check_names_a_missing_and_an_unexpected_file(cli, tmp_path, capsys):
 def test_check_on_a_missing_directory_fails(cli, capsys):
     assert cli("--check") == 1
     assert "c.yaml" in capsys.readouterr().err
+
+
+class _TruncatedResponse:
+    """What urlopen returns when the server closes the connection mid-body."""
+
+    def __enter__(self) -> _TruncatedResponse:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+    def read(self, size: int = -1) -> bytes:
+        raise http.client.IncompleteRead(b"partial", 1024)
+
+
+def test_a_truncated_download_exits_2_not_1(tmp_path, monkeypatch, capsys):
+    # IncompleteRead is an http.client.HTTPException, not an OSError. Left
+    # uncaught it ended the run with exit 1, which --check means "differs".
+    assert not issubclass(http.client.IncompleteRead, OSError)
+    monkeypatch.setattr(
+        bb.urllib.request, "urlopen", lambda request, timeout=None: _TruncatedResponse()
+    )
+    for extra in ([], ["--check"]):
+        code = bb.main(
+            [
+                "--out",
+                str(tmp_path / "bundle"),
+                "--cache",
+                str(tmp_path / "cache"),
+                *extra,
+            ]
+        )
+        assert code == 2, extra
+    assert "IncompleteRead" in capsys.readouterr().err
+    assert list((tmp_path / "cache").glob("*.part")) == []
+
+
+def test_a_rule_json_cannot_hold_exits_2_not_1(cli, trees, capsys):
+    # A bare YAML date loads as datetime.date, which json.dumps (rule_body)
+    # raises TypeError on. That is an unreadable source, exit 2, not "differs".
+    planted = trees["opengrep-rules"] / "javascript" / "dated.yaml"
+    planted.write_bytes(
+        b"rules:\n  - id: dated\n    languages: [javascript]\n    pattern: x\n"
+        b"    min-version: 2020-01-02\n    metadata: {category: security}\n"
+    )
+    assert cli() == 2
+    assert cli("--check") == 2
+    assert "error:" in capsys.readouterr().err
 
 
 def test_main_reports_a_failed_fetch_and_exits_2(tmp_path, monkeypatch, capsys):
