@@ -28,10 +28,35 @@ You have access to all documentation analysis tools:
 
 ### Documentation Hierarchy
 
-The documentation structure — which docs exist, who reads them, and which
-ones an update touches first — is defined once, in
-[jmo-documentation-updater/SKILL.md § Complete Documentation Structure](../skills/jmo-documentation-updater/SKILL.md).
-Read it there; do not duplicate it here.
+Which docs exist, who reads them, and which ones an update touches first:
+
+**Complete Beginner**
+
+- [docs/DOCKER_README.md](../../docs/DOCKER_README.md) - Docker deep-dive; its Quick Start is the beginner path and the DevOps/SRE entry point
+
+**Developer**
+
+- [README.md](../../README.md) - project overview, value proposition, and the supported-tools table
+- [QUICKSTART.md](../../QUICKSTART.md) - five-minute guide for every user type
+
+**DevOps/SRE**
+
+- [DOCKER_HUB_README.md](../../DOCKER_HUB_README.md) - Docker Hub repository description, synced by release.yml
+- [docs/examples/](../../docs/examples/) - copy-paste CI/CD workflows and scan scripts
+
+**Advanced User**
+
+- [docs/USER_GUIDE.md](../../docs/USER_GUIDE.md) - comprehensive reference: configuration, advanced features, troubleshooting
+- [docs/TOOLS.md](../../docs/TOOLS.md) - the tool matrix, when each tool runs, target types, and what was removed in v2.0.0
+- [docs/RESULTS_GUIDE.md](../../docs/RESULTS_GUIDE.md) - example outputs from real scans
+
+**Contributor**
+
+- [CHANGELOG.md](../../CHANGELOG.md) - version history in Keep-a-Changelog format; every user-facing change lands here
+- [docs/index.md](../../docs/index.md) - documentation hub; update it when a doc is added, moved, or removed
+- [CLAUDE.md](../../CLAUDE.md) - agent context: architecture overview, guardrails, key files
+
+The full inventory is [docs/index.md](../../docs/index.md).
 
 ### User Journey-Based Documentation
 

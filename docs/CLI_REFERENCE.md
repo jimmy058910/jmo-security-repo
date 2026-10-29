@@ -188,7 +188,7 @@ Generate reports from completed scan results.
 | `--out DIR` | Output directory (default: `<results_dir>/summaries`) |
 | `--config FILE` | Config file (default: `jmo.yml`) |
 | `--fail-on SEV` | Exit non-zero if findings at severity or above (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) |
-| `--profile` | Collect per-tool timing and write `timings.json` |
+| `--profile` | Write `timings.json`: per-adapter parse timing for the report phase (tool run times are in each target's `scan-timings.json`, written by scan) |
 | `--threads N` | Worker threads for aggregation (default: auto) |
 | `--policy NAME` | Policy to evaluate (repeatable: `--policy owasp-top-10 --policy zero-secrets`) |
 | `--allow-missing-tools` | Accepted for compatibility; reporting tolerates missing tool outputs by default |
@@ -204,7 +204,7 @@ Combined scan + report for CI/CD pipelines. Supports all `jmo scan` flags plus:
 | Flag | Description |
 |------|-------------|
 | `--fail-on SEV` | Exit non-zero at severity threshold |
-| `--profile` | Collect `timings.json` during report |
+| `--profile` | Write `timings.json`: report-phase parse timing, as for `jmo report` |
 | `--policy NAME` | Policy to evaluate (repeatable: `--policy owasp-top-10 --policy zero-secrets`) |
 | `--fail-on-policy-violation` | Exit code 1 if any policy violations found |
 | `--strict-versions` | Fail if tool versions don't match `versions.yaml` (for reproducible builds) |

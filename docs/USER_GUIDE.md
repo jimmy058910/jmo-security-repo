@@ -198,7 +198,7 @@ Once the scan finishes, aggregate the raw tool outputs into unified summaries:
 jmo report results/ --profile --human-logs
 ```
 
-The `--profile` flag writes a `timings.json` file showing how long each tool took, which is useful for spotting bottlenecks.
+The `--profile` flag writes `summaries/timings.json`, which shows how long the report took to read and normalize each tool's output. It does not show how long the tools ran: the scan records that itself, in a `scan-timings.json` in each target's results folder, one row per tool. Look there to find a slow scanner.
 
 **4. Inspect the results**
 
@@ -2677,7 +2677,7 @@ No repositories to scan
 
 Slow scans
 
-- Reduce the toolset with `--tools` or `--skip-tools`, or increase threads; use `report --profile` to inspect `timings.json` and adjust.
+- Reduce the toolset with `--tools` or `--skip-tools`, or increase threads. Each target's `scan-timings.json` shows how long every tool ran; `report --profile` times only the report's parsing.
 
 YAML reporter missing
 

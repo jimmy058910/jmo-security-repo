@@ -135,15 +135,15 @@ python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
 
 ## AI Tooling Ecosystem
 
-JMo Security ships 12 skills, 7 agents, and an MCP server for AI-assisted development.
-Claude Code lists the available skills and agents automatically, so they are not
-enumerated here. Full index: [.claude/skills/INDEX.md](.claude/skills/INDEX.md) ·
+JMo Security ships 7 agents and an MCP server for AI-assisted development, and no
+skills at present (the contributor skills were retired in 2026-10). Claude Code lists
+the available agents automatically, so they are not enumerated here. Full index: [.claude/skills/INDEX.md](.claude/skills/INDEX.md) ·
 personas: [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md) ·
 MCP entry points and their measured state: [.claude/rules/mcp.rules.md](.claude/rules/mcp.rules.md).
 
 ### What ships, and what does not
 
-`.claude/` is scoped to **contributors**. Skills that generate an adapter, fabricate tests, debug CI, or map compliance frameworks are tracked. Maintainer workflows — issue and PR triage, dependency sweeps, merges, releases, marketing — are deliberately not published: they need `gh` write access or push rights to `main`, so they would be unusable to a contributor anyway. They stay on the maintainer's machine, in place under `.claude/skills/` and untracked.
+`.claude/` is scoped to **contributors**: shared rules and the read-only agents are tracked. Maintainer workflows — issue and PR triage, dependency sweeps, merges, releases, marketing — are deliberately not published: they need `gh` write access or push rights to `main`, so they would be unusable to a contributor anyway. They stay on the maintainer's machine, in place under `.claude/skills/` and untracked.
 
 The split is mechanical rather than remembered. `.gitignore` carries an explicit per-skill allowlist under `.claude/`, and `scripts/dev/check_doc_links.py` fails CI and pre-commit if any tracked file links to a path a clone does not receive. **Anything this file names must be tracked** — an instruction pointing at an untracked path is a dead end for every contributor who follows it.
 
