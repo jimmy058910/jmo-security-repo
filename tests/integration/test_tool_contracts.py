@@ -132,18 +132,26 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_keys": ["results"],
         "result_item_keys": ["check_id", "path", "extra"],
         "sample_target": "python-vulnerable",
-        # The file, not the directory: with no .semgrepignore, opengrep's
-        # built-in one skips `tests/` as semgrep's did, so the directory
-        # scanned 0 files and `result_item_keys` was never checked. The file:
-        # 1 scanned, 6 results (v1.32.0, 2026-10-29). The rules are the
-        # committed bundle's Python file, so nothing is fetched.
+        # The file, not the directory: the sample sits under `tests/`, which
+        # opengrep's built-in ignore list skips, so the directory scanned 0
+        # files (rc 0, 0 results, measured on v1.32.0, 2026-10-29) and
+        # `result_item_keys` was never checked. The file: 1 scanned, 6 results.
+        # The command is the descriptor row's for this file (the configs its
+        # languages select, `-j 4`, no version check) minus `--output`, since
+        # this harness reads stdout; TestContractInfrastructure holds the two
+        # equal. Nothing is fetched: the rules are the committed bundle's.
         "command": [
             "opengrep",
             "scan",
             "--config",
-            "scripts/jmo_rules/python.yaml",
-            "--json",
+            str(PROJECT_ROOT / "scripts" / "jmo_rules" / "generic.yaml"),
+            "--config",
+            str(PROJECT_ROOT / "scripts" / "jmo_rules" / "python.yaml"),
             "--no-rewrite-rule-ids",
+            "--json",
+            "--disable-version-check",
+            "-j",
+            "4",
             "{target}/vulnerable_app.py",
         ],
         "ok_return_codes": (0,),
@@ -655,6 +663,33 @@ class TestContractInfrastructure:
             if not any(re.search(rf"\b{tool}\b", ln) for ln in install_lines)
         ]
         assert not missing, f"{workflow}: no install line for {missing}"
+
+    def test_the_opengrep_contract_is_the_rows_command(self, tmp_path):
+        """The contract runs what a scan runs, so a change to the row (a flag, a
+        job count, a config) reaches the weekly job that watches opengrep's
+        output. Only `--output` differs: this harness reads stdout."""
+        from scripts.core.tool_descriptors import DESCRIPTORS, ScanContext
+
+        contract = TOOL_CONTRACTS["opengrep"]
+        sample = SAMPLES_DIR / contract["sample_target"] / "vulnerable_app.py"
+        ctx = ScanContext(
+            tool="opengrep",
+            target_type="repo",
+            target=sample,
+            out_dir=tmp_path,
+            binary="opengrep",
+            files=(str(sample),),
+        )
+        (invocation,) = DESCRIPTORS["opengrep"].invocations["repo"](ctx)
+        row = list(invocation.command)
+        at = row.index("--output")
+        del row[at : at + 2]
+
+        spelled = [
+            part.replace("{target}", str(SAMPLES_DIR / contract["sample_target"]))
+            for part in contract["command"]
+        ]
+        assert spelled == row
 
     def test_contracts_cover_key_adapters(self):
         """Verify contracts exist for critical adapters."""

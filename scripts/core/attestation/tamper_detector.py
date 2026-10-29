@@ -517,7 +517,7 @@ class TamperDetector:
                             severity = (
                                 TamperSeverity.CRITICAL
                                 if tool_name
-                                in ["trivy", "semgrep", "trufflehog", "syft"]
+                                in ["trivy", "opengrep", "trufflehog", "syft"]
                                 else TamperSeverity.HIGH
                             )
 

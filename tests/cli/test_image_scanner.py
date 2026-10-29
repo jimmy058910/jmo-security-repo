@@ -144,15 +144,15 @@ class TestImageScanner:
         assert list(rows) == ["trivy"]
 
     def test_a_tool_that_reads_no_image_is_skipped_not_dropped(self, tmp_path):
-        """#1227's class on an image target: semgrep reads repositories, so it
+        """#1227's class on an image target: opengrep reads repositories, so it
         gets a `skipped` row rather than vanishing."""
         _, rows, MockRunner = _scan(
             tmp_path,
             [ToolResult(tool="trivy", status="success", attempts=1)],
-            ["trivy", "semgrep", "zap"],
+            ["trivy", "opengrep", "zap"],
         )
 
-        assert rows["semgrep"].label == "skipped:not for this target type"
+        assert rows["opengrep"].label == "skipped:not for this target type"
         assert rows["zap"].label == "skipped:needs --url"
         assert [d.name for d in _defs(MockRunner)] == ["trivy"]
 

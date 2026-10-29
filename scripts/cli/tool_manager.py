@@ -136,13 +136,15 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
         },
         "jmo_install": "jmo tools install trivy",
     },
-    "semgrep": {
+    "opengrep": {
+        # A static binary, so JMo's pinned release is the route on every
+        # platform; upstream's install.sh and install.ps1 take the latest.
         "install": {
-            "linux": "pip install semgrep",
-            "macos": "brew install semgrep",
-            "windows": "pip install semgrep",
+            "linux": "jmo tools install opengrep",
+            "macos": "jmo tools install opengrep",
+            "windows": "jmo tools install opengrep",
         },
-        "jmo_install": "jmo tools install semgrep",
+        "jmo_install": "jmo tools install opengrep",
     },
     "trufflehog": {
         "install": {

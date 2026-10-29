@@ -40,7 +40,7 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     # Fast tools (< 30s)
     "trufflehog": 15,
     "gitleaks": 10,
-    "semgrep": 25,
+    "opengrep": 25,
     "hadolint": 5,
     "shellcheck": 10,
     "zizmor": 5,

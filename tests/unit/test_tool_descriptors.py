@@ -24,6 +24,7 @@ from scripts.cli import scan_utils, tool_manager
 from scripts.core import tool_registry
 from scripts.core.tool_descriptors import (
     DESCRIPTORS,
+    DOCKERFILE_PATTERNS,
     REMOVED_TOOLS,
     VENDORED_DIRS,
     ExclusionStyle,
@@ -33,10 +34,11 @@ from scripts.core.tool_descriptors import (
 )
 
 # --- the literals, as they stood at 025edd01 ---------------------------------
+# (semgrep's row is opengrep's since Phase 5, PR B: the tables carry its name.)
 
 OLD_REPO_TOOLS = {
     "trufflehog",
-    "semgrep",
+    "opengrep",
     "syft",
     "trivy",
     "checkov",
@@ -59,16 +61,16 @@ OLD_TOOL_EXECUTION_COMMANDS = {
     "zap": ["zap.sh", "java"],
     "nuclei": ["nuclei"],
 }
-OLD_VENDOR_NOISE_TOOLS = {"semgrep", "trivy", "checkov"}
+OLD_VENDOR_NOISE_TOOLS = {"opengrep", "trivy", "checkov"}
 OLD_TOOL_EXCLUSION_FLAG = {
-    "semgrep": ("--exclude", "inline"),
+    "opengrep": ("--exclude", "inline"),
     "trivy": ("--skip-dirs", "separate"),
     "checkov": ("--skip-path", "regex"),
 }
-OLD_TOOL_TIMEOUT_DEFAULTS = {"semgrep": 900, "zap": 900}
+OLD_TOOL_TIMEOUT_DEFAULTS = {"opengrep": 900, "zap": 900}
 OLD_STUBS = {
     "trufflehog": [],
-    "semgrep": {"results": []},
+    "opengrep": {"results": []},
     "syft": {"artifacts": []},
     "trivy": {"Results": []},
     "grype": {"matches": []},
@@ -87,7 +89,7 @@ OLD_VERSION_PATTERNS = {
     "shellcheck": (r"(?:version:?\s*)?(\d+\.\d+\.\d+)", re.IGNORECASE),
     "hadolint": (r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)", 0),
     "checkov": (r"(?:checkov\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
-    "semgrep": (r"^(\d+\.\d+\.\d+)$", re.MULTILINE),
+    "opengrep": (r"^(\d+\.\d+\.\d+)$", re.MULTILINE),
     "zap": (
         r"(?<!version )(?<!\d)(?<!\.)(?:(?:OWASP\s+)?(?:ZAP|Zed Attack Proxy)\s+)?"
         r"v?(\d+\.\d+\.\d+)(?!\d|\.jar|\.\d)",
@@ -298,14 +300,24 @@ def test_vendored_dirs_is_one_list() -> None:
     assert set(yara_runner.SKIP_DIRS) == set(VENDORED_DIRS)
 
 
+def test_hadolints_patterns_are_the_dockerfile_rule_files_first_three() -> None:
+    """The two tables say what a Dockerfile is, and `rule_bundle` cannot import
+    this one (`tool_descriptors` imports it): they must not drift. The bundle
+    row's remaining two are the lowercase spellings opengrep also scans."""
+    from scripts.core.rule_bundle import LANGUAGE_PATTERNS
+
+    bundle_row = tuple("**/" + p for p in LANGUAGE_PATTERNS["dockerfile"][:3])
+    assert bundle_row == DOCKERFILE_PATTERNS
+
+
 class TestToolNames:
     """Decision 4 (#1279): split commas, reject unknowns."""
 
     def test_commas_and_spaces_split(self) -> None:
-        assert parse_tool_names(["trivy,syft", "semgrep"]) == [
+        assert parse_tool_names(["trivy,syft", "opengrep"]) == [
             "trivy",
             "syft",
-            "semgrep",
+            "opengrep",
         ]
         assert parse_tool_names(["trivy, syft ,", " grype "]) == [
             "trivy",
@@ -329,10 +341,12 @@ class TestToolNames:
         assert f"{name}" in str(exc.value)
         assert "removed in v2.0.0" in str(exc.value)
 
-    def test_seventeen_were_removed(self) -> None:
-        """docs/TOOLS.md "Removed in v2.0.0" lists seventeen; falco's companion
-        falcoctl is accepted as a spelling of the same removal."""
-        assert len(REMOVED_TOOLS - {"falcoctl"}) == 17
+    def test_eighteen_were_removed(self) -> None:
+        """docs/TOOLS.md "Removed in v2.0.0" lists seventeen, and semgrep, which
+        opengrep replaced, is the eighteenth; falco's companion falcoctl is
+        accepted as a spelling of the same removal."""
+        assert len(REMOVED_TOOLS - {"falcoctl"}) == 18
+        assert "semgrep" in REMOVED_TOOLS
         assert not REMOVED_TOOLS & set(DESCRIPTORS)
 
 

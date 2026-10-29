@@ -320,7 +320,7 @@ class TestGitlabScanner:
             full_path, statuses = scan_gitlab_repo(
                 gitlab_info=gitlab_info,
                 results_dir=tmp_path,
-                tools=["trufflehog", "semgrep"],
+                tools=["trufflehog", "opengrep"],
                 timeout=600,
                 retries=0,
                 per_tool_config={},
@@ -330,7 +330,7 @@ class TestGitlabScanner:
             # Should return failure for all tools
             assert full_path == "fail/clone"
             assert statuses["trufflehog"].label == "failed:target not scanned"
-            assert statuses["semgrep"].label == "failed:target not scanned"
+            assert statuses["opengrep"].label == "failed:target not scanned"
 
     def test_scan_gitlab_no_token(self, tmp_path):
         """Test GitLab scan when token is missing"""
@@ -487,7 +487,7 @@ spec:
             full_path, statuses = scan_gitlab_repo(
                 gitlab_info=gitlab_info,
                 results_dir=tmp_path,
-                tools=["trufflehog", "semgrep"],
+                tools=["trufflehog", "opengrep"],
                 timeout=600,
                 retries=0,
                 per_tool_config={},
@@ -497,7 +497,7 @@ spec:
             # Should return failure for all tools
             assert full_path == "timeout/repo"
             assert statuses["trufflehog"].label == "failed:target not scanned"
-            assert statuses["semgrep"].label == "failed:target not scanned"
+            assert statuses["opengrep"].label == "failed:target not scanned"
 
     def test_scan_gitlab_generic_exception(self, tmp_path):
         """Test GitLab scan when unexpected exception occurs"""
@@ -731,7 +731,7 @@ spec:
             mock_subprocess.return_value = MagicMock(returncode=0)
             mock_scan_repo.return_value = (
                 "myrepo",
-                _rows(trufflehog=True, semgrep=True),
+                _rows(trufflehog=True, opengrep=True),
             )
             mock_discover.return_value = set()
 
@@ -745,7 +745,7 @@ spec:
             full_path, statuses = scan_gitlab_repo(
                 gitlab_info=gitlab_info,
                 results_dir=tmp_path,
-                tools=["trufflehog", "semgrep"],
+                tools=["trufflehog", "opengrep"],
                 timeout=600,
                 retries=0,
                 per_tool_config={},
@@ -1115,7 +1115,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         _full_path, statuses = scan_gitlab_repo(
             gitlab_info=dict(self.GITLAB_INFO),
             results_dir=tmp_path,
-            tools=["trufflehog", "semgrep"],
+            tools=["trufflehog", "opengrep"],
             timeout=600,
             retries=0,
             per_tool_config={},
@@ -1124,7 +1124,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
 
         assert {t: r.label for t, r in statuses.items()} == {
             "trufflehog": "failed:target not scanned",
-            "semgrep": "failed:target not scanned",
+            "opengrep": "failed:target not scanned",
         }
         doc = self._timings(tmp_path)
         assert doc["target"] == "group/project"
@@ -1132,7 +1132,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         # A row per requested tool, none of which ran, so none has a time.
         assert [(r["tool"], r["state"]) for r in doc["tools"]] == [
             ("trufflehog", "failed"),
-            ("semgrep", "failed"),
+            ("opengrep", "failed"),
         ]
         assert all(r["seconds"] == 0 for r in doc["tools"])
         assert doc["outcome"] == "failed-before-tools"

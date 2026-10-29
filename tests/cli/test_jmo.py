@@ -40,11 +40,11 @@ def test_parse_args_scan_with_tools(tmp_path: Path):
     """Test scan with explicit tools list."""
     with patch(
         "sys.argv",
-        ["jmo", "scan", "--repo", str(tmp_path), "--tools", "trivy", "semgrep"],
+        ["jmo", "scan", "--repo", str(tmp_path), "--tools", "trivy", "opengrep"],
     ):
         args = parse_args()
         assert args.cmd == "scan"
-        assert args.tools == ["trivy", "semgrep"]
+        assert args.tools == ["trivy", "opengrep"]
 
 
 def test_parse_args_scan_with_threads_timeout(tmp_path: Path):

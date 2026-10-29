@@ -187,7 +187,7 @@ class TestConstants:
         assert {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"} == STANDARD_SEVERITIES
 
     def test_known_adapters_in_list(self):
-        for adapter in ["osv_scanner", "trivy", "semgrep", "grype", "zap"]:
+        for adapter in ["osv_scanner", "trivy", "opengrep", "grype", "zap"]:
             assert adapter in EXPECTED_ADAPTERS
 
 
@@ -283,14 +283,14 @@ class TestFixtureParsing:
     """Tests for adapter parse function checks."""
 
     def test_make_adapter_parse_check_returns_callable(self):
-        check_fn = _make_adapter_parse_check("semgrep")
+        check_fn = _make_adapter_parse_check("opengrep")
         assert callable(check_fn)
 
-    def test_parse_check_semgrep(self):
-        check_fn = _make_adapter_parse_check("semgrep")
+    def test_parse_check_opengrep(self):
+        check_fn = _make_adapter_parse_check("opengrep")
         result = check_fn()
         assert isinstance(result, CheckResult)
-        assert result.name == "parse-semgrep"
+        assert result.name == "parse-opengrep"
         assert result.status in (CheckStatus.PASS, CheckStatus.FAIL, CheckStatus.ERROR)
 
     def test_parse_check_trivy(self):
@@ -351,7 +351,7 @@ class TestSeverityMappingChecks:
         from scripts.core.common_finding import map_tool_severity
 
         assert map_tool_severity("zap", "informational") == "INFO"
-        assert map_tool_severity("semgrep", "error") == "HIGH"
+        assert map_tool_severity("opengrep", "error") == "HIGH"
         assert map_tool_severity("nuclei", "critical") == "CRITICAL"
 
     def test_severity_enum_values(self):

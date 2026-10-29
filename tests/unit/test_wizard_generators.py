@@ -130,7 +130,7 @@ def test_generate_makefile_target_cicd_quick_job_narrows_with_tools(mock_config)
 
     assert (
         "security-audit-fast:\n"
-        "\tjmo ci --repos-dir . --tools trufflehog semgrep --fail-on HIGH\n"
+        "\tjmo ci --repos-dir . --tools trufflehog opengrep --fail-on HIGH\n"
     ) in result
 
 

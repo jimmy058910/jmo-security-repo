@@ -45,7 +45,7 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
     # Removed: gitleaks, noseyparker, tfsec (deprecated/not implemented)
     tools = [
         "trufflehog",
-        "semgrep",
+        "opengrep",
         "syft",
         "trivy",
         "hadolint",
@@ -89,14 +89,14 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
                     "shutil.which was mocked with a fabricated path"
                 )
                 # Use basename to handle both bare names and full paths
-                # (e.g., "semgrep" vs "/usr/bin/semgrep" from shutil.which)
+                # (e.g., "opengrep" vs "/usr/bin/opengrep" from shutil.which)
                 prog = Path(cmd[0]).name
                 result = MagicMock()
                 result.returncode = 0
                 result.stderr = ""
 
                 # Tools with --output or -o flags (write to file)
-                if prog == "semgrep" and "--output" in cmd:
+                if prog == "opengrep" and "--output" in cmd:
                     p = Path(cmd[cmd.index("--output") + 1])
                     p.parent.mkdir(parents=True, exist_ok=True)
                     p.write_text(json.dumps({"results": []}), encoding="utf-8")

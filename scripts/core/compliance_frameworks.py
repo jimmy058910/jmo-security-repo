@@ -238,7 +238,7 @@ TOOL_RULE_TO_OWASP_TOP10_2021 = {
         # All secrets findings map to A02:2021
         "*": ["A02:2021"],
     },
-    "semgrep": {
+    "opengrep": {
         "generic.secrets.gitleaks.*": ["A02:2021"],
         "generic.secrets.*": ["A02:2021"],
         "generic.html-templates.*": ["A03:2021"],

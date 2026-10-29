@@ -3,7 +3,7 @@ from pathlib import Path
 
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
-from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
+from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 from scripts.core.adapters.syft_adapter import SyftAdapter
 
 
@@ -14,7 +14,7 @@ def _write(p: Path, obj):
 def test_empty_and_malformed_inputs(tmp_path: Path):
     # Verify adapters gracefully handle empty and malformed payloads
     adapters_map = {
-        "semgrep.json": SemgrepAdapter(),
+        "opengrep.json": OpengrepAdapter(),
         "syft.json": SyftAdapter(),
         "checkov.json": CheckovAdapter(),
         "hadolint.json": HadolintAdapter(),
@@ -32,7 +32,7 @@ def test_empty_and_malformed_inputs(tmp_path: Path):
 
 
 def test_severity_translation_paths(tmp_path: Path):
-    # Semgrep severity mapping
+    # Opengrep severity mapping
     sem = {
         "results": [
             {
@@ -50,9 +50,9 @@ def test_severity_translation_paths(tmp_path: Path):
         ],
         "version": "1",
     }
-    p = tmp_path / "semgrep.json"
+    p = tmp_path / "opengrep.json"
     _write(p, sem)
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     findings = adapter.parse(p)
     assert [f.severity for f in findings] == ["MEDIUM", "LOW"]
 

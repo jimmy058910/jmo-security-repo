@@ -33,23 +33,23 @@ from tests.conftest import (
 @pytest.mark.parametrize(
     "argv0",
     [
-        "semgrep",
-        "semgrep.exe",
-        "SEMGREP.EXE",
-        "Semgrep.Exe",
-        r"C:\Users\Jimmy\AppData\Roaming\Python\Python312\Scripts\semgrep.EXE",
-        "/usr/local/bin/semgrep",
-        "./semgrep",
-        r".\semgrep.exe",
+        "opengrep",
+        "opengrep.exe",
+        "OPENGREP.EXE",
+        "Opengrep.Exe",
+        r"C:\Users\Jimmy\AppData\Roaming\Python\Python312\Scripts\opengrep.EXE",
+        "/usr/local/bin/opengrep",
+        "./opengrep",
+        r".\opengrep.exe",
     ],
 )
-def test_scanner_binary_match_detects_semgrep_variants(argv0):
+def test_scanner_binary_match_detects_opengrep_variants(argv0):
     """Bare name, `.exe` suffix, mixed case, and both path-separator styles
     all resolve to the same match - the styles that actually appear across
     this suite's platforms (Windows argv0s use backslashes; Linux/macOS use
     forward slashes), not just the one style whichever OS runs this test
     happens to produce natively."""
-    assert scanner_binary_match(argv0) == "semgrep"
+    assert scanner_binary_match(argv0) == "opengrep"
 
 
 @pytest.mark.parametrize(
@@ -90,12 +90,12 @@ def test_recorder_detects_a_deliberate_spawn_without_a_real_process():
     recording_init = make_scanner_spawn_recorder(_fake_delegate, sink)
 
     fake_self = object()
-    recording_init(fake_self, ["semgrep", "--config", "auto"])
+    recording_init(fake_self, ["opengrep", "--config", "auto"])
     recording_init(fake_self, ["black", "--check", "."])
 
-    assert sink == [("semgrep", ["semgrep", "--config", "auto"])]
+    assert sink == [("opengrep", ["opengrep", "--config", "auto"])]
     assert delegate_calls == [
-        ["semgrep", "--config", "auto"],
+        ["opengrep", "--config", "auto"],
         ["black", "--check", "."],
     ], "the wrapper must still call through to the real init every time"
 
@@ -120,8 +120,8 @@ def test_recorder_handles_a_string_command_defensively():
     recording_init = make_scanner_spawn_recorder(
         lambda self, args, *a, **kw: None, sink
     )
-    recording_init(object(), "semgrep")
-    assert sink == [("semgrep", ["semgrep"])]
+    recording_init(object(), "opengrep")
+    assert sink == [("opengrep", ["opengrep"])]
 
 
 @pytest.mark.parametrize(

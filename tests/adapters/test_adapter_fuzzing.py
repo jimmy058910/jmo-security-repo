@@ -23,7 +23,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
-from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
+from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
 from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 
@@ -74,12 +74,12 @@ def test_trufflehog_handles_malformed_json(tmp_path: Path, content: str):
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @given(content=malformed_json())
-def test_semgrep_handles_malformed_json(tmp_path: Path, content: str):
-    """Semgrep adapter should not crash on malformed input."""
-    test_file = tmp_path / "semgrep.json"
+def test_opengrep_handles_malformed_json(tmp_path: Path, content: str):
+    """Opengrep adapter should not crash on malformed input."""
+    test_file = tmp_path / "opengrep.json"
     test_file.write_text(content, encoding="utf-8")
 
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     result = adapter.parse(test_file)
     assert isinstance(result, list)
     assert len(result) == 0
@@ -148,7 +148,7 @@ def test_adapters_handle_deep_nesting(tmp_path: Path, content: str):
     adapter = TruffleHogAdapter()
 
     adapter.parse(test_file)
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
 
     adapter.parse(test_file)
     adapter = TrivyAdapter()
@@ -218,7 +218,7 @@ def test_adapters_handle_special_characters(tmp_path: Path, content: str):
     result = adapter.parse(test_file)
     assert isinstance(result, list)
 
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     result = adapter.parse(test_file)
     assert isinstance(result, list)
 
@@ -232,7 +232,7 @@ def test_concurrent_adapter_failures(tmp_path: Path):
     indiv = tmp_path / "individual-repos" / "test-repo"
     indiv.mkdir(parents=True)
 
-    for tool in ["trufflehog", "semgrep", "trivy", "checkov"]:
+    for tool in ["trufflehog", "opengrep", "trivy", "checkov"]:
         (indiv / f"{tool}.json").write_text("INVALID JSON{", encoding="utf-8")
 
     # Should return empty list, not crash
@@ -250,7 +250,7 @@ def test_adapters_handle_missing_files(tmp_path: Path):
     result = adapter.parse(missing_file)
     assert result == []
 
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     result = adapter.parse(missing_file)
     assert result == []
 
@@ -274,7 +274,7 @@ def test_adapters_handle_empty_files(tmp_path: Path):
     result = adapter.parse(empty_file)
     assert result == []
 
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     result = adapter.parse(empty_file)
     assert result == []
 
@@ -298,7 +298,7 @@ def test_adapters_handle_binary_data(tmp_path: Path):
     result = adapter.parse(binary_file)
     assert result == []
 
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     result = adapter.parse(binary_file)
     assert result == []
 
@@ -316,7 +316,7 @@ def test_adapters_handle_long_strings(tmp_path: Path):
     result = adapter.parse(long_file)
     assert isinstance(result, list)
 
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     result = adapter.parse(long_file)
     assert isinstance(result, list)
 
@@ -338,7 +338,7 @@ def test_adapters_handle_unicode(tmp_path: Path):
     result = adapter.parse(unicode_file)
     assert isinstance(result, list)
 
-    adapter = SemgrepAdapter()
+    adapter = OpengrepAdapter()
     result = adapter.parse(unicode_file)
     assert isinstance(result, list)
 

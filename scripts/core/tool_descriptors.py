@@ -36,7 +36,7 @@ from urllib.parse import quote, unquote, urlsplit
 
 import yaml
 
-from scripts.core import osv_database
+from scripts.core import osv_database, rule_bundle
 from scripts.core.scan_timings import Reason
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,11 @@ logger = logging.getLogger(__name__)
 #
 # Deliberately absent: `dist`, `build`, `target`, and any tool's output
 # directory. Those hold the repository's own build output, and a user who
-# points JMo at a release tree means it. (semgrep skips `build/` and `dist/`
-# anyway, by a built-in list JMo cannot turn off without writing a file into
-# the user's tree: docs/KNOWN_LIMITATIONS.md.)
+# points JMo at a release tree means it. (opengrep skips `build/`, `dist/`,
+# `test/` and `tests/` anyway, by a built-in list: measured on 1.32.0, a tree
+# holding each beside `src/` and `docs/` scanned only those two, and a target
+# whose own path holds a `tests/` component scanned 0 files, rc 0. Its
+# `--x-ignore-semgrepignore-files` turns the list off.)
 VENDORED_DIRS: tuple[str, ...] = (
     ".git",
     "node_modules",
@@ -159,7 +161,7 @@ class FlagGrammar(StrEnum):
 
     PFLAG = "pflag"  # cobra's: trivy, grype, syft, gitleaks
     KINGPIN = "kingpin"  # trufflehog
-    CMDLINER = "cmdliner"  # semgrep
+    CMDLINER = "cmdliner"  # opengrep
     GETOPT = "getopt"  # Haskell's GetOpt: shellcheck
     OPTPARSE_APPLICATIVE = "optparse-applicative"  # hadolint
     ARGPARSE = "argparse"  # checkov (configargparse), JMo's own runners
@@ -179,7 +181,7 @@ class FlagGrammar(StrEnum):
     def abbreviates(self) -> bool:
         """A long option's unique prefix is that option: checkov reads
         `--output-f=x` as `--output-file-path`, shellcheck `--fo=tty` as
-        `--format=tty`. semgrep, hadolint and zizmor reject `--outp` and
+        `--format=tty`. opengrep, hadolint and zizmor reject `--outp` and
         `--form` themselves."""
         return self in (FlagGrammar.GETOPT, FlagGrammar.ARGPARSE)
 
@@ -200,7 +202,7 @@ class FlagGrammar(StrEnum):
         """A flag given twice is an error, so every flag JMo passes is the
         row's: trufflehog "flag 'exclude-paths' cannot be repeated", zizmor
         "the argument '--offline' cannot be used multiple times" (rc 2),
-        semgrep "option '--json' cannot be repeated". A list option (semgrep's
+        opengrep "option '--json' cannot be repeated". A list option (opengrep's
         `--config`, `--exclude`) is the exception. The others take a repeat:
         zap ran `-cmd -cmd`, hadolint printed a second `-f json` report."""
         return self in (FlagGrammar.KINGPIN, FlagGrammar.CLAP, FlagGrammar.CMDLINER)
@@ -437,7 +439,7 @@ class ToolDescriptor:
     # this tool's own spellings of what decides where and how it writes, of
     # its exit code, and of what JMo passes when its parser refuses a repeat
     # (#1325, #1335). Per tool, since one tool's reserved flag is another's
-    # option (semgrep's `-f` is `--config`, and gitleaks' `-r` is nuclei's
+    # option (opengrep's `-f` is `--config`, and gitleaks' `-r` is nuclei's
     # `-resolvers`).
     reserved_flags: Mapping[str, Reserved] = field(default_factory=dict)
     # Its short flags that take no value. A clustering parser chains them, so
@@ -621,6 +623,38 @@ def _native_trigger(ctx: ScanContext) -> Reason | None:
     return None if ctx.any_file(reads) else Reason.NO_WEB_APP_FILES
 
 
+def _opengrep_files(ctx: ScanContext) -> Iterable[Path | str]:
+    """Every file of the scan's pruned walk (vendored trees and JMo's own
+    results directory left out), or `ctx.files` for a context built without one.
+    Not `ctx.files` in a scan, which the loop caps at 300 sorted paths for the
+    tools it hands files to: a language whose only file sorts after 300 of
+    another's would lose its rules without a word."""
+    return ctx.iter_files() if ctx.iter_files is not None else ctx.files
+
+
+def _opengrep_trigger(ctx: ScanContext) -> Reason | None:
+    """Skip a repository with no file in a language the rule bundle reads.
+
+    `select_configs` always names `generic.yaml`, and opengrep loaded with it
+    alone scans nothing, so the row would read `ran` with 0 findings. A
+    `trigger` and not `file_patterns`: the scan loop's glob for `file_patterns`
+    walks the whole tree once per pattern, vendored trees included (61 of
+    them: 1.78 s on a tree holding 30,000 `node_modules` files, against 0.00 s
+    for the pruned walk), and warns that every file past 300 was "NOT
+    scanned", which is false for a tool handed the directory (measured on
+    juice-shop: "911 matching files in juice-shop, scanning the first 300 -
+    611 file(s) NOT scanned"). The user's own `configs` replace the bundle,
+    and with it the languages: they may read what the bundle does not.
+
+    A known gap: `generic.yaml` has no file-name pattern, so a repository whose
+    only files are ones its rules read (an nginx config) is skipped.
+    """
+    if ctx.tool_config.get("configs"):
+        return None
+    chosen = rule_bundle.select_configs(_opengrep_files(ctx))
+    return None if len(chosen) > 1 else Reason.NO_RULE_LANGUAGES
+
+
 # --- examined-files readers (G2, #1231) -----------------------------------------
 
 
@@ -631,9 +665,12 @@ def _load(path: Path) -> Any:
         return None
 
 
-def _semgrep_scanned(path: Path) -> int | None:
-    """`paths.scanned`: 0 when semgrep's git-based walk resolved to an
-    enclosing repository with no tracked files (#1231, measured 0 vs 4)."""
+def _opengrep_scanned(path: Path) -> int | None:
+    """`paths.scanned`: 0 when its walk found nothing to read, which it reports
+    as a run that worked (rc 0, no results). Measured on 1.32.0 for a target
+    whose own path holds a `tests/` component (its built-in ignore list), and
+    on semgrep for a git-based walk that resolved to an enclosing repository
+    with no tracked files (#1231, 0 vs 4)."""
     data = _load(path)
     if not isinstance(data, dict):
         return None
@@ -767,19 +804,35 @@ def _gitleaks_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
-def _semgrep_repo(ctx: ScanContext) -> list[Invocation]:
-    # Default ["auto"]: the Semgrep Registry picks rules per language. A
-    # `configs:` list in per_tool.semgrep allows offline packs.
-    configs = ctx.tool_config.get("configs", ["auto"])
-    config_args = [arg for cfg in configs for arg in ("--config", str(cfg))]
+def _opengrep_configs(ctx: ScanContext) -> list[str]:
+    """The rule files this run loads: `per_tool.opengrep.configs` when the user
+    set it (their own packs, offline; a bare string is one file, not its
+    letters), else the bundle's files for the languages present."""
+    own = ctx.tool_config.get("configs")
+    if own:
+        return [str(c) for c in ([own] if isinstance(own, str) else own)]
+    return [str(p) for p in rule_bundle.select_configs(_opengrep_files(ctx))]
+
+
+def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
+    config_args = [arg for cfg in _opengrep_configs(ctx) for arg in ("--config", cfg)]
     return [
         Invocation(
             command=(
                 ctx.binary,
+                "scan",
                 *config_args,
+                # The id is exactly the YAML's whatever the working directory;
+                # without it opengrep prefixes the path it was run from (B7).
+                "--no-rewrite-rule-ids",
                 "--json",
                 "--output",
                 str(ctx.output),
+                # No call home to check for a newer release.
+                "--disable-version-check",
+                # Fixed (the program plan's decision): the parity target needs
+                # 467 MB at 4 and only 1 fits 800 MB. Phase 7 owns tuning it.
+                *("-j", "4"),
                 # JMo's exclusions before the user's flags, so an explicit
                 # per_tool entry still wins; repeatable forms accumulate.
                 *ctx.exclusion_args,
@@ -788,7 +841,15 @@ def _semgrep_repo(ctx: ScanContext) -> list[Invocation]:
             ),
             output_file=ctx.output,
             capture_stdout=False,
-            ok_return_codes=(0, 1, 2),  # 2 = errors, with output written
+            # Measured on 1.32.0 (2026-10-29): a run whose files carry errors
+            # (a syntax error, a Timeout, a Stack overflow) is rc 0, with every
+            # other file's results in the output and the errors in `errors`. An
+            # invalid config is rc 7 with an output holding no results and the
+            # cause in `errors`, and a usage error (a second `-j`) rc 2 and no
+            # output. rc 1 is `--error` and rc 3 `--strict`, both reserved. So
+            # only 0 is a run that worked; semgrep's (0, 1, 2) would have read a
+            # bad config as `examined 0 files`.
+            ok_return_codes=(0,),
         )
     ]
 
@@ -1663,6 +1724,7 @@ def _zap_url(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+# TODO(issue-#1351): nuclei cannot import an OpenAPI spec without attacking the spec's servers
 def _nuclei_url(ctx: ScanContext) -> list[Invocation]:
     return [
         Invocation(
@@ -1750,17 +1812,26 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             reads_history=True,
         ),
         ToolDescriptor(
-            name="semgrep",
-            invocations={"repo": _semgrep_repo},
+            name="opengrep",
+            invocations={"repo": _opengrep_repo},
+            # `opengrep --version` prints the bare version (measured, 1.32.0).
             version_probe=VersionProbe(re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE)),
             exclusion_style=ExclusionStyle.INLINE,
             exclusion_flag="--exclude",
             flag_grammar=FlagGrammar.CMDLINER,
-            # A second output or format is rc 2 with no output file ("options
-            # '--output' and '-o' cannot be present at the same time", "option
-            # '--json' cannot be repeated", and "Mutually exclusive options"
-            # for `--sarif`), measured 1.175.0. Its `-f` is `--config`, which
-            # adds rules, as a repeated `--exclude` adds exclusions.
+            # A second output or format is rc 2 with no output file ("option
+            # '--json' cannot be repeated", "options '--output' and '-o'
+            # cannot be present at the same time", and "Mutually exclusive
+            # options" for `--sarif`), and `--text` writes text into the file
+            # JMo reads as JSON, rc 0 (measured, 1.32.0). The same for `-j`
+            # ("option '-j' cannot be repeated"; `--jobs` and `-j` together,
+            # and `--rewrite-rule-ids` against JMo's `--no-` form, are rc 2
+            # too), which JMo sets to 4. `--enable-version-check` would undo
+            # JMo's `--disable-version-check`. It reads no abbreviation
+            # (`--outp` is "unknown option"), and chains `-qj2` as `-q -j 2`.
+            # Its `-f` is `--config`, which adds rules, as a repeated
+            # `--exclude` adds exclusions. `--error` is rc 1 for any finding
+            # and `--strict` rc 3 for any error.
             reserved_flags=_reserve(
                 OUTPUT=(
                     "-o",
@@ -1774,14 +1845,27 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                     "--gitlab-sast",
                     "--gitlab-secrets",
                 ),
+                PASSED=(
+                    "-j",
+                    "--jobs",
+                    "--rewrite-rule-ids",
+                    "--no-rewrite-rule-ids",
+                    "--enable-version-check",
+                    "--disable-version-check",
+                ),
                 EXIT_CODE=("--error", "--strict"),
             ),
             short_switches=frozenset({"-a", "-d", "-q", "-v"}),
+            # Skips a tree with no file in a language the bundle reads. A known
+            # gap: `generic.yaml` has no file-name pattern, so a tree whose only
+            # files are ones its rules read (an nginx config) is skipped too.
+            trigger=_opengrep_trigger,
             # Its cost is its rule count, not the tree: 409.8 s and 583 s for
-            # identical work on one machine (#1204). A floor caps wasted time.
+            # identical work on one machine (#1204, semgrep). A floor caps
+            # wasted time.
             timeout_floor=900,
             stub={"results": []},
-            scanned_count=_semgrep_scanned,
+            scanned_count=_opengrep_scanned,
         ),
         ToolDescriptor(
             name="syft",
@@ -2108,10 +2192,12 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
 }
 
 
-# The seventeen tools v2.0.0 removed (docs/TOOLS.md), and falco's companion.
+# The seventeen tools v2.0.0 removed (docs/TOOLS.md), falco's companion, and
+# semgrep, which opengrep replaced.
 REMOVED_TOOLS: frozenset[str] = frozenset(
     {
         "kubescape",
+        "semgrep",
         "semgrep-secrets",
         "bandit",
         "trivy-rbac",

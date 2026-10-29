@@ -32,8 +32,8 @@ knowledge to read. Reading it centrally costs one extra ``json.loads`` for the
 tools that actually have a channel, and nothing at all for the rest.
 
 (bandit, whose run is measured above, left in v2.0.0 along with the other
-tools that had a channel -- semgrep-secrets, horusec, scancode. semgrep is the
-one that remains.)
+tools that had a channel -- semgrep-secrets, horusec, scancode. opengrep, which
+replaced semgrep, is the one that remains.)
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def _file_of(entry: Any) -> str:
 
 
 def _from_errors_list(tool: str, data: Any) -> list[ToolDiagnostic]:
-    """``{"errors": [...]}`` -- semgrep.
+    """``{"errors": [...]}`` -- opengrep (semgrep's shape).
 
     A string value is accepted too (horusec used the same key for one), which is
     why the value's type is inspected rather than assumed. An adapter that
@@ -115,7 +115,7 @@ def _from_errors_list(tool: str, data: Any) -> list[ToolDiagnostic]:
 # Only tools with a channel appear here, so the other adapters cost nothing.
 # Keyed by adapter name, matching `PluginMetadata.name` (underscores).
 DIAGNOSTIC_EXTRACTORS: dict[str, Callable[[str, Any], list[ToolDiagnostic]]] = {
-    "semgrep": _from_errors_list,
+    "opengrep": _from_errors_list,
 }
 
 

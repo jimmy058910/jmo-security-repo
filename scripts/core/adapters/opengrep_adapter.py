@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Semgrep adapter - Maps Semgrep multi-language SAST JSON to CommonFinding schema.
+opengrep adapter - maps opengrep's multi-language SAST JSON to CommonFinding.
 
 Plugin Architecture (v0.9.0):
 - Uses @adapter_plugin decorator for auto-discovery
@@ -8,46 +8,43 @@ Plugin Architecture (v0.9.0):
 - Returns Finding objects (not dicts)
 - Auto-loaded by plugin registry
 
-v1.0.0 Feature #1:
-- Multi-language SAST with 2500+ rules
-- Lightweight and fast pattern-matching engine
-- Semantic code analysis (dataflow, taint tracking)
-- Autofix support for automated remediation
+opengrep (v2.0.0 Phase 5) replaced semgrep, and runs the rule bundle committed
+under ``scripts/jmo_rules`` (docs/RULE_BUNDLE.md), so a scan needs no network
+and no registry. Its ``--json`` document is semgrep's shape, and this adapter
+is the semgrep adapter's, renamed: the tool name is hashed into every finding
+id, so every SAST id changed once, on purpose (UPGRADE.md).
 
-Tool Version: 1.90.0+
-Output Format: JSON with results array
-Exit Codes: 0 (clean), 1 (findings), 2 (error)
+Tool Version: 1.32.0
+Output Format: JSON with a ``results`` array, ``errors`` and ``paths.scanned``.
+    ``errors`` (a file that timed out or did not parse) is read by
+    ``tool_diagnostics``, not here, and ``paths.scanned`` by the descriptor
+    row's examined-files reader: neither costs the other files' findings.
+Exit Codes: 0 (the run worked, errors per file included), 7 (an invalid
+    config; the output holds no results), 2 (a usage error; no output).
 
-Supported Languages (30+):
-- Python, JavaScript/TypeScript, Java, C/C++, Go
-- Ruby, PHP, Kotlin, Swift, Rust, Scala
-- C#, Lua, OCaml, R, Elixir, Terraform
-- Dockerfile, YAML, JSON, XML, HTML
+Rule ids are exactly the bundle YAML's (``--no-rewrite-rule-ids``), namespaced
+by the rule's source path (``javascript.express.security.audit...``), so they
+do not depend on the directory the scan ran from.
 
-Registry Rule Categories:
-- security: OWASP Top 10, CWE coverage
-- best-practices: Code quality and patterns
-- correctness: Bug detection
-- performance: Performance anti-patterns
-- secrets: Hardcoded credentials
-
-Severity Mapping (Semgrep -> CommonFinding):
+Severity Mapping (opengrep -> CommonFinding), from ``extra.severity``:
 - ERROR: HIGH
 - WARNING: MEDIUM
 - INFO: LOW
 
+CWE, OWASP, confidence, likelihood and impact are read from ``extra.metadata``.
+
 Autofix Support:
-- When available, findings include fix suggestions
-- Returned as remediation.fix with remediation.steps
+- When a rule has a fix, findings include it as remediation.fix with
+  remediation.steps
 
 Example:
-    >>> adapter = SemgrepAdapter()
-    >>> findings = adapter.parse(Path('semgrep.json'))
+    >>> adapter = OpengrepAdapter()
+    >>> findings = adapter.parse(Path('opengrep.json'))
     >>> # Returns SAST findings with CWE/OWASP enrichment
 
 See Also:
-    - https://semgrep.dev/
-    - Semgrep Registry (semgrep.dev/explore)
+    - https://github.com/opengrep/opengrep
+    - docs/RULE_BUNDLE.md
 """
 
 from __future__ import annotations
@@ -70,18 +67,18 @@ from scripts.core.plugin_api import (
 
 @adapter_plugin(
     PluginMetadata(
-        name="semgrep",
+        name="opengrep",
         version="1.0.0",
         author="JMo Security",
-        description="Adapter for Semgrep multi-language SAST scanner",
-        tool_name="semgrep",
+        description="Adapter for the opengrep multi-language SAST scanner",
+        tool_name="opengrep",
         schema_version="1.2.0",
         output_format="json",
-        exit_codes={0: "clean", 1: "findings", 2: "error"},
+        exit_codes={0: "ran", 2: "usage error", 7: "invalid config"},
     )
 )
-class SemgrepAdapter(AdapterPlugin):
-    """Semgrep SAST scanner adapter (plugin architecture)."""
+class OpengrepAdapter(AdapterPlugin):
+    """opengrep SAST scanner adapter (plugin architecture)."""
 
     @property
     def metadata(self) -> PluginMetadata:
@@ -89,10 +86,10 @@ class SemgrepAdapter(AdapterPlugin):
         return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]  # Dynamically attached by @adapter_plugin decorator
 
     def parse(self, output_path: Path) -> list[Finding]:
-        """Parse Semgrep JSON output and return normalized findings.
+        """Parse opengrep JSON output and return normalized findings.
 
         Args:
-            output_path: Path to semgrep.json output file
+            output_path: Path to opengrep.json output file
 
         Returns:
             List of Finding objects following CommonFinding schema v1.2.0
@@ -116,19 +113,19 @@ class SemgrepAdapter(AdapterPlugin):
 
             # Extract rule ID
             check_id = str(
-                r.get("check_id") or r.get("ruleId") or r.get("id") or "SEMGR"
+                r.get("check_id") or r.get("ruleId") or r.get("id") or "OPENGREP"
             )
 
             # Extract message
             msg = (
                 (r.get("extra") or {}).get("message")
                 or r.get("message")
-                or "Semgrep finding"
+                or "opengrep finding"
             )
 
             # Extract and normalize severity using centralized mapping
             sev_raw = (r.get("extra") or {}).get("severity") or r.get("severity")
-            severity = map_tool_severity("semgrep", str(sev_raw) if sev_raw else "")
+            severity = map_tool_severity("opengrep", str(sev_raw) if sev_raw else "")
 
             # Extract path
             path_str = r.get("path") or (r.get("location") or {}).get("path") or ""
@@ -218,7 +215,7 @@ class SemgrepAdapter(AdapterPlugin):
                 message=msg,
                 description=msg,
                 severity=severity,
-                tool={"name": "semgrep", "version": tool_version},
+                tool={"name": "opengrep", "version": tool_version},
                 location={"path": path_str, "startLine": start_line},
                 remediation=remediation,
                 tags=["sast"],

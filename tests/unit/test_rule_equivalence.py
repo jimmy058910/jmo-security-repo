@@ -234,12 +234,8 @@ class TestSecretDetectionEquivalence:
         finding either (#1328). Since #1330 gitleaks has a real adapter, so
         the correct tool is back.
         """
-        canonical1 = get_canonical_rule_id("gitleaks", "github-pat")
-        canonical2 = get_canonical_rule_id(
-            "semgrep", "generic.secrets.security.detected-github-pat"
-        )
-
-        assert canonical1 == canonical2 == "secret-github-token"
+        assert get_canonical_rule_id("gitleaks", "github-pat") == "secret-github-token"
+        assert get_canonical_rule_id("trufflehog", "Github") == "secret-github-token"
 
         # The wrong tuple is gone from the table itself. (Not asserted as
         # `get_canonical_rule_id("trufflehog", "github-pat") is None`: the
@@ -255,6 +251,45 @@ class TestSecretDetectionEquivalence:
         )
 
 
+class TestNoRowNamesARuleTheBundleLeftOut:
+    """Phase 5, PR B: the bundle excludes `generic/secrets/` (secrets are
+    gitleaks' and trufflehog's class), so an opengrep row for one of its rules
+    could never match a finding."""
+
+    def test_no_row_names_a_generic_secrets_rule(self):
+        named = [
+            (tool, rule)
+            for members in RULE_EQUIVALENCE.values()
+            for tool, rule in members
+            if tool == "opengrep" and rule.startswith("generic.secrets.")
+        ]
+        assert not named, named
+
+    def test_the_opengrep_row_resolves_a_rule_the_bundle_ships(self):
+        """`python.lang.security.audit.hardcoded-password` is not an id in
+        python.yaml (the bundle has `...-default-argument`), so the row works
+        by the boundary fallback: the shipped id carries it as a prefix at a
+        `-`. The test is that a real shipped id resolves, so a rebuild that
+        drops the rule fails here and the row can be removed."""
+        shipped = [
+            line.removeprefix("- id: ").strip()
+            for line in (
+                Path(__file__).resolve().parents[2]
+                / "scripts"
+                / "jmo_rules"
+                / "python.yaml"
+            )
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.startswith("- id: python.lang.security.audit.hardcoded-password")
+        ]
+        assert shipped, "python.yaml ships no hardcoded-password rule"
+        for rule_id in shipped:
+            assert get_canonical_rule_id("opengrep", rule_id) == (
+                "code-hardcoded-password"
+            ), rule_id
+
+
 class TestGitleaksSecretEquivalence:
     """#1328: gitleaks 8.30.1's own ids, added to the secret classes.
 
@@ -264,7 +299,7 @@ class TestGitleaksSecretEquivalence:
     """
 
     def test_private_key_equivalence(self):
-        """gitleaks `private-key` = trufflehog `PrivateKey` = semgrep's rule.
+        """gitleaks `private-key` = trufflehog `PrivateKey`.
 
         Juice-shop `1618a611`, `terraform/networking.tf:171` (and its
         `infrastructure/` copy): gitleaks and trufflehog each report the same
@@ -275,12 +310,6 @@ class TestGitleaksSecretEquivalence:
         ) == (
             True,
             "secret-private-key",
-        )
-        assert (
-            get_canonical_rule_id(
-                "semgrep", "generic.secrets.security.detected-private-key"
-            )
-            == "secret-private-key"
         )
 
     def test_jwt_equivalence(self):
@@ -665,10 +694,10 @@ class TestGitleaksIdsAreExactMatchOnly:
         assert get_canonical_rule_id("trivy", "AVD-DS-0001") == "dockerfile-latest-tag"
         assert (
             get_canonical_rule_id(
-                "semgrep",
-                "generic.secrets.security.detected-github-pat.detected-github-pat",
+                "opengrep",
+                "python.lang.security.audit.hardcoded-password.hardcoded-password",
             )
-            == "secret-github-token"
+            == "code-hardcoded-password"
         )
 
 
@@ -842,23 +871,22 @@ class TestSubstringFallbackBoundaries:
     def test_separator_delimited_suffix_still_matches(self):
         """The case the fallback exists for must keep working.
 
-        This drives a real cross-tool cluster (semgrep + gitleaks on one
-        secret; gitleaks per #1328/#1330, replacing trufflehog here -- see
-        `test_github_token_equivalence`'s docstring: `github-pat` is
-        gitleaks' rule id, not a real trufflehog one). Tightening the
-        fallback must not disable it.
+        This drives a real cross-tool cluster (opengrep + trufflehog on one
+        hard-coded password; the secret classes had an opengrep row until the
+        bundle left out `generic/secrets/`, and this is the one row it keeps).
+        Tightening the fallback must not disable it.
         """
-        semgrep_reported = (
-            "generic.secrets.security.detected-github-pat.detected-github-pat"
+        opengrep_reported = (
+            "python.lang.security.audit.hardcoded-password.hardcoded-password"
         )
-        assert get_canonical_rule_id("semgrep", semgrep_reported) == (
-            "secret-github-token"
+        assert get_canonical_rule_id("opengrep", opengrep_reported) == (
+            "code-hardcoded-password"
         )
         equivalent, canonical = are_rules_equivalent(
-            "semgrep", semgrep_reported, "gitleaks", "github-pat"
+            "opengrep", opengrep_reported, "trufflehog", "Password"
         )
         assert equivalent is True
-        assert canonical == "secret-github-token"
+        assert canonical == "code-hardcoded-password"
 
     def test_exact_table_entries_are_untouched(self):
         """Every (tool, rule) pair the table declares must still resolve."""

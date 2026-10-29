@@ -37,6 +37,18 @@ def test_typescript_selects_javascript_too():
     assert _stems([Path("web/App.tsx")]) == ["generic", "javascript", "typescript"]
 
 
+def test_every_typescript_pattern_is_a_javascript_pattern():
+    """Decision 6 as an invariant: a TypeScript file always selects javascript.yaml
+    too. A `.mts` added to the typescript row alone would give that repository
+    typescript.yaml and none of the JavaScript rules opengrep runs on it."""
+    missing = set(LANGUAGE_PATTERNS["typescript"]) - set(
+        LANGUAGE_PATTERNS["javascript"]
+    )
+    assert not missing, (
+        f"typescript patterns the javascript row lacks: {sorted(missing)}"
+    )
+
+
 def test_generic_is_always_selected():
     """generic.yaml carries the rules that match by file name, whatever the
     language (nginx and apache configs, Bicep, Handlebars), so no file

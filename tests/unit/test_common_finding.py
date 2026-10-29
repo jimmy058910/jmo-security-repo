@@ -248,7 +248,7 @@ class TestFingerprint:
     def test_fingerprint_basic(self):
         """Test basic fingerprint generation."""
         fp = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="python.lang.security.audit.dangerous-spawn.dangerous-spawn",
             path="src/main.py",
             start_line=42,
@@ -282,7 +282,7 @@ class TestFingerprint:
     def test_fingerprint_different_tools(self):
         """Test that different tools produce different fingerprints."""
         fp1 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file.py",
             start_line=1,
@@ -301,14 +301,14 @@ class TestFingerprint:
     def test_fingerprint_different_rule_ids(self):
         """Test that different rule IDs produce different fingerprints."""
         fp1 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file.py",
             start_line=1,
             message="Issue",
         )
         fp2 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule2",
             path="file.py",
             start_line=1,
@@ -320,14 +320,14 @@ class TestFingerprint:
     def test_fingerprint_different_paths(self):
         """Test that different paths produce different fingerprints."""
         fp1 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file1.py",
             start_line=1,
             message="Issue",
         )
         fp2 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file2.py",
             start_line=1,
@@ -339,14 +339,14 @@ class TestFingerprint:
     def test_fingerprint_different_lines(self):
         """Test that different line numbers produce different fingerprints."""
         fp1 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file.py",
             start_line=10,
             message="Issue",
         )
         fp2 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file.py",
             start_line=20,
@@ -358,14 +358,14 @@ class TestFingerprint:
     def test_fingerprint_different_messages(self):
         """Test that different messages produce different fingerprints."""
         fp1 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file.py",
             start_line=1,
             message="Issue 1",
         )
         fp2 = fingerprint(
-            tool="semgrep",
+            tool="opengrep",
             rule_id="rule1",
             path="file.py",
             start_line=1,
@@ -470,7 +470,7 @@ class TestFingerprint:
 
     def test_fingerprint_algorithm(self):
         """Test that fingerprint uses SHA256 and truncates to FINGERPRINT_LENGTH."""
-        tool = "semgrep"
+        tool = "opengrep"
         rule_id = "rule1"
         path = "file.py"
         start_line = 42
@@ -791,7 +791,7 @@ class TestConstants:
         assert isinstance(TOOL_SEVERITY_MAPPINGS, dict)
         # Should have mappings for known tools
         assert "zap" in TOOL_SEVERITY_MAPPINGS
-        assert "semgrep" in TOOL_SEVERITY_MAPPINGS
+        assert "opengrep" in TOOL_SEVERITY_MAPPINGS
         assert "nuclei" in TOOL_SEVERITY_MAPPINGS
 
     def test_tool_severity_mappings_values_are_valid(self):
@@ -841,22 +841,22 @@ class TestMapToolSeverity:
         assert map_tool_severity("zap", "CRITICAL") == "CRITICAL"
 
     # ------------------------------------
-    # Semgrep severity mapping tests
+    # Opengrep severity mapping tests
     # ------------------------------------
-    def test_semgrep_error(self):
-        """Test Semgrep ERROR maps to HIGH."""
-        assert map_tool_severity("semgrep", "error") == "HIGH"
-        assert map_tool_severity("semgrep", "ERROR") == "HIGH"
+    def test_opengrep_error(self):
+        """Test Opengrep ERROR maps to HIGH."""
+        assert map_tool_severity("opengrep", "error") == "HIGH"
+        assert map_tool_severity("opengrep", "ERROR") == "HIGH"
 
-    def test_semgrep_warning(self):
-        """Test Semgrep WARNING maps to MEDIUM."""
-        assert map_tool_severity("semgrep", "warning") == "MEDIUM"
-        assert map_tool_severity("semgrep", "WARNING") == "MEDIUM"
+    def test_opengrep_warning(self):
+        """Test Opengrep WARNING maps to MEDIUM."""
+        assert map_tool_severity("opengrep", "warning") == "MEDIUM"
+        assert map_tool_severity("opengrep", "WARNING") == "MEDIUM"
 
-    def test_semgrep_info(self):
-        """Test Semgrep INFO maps to LOW."""
-        assert map_tool_severity("semgrep", "info") == "LOW"
-        assert map_tool_severity("semgrep", "INFO") == "LOW"
+    def test_opengrep_info(self):
+        """Test Opengrep INFO maps to LOW."""
+        assert map_tool_severity("opengrep", "info") == "LOW"
+        assert map_tool_severity("opengrep", "INFO") == "LOW"
 
     # ------------------------------------
     # Nuclei severity mapping tests
@@ -945,8 +945,8 @@ class TestMapToolSeverity:
         """Test tool name matching is case insensitive."""
         assert map_tool_severity("ZAP", "high") == "HIGH"
         assert map_tool_severity("Zap", "low") == "LOW"
-        assert map_tool_severity("SEMGREP", "error") == "HIGH"
-        assert map_tool_severity("Semgrep", "warning") == "MEDIUM"
+        assert map_tool_severity("OPENGREP", "error") == "HIGH"
+        assert map_tool_severity("Opengrep", "warning") == "MEDIUM"
 
     def test_case_insensitive_severity(self):
         """Test severity matching is case insensitive."""
@@ -958,7 +958,7 @@ class TestMapToolSeverity:
     def test_whitespace_handling(self):
         """Test whitespace is stripped from severity values."""
         assert map_tool_severity("zap", "  high  ") == "HIGH"
-        assert map_tool_severity("semgrep", "\terror\n") == "HIGH"
+        assert map_tool_severity("opengrep", "\terror\n") == "HIGH"
 
     def test_unmapped_value_for_known_tool(self):
         """Test unmapped severity values fall back to normalize_severity."""

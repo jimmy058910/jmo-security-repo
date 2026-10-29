@@ -40,7 +40,7 @@ def test_gather_results_merges_and_dedupes(tmp_path: Path):
         ),
     )
     write(
-        r2 / "semgrep.json",
+        r2 / "opengrep.json",
         json.dumps(
             {
                 "results": [

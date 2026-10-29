@@ -106,8 +106,8 @@ def _write_fixture_repo(root: Path) -> Path:
 # that bounds every tool.
 #
 # The cap must clear the tools that are merely slow, or it manufactures
-# failures. Measured at 30s: semgrep (natural runtime 47s on this fixture) was
-# killed mid-run after writing its output file - so the reconciler correctly
+# failures. Measured at 30s: semgrep (natural runtime 47s on this fixture; since
+# replaced by opengrep) was killed mid-run after writing its output file - so the reconciler correctly
 # reported it **contradictory**, in `output` and `failed` at once. A cap that
 # kills a healthy tool does not test accounting, it fabricates a defect. 120s
 # cleared every tool measured here.
@@ -117,14 +117,13 @@ def _write_fixture_repo(root: Path) -> Path:
 PER_TOOL_TIMEOUT_S = 120
 SCAN_BUDGET_S = 420
 
-# semgrep is excluded rather than capped (#907): its production default
-# (`--config auto`) fetches its ruleset from semgrep.dev, so on a machine where
-# semgrep is genuinely on PATH this test spawned a real, unmarked,
-# network-blocking scan of its own -- and PER_TOOL_TIMEOUT_S caps it mid-fetch,
-# producing the exact output-vs-failed contradiction described above.
-# `--skip-tools` takes it out of the request, so it is not declared and has no
-# row, and this test does not depend on network access to pass.
-SKIP_TOOLS = ("semgrep",)
+# opengrep is excluded rather than capped (#907, written for semgrep, whose
+# `--config auto` fetched its ruleset from the network): a real scan of its own
+# unpacks its 246 MB engine into the child's `$HOME/.cache` on a first run and
+# writes a debug log under `$HOME/.opengrep`, here a temporary directory, and
+# this test is about accounting, not SAST. `--skip-tools` takes it out of the
+# request, so it is not declared and has no row.
+SKIP_TOOLS = ("opengrep",)
 
 # A capped-out tool is still *accounted* - `failed` is a state like any other,
 # and this test asserts the invariant, never the distribution. That is what
@@ -267,7 +266,7 @@ def test_default_scan_accounts_for_every_matrix_tool(tmp_path: Path) -> None:
         f"stderr: {proc.stderr[-2000:]}"
     )
 
-    # `--skip-tools semgrep` takes it out of the request: every other matrix
+    # `--skip-tools opengrep` takes it out of the request: every other matrix
     # tool is declared, and each must have exactly one row.
     declared = [t for t in TOOL_MATRIX if t not in SKIP_TOOLS]
     meta = json.loads((results_dir / ".scan_metadata.json").read_bytes())

@@ -30,8 +30,8 @@ def no_real_scanners(monkeypatch):
     The full-scan tests are about platform behaviour (paths, case sensitivity,
     SQLite), not any scanner. With nothing resolved, every requested tool is
     stubbed, as on a CI runner with no scanners installed, so a developer machine
-    with semgrep or trufflehog on PATH behaves the same: otherwise it spawns the
-    real binary (semgrep with the network-fetching `--config auto`) and trips
+    with opengrep or trufflehog on PATH behaves the same: otherwise it spawns the
+    real binary and trips
     `_guard_no_unmarked_scanner_spawn`. Returns the names asked for, so a test can
     prove the stub was reached: a patch on a name the scanner stopped reading
     would pass silently.
@@ -78,7 +78,7 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["trufflehog", "semgrep"]
+                self.tools = ["trufflehog", "opengrep"]
                 self.timeout = 300
                 self.threads = 2
                 self.allow_missing_tools = True
@@ -112,7 +112,7 @@ class TestCrossPlatformCompatibility:
         # each missing tool reaches the scan core and is stubbed, as in Docker.
         monkeypatch.setenv("DOCKER_CONTAINER", "1")
         scan_rc = cmd_scan(ScanArgs())
-        assert {"trufflehog", "semgrep"} <= set(no_real_scanners), no_real_scanners
+        assert {"trufflehog", "opengrep"} <= set(no_real_scanners), no_real_scanners
         assert scan_rc == 0, "Scan should succeed on Linux"
 
         # Step 2: Report with history storage
@@ -180,7 +180,7 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["trufflehog", "semgrep"]
+                self.tools = ["trufflehog", "opengrep"]
                 self.timeout = 300
                 self.threads = 2
                 self.allow_missing_tools = True
@@ -214,7 +214,7 @@ class TestCrossPlatformCompatibility:
         # each missing tool reaches the scan core and is stubbed, as in Docker.
         monkeypatch.setenv("DOCKER_CONTAINER", "1")
         scan_rc = cmd_scan(ScanArgs())
-        assert {"trufflehog", "semgrep"} <= set(no_real_scanners), no_real_scanners
+        assert {"trufflehog", "opengrep"} <= set(no_real_scanners), no_real_scanners
         assert scan_rc == 0, "Scan should succeed on macOS"
 
         # Step 2: Report with history storage
@@ -294,7 +294,7 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["trufflehog", "semgrep"]
+                self.tools = ["trufflehog", "opengrep"]
                 self.timeout = 300
                 self.threads = 2
                 self.allow_missing_tools = True
@@ -328,7 +328,7 @@ class TestCrossPlatformCompatibility:
         # each missing tool reaches the scan core and is stubbed, as in Docker.
         monkeypatch.setenv("DOCKER_CONTAINER", "1")
         scan_rc = cmd_scan(ScanArgs())
-        assert {"trufflehog", "semgrep"} <= set(no_real_scanners), no_real_scanners
+        assert {"trufflehog", "opengrep"} <= set(no_real_scanners), no_real_scanners
         assert scan_rc == 0, "Scan should succeed on Windows/WSL"
 
         # Step 2: Report with history storage
@@ -393,7 +393,7 @@ class TestCrossPlatformCompatibility:
         - Path separators normalized (/ vs \\)
         - Symlinks handled correctly
 
-        Note: Requires at least one tool (semgrep) installed.
+        Note: Requires at least one tool (opengrep) installed.
         """
         # Create test structure
         repo = tmp_path / "path-test-repo"
@@ -411,7 +411,7 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["semgrep"]
+                self.tools = ["opengrep"]
                 self.timeout = 60
                 self.threads = 1
                 self.allow_missing_tools = True

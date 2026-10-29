@@ -208,7 +208,7 @@ def test_failure_report_bounds_a_chatty_tool(caplog):
     with caplog.at_level(logging.ERROR):
         report_tool_failure(
             ToolResult(
-                tool="semgrep",
+                tool="opengrep",
                 status="error",
                 stderr=("banner\n" * 5000) + "FATAL: the actual cause",
                 error_message="exited 2",
@@ -264,7 +264,7 @@ def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplo
         MockRunner.return_value = mock_runner
         mock_runner.run_all_parallel.return_value = [
             ToolResult(
-                tool="semgrep",
+                tool="opengrep",
                 status="retry_exhausted",
                 returncode=-1,
                 attempts=3,
@@ -276,7 +276,7 @@ def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplo
             _, statuses = scan_repository(
                 repo=_repo_target(tmp_path)["repo"],
                 results_dir=tmp_path,
-                tools=["semgrep"],
+                tools=["opengrep"],
                 timeout=600,
                 retries=0,
                 per_tool_config={},
@@ -285,8 +285,8 @@ def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplo
                 write_stub_func=lambda name, path: stubbed.append(name),
             )
 
-    assert statuses["semgrep"].label == "failed:timed out"
-    assert stubbed == ["semgrep"], (
+    assert statuses["opengrep"].label == "failed:timed out"
+    assert stubbed == ["opengrep"], (
         "no stub was written for a timed-out tool, so the report phase will "
         f"have no file for it at all. stubbed={stubbed}"
     )

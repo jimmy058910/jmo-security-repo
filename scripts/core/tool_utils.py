@@ -24,7 +24,7 @@ _warned_tools: set[str] = set()
 # Installation hints for supported security tools
 TOOL_INSTALL_HINTS = {
     "trufflehog": "Install: brew install trufflehog (macOS) or see https://github.com/trufflesecurity/trufflehog#installation",
-    "semgrep": "Install: pip install semgrep or see https://semgrep.dev/docs/getting-started/",
+    "opengrep": "Install: jmo tools install opengrep or see https://github.com/opengrep/opengrep#installation",
     "trivy": "Install: brew install trivy (macOS) or see https://aquasecurity.github.io/trivy/latest/getting-started/installation/",
     "syft": "Install: brew install syft (macOS) or see https://github.com/anchore/syft#installation",
     "checkov": "Install: pip install checkov or see https://www.checkov.io/2.Basics/Installing%20Checkov.html",

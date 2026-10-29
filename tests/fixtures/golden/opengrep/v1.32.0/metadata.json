@@ -1,0 +1,22 @@
+{
+  "tool": "opengrep",
+  "version": "1.32.0",
+  "generated_at": "2026-10-29T22:00:04.325751+00:00",
+  "sample_dir": null,
+  "finding_count": 10,
+  "raw_output_hash": "045e9090d052",
+  "binary_sha256": "7360d60174880bd9214f2dfbe439b7bce82b7a3d44cfe945ba833c85cc8bda75",
+  "download_url": "https://github.com/opengrep/opengrep/releases/download/v1.32.0/opengrep_manylinux_x86",
+  "target": {
+    "repository": "https://github.com/juice-shop/juice-shop",
+    "commit": "401393872069a1cedc8cdd26e89f2f8e05fe0dab",
+    "files": {
+      "routes/login.ts": "a75800151ddeda7b18ad683cd3c75fecadf48d23b507c5e531426285a1feb67a",
+      "routes/search.ts": "0c23e746dfe31ec29aa6477e076a0a4d55d27afd90446e668b1dc10b88416967",
+      "lib/insecurity.ts": "cc8eb6a6bc249de6c2616706a27123842dbfafb8b967595365f671be5e9ca7f0",
+      "views/promotionVideo.pug": "d9c4ab0b3a96c832fbde18346f900df727ab20cd0d4ce229e7a8ef3d0bd0c285"
+    }
+  },
+  "command": "opengrep scan --config scripts/jmo_rules/generic.yaml --config scripts/jmo_rules/javascript.yaml --config scripts/jmo_rules/typescript.yaml --no-rewrite-rule-ids --json --output raw-output.json --disable-version-check -j 4 --exclude=.git --exclude=node_modules --exclude=vendor --exclude=.venv --exclude=venv .  (cwd: the four files above, fetched by commit into a scratch directory; the configs are the ones the descriptor row selects for them, absolute in the real run)",
+  "stripped": "extra.lines, extra.dataflow_trace and extra.metavars are removed from every result: they copy juice-shop source text into the output, and one metavariable holds lib/insecurity.ts's RSA private key. No other field is changed."
+}

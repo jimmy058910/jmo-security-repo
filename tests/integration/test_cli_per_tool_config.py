@@ -141,8 +141,8 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     (r / "app.py").write_bytes(b"x = 1\n")  # not empty: G2 fails an empty tree
 
     cfg = {
-        "tools": ["semgrep"],
-        "per_tool": {"semgrep": {"flags": ["--exclude", "node_modules"]}},
+        "tools": ["opengrep"],
+        "per_tool": {"opengrep": {"flags": ["--exclude", "node_modules"]}},
     }
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
@@ -150,11 +150,11 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     # Mock _check_scan_tools to skip tool availability checks
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
 
-    # Mock shutil.which to simulate semgrep being installed
+    # Mock shutil.which to simulate opengrep being installed
     import shutil
 
     def fake_which(tool: str):
-        return "/usr/bin/semgrep" if tool == "semgrep" else None
+        return "/usr/bin/opengrep" if tool == "opengrep" else None
 
     monkeypatch.setattr(shutil, "which", fake_which)
 
@@ -169,7 +169,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     def fake_run(cmd, *args, **kwargs):
         """Mock subprocess.run - accepts all args/kwargs to match real signature."""
         calls.append(cmd)
-        # semgrep writes to --output path
+        # opengrep writes to --output path
         if isinstance(cmd, list) and "--output" in cmd:
             output_idx = cmd.index("--output") + 1
             output_path = Path(cmd[output_idx])
@@ -207,12 +207,12 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     # Ensure one of the commands contains our flags
     found = False
     for c in calls:
-        if isinstance(c, list) and c and "semgrep" in Path(c[0]).name:
+        if isinstance(c, list) and c and "opengrep" in Path(c[0]).name:
             # flags must be present in the argument list
             if "--exclude" in c and "node_modules" in c:
                 found = True
                 break
-    assert found, f"semgrep flags not found in {calls}"
+    assert found, f"opengrep flags not found in {calls}"
 
 
 def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
@@ -303,12 +303,12 @@ def test_per_tool_timeout_override(tmp_path: Path):
     # Create custom config with per-tool override
     config_file = tmp_path / "custom-jmo.yml"
     config_file.write_text("""
-tools: [semgrep]
+tools: [opengrep]
 outputs: [json]
 timeout: 300
 
 per_tool:
-  semgrep:
+  opengrep:
     timeout: 600  # Override global timeout
     flags: ["--exclude", "tests"]
 """)
@@ -344,15 +344,15 @@ per_tool:
     # Should complete successfully
     assert result.returncode in [0, 1]
 
-    # Verify semgrep ran (check logs for tool execution OR stub file created)
+    # Verify opengrep ran (check logs for tool execution OR stub file created)
     output = result.stdout + result.stderr
-    semgrep_stub = (
-        tmp_path / "results" / "individual-repos" / "test-repo" / "semgrep.json"
+    opengrep_stub = (
+        tmp_path / "results" / "individual-repos" / "test-repo" / "opengrep.json"
     )
 
-    # Either semgrep logged (tool installed) OR stub file exists (tool missing)
-    assert "semgrep" in output.lower() or semgrep_stub.exists(), (
-        "semgrep should be logged in tool execution OR stub file created"
+    # Either opengrep logged (tool installed) OR stub file exists (tool missing)
+    assert "opengrep" in output.lower() or opengrep_stub.exists(), (
+        "opengrep should be logged in tool execution OR stub file created"
     )
 
 
@@ -369,15 +369,15 @@ def test_per_tool_flags_override(tmp_path: Path):
     (test_repo / "tests").mkdir(parents=True)
     (test_repo / "tests" / "test.py").write_text("assert True")
 
-    # #907: semgrep's production default (`--config auto`) fetches its
-    # ruleset from semgrep.dev over the network -- this test's own point is
-    # that a per_tool `flags` override reaches the real semgrep invocation,
-    # which needs semgrep genuinely resolved and run, so (unlike a plumbing
-    # test) skip-tools would defeat the point entirely. Route it through the
-    # same `per_tool.configs` hook instead, so when this test runs on a
-    # machine where semgrep actually is on PATH, it stays offline.
-    offline_semgrep_rule = tmp_path / "offline-semgrep-rule.yml"
-    offline_semgrep_rule.write_text(
+    # #907, written for semgrep, whose default (`--config auto`) fetched its
+    # ruleset over the network. This test's own point is that a per_tool
+    # `flags` override reaches the real opengrep invocation, which needs
+    # opengrep genuinely resolved and run, so (unlike a plumbing test)
+    # skip-tools would defeat the point entirely. opengrep's default is the
+    # committed bundle and fetches nothing; the `per_tool.configs` hook is kept
+    # so the run loads one rule instead of every file the languages select.
+    offline_opengrep_rule = tmp_path / "offline-opengrep-rule.yml"
+    offline_opengrep_rule.write_text(
         "rules:\n"
         "  - id: jmo-offline-flags-override-rule\n"
         "    languages: [generic]\n"
@@ -390,13 +390,13 @@ def test_per_tool_flags_override(tmp_path: Path):
     # Create config with exclude flags
     config_file = tmp_path / "exclude-config.yml"
     config_file.write_text(f"""
-tools: [semgrep]
+tools: [opengrep]
 outputs: [json]
 
 per_tool:
-  semgrep:
+  opengrep:
     flags: ["--exclude", "tests"]
-    configs: ["{offline_semgrep_rule.as_posix()}"]
+    configs: ["{offline_opengrep_rule.as_posix()}"]
 """)
 
     # Run scan
@@ -429,7 +429,7 @@ per_tool:
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
-    # Exact verification of excluded directories depends on semgrep log format
+    # Exact verification of excluded directories depends on opengrep log format
     # Output captured in result.stdout + result.stderr if needed for debugging
 
 
@@ -584,16 +584,15 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
     repos_dir = tmp_path / "repos"
     (repos_dir / "proj").mkdir(parents=True)
 
-    # #907: semgrep's production default (`--config auto`) fetches its
-    # ruleset from semgrep.dev over the network. This test's own point is
-    # resolution/probe *counting*, which needs semgrep to actually be
-    # resolved (removing it from `tools` would just make the test say
-    # nothing about it) -- so instead of skipping it, give it a fully
-    # offline, filesystem-only ruleset via the `per_tool.configs` hook
-    # `repository_scanner.py` already supports, precisely so a scan that
-    # does run to completion here never reaches the network.
-    offline_semgrep_rule = tmp_path / "offline-semgrep-rule.yml"
-    offline_semgrep_rule.write_text(
+    # #907, written for semgrep, whose default (`--config auto`) fetched its
+    # ruleset over the network. This test's own point is resolution/probe
+    # *counting*, which needs opengrep to actually be resolved (removing it
+    # from `tools` would just make the test say nothing about it) -- so
+    # instead of skipping it, give it one filesystem-only rule via the
+    # `per_tool.configs` hook, so a scan that runs to completion here loads
+    # that rule and not the bundle's files.
+    offline_opengrep_rule = tmp_path / "offline-opengrep-rule.yml"
+    offline_opengrep_rule.write_text(
         "rules:\n"
         "  - id: jmo-offline-probe-rule\n"
         "    languages: [generic]\n"
@@ -604,10 +603,10 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
     )
 
     cfg = {
-        "tools": ["trufflehog", "semgrep", "trivy"],
+        "tools": ["trufflehog", "opengrep", "trivy"],
         "timeout": 60,
         "threads": 1,
-        "per_tool": {"semgrep": {"configs": [str(offline_semgrep_rule)]}},
+        "per_tool": {"opengrep": {"configs": [str(offline_opengrep_rule)]}},
     }
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
@@ -647,7 +646,7 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
         targets=None,
         results_dir=str(tmp_path / "results"),
         config=str(cfg_path),
-        tools=["trufflehog", "semgrep", "trivy"],
+        tools=["trufflehog", "opengrep", "trivy"],
         timeout=None,
         threads=None,
         allow_missing_tools=True,

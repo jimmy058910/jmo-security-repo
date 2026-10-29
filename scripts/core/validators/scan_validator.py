@@ -37,8 +37,8 @@ EXPECTED_ADAPTERS = sorted(
         "hadolint",
         "jmo_native",
         "nuclei",
+        "opengrep",
         "osv_scanner",
-        "semgrep",
         "shellcheck",
         "syft",
         "trivy",
@@ -2019,7 +2019,7 @@ def _check_full_real_scan_available() -> CheckResult:
         from scripts.core.tool_utils import tool_exists
 
         tools_available = []
-        for tool in ["trivy", "semgrep", "grype"]:
+        for tool in ["trivy", "opengrep", "grype"]:
             if tool_exists(tool, warn=False):
                 tools_available.append(tool)
 

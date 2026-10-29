@@ -19,16 +19,12 @@ import pytest
 
 from scripts.core.tool_registry import BUILTIN_TOOLS, POLICY_ENGINE, TOOL_MATRIX
 
-# Phase 5, PR B, task B1 took semgrep out of versions.yaml, but its descriptor row
-# is renamed to opengrep in task B3, so until then TOOL_MATRIX names a scanner
-# the registry no longer pins. B3 drops this with the rename.
-AWAITING_RENAME = frozenset({"semgrep"})
-
 # ========== Category 1: The tool matrix and name-keyed tables ==========
 
 V2_PHASE_2_MATRIX = {
     "trufflehog",
-    "semgrep",
+    # Phase 5, PR B: opengrep, in the slot semgrep had.
+    "opengrep",
     "syft",
     "trivy",
     "checkov",
@@ -54,15 +50,6 @@ def test_tool_matrix_is_the_phase_2_set():
     and Phase 4's zizmor, osv-scanner and jmo-native, with no duplicates."""
     assert set(TOOL_MATRIX) == V2_PHASE_2_MATRIX
     assert len(TOOL_MATRIX) == len(set(TOOL_MATRIX))
-
-
-def test_the_rename_exemption_ends_with_the_rename():
-    """Fails the day semgrep's row is renamed, so AWAITING_RENAME cannot linger:
-    subtracting a name that is no longer in the matrix would pass for ever."""
-    assert set(TOOL_MATRIX) >= AWAITING_RENAME, (
-        "the row was renamed: delete AWAITING_RENAME and its uses in this file, "
-        'and the `- {"semgrep"}` in tests/core/test_platform_validator.py'
-    )
 
 
 def test_the_policy_engine_is_not_a_scanner():
@@ -271,8 +258,7 @@ def test_toolregistry_registers_every_tool_jmo_installs():
 
     registered = {t.name for t in ToolRegistry().get_all_tools()}
 
-    expected = {*TOOL_MATRIX, POLICY_ENGINE} - BUILTIN_TOOLS - AWAITING_RENAME
-    assert sorted(expected - registered) == []
+    assert sorted({*TOOL_MATRIX, POLICY_ENGINE} - BUILTIN_TOOLS - registered) == []
     assert BUILTIN_TOOLS and BUILTIN_TOOLS.isdisjoint(registered)
 
 
@@ -587,11 +573,7 @@ def _install_routes(tool: str, platform: str, monkeypatch, tmp_path) -> list[str
 # (tests/unit/test_jmo_native_wiring.py).
 @pytest.mark.parametrize("platform", _PLATFORMS)
 @pytest.mark.parametrize(
-    "tool",
-    [
-        *(t for t in TOOL_MATRIX if t not in BUILTIN_TOOLS | AWAITING_RENAME),
-        POLICY_ENGINE,
-    ],
+    "tool", [*(t for t in TOOL_MATRIX if t not in BUILTIN_TOOLS), POLICY_ENGINE]
 )
 def test_every_installed_tool_has_an_install_route_on_every_platform(
     tool, platform, monkeypatch, tmp_path

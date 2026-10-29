@@ -15,10 +15,24 @@ Measured before any of this was written:
   `$XDG_CACHE_HOME/opengrep/v1.32.0/` and takes 1.1 s, the same as the second
   (v1.32.0, x86_64, fresh `HOME`, 2026-10-29), so the Dockerfile has no
   warm-up step.
+
+The descriptor row (task B3), measured on v1.32.0 the same day:
+
+- A run whose files carry errors exits 0 with every other file's results in
+  the output: a syntax error, a `Timeout` and a `Stack overflow` each gave rc 0
+  and an entry in `errors`. An invalid `--config` exits 7 and still writes the
+  output, with no results and the cause in `errors`. A usage error (`-j` given
+  twice) exits 2 and writes nothing. rc 1 comes only from `--error` and rc 3
+  only from `--strict`, which a user may not set.
+- It has no `--metrics` flag, so nothing in the command turns telemetry off.
 """
 
 from __future__ import annotations
 
+import json
+import logging
+import shutil
+import subprocess
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -26,8 +40,19 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from scripts.cli.scan_jobs import tool_loop
 from scripts.cli.tool_installer import ToolInstaller
 from scripts.cli.tool_manager import ToolManager
+from scripts.core.rule_bundle import BUNDLE_DIR
+from scripts.core.scan_timings import SKIP_REASONS, Reason, State
+from scripts.core.tool_descriptors import (
+    DESCRIPTORS,
+    VENDORED_DIRS,
+    ExclusionStyle,
+    FlagGrammar,
+    Reserved,
+)
+from scripts.core.tool_diagnostics import extract_tool_diagnostics
 from scripts.core.tool_registry import ToolInfo
 
 # opengrep v1.32.0's release assets, listed with `gh release view v1.32.0 -R
@@ -119,3 +144,454 @@ def test_jmo_tools_check_says_there_is_no_windows_arm64_build() -> None:
     assert status.expected_version == pin["binary_tools"]["opengrep"]["version"]
     assert status.install_hint.startswith("jmo tools install opengrep")
     assert "no Windows arm64 build" in status.install_hint
+
+
+# --- the descriptor row (task B3) ------------------------------------------------
+
+
+class TestDescriptor:
+    def test_it_sits_in_the_slot_semgrep_had(self) -> None:
+        names = list(DESCRIPTORS)
+        assert "semgrep" not in names
+        assert names[names.index("gitleaks") + 1] == "opengrep"
+
+    def test_it_takes_the_exclusion_flag_it_always_had(self) -> None:
+        d = DESCRIPTORS["opengrep"]
+        assert d.exclusion_style is ExclusionStyle.INLINE
+        assert d.exclusion_flag == "--exclude"
+        assert d.excluded_vendored == VENDORED_DIRS
+        assert d.target_types == frozenset({"repo", "gitlab"})
+        assert d.flag_grammar is FlagGrammar.CMDLINER
+
+    def test_the_probe_reads_what_opengrep_version_prints(self) -> None:
+        """`opengrep --version` prints the bare version (measured, 1.32.0)."""
+        probe = DESCRIPTORS["opengrep"].version_probe
+        assert probe.pattern.search("1.32.0\n").group(1) == "1.32.0"
+        assert probe.command is None
+
+    def test_no_rule_languages_is_a_skip_reason(self) -> None:
+        d = DESCRIPTORS["opengrep"]
+        assert d.trigger is not None
+        assert d.file_patterns == ()
+        assert Reason.NO_RULE_LANGUAGES in SKIP_REASONS
+        assert (
+            Reason.NO_RULE_LANGUAGES.value
+            == "no files in a language the rule bundle reads"
+        )
+
+    def test_its_empty_result_has_no_results(self) -> None:
+        assert DESCRIPTORS["opengrep"].stub == {"results": []}
+
+    def test_examined_files_are_read_from_paths_scanned(self, tmp_path) -> None:
+        reader = DESCRIPTORS["opengrep"].scanned_count
+        assert reader is not None
+        out = tmp_path / "opengrep.json"
+        out.write_text(json.dumps({"paths": {"scanned": ["a.py", "b.py"]}}))
+        assert reader(out) == 2
+        out.write_text(json.dumps({"paths": {"scanned": []}}))
+        assert reader(out) == 0
+        out.write_text(json.dumps({"results": []}))
+        assert reader(out) is None
+        assert reader(tmp_path / "missing.json") is None
+
+    def test_it_reserves_what_it_owns(self) -> None:
+        reserved = DESCRIPTORS["opengrep"].reserved_flags
+        for flag in ("-o", "--output", "--json", "--sarif", "--text"):
+            assert reserved[flag] is Reserved.OUTPUT
+        for flag in ("--error", "--strict"):
+            assert reserved[flag] is Reserved.EXIT_CODE
+        for flag in (
+            *("-j", "--jobs", "--rewrite-rule-ids", "--no-rewrite-rule-ids"),
+            *("--enable-version-check", "--disable-version-check"),
+        ):
+            assert reserved[flag] is Reserved.PASSED
+        # A rule file is a list option: a user's own pack adds to JMo's.
+        assert "--config" not in reserved
+        assert "-c" not in reserved
+
+
+# --- the command line, through the scan loop -------------------------------------
+
+PYTHON = b"import os\nos.system(input())\n"
+
+
+def _plant(repo: Path, paths) -> None:
+    for rel in paths:
+        path = repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(PYTHON)
+
+
+def _recorded(repo: Path, out: Path, per_tool_config=None, results_tree=None):
+    captured: list = []
+
+    class Recorder:
+        def __init__(self, tools, progress_callback=None):
+            captured.extend(tools)
+
+        def run_all_parallel(self):
+            return []
+
+    rows = tool_loop.run_tools(
+        tools=["opengrep"],
+        target_type="repo",
+        target=repo,
+        target_label="t",
+        out_dir=out,
+        timeout=60,
+        retries=0,
+        per_tool_config=per_tool_config or {},
+        allow_missing_tools=False,
+        runner_cls=Recorder,
+        find_tool_func=lambda name: "/bin/opengrep" if name == "opengrep" else None,
+        repo_root=repo,
+        results_name="results" if results_tree else None,
+        results_tree=results_tree,
+    )
+    return rows, captured
+
+
+def _bundle(*stems: str) -> list[str]:
+    return [arg for s in stems for arg in ("--config", str(BUNDLE_DIR / f"{s}.yaml"))]
+
+
+def test_the_command_line(tmp_path) -> None:
+    """A TypeScript repository: opengrep runs JavaScript rules on `.ts`, so
+    both files and `generic.yaml` (every scan gets it) are named."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["src/app.ts", "README.md"])
+    out = repo / "results" / "individual-repos" / "repo"
+    out.mkdir(parents=True)
+
+    _, (definition,) = _recorded(repo, out, results_tree=(repo / "results").resolve())
+
+    assert definition.command == [
+        "/bin/opengrep",
+        "scan",
+        *_bundle("generic", "javascript", "typescript"),
+        # The id is the YAML's, whatever the working directory (B7): without
+        # this opengrep prefixes it with the path it was run from.
+        "--no-rewrite-rule-ids",
+        "--json",
+        "--output",
+        str(out / "opengrep.json"),
+        "--disable-version-check",
+        "-j",
+        "4",
+        *(f"--exclude={d}" for d in (*VENDORED_DIRS, "results")),
+        str(repo),
+    ]
+    assert definition.output_file == out / "opengrep.json"
+    assert definition.capture_stdout is False
+    assert definition.ok_return_codes == (0,)
+    assert definition.timeout == 900
+
+
+def test_user_configs_replace_the_bundle(tmp_path) -> None:
+    """`per_tool.opengrep.configs` is the user's own packs, offline: it takes
+    the bundle's place, and the languages present no longer pick the files."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+    mine = ["/rules/mine.yaml", "/rules/more.yaml"]
+
+    _, (definition,) = _recorded(repo, out, {"opengrep": {"configs": mine}})
+
+    command = definition.command
+    assert command[:6] == [
+        "/bin/opengrep",
+        "scan",
+        *("--config", "/rules/mine.yaml"),
+        *("--config", "/rules/more.yaml"),
+    ]
+    assert command[6] == "--no-rewrite-rule-ids"
+    assert str(BUNDLE_DIR) not in " ".join(command)
+
+
+def test_a_single_user_config_is_one_config_not_its_characters(tmp_path) -> None:
+    """`configs: rules.yaml` in YAML is a string, which iterated as a list is
+    one `--config` per letter."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    _, (definition,) = _recorded(repo, out, {"opengrep": {"configs": "rules.yaml"}})
+
+    assert definition.command[2:4] == ["--config", "rules.yaml"]
+    assert definition.command[4] == "--no-rewrite-rule-ids"
+
+
+def test_user_configs_run_on_a_tree_with_no_bundle_language(tmp_path) -> None:
+    """The skip is the bundle's: a user's pack may read what the bundle does
+    not (Lua, say), so it decides for itself."""
+    repo = tmp_path / "repo"
+    (repo / "lib").mkdir(parents=True)
+    (repo / "lib" / "init.lua").write_bytes(b"print(1)\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    _, definitions = _recorded(repo, out, {"opengrep": {"configs": ["m.yaml"]}})
+
+    assert len(definitions) == 1
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"README.md": b"# t\n", "LICENSE": b"MIT\n"},
+        # Vendored trees are not the repository's: pruned by the walk.
+        {"README.md": b"# t\n", "node_modules/x/index.js": b"x\n"},
+        {"README.md": b"# t\n", "vendor/lib.go": b"package x\n"},
+        {"README.md": b"# t\n", "a/venv/m.py": b"x = 1\n"},
+    ],
+)
+def test_a_repo_with_no_bundle_language_is_skipped_and_says_why(
+    tmp_path, files
+) -> None:
+    """Review Focus 2: with no file in a language the rule bundle reads,
+    opengrep would load `generic.yaml`, scan nothing, and the row would read
+    `ran` with 0 findings."""
+    repo = tmp_path / "repo"
+    for rel, data in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(data)
+    out = tmp_path / "out"
+    out.mkdir()
+
+    rows, definitions = _recorded(repo, out)
+
+    assert definitions == []
+    assert rows["opengrep"].state is State.SKIPPED
+    assert rows["opengrep"].reason is Reason.NO_RULE_LANGUAGES
+    assert rows["opengrep"].label == (
+        "skipped:no files in a language the rule bundle reads"
+    )
+    # The row's output is the empty result, so the report reads it.
+    assert json.loads((out / "opengrep.json").read_bytes()) == {"results": []}
+
+
+def test_the_results_directory_is_not_a_language_file(tmp_path) -> None:
+    """JMo's own earlier output, inside the tree, is not the repository's."""
+    repo = tmp_path / "repo"
+    (repo / "README.md").parent.mkdir(parents=True)
+    (repo / "README.md").write_bytes(b"# t\n")
+    _plant(repo, ["results/individual-repos/old/x.py"])
+    out = repo / "results" / "individual-repos" / "repo"
+    out.mkdir(parents=True)
+
+    rows, definitions = _recorded(repo, out, results_tree=(repo / "results").resolve())
+
+    assert definitions == []
+    assert rows["opengrep"].reason is Reason.NO_RULE_LANGUAGES
+
+
+def test_the_languages_are_chosen_from_the_whole_walk(tmp_path, caplog) -> None:
+    """`ctx.files` is a tuple capped at 300 sorted paths (a command-line
+    length limit, true of the file-fed tools), so a language whose only file
+    sorts after 300 of another would lose its rules without a word. The
+    languages are read from the pruned walk, which is not capped, and the cap's
+    "NOT scanned" warning, false here since opengrep is handed the directory,
+    is never logged."""
+    repo = tmp_path / "repo"
+    _plant(repo, [f"a/f{i:03d}.py" for i in range(tool_loop.MAX_FILE_ARGS + 1)])
+    (repo / "z").mkdir()
+    (repo / "z" / "main.go").write_bytes(b"package main\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    with caplog.at_level(logging.WARNING, logger=tool_loop.logger.name):
+        _, (definition,) = _recorded(repo, out)
+
+    assert definition.command[2:8] == _bundle("generic", "go", "python")
+    assert "NOT scanned" not in caplog.text
+
+
+def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
+    """opengrep refuses a second `-j` (rc 2, "option '-j' cannot be repeated",
+    no output: measured) and JMo sets it to 4 (the program plan's decision:
+    only `-j 1` fits 800 MB, and Phase 7 owns tuning it)."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+    flags = ["-j", "2", "--jobs=3", "-j8", "--timeout", "9"]
+
+    with caplog.at_level(logging.WARNING):
+        _, (definition,) = _recorded(repo, out, {"opengrep": {"flags": flags}})
+
+    command = definition.command
+    assert command.count("-j") == 1 and command[command.index("-j") + 1] == "4"
+    assert not any(tok.startswith(("--jobs", "-j8")) for tok in command)
+    # What is not JMo's is the user's, spliced in before the target.
+    assert command[-3:-1] == ["--timeout", "9"]
+    assert command[-1] == str(repo)
+    for refused in ("-j 2", "--jobs=3", "-j8"):
+        assert f"Ignoring `{refused}` in per_tool.opengrep.flags" in caplog.text
+    assert Reserved.PASSED.value in caplog.text
+
+
+@pytest.mark.parametrize(
+    "flag", ["--rewrite-rule-ids", "--no-rewrite-rule-ids", "--enable-version-check"]
+)
+def test_the_other_flags_jmo_passes_are_refused(tmp_path, flag) -> None:
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    _, (definition,) = _recorded(repo, out, {"opengrep": {"flags": [flag]}})
+
+    assert definition.command.count(flag) == (
+        1 if flag == "--no-rewrite-rule-ids" else 0
+    )
+
+
+# --- what a run with errors still gives ------------------------------------------
+
+# Copied from runs of 1.32.0 (2026-10-29): a `Timeout` names the rule and the
+# file, a `Syntax error` the file, and both are `"level": "warn"`.
+TIMEOUT = {
+    "code": 2,
+    "level": "warn",
+    "type": "Timeout",
+    "rule_id": "raptor-use-after-free",
+    "message": "Timeout when running raptor-use-after-free on src/big.c:\n ",
+    "path": "src/big.c",
+}
+
+
+def _result(path: str, line: int) -> dict:
+    return {
+        "check_id": "python.lang.security.audit.dangerous-system-call.dangerous-system-call",
+        "path": path,
+        "start": {"line": line, "col": 1, "offset": 0},
+        "end": {"line": line, "col": 20, "offset": 19},
+        "extra": {
+            "message": "Detected a system call.",
+            "metadata": {
+                "cwe": ["CWE-78: OS Command Injection"],
+                "owasp": ["A03:2021 - Injection"],
+                "confidence": "HIGH",
+                "category": "security",
+            },
+            "severity": "ERROR",
+            "lines": "os.system(input())",
+        },
+    }
+
+
+def test_errors_keep_the_other_files_findings(tmp_path) -> None:
+    """Review Focus 3: a file opengrep times out on leaves the others' findings
+    in the report, and is named. Both come from the one output file."""
+    from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
+
+    out = tmp_path / "opengrep.json"
+    out.write_text(
+        json.dumps(
+            {
+                "version": "1.32.0",
+                "results": [_result("src/a.py", 2), _result("src/b.py", 7)],
+                "errors": [TIMEOUT],
+                "paths": {"scanned": ["src/a.py", "src/b.py", "src/big.c"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    findings = OpengrepAdapter().parse(out)
+    diagnostics = extract_tool_diagnostics("opengrep", out)
+
+    assert [(f.location["path"], f.location["startLine"]) for f in findings] == [
+        ("src/a.py", 2),
+        ("src/b.py", 7),
+    ]
+    assert [f.severity for f in findings] == ["HIGH", "HIGH"]
+    assert [(d.tool, d.path) for d in diagnostics] == [("opengrep", "src/big.c")]
+    assert "Timeout" in diagnostics[0].reason
+
+
+# --- the real binary --------------------------------------------------------------
+
+
+def _opengrep() -> str:
+    found = shutil.which("opengrep")
+    if found is None:
+        pytest.skip("opengrep is not on PATH")
+    return found
+
+
+def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [_opengrep(), "scan", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+    )
+
+
+@pytest.mark.requires_tools
+def test_a_run_with_errors_is_rc_0_and_keeps_the_other_files(tmp_path) -> None:
+    """Why `ok_return_codes` is `(0,)` and a file that does not parse costs
+    only itself: a syntax error is rc 0 with the error in the output."""
+    (tmp_path / "good.py").write_bytes(PYTHON)
+    (tmp_path / "bad.py").write_bytes(b"def broken(:\n  x = (\n")
+
+    done = _run(
+        [
+            *("--config", str(BUNDLE_DIR / "python.yaml")),
+            *("--no-rewrite-rule-ids", "--json", "--output", "o.json"),
+            *("--disable-version-check", "-j", "4", "."),
+        ],
+        tmp_path,
+    )
+
+    data = json.loads((tmp_path / "o.json").read_bytes())
+    assert done.returncode == 0, done.stderr
+    assert [r["path"] for r in data["results"]] == ["good.py"]
+    assert [e["path"] for e in data["errors"]] == ["bad.py"]
+    assert "bad.py" in data["paths"]["scanned"]
+
+
+@pytest.mark.requires_tools
+def test_an_invalid_config_is_rc_7_with_no_results(tmp_path) -> None:
+    """Rc 7, not 0, and the output is written with the cause in `errors`: the
+    row fails as `unaccepted exit code` instead of reading `examined 0 files`."""
+    (tmp_path / "good.py").write_bytes(PYTHON)
+
+    done = _run(
+        [
+            *("--config", str(BUNDLE_DIR / "python.yaml")),
+            *("--config", str(tmp_path / "no-such-rules.yaml")),
+            *("--no-rewrite-rule-ids", "--json", "--output", "o.json"),
+            *("--disable-version-check", "-j", "4", "."),
+        ],
+        tmp_path,
+    )
+
+    data = json.loads((tmp_path / "o.json").read_bytes())
+    assert done.returncode == 7
+    assert data["results"] == []
+    assert any("invalid configuration" in e["message"] for e in data["errors"])
+
+
+@pytest.mark.requires_tools
+def test_a_second_jobs_flag_is_rc_2_and_writes_nothing(tmp_path) -> None:
+    """Why `-j` is JMo's (measured: "option '-j' cannot be repeated")."""
+    (tmp_path / "good.py").write_bytes(PYTHON)
+
+    done = _run(
+        [
+            *("--config", str(BUNDLE_DIR / "python.yaml")),
+            *("--json", "--output", "o.json", "-j", "4", "-j", "2", "."),
+        ],
+        tmp_path,
+    )
+
+    assert done.returncode == 2
+    assert "cannot be repeated" in done.stderr
+    assert not (tmp_path / "o.json").exists()

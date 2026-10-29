@@ -42,7 +42,7 @@ from typing import Any
 import pytest
 
 from scripts.core.adapters.nuclei_adapter import NucleiAdapter
-from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
+from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 
@@ -173,8 +173,8 @@ def _real_findings() -> list[dict[str, Any]]:
         )
         findings += [f.to_dict() for f in TruffleHogAdapter().parse(th)]
 
-        # Semgrep -- supplies risk.cwe and a CWE the compliance mapper maps.
-        sg = tmp / "semgrep.json"
+        # Opengrep -- supplies risk.cwe and a CWE the compliance mapper maps.
+        sg = tmp / "opengrep.json"
         sg.write_bytes(
             json.dumps(
                 {
@@ -201,7 +201,7 @@ def _real_findings() -> list[dict[str, Any]]:
                 }
             ).encode("utf-8")
         )
-        findings += [f.to_dict() for f in SemgrepAdapter().parse(sg)]
+        findings += [f.to_dict() for f in OpengrepAdapter().parse(sg)]
 
         # Nuclei -- a second shape, and a tool whose remediation is defaulted.
         nu = tmp / "nuclei.json"
