@@ -39,9 +39,9 @@ check_tool "TruffleHog" \
   "trufflehog --version" \
   "curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin" || ALL_INSTALLED=false
 
-check_tool "Semgrep" \
-  "semgrep --version" \
-  "pip install semgrep OR brew install semgrep" || ALL_INSTALLED=false
+check_tool "Opengrep" \
+  "opengrep --version" \
+  "jmo tools install opengrep" || ALL_INSTALLED=false
 
 # Optional but useful
 check_tool "jq (JSON processor)" \

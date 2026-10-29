@@ -4,8 +4,8 @@ This module provides two concrete installer implementations:
 - PipInstaller: For standard pip packages installed globally
 - IsolatedPipInstaller: For packages with dependency conflicts that need isolated venvs
 
-The isolation strategy keeps the pinned dependencies of tools like semgrep and
-checkov out of JMo's own environment.
+The isolation strategy keeps the pinned dependencies of tools like checkov out of
+JMo's own environment.
 """
 
 from __future__ import annotations
@@ -379,7 +379,7 @@ class PipInstaller(BaseInstaller):
 class IsolatedPipInstaller(BaseInstaller):
     """Installer for pip packages in isolated venvs.
 
-    Used for the tools in ISOLATED_TOOLS (semgrep, checkov), whose pinned
+    Used for the tools in ISOLATED_TOOLS (checkov), whose pinned
     dependencies must not reach JMo's own Python environment.
 
     Each tool gets its own venv at ~/.jmo/tools/venvs/<tool_name>/ to prevent
@@ -462,7 +462,7 @@ class IsolatedPipInstaller(BaseInstaller):
 
         Args:
             tool_name: Name of the tool
-            package_spec: Pip package specification (e.g., "semgrep==1.175.0")
+            package_spec: Pip package specification (e.g., "checkov==3.3.30")
 
         Returns:
             InstallResult with success status and details

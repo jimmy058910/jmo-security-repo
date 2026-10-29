@@ -5,7 +5,7 @@ This module contains extracted scan job functions for different target types.
 Each scanner is responsible for executing security tools against a specific target type.
 
 Scanners:
-- repository_scanner: Local Git repositories (trufflehog, semgrep, trivy, syft, etc.)
+- repository_scanner: Local Git repositories (trufflehog, opengrep, trivy, syft, etc.)
 - image_scanner: Container images (trivy, syft)
 - iac_scanner: IaC files (checkov, trivy)
 - url_scanner: Web URLs (zap)

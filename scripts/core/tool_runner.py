@@ -67,7 +67,7 @@ class ToolDefinition:
     Definition of a security tool to execute.
 
     Attributes:
-        name: Tool name (e.g., "trufflehog", "semgrep", "trivy")
+        name: Tool name (e.g., "trufflehog", "opengrep", "trivy")
         command: Command to execute as list of arguments (no shell expansion)
         output_file: Path where tool writes JSON output (None for tools that don't write files)
         timeout: Maximum execution time in seconds (default: 600)
@@ -297,9 +297,9 @@ class ToolRunner:
         ...         timeout=300
         ...     ),
         ...     ToolDefinition(
-        ...         name="semgrep",
-        ...         command=["semgrep", "scan", "/path/to/repo"],
-        ...         output_file=Path("/tmp/semgrep.json"),
+        ...         name="opengrep",
+        ...         command=["opengrep", "scan", "/path/to/repo"],
+        ...         output_file=Path("/tmp/opengrep.json"),
         ...         timeout=600
         ...     )
         ... ]
@@ -442,13 +442,15 @@ class ToolRunner:
         # cannot patch a third-party tool, but we do choose the environment it
         # runs in.
         #
-        # Measured: semgrep 1.161.0 on OWASP/NodeGoat under a cp1252 host dies
-        # with "'charmap' codec can't encode character U+202A" (LEFT-TO-RIGHT
-        # EMBEDDING, present in the scanned source) and exits 2 - which semgrep
-        # declares as "errors" and JMo accepts - so it wrote nothing while
-        # looking fine. The codepoint is named rather than quoted here: bandit
-        # B613 flags literal bidirectional control characters in source, and it
-        # is right to (CVE-2021-42574, "Trojan Source").
+        # Measured on semgrep 1.161.0, a Python scanner that opengrep (a native
+        # binary, which ignores this variable) replaced; checkov is the Python
+        # scanner left that reads it. On OWASP/NodeGoat under a cp1252 host it
+        # died with "'charmap' codec can't encode character U+202A"
+        # (LEFT-TO-RIGHT EMBEDDING, present in the scanned source) and exited 2
+        # - which it declared as "errors" and JMo accepted - so it wrote nothing
+        # while looking fine. The codepoint is named rather than quoted here:
+        # bandit B613 flags literal bidirectional control characters in source,
+        # and it is right to (CVE-2021-42574, "Trojan Source").
         # With PYTHONUTF8=1 the identical command returns 186 KB and 42 results.
         #
         # setdefault, not assignment: an operator who deliberately pinned
@@ -535,10 +537,10 @@ class ToolRunner:
                     # A tool told exactly where to write (every capture_stdout=False
                     # site passes -o/--output/-out=) can exit acceptably and write
                     # nothing: it may crash after startup, or the code may itself
-                    # mean "I did nothing" -- prowler's 3 is "no credentials", and
-                    # semgrep's 2 is "errors". Reporting that as success is not
-                    # recoverable downstream, because normalize_and_report globs
-                    # for files that exist and so cannot see one that is absent.
+                    # mean "I did nothing" -- prowler's 3 is "no credentials".
+                    # Reporting that as success is not recoverable downstream,
+                    # because normalize_and_report globs for files that exist
+                    # and so cannot see one that is absent.
                     # This is the only layer that knows what was expected.
                     if self._missing_declared_output(tool):
                         duration = time.perf_counter() - start_time

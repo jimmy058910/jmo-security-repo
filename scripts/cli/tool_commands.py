@@ -147,7 +147,7 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
 
     Usage:
         jmo tools check                    # Every scanner, plus the policy engine
-        jmo tools check trivy semgrep      # Check specific tools
+        jmo tools check trivy opengrep     # Check specific tools
 
     With no tool names the table is the scan matrix (TOOL_MATRIX) and the
     policy engine gets a line of its own below it: opa evaluates policies in
@@ -451,7 +451,7 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
 
     Usage:
         jmo tools install                     # Install all missing (parallel)
-        jmo tools install trivy semgrep       # Install specific tools
+        jmo tools install trivy opengrep       # Install specific tools
         jmo tools install --dry-run           # Show what would be installed
         jmo tools install --print-script      # Print install script
         jmo tools install --sequential        # Install sequentially (slower)
@@ -1189,7 +1189,7 @@ def cmd_tools_clean(args: argparse.Namespace) -> int:
     """
     Clean isolated virtual environments (Phase 5).
 
-    Removes the isolated venvs of the Python tools (semgrep, checkov).
+    Removes the isolated venvs of the Python tools (checkov).
     Useful when you need to fix a corrupted installation or reclaim disk space.
 
     Usage:
@@ -1229,7 +1229,7 @@ def cmd_tools_clean(args: argparse.Namespace) -> int:
     if force:
         print(colorize(f"Cleaned {len(removed)} isolated venv(s).", "green"))
         print("\nTo reinstall tools in isolated venvs, run:")
-        print("  jmo tools install semgrep checkov")
+        print("  jmo tools install checkov")
     else:
         print("To actually remove these, run:")
         print(colorize("  jmo tools clean --force", "cyan"))

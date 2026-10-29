@@ -435,7 +435,7 @@ def format_developer_stats(dev: DeveloperStats, rank: int = 0) -> str:
         1. Alice Smith <alice@example.com>
            Resolved: 45 findings | Net: +42
            Focus: src/api/auth.py, src/api/users.py
-           Tools: semgrep, trivy, bandit
+           Tools: opengrep, trivy, checkov
            CWEs: CWE-79, CWE-89, CWE-798
     """
     lines = []

@@ -126,22 +126,21 @@ All notable changes to JMo Security will be documented in this file.
   CI's docker-smoke job now also builds and checks its image when
   `scripts/core/tool_descriptors.py` changes, not only the Dockerfile or the registry.
 - **An offline opengrep rule bundle, and its third-party notices, ship in the wheel.**
-  `scripts/jmo_rules/` holds 1,420 security-only rules in 25 files, one per language,
+  `scripts/jmo_rules/` holds 1,456 security-only rules in 25 files, one per language,
   built by `scripts/dev/build_rule_bundle.py` from four pinned sources (opengrep-rules,
   GitLab's `lgpl-cc` set and two MIT packs); `SOURCES.json` beside them records each
   source's pin and sha256 and everything the builder left out, and each file opens with
   a header giving its sources, their licenses and the changes made. The wheel also
-  carries `THIRD_PARTY_LICENSES.md`, the licenses of those sources. Scans do not use the
-  bundle yet: it is read when v2.0.0 replaces Semgrep with opengrep. What is in it, what
-  is left out and how to rebuild or replace it:
-  [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md).
+  carries `THIRD_PARTY_LICENSES.md`, the licenses of those sources. A scan reads the
+  bundle, through opengrep, which replaced Semgrep (below). What is in it, what is left
+  out and how to rebuild or replace it: [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md).
 
 ### Removed
 
 - **Breaking. 16 scanners leave; a scan runs 12.** noseyparker, semgrep-secrets, bandit,
   trivy-rbac, prowler, kubescape, akto, scancode, cdxgen, dependency-check, horusec, falco,
   falcoctl, afl++, mobsf and lynis are gone, with their adapters, installer entries,
-  `versions.yaml` rows and docs. `TOOL_MATRIX` is trufflehog, semgrep, syft, trivy,
+  `versions.yaml` rows and docs. `TOOL_MATRIX` is trufflehog, opengrep, syft, trivy,
   checkov, hadolint, shellcheck, gosec, yara, grype, zap and nuclei. opa is the policy
   engine: installed and checked by `jmo tools check`, not a scanner. checkov-cicd folds
   into checkov. Naming a removed tool in `--tools`, `--skip-tools` or `tools:` is a
@@ -167,7 +166,7 @@ All notable changes to JMo Security will be documented in this file.
   through the go command, which neither the Docker image nor `jmo tools install` provides,
   so it examined 0 files on every run and no scan ever got a finding from it. Naming it in
   `--tools`, `--skip-tools` or `tools:` is now a usage error (exit 2) that says it was
-  removed in v2.0.0; Semgrep covers Go code. The Docker image no longer carries its binary
+  removed in v2.0.0; opengrep covers Go code. The Docker image no longer carries its binary
   (#1310).
 - **The twelve published Claude Code skills are retired.** `.claude/skills/` no longer
   ships `jmo-adapter-generator`, `jmo-ci-debugger`, `jmo-compliance-mapper`,
@@ -182,6 +181,23 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **Breaking. opengrep replaces semgrep.** The code scanner is opengrep, a single static
+  binary pinned in `versions.yaml` (v1.32.0), and it runs a rule bundle that ships with JMo
+  instead of fetching rules from the Semgrep registry at scan time, so a scan makes no
+  network call for rules (#1228: `--config auto` asked semgrep.dev which rules applied,
+  on every run, and two runs of one JMo version could differ). `--tools semgrep`,
+  `--skip-tools semgrep` and a `semgrep` entry in `tools:` are a usage error (exit 2) that
+  says semgrep was removed in v2.0.0 and that opengrep replaced it. `per_tool.semgrep` is
+  ignored with one warning that names `per_tool.opengrep.configs`, where your own packs
+  now go. The tool's name is hashed into every finding id, so **every SAST finding id
+  changes once**. A repository with no file in a language the bundle reads is
+  `skipped:no files in a language the rule bundle reads`, where Semgrep always ran.
+  opengrep runs from inside the target, so a repository cloned under a directory named
+  `build/` or `tests/` is scanned, and its debug log, which holds matched source text,
+  stays in the scan's own `.opengrep/` scratch rather than `~/.opengrep` (#1229: Semgrep
+  left a copy of its settings file, with a token, per invocation; opengrep writes no
+  settings file). `jmo tools install opengrep` replaces the semgrep virtual environment.
+  [UPGRADE.md](UPGRADE.md#semgrep-is-replaced-by-opengrep) has the migration.
 - **Breaking. TruffleHog no longer verifies secrets unless asked.** Verification sends
   each candidate secret to the service that issued it, and git history multiplies the
   candidates, so both TruffleHog runs pass `--no-verification`.
@@ -209,7 +225,7 @@ All notable changes to JMo Security will be documented in this file.
 - **Breaking. A scan of nothing fails.** A repository with no file outside the excluded
   directories fails every tool that reads it (`failed:no files to scan`, exit 1). On an
   empty tree, trivy and semgrep used to be graded a success. A tool whose own output
-  reports 0 files examined is `failed:examined 0 files`: semgrep (`paths.scanned`) and
+  reports 0 files examined is `failed:examined 0 files`: opengrep (`paths.scanned`) and
   gosec (`Stats.files`). gosec reads 0 on every machine without a Go toolchain, the image
   included, so on a Go repository it now fails where it used to pass (#1231, #1310).
 - **Breaking. Tool names are checked.** `--tools`, `--skip-tools` and `tools:` split on

@@ -6,13 +6,13 @@
 
 ## Windows Tool Compatibility Matrix
 
-JMo Security orchestrates **15 scanners**. Every one of them runs natively on Windows: jmo-native is part of JMo, and `jmo tools install` sets up the rest; two carry a caveat (Semgrep and ZAP).
+JMo Security orchestrates **15 scanners**. Every one of them runs natively on Windows: jmo-native is part of JMo, and `jmo tools install` sets up the rest; one carries a caveat (ZAP).
 
 | Tool | Category | Native Windows Support | Notes |
 |------|----------|------------------------|-------|
 | **TruffleHog** | Secrets Scanning | Full support | Go binary; working tree and git history |
 | **Gitleaks** | Secrets Scanning | Full support | Go binary; working tree and git history |
-| **Semgrep** | Multi-Language SAST | Some rules require Linux | Use Docker for full coverage |
+| **Opengrep** | Multi-Language SAST | Full support | Windows `.exe` from upstream, the x86_64 build (no Windows arm64 build upstream); the rule bundle ships inside JMo |
 | **Syft** | SBOM Generation | Full support | Go binary, generates Software Bill of Materials |
 | **Trivy** | Vulnerability Scanning | Full support | Go binary, scans containers/IaC/files |
 | **Checkov** | IaC Security | Full support | Python, scans Terraform/CloudFormation/K8s |
@@ -39,7 +39,7 @@ There are no scan profiles. `jmo scan` considers all 15 scanners, and the target
 jmo scan --repos-dir C:\Projects
 
 # Only some tools
-jmo scan --repos-dir C:\Projects --tools trufflehog trivy semgrep
+jmo scan --repos-dir C:\Projects --tools trufflehog trivy opengrep
 
 # Leave ZAP out when Java is not configured
 jmo scan --url http://localhost:3000 --skip-tools zap
@@ -137,7 +137,6 @@ A top-level `tools:` list in `jmo.yml` narrows the list for every scan.
 **Limitations:**
 
 - No ZAP (DAST) unless Java is configured
-- Some Semgrep rules skip on Windows
 
 **When to use:**
 
@@ -219,10 +218,9 @@ jmo tools check
 
 ### Q: Why do some tools need extra setup on Windows?
 
-**A:** All 15 scanners run natively on Windows, but two need more than the binary:
+**A:** All 15 scanners run natively on Windows, but one needs more than the binary:
 
 - **OWASP ZAP** needs a Java runtime
-- **Semgrep** has rules that assume Linux
 
 Windows is a secondary platform for most security tools, so Docker/WSL2 remains the simplest route to full coverage.
 
@@ -313,15 +311,7 @@ jmo scan --repos-dir C:\Projects --allow-missing-tools
    jmo wizard --docker
    ```
 
-### Issue: Semgrep rules fail
-
-**Solution:** Some rules are Linux-specific. Use Docker for full Semgrep coverage:
-
-```powershell
-jmo wizard --docker
-```
-
 ---
 
-**Last Updated:** September 2026
+**Last Updated:** October 2026
 **Maintainer:** Jimmy Moceri (@jimmy058910)

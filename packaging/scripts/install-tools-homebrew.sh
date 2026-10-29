@@ -39,9 +39,6 @@ echo ""
 # Secrets Scanning
 install_tool "TruffleHog" "trufflesecurity/trufflehog/trufflehog" "Verified secrets detection"
 
-# SAST
-install_tool "Semgrep" "semgrep" "Multi-language static analysis"
-
 # SBOM + Vulnerabilities
 install_tool "Syft" "syft" "SBOM generation"
 install_tool "Trivy" "aquasecurity/trivy/trivy" "Vulnerability scanner"
@@ -56,6 +53,9 @@ install_tool "Hadolint" "hadolint" "Dockerfile best practices"
 install_tool "Nuclei" "nuclei" "Fast vulnerability scanner"
 
 echo "⚠️  Note: Some tools require manual installation:"
+echo ""
+echo "   • Opengrep (SAST): a static binary with no Homebrew formula:"
+echo "     jmo tools install opengrep"
 echo ""
 echo "   • OWASP ZAP (DAST web scanning):"
 echo "     macOS: brew install --cask owasp-zap"

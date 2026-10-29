@@ -60,7 +60,7 @@ from pathlib import Path
 try:
     from mcp.server import MCPServer
 except ImportError:
-    # Say what is installed. With mcp 1.29.0 in the venv (semgrep pins it,
+    # Say what is installed. With mcp 1.29.0 in the venv (a scanner pinned it,
     # #1101) this used to raise "MCP SDK not installed ... >=1.0.0", wrong
     # twice: it was installed, and 1.29.0 already satisfies >=1.0.0, so the
     # advice changed nothing.
@@ -78,7 +78,7 @@ except ImportError:
             "  pip install 'mcp[cli]>=2.0.0'\n"
             "or:\n"
             "  uv add 'mcp[cli]>=2.0.0'\n"
-            "If a scanner pinned it down (semgrep pins mcp==1.29.0), install "
+            "If a scanner pinned it down, install "
             "that scanner with `jmo tools install`, which isolates it."
         )
     raise ImportError(
@@ -408,7 +408,7 @@ def get_security_findings(
     Args:
         severity: Filter by severity levels (e.g., ["HIGH", "CRITICAL"])
                  Valid values: CRITICAL, HIGH, MEDIUM, LOW, INFO
-        tool: Filter by tool name (e.g., "semgrep", "trivy", "trufflehog")
+        tool: Filter by tool name (e.g., "opengrep", "trivy", "trufflehog")
         rule_id: Filter by rule ID (e.g., "CWE-79" for XSS)
         path: Filter by file path (substring match, e.g., "src/api")
         limit: Maximum findings to return (default: 100, max: 1000). Must not
@@ -436,7 +436,7 @@ def get_security_findings(
                     "id": "fingerprint-abc123",
                     "ruleId": "CWE-79",
                     "severity": "HIGH",
-                    "tool": {"name": "semgrep", "version": "1.45.0"},
+                    "tool": {"name": "opengrep", "version": "1.32.0"},
                     "location": {"path": "src/app.js", "startLine": 42},
                     "message": "Potential XSS vulnerability in user input"
                 },

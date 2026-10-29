@@ -90,4 +90,4 @@ services:
 #    docker-compose run --rm jmo-scan report /scan/results --profile --human-logs
 #
 # 6. Narrow the tool list:
-#    docker-compose run --rm jmo-scan scan --repo /scan --tools trivy semgrep --timeout 900
+#    docker-compose run --rm jmo-scan scan --repo /scan --tools trivy opengrep --timeout 900

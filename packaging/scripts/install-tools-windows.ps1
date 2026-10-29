@@ -166,7 +166,6 @@ Write-Host ""
 
 Write-Host "⚠️  Windows Limitations (tools NOT available natively):" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "   ❌ Semgrep: Some rules require Linux (use Docker)" -ForegroundColor Red
 Write-Host "   ❌ OWASP ZAP: Requires Java JRE 11+ (complex setup)" -ForegroundColor Red
 Write-Host ""
 

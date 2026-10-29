@@ -78,7 +78,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -294,7 +294,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -352,7 +352,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -462,7 +462,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -609,7 +609,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -683,7 +683,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -833,7 +833,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -950,7 +950,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -1065,7 +1065,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -1173,7 +1173,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -1544,7 +1544,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then

@@ -605,7 +605,7 @@ results/
 ├── individual-repos/          # Repository scans (existing)
 │   └── myapp/
 │       ├── trufflehog.json
-│       ├── semgrep.json
+│       ├── opengrep.json
 │       └── trivy.json
 ├── individual-images/         # Container image scans
 │   └── nginx_latest/
@@ -640,6 +640,7 @@ results/
 - Target names are sanitized (special characters replaced with `_`)
 - `summaries/` contains unified reports across all target types
 - Findings are deduplicated by fingerprint ID across all targets
+- The results directory holds matched source text (opengrep's debug log is in each target's `.opengrep/`), so treat it like the code it scanned, for example before uploading it as a CI artifact ([RESULTS_GUIDE.md](RESULTS_GUIDE.md#the-results-directory-structure))
 
 ### Multi-Target CI/CD Integration
 
@@ -1616,18 +1617,19 @@ per_tool:
   trivy:
     flags: ["--ignore-unfixed"]
     timeout: 1200
-  semgrep:
-    # Override Semgrep registry configs (default: ["auto"])
-    # Use language-specific packs or local rules for offline scanning
-    configs: ["auto", "p/python", "p/javascript"]
-    flags: ["--exclude", "node_modules", "--exclude", ".git"]
+  opengrep:
+    # Your own rule files or directories. They replace the rule bundle that
+    # ships with JMo (default: the bundle's files for the languages present).
+    # A registry pack such as "p/python" would fetch its rules over the network.
+    configs: ["./rules/mine.yml"]
+    flags: ["--exclude", "generated"]
 ```
 
 Default directory exclusions:
 
 - JMo already excludes `.git`, `node_modules`, `vendor`, `.venv` and `venv` from
-  the tools that read your source (semgrep, trivy, checkov), so the
-  `--exclude` entries above are no longer needed to get that effect. Your own
+  the tools that read your source (opengrep, trivy, checkov), so a
+  `--exclude` of those directories is not needed to get that effect. Your own
   `flags` are appended after JMo's, so anything you add still applies.
 - The tools that *inventory* dependencies are deliberately exempt:
   `syft` and `grype` still read those directories, because a vendored

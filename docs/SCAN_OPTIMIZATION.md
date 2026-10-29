@@ -98,14 +98,14 @@ A quick check does not need every scanner. Narrow the list with `--tools` (or `-
 
 | Use Case | Tools |
 |----------|-------|
-| Pre-commit hook | `--tools trufflehog semgrep` |
-| PR validation | `--tools trufflehog semgrep trivy` |
+| Pre-commit hook | `--tools trufflehog opengrep` |
+| PR validation | `--tools trufflehog opengrep trivy` |
 | Nightly CI/CD | all (no `--tools`) |
 | Release or compliance audit | all (no `--tools`) |
 
 ```bash
 # Quick pre-commit check
-jmo scan --repo . --tools trufflehog semgrep
+jmo scan --repo . --tools trufflehog opengrep
 
 # Full production scan
 jmo scan --repo .
@@ -113,45 +113,31 @@ jmo scan --repo .
 
 ## Tool-Specific Optimizations
 
-### 4. Semgrep Optimizations
+### 4. Opengrep Optimizations
 
-Semgrep can be slow on large codebases. Optimize with exclusions and rule selection.
+Opengrep's cost is its rule count as much as the size of the tree: it loads every rule of every config file before it scans a file. JMo hands it only the bundle's files for the languages the repository has, plus `generic.yaml`, and already excludes `.git`, `node_modules`, `vendor`, `.venv` and `venv`. To cut further, exclude more or swap in a smaller rule set.
 
 **In `jmo.yml`:**
 
 ```yaml
 per_tool:
-  semgrep:
+  opengrep:
     timeout: 300
+    # Your own, smaller rule set. It replaces the bundle.
+    configs: ["./rules/mine.yml"]
     flags:
       # Exclude large/generated directories
       - --exclude
-      - node_modules
-      - --exclude
-      - .git
-      - --exclude
-      - vendor
-      - --exclude
-      - dist
-      - --exclude
-      - build
+      - generated
       - --exclude
       - "*.min.js"
-      # Use specific rulesets instead of all
-      - --config
-      - p/security-audit
-      - --config
-      - p/secrets
-      # Skip slow rules
-      - --exclude-rule
-      - generic.secrets.gitleaks.*
 ```
 
-**For incremental scans (git repos only):**
+**For incremental scans (git repos only), by hand with the bundle's files:**
 
 ```bash
-# Only scan changed files (requires git)
-semgrep scan --config auto --baseline-commit HEAD~1 .
+# Only report what the last commit introduced (requires git and a clean work tree)
+opengrep scan --config scripts/jmo_rules/python.yaml --no-rewrite-rule-ids --baseline-commit HEAD~1 .
 ```
 
 ### 5. Trivy Optimizations
@@ -306,7 +292,7 @@ Not all tools are relevant for all targets, and JMo already skips the ones that 
 
 ```bash
 # Python project: secrets, SAST, dependencies, IaC
-jmo scan --repo ./python-app --tools trufflehog semgrep trivy checkov
+jmo scan --repo ./python-app --tools trufflehog opengrep trivy checkov
 
 # Container image only
 jmo scan --image nginx:latest --tools trivy syft
@@ -320,16 +306,14 @@ To make a narrower list the default for a project, set a top-level `tools:` list
 ```yaml
 tools:
   - trufflehog
-  - semgrep
+  - opengrep
   - trivy
   - checkov
 threads: 6
 timeout: 300
 per_tool:
-  semgrep:
-    flags:
-      - --config
-      - p/python
+  opengrep:
+    configs: ["./rules/mine.yml"]
 ```
 
 ### 11. Incremental/Differential Scanning
@@ -341,8 +325,8 @@ For CI/CD, only scan changed files:
 CHANGED_FILES=$(git diff --name-only HEAD~1)
 
 # Create a temporary directory with only changed files
-# (Tool-specific - semgrep supports this natively)
-semgrep scan --baseline-commit HEAD~1 .
+# (Tool-specific - opengrep supports this natively)
+opengrep scan --config scripts/jmo_rules/python.yaml --no-rewrite-rule-ids --baseline-commit HEAD~1 .
 ```
 
 **CI/CD example (GitHub Actions):**
@@ -357,7 +341,7 @@ semgrep scan --baseline-commit HEAD~1 .
   run: |
     # Only scan if security-relevant files changed
     if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -qE '\.(py|js|ts|go|java|yaml|yml|tf|json)$'; then
-      jmo scan --repo . --tools trufflehog semgrep trivy
+      jmo scan --repo . --tools trufflehog opengrep trivy
     fi
 ```
 
@@ -405,8 +389,8 @@ Track which tools are slowest:
 # Enable timing output
 time jmo scan --repo . 2>&1 | tee scan.log
 
-# Parse timing from results
-grep -E "duration|elapsed" results/summaries/*.json
+# Per-tool run time, from each target's scan-timings.json (tool, state, seconds)
+jq -r '.tools[] | [input_filename, .tool, .state, .seconds] | @tsv' results/individual-*/*/scan-timings.json
 ```
 
 **Which file has which timings.** Two files record timings, written by different phases:
@@ -440,14 +424,14 @@ Set one default timeout at the top level of `jmo.yml`, and give the slow tools m
 timeout: 600      # 10 minutes max per tool
 retries: 1        # Retry once on timeout
 per_tool:
-  semgrep:
+  opengrep:
     timeout: 900  # 15 minutes for a large codebase
 ```
 
 For a one-off quick run, `--timeout` overrides the default:
 
 ```bash
-jmo scan --repo . --tools trufflehog semgrep --timeout 300
+jmo scan --repo . --tools trufflehog opengrep --timeout 300
 ```
 
 ## Docker Optimizations
@@ -516,7 +500,7 @@ Before running a scan, verify these settings:
 | Symptom | Cause | Solution |
 |---------|-------|----------|
 | Trivy stuck downloading | Slow network | Pre-cache with `trivy image --download-db-only` |
-| Semgrep timeout | Large codebase | Add more exclusions, increase timeout |
+| Opengrep timeout | Large codebase, or many rules | Add more exclusions, hand it a smaller rule set with `configs`, increase timeout |
 | Nuclei slow | Too many templates | Limit severity: `-severity critical,high` |
 | High memory usage | Too many threads | Reduce thread count |
 | ZAP slow | Deep spidering | Lower `per_tool.zap.timeout`, the plan's whole budget (spider a third) |

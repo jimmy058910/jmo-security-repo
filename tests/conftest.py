@@ -508,17 +508,20 @@ def _guard_real_jmo_config(request):
 # Guard: an unmarked test must never spawn a real scanner binary (#907).
 # ---------------------------------------------------------------------------
 #
-# semgrep's production default (`--config auto`, repository_scanner.py
-# ~line 288) fetches its ruleset from semgrep.dev over the network. It only
-# fires when `_find_tool("semgrep")` resolves a real binary on PATH - true on
-# this maintainer's machine (a `--user` pip install outside the project venv:
-# `...\Python\Python312\Scripts\semgrep.EXE`), false on CI's sharded jobs. So
-# an unmarked test that reaches the real scan path blocks on an undeclared
-# network fetch locally, while silently taking a different path (tool
-# missing -> dropped or stubbed) on CI - a test whose behaviour depends on
-# the machine it happens to run on, with nothing declaring that dependency.
+# #907 was found with semgrep, whose production default (`--config auto`)
+# fetched its ruleset from semgrep.dev over the network. opengrep, which
+# replaced it, runs the rule bundle committed in scripts/jmo_rules/ and fetches
+# nothing by default; it still resolves `--config auto` and the registry
+# shortcuts (`p/xxx`) over the network when a config names one (measured on
+# 1.32.0: `--config p/python` loaded 151 rules online). The hazard is the same
+# one: it only fires when a real scanner binary resolves on PATH - true on
+# a maintainer's machine, false on CI's sharded jobs. So an unmarked test that
+# reaches the real scan path blocks on an undeclared network fetch locally,
+# while silently taking a different path (tool missing -> dropped or stubbed)
+# on CI - a test whose behaviour depends on the machine it happens to run on,
+# with nothing declaring that dependency.
 #
-# Every tool invocation this codebase makes - semgrep's included - reaches
+# Every tool invocation this codebase makes - opengrep's included - reaches
 # the OS via `subprocess.Popen`, NOT `subprocess.run`: `_run_bounded()`
 # (scripts/core/tool_runner.py) constructs `Popen` directly so it can
 # `communicate(timeout=...)` and walk the whole process tree on expiry (see
@@ -538,9 +541,8 @@ def _guard_real_jmo_config(request):
 # need `requires_tools`, which would make that self-test depend on the very
 # exemption it exists to prove works.
 #
-# Scoped to semgrep only (#907's subject), not every scanner binary this
-# suite might spawn - see task-8-report.md for the other real binaries this
-# recorder observed and left alone, out of this task's scope.
+# It began scoped to semgrep only (#907's subject); #994 widened it to every
+# matrix scanner binary, derived from the tool registry.
 #
 # Two fixes are legitimate per the issue (mark `requires_tools`, or route the
 # test through an explicit offline `per_tool_config`), and the second one
@@ -564,10 +566,10 @@ def _guard_real_jmo_config(request):
 
 _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # Its own point is counting real `_find_binary` resolutions across a
-    # profile that deliberately includes semgrep - removing semgrep from the
+    # profile that deliberately includes opengrep - removing opengrep from the
     # test entirely (skip-tools) would just make it assert nothing about
     # the tool it's most likely to regress on. Fixed via
-    # `per_tool.semgrep.configs` pointing at a local rule file (task-8-report.md).
+    # `per_tool.opengrep.configs` pointing at a local rule file (task-8-report.md).
     "tests/integration/test_cli_per_tool_config.py::test_scan_startup_probes_each_tool_at_most_once",
     #
     # The three below were invisible until the recorder stopped watching only
@@ -784,10 +786,10 @@ def scanner_binary_match(argv0: object) -> str | None:
     """Return the matched entry of `SCANNER_BINARY_NAMES`, or None.
 
     Compares the resolved basename, case-insensitively, against each known
-    scanner name and its Windows `.exe` form - so both a bare `semgrep` on
-    PATH and `C:\\...\\semgrep.EXE` match, while something that merely
-    *contains* the substring ("semgrep-action", a fixture path ending in
-    `semgrep_report.json`) does not.
+    scanner name and its Windows `.exe` form - so both a bare `opengrep` on
+    PATH and `C:\\...\\opengrep.EXE` match, while something that merely
+    *contains* the substring ("opengrep-action", a fixture path ending in
+    `opengrep_report.json`) does not.
 
     Splits on both `/` and `\\` explicitly, rather than delegating to
     `pathlib.Path(...).name`: `PurePosixPath` does not treat a backslash as
@@ -828,16 +830,19 @@ def make_scanner_spawn_recorder(delegate, sink: list[tuple[str, list[str]]]):
     return _recording_init
 
 
-def semgrep_argv_uses_config_auto(argv: list[str]) -> bool:
-    """True if `argv` passes semgrep the network-fetching `--config auto`
-    default (repository_scanner.py's `semgrep_configs = ["auto"]`).
+def opengrep_argv_uses_config_auto(argv: list[str]) -> bool:
+    """True if `argv` passes opengrep the network-fetching `--config auto`.
+
+    JMo's own row never does (it hands opengrep the committed bundle's files),
+    so this fires only for a config that asks for it. semgrep's default was
+    `--config auto` (#907), which is where this check came from.
 
     A `--version` probe (no `--config` at all) and an explicit non-"auto"
     `--config` value (this task's own offline-config fixes) both return
     False. Deliberately narrow, not a general "does this reach the network"
-    oracle: semgrep's `p/xxx` / `r/xxx` registry shortcuts also pull from
-    semgrep.dev and would slip past this check. None of this task's fixes
-    use them; see task-8-report.md.
+    oracle: the `p/xxx` / `r/xxx` registry shortcuts also pull rules over the
+    network (measured on opengrep 1.32.0) and would slip past this check. None
+    of this task's fixes use them; see task-8-report.md.
     """
     if "--config" not in argv:
         return False
@@ -865,7 +870,7 @@ def _guard_no_unmarked_scanner_spawn(request, monkeypatch):
 
     Known blind spot, not fixed here: this can only see a `Popen` call made
     in THIS process. Several integration tests spawn the whole `jmo` CLI as
-    a subprocess, which then spawns semgrep itself - two process hops away
+    a subprocess, which then spawns opengrep itself - two process hops away
     from anything patchable here. Those were found and fixed by a one-time
     measurement (task-8-report.md), not by this fixture, which cannot see
     them at all, before or after the fix.
@@ -912,7 +917,7 @@ def _guard_no_unmarked_scanner_spawn(request, monkeypatch):
     if declared:
         return  # declared -- exactly what the markers are for
 
-    reaches_network = any(semgrep_argv_uses_config_auto(argv) for _, argv in spawns)
+    reaches_network = any(opengrep_argv_uses_config_auto(argv) for _, argv in spawns)
     if not reaches_network and request.node.nodeid in _ALLOWED_OFFLINE_SCANNER_SPAWNS:
         return  # reviewed exemption, and this run's argv confirms it stayed offline
 

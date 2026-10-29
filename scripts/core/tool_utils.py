@@ -111,8 +111,8 @@ def find_tool(tool_name: str) -> str | None:
     #
     # And it has to come FIRST. `tool_manager._find_binary` checks the isolated
     # venv before PATH; this resolver checked it third, after `shutil.which`
-    # and the interpreter's Scripts/, so with a stale user-site semgrep 1.161.0
-    # on PATH `tools check` said OK 1.172.0 (the venv) while the scanner ran
+    # and the interpreter's Scripts/, so with a stale user-site copy 1.161.0 on
+    # PATH `tools check` said OK 1.172.0 (the venv) while the scanner ran
     # 1.161.0. Two resolvers for one question is the same defect as the four
     # private copies of `_can_encode_unicode` (see
     # tests/cross_platform/test_encoding_drift_guard.py). One implementation,
@@ -210,7 +210,7 @@ def tool_exists(tool_name: str, warn: bool = True) -> bool:
     Uses deduplication to avoid duplicate warnings (Fix 1.3 - Issue #3).
 
     Args:
-        tool_name: Name of the security tool to check (e.g., 'trivy', 'semgrep')
+        tool_name: Name of the security tool to check (e.g., 'trivy', 'checkov')
         warn: Whether to show warning if not found (default: True)
 
     Returns:

@@ -228,7 +228,7 @@ class PluginLoader:
         3. Returns None if adapter not found
 
         Args:
-            name: Adapter name (e.g., 'trivy', 'semgrep')
+            name: Adapter name (e.g., 'trivy', 'opengrep')
 
         Returns:
             Adapter plugin class, or None if not found

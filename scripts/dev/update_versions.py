@@ -656,7 +656,7 @@ def _print_classification_json() -> int:
 
         {
           "hadolint": {"current": "2.15.0",   "latest": "2.15.1", "level": "patch",   "critical": false},
-          "semgrep":  {"current": "1.151.0",  "latest": "1.159.0","level": "minor",   "critical": true},
+          "opengrep": {"current": "1.31.0",   "latest": "1.32.0", "level": "minor",   "critical": true},
           "trivy":    {"current": "0.74.0",   "latest": "1.0.0",  "level": "major",   "critical": true},
           "zap":      {"current": "2.17.0",   "latest": "w2026-09-01", "level": "unknown", "critical": true}
         }
@@ -890,7 +890,7 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
             if not pkg:
                 continue
 
-            # The pip pin style, `package==X.Y.Z` (semgrep, checkov, ...), has
+            # The pip pin style, `package==X.Y.Z` (checkov, ...), has
             # to be reachable too, or --sync reports success over a stale pin.
             # Package names come from versions.yaml's `pypi_package`, not a
             # hardcoded list -- that list named 4 of 8 python_tools, which is

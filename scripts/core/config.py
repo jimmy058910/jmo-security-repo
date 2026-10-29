@@ -249,6 +249,36 @@ def _warn_unrecognised_config_keys(path: Path, data: dict) -> None:
     )
 
 
+# Config files whose v1 ``per_tool.semgrep`` entry has been named already. A
+# scan loads ``jmo.yml`` many times (measured: 10 in one ``jmo scan``), and the
+# warning is for the user, not for each load.
+_V1_SEMGREP_NAMED: set[str] = set()
+
+
+def _warn_v1_semgrep_entry(path: Path, per_tool: dict) -> None:
+    """Name a v1 ``per_tool.semgrep`` entry, which v2.0.0 reads nowhere.
+
+    opengrep replaced semgrep, and its settings live under
+    ``per_tool.opengrep``. The old entry is left as written and read by
+    nothing, so a user's own packs (``configs``) and flags would stop applying
+    to the scan without a word. One warning per file, naming where they go.
+    """
+    entry = per_tool.get("semgrep")
+    if entry is None or str(path) in _V1_SEMGREP_NAMED:
+        return
+    _V1_SEMGREP_NAMED.add(str(path))
+    configs = entry.get("configs") if isinstance(entry, dict) else None
+    if isinstance(configs, str):  # one pack written bare, not its letters
+        configs = [configs]
+    packs = f" ({', '.join(str(c) for c in configs)})" if configs else ""
+    logger.warning(
+        f"{path} has per_tool.semgrep{packs}, which is ignored: opengrep "
+        f"replaced semgrep in v2.0.0. Move `configs` to per_tool.opengrep.configs "
+        f"(they replace the bundled rules) and any `flags` to "
+        f"per_tool.opengrep.flags"
+    )
+
+
 def load_config(path: str | None) -> Config:
     """Load and parse JMo Security configuration from YAML file.
 
@@ -343,6 +373,7 @@ def load_config(path: str | None) -> Config:
     # per_tool overrides
     if isinstance(data.get("per_tool"), dict):
         cfg.per_tool = data["per_tool"]
+        _warn_v1_semgrep_entry(p, cfg.per_tool)
     # retries (int for backward compat, or dict for typed config)
     rv = data.get("retries")
     if isinstance(rv, int) and rv >= 0:

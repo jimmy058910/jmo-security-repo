@@ -355,7 +355,7 @@ class ToolInstaller:
                 if result.method in PINNED_INSTALL_METHODS:
                     # The version check decides the verdict, not the installer's
                     # exit code (#1093). `jmo tools update` printed
-                    # `[OK] semgrep (v1.161.0)` two lines after this warning
+                    # `[OK] <tool> (v1.161.0)` two lines after this warning
                     # said expected=1.175.0, then "All 6 tool(s) updated
                     # successfully!" at exit 0.
                     result.success = False
@@ -449,8 +449,8 @@ class ToolInstaller:
         # this method -- behind `jmo tools install <names>`, `jmo tools update`
         # and the scan-time auto-install -- did not, so a pip install of an
         # isolated tool ran against sys.executable and dragged cryptography
-        # 50 -> 46 and, via semgrep's mcp==1.29.0 pin, mcp 2.0 -> 1.29 off
-        # uv.lock. Measured twice.
+        # 50 -> 46 and, via an mcp==1.29.0 pin a scanner carried, mcp 2.0 -> 1.29
+        # off uv.lock. Measured twice.
         if tool_name in ISOLATED_TOOLS:
             if tool_info.pypi_package:
                 package_spec = f"{tool_info.pypi_package}=={tool_info.version}"
@@ -863,7 +863,7 @@ class ToolInstaller:
 
         Args:
             tool_name: Name of the tool
-            package_spec: Pip package specification (e.g., "semgrep==1.175.0")
+            package_spec: Pip package specification (e.g., "checkov==3.3.30")
 
         Returns:
             InstallResult with success status and details

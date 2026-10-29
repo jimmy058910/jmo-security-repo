@@ -236,11 +236,7 @@ naming `verified`, in TruffleHog's flags counts as asking to verify.
 
 ### Most of the rule bundle is a frozen snapshot, JavaScript and TypeScript included
 
-**This describes v2.0.0.** Until v2.0.0 ships, JMo's code scanner is Semgrep, which
-does not read this bundle; read this entry, and its advice on an empty result, as
-applying from v2.0.0.
-
-JMo's code scanner reads the rule bundle in `scripts/jmo_rules/`
+JMo's code scanner, opengrep, reads the rule bundle in `scripts/jmo_rules/`
 ([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,286 of its 1,456 rules come from one
 snapshot of opengrep-rules whose commit is dated 2025-01-26. Nothing refreshes
 it: a rule written since is not in the bundle until someone moves the pin and
@@ -262,24 +258,31 @@ scanning is separate and is not affected. To take newer rules, move a source's
 pin in `scripts/dev/build_rule_bundle.py` and rebuild
 ([RULE_BUNDLE.md](RULE_BUNDLE.md#rebuilding)).
 
-### Semgrep also skips tests, build output and vendored code
+### Opengrep also skips tests, build output and vendored code
 
-Semgrep brings its own ignore list. When the scanned directory has no
-`.semgrepignore`, it skips `tests/` and `test/` at any depth, `build/`, `dist/`,
-`node_modules/`, `vendor/` and `.venv/`. JMo's own exclusions are passed on top of
-it, so a flaw that lives only in test code is not reported by Semgrep.
+Opengrep brings its own ignore list, as Semgrep did. When the scanned directory
+has no `.semgrepignore` (opengrep still reads that name), it skips `tests/` and
+`test/` at any depth, `build/`, `dist/` and `node_modules/`. JMo's own exclusions are
+passed on top of it, so a flaw that lives only in test code is not reported by
+opengrep.
 
-Measured with Semgrep 1.175.0 on a fixture with one Python file in each of those
-directories and five others: it scanned the five others and none of these, inside a
-git work tree or not. No flag or environment variable turns the list off.
+Measured with opengrep 1.32.0 on a fixture with one Python file in each of `tests/`,
+`test/`, `deep/tests/`, `build/`, `dist/` and `node_modules/` and two others (`src/`,
+`docs/`): it scanned the two others and none of these. The list is matched against the
+path opengrep is handed, so JMo runs it from inside the target and names the target
+`.`: a repository checked out under a directory called `build/` or `tests/` is scanned
+all the same.
 
-It is kept because the only way around it is to write a `.semgrepignore` into the
-repository being scanned, and a scanner should not change the tree it reads.
+It is kept because the ways around it change the tree or the command: an empty
+`.semgrepignore` written into the repository being scanned, and a scanner should not
+change the tree it reads, or `--x-ignore-semgrepignore-files` in
+`per_tool.opengrep.flags`.
 
-**What to do:** to have Semgrep read test code, put a `.semgrepignore` at the root
-of the scanned repository. An empty one disables the built-in list (measured: all
-13 files scanned). JMo still keeps the vendored trees and its results directory out
-through its own flags.
+**What to do:** to have opengrep read test code, put an empty `.semgrepignore` at the
+root of the scanned repository, or add `--x-ignore-semgrepignore-files` to
+`per_tool.opengrep.flags` (measured on 1.32.0: with either, all eight files were
+scanned). JMo still keeps the vendored trees and its results directory out through its
+own flags.
 
 ### zizmor runs offline, so its online audits never run
 

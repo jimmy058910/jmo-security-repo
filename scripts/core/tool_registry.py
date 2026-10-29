@@ -226,7 +226,7 @@ class ToolRegistry:
         Get tool info by name.
 
         Args:
-            name: Tool name (e.g., 'trivy', 'semgrep')
+            name: Tool name (e.g., 'trivy', 'opengrep')
 
         Returns:
             ToolInfo or None if not found

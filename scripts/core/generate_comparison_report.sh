@@ -26,7 +26,7 @@ cat >"$COMPARISON_FILE" <<'EOF'
 EOF
 
 # Parse each tool's results across all repos
-for tool in trufflehog semgrep noseyparker; do
+for tool in trufflehog opengrep noseyparker; do
   TOTAL=0
   REPOS=0
 
@@ -38,7 +38,7 @@ for tool in trufflehog semgrep noseyparker; do
         # TruffleHog outputs newline-delimited JSON (NDJSON)
         FINDINGS=$(jq -s 'length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
         ;;
-      semgrep)
+      opengrep)
         # Correctly count total results, not length of each result object
         FINDINGS=$(jq '.results | length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
         ;;
@@ -68,7 +68,7 @@ for tool in trufflehog semgrep noseyparker; do
   trufflehog)
     STRENGTH="Secret verification"
     ;;
-  semgrep)
+  opengrep)
     STRENGTH="Pattern-based code analysis"
     ;;
   noseyparker)
@@ -88,7 +88,7 @@ cat >>"$COMPARISON_FILE" <<'EOF'
 | Tool | Secret Detection | Vulnerability Detection | Git History | Verification | Speed |
 |------|-----------------|------------------------|-------------|--------------|-------|
 | TruffleHog | ✅ Excellent | ❌ No | ✅ Yes | ✅ Yes | 🐌 Slow |
-| Semgrep | ⚠️ Limited | ✅ Excellent | ❌ No | ❌ No | ⚡ Fast |
+| Opengrep | ⚠️ Limited | ✅ Excellent | ❌ No | ❌ No | ⚡ Fast |
 | Nosey Parker | ✅ Excellent | ❌ No | ✅ Yes | ❌ No | 🐌 Slow |
 
 ---
@@ -109,7 +109,7 @@ cat >>"$COMPARISON_FILE" <<'EOF'
 trufflehog git file://. --since-commit HEAD --results=verified --fail
 ```
 
-### Stage 2: CI/CD Pipeline (Recommended: TruffleHog + Semgrep)
+### Stage 2: CI/CD Pipeline (Recommended: TruffleHog + Opengrep)
 **Purpose**: Automated scanning on every PR/commit
 
 **Advantages**:
@@ -122,8 +122,8 @@ trufflehog git file://. --since-commit HEAD --results=verified --fail
 # .github/workflows/security.yml
 - name: TruffleHog Scan
   uses: trufflesecurity/trufflehog@main
-- name: Semgrep Scan
-  uses: returntocorp/semgrep-action@v1
+- name: Opengrep Scan
+  run: jmo scan --repo . --tools opengrep
 ```
 
 ### Stage 3: Deep Periodic Audits (Recommended: All Tools)
@@ -144,17 +144,17 @@ trufflehog git file://. --since-commit HEAD --results=verified --fail
 
 ### Small Repositories (< 1000 LOC)
 - **Pre-commit**: TruffleHog
-- **CI/CD**: TruffleHog + Semgrep
+- **CI/CD**: TruffleHog + Opengrep
 - **Periodic**: Monthly full scan
 
 ### Medium Repositories (1000-10000 LOC)
 - **Pre-commit**: TruffleHog
-- **CI/CD**: TruffleHog + Semgrep
+- **CI/CD**: TruffleHog + Opengrep
 - **Periodic**: Weekly TruffleHog + Nosey Parker
 
 ### Large Repositories (> 10000 LOC)
 - **Pre-commit**: TruffleHog (staged range only)
-- **CI/CD**: TruffleHog + Semgrep (incremental)
+- **CI/CD**: TruffleHog + Opengrep (incremental)
 - **Periodic**: Bi-weekly comprehensive scan with all tools
 
 ---
@@ -167,7 +167,7 @@ trufflehog git file://. --since-commit HEAD --results=verified --fail
 - Deep historical analysis needed
 - Integrating into pre-commit hooks
 
-**Choose Semgrep when**:
+**Choose Opengrep when**:
 - Looking for code vulnerabilities
 - Pattern-based security rules needed
 - Language-specific security checks required

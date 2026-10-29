@@ -58,7 +58,7 @@ FIXTURE = {
             "id": "0000eba9addb92a7",
             "severity": "HIGH",
             "title": "Attest smoke fixture",
-            "tool": "semgrep",
+            "tool": "opengrep",
             "ruleId": "smoke.fixture.rule",
             "location": {"path": "smoke/app.py", "startLine": 1},
         }

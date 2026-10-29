@@ -1035,7 +1035,7 @@ def _check_compliance_owasp() -> CheckResult:
         from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
         finding = _make_sample_finding(
-            ruleId="CWE-79", tool={"name": "semgrep", "version": "1.0"}
+            ruleId="CWE-79", tool={"name": "opengrep", "version": "1.0"}
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
@@ -1063,7 +1063,7 @@ def _check_compliance_cwe() -> CheckResult:
         from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
         finding = _make_sample_finding(
-            ruleId="CWE-89", tool={"name": "semgrep", "version": "1.0"}
+            ruleId="CWE-89", tool={"name": "opengrep", "version": "1.0"}
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
@@ -1090,7 +1090,7 @@ def _check_compliance_cis() -> CheckResult:
         from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
         finding = _make_sample_finding(
-            ruleId="CWE-78", tool={"name": "semgrep", "version": "1.0"}
+            ruleId="CWE-78", tool={"name": "opengrep", "version": "1.0"}
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
@@ -1146,7 +1146,7 @@ def _check_compliance_pci_dss() -> CheckResult:
         finding = _make_sample_finding(
             ruleId="CWE-89",
             severity="CRITICAL",
-            tool={"name": "semgrep", "version": "1.0"},
+            tool={"name": "opengrep", "version": "1.0"},
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
@@ -1816,7 +1816,7 @@ def _check_full_compliance_enrichment() -> CheckResult:
         cwes = ["CWE-79", "CWE-89", "CWE-22", "CWE-78", "CWE-352"]
         findings = [
             _make_sample_finding(
-                id=f"comp_{i}", ruleId=cwe, tool={"name": "semgrep", "version": "1.0"}
+                id=f"comp_{i}", ruleId=cwe, tool={"name": "opengrep", "version": "1.0"}
             )
             for i, cwe in enumerate(cwes)
         ]

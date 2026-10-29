@@ -4,13 +4,13 @@ Migration guide for users upgrading JMo Security. [Upgrading to v2.0.0](#upgradi
 
 ## Upgrading to v2.0.0
 
-v2.0.0 removes scan profiles, 17 tools and all but one Docker image. There are no aliases and no deprecation period: a removed flag or subcommand now fails with an argument error (exit code 2).
+v2.0.0 removes scan profiles, 17 tools and all but one Docker image, and replaces Semgrep with opengrep. There are no aliases and no deprecation period: a removed flag or subcommand now fails with an argument error (exit code 2).
 
 ### Scan profiles are removed
 
 `jmo scan` and `jmo ci` consider one tool list, the 15 scanners in [docs/TOOLS.md](docs/TOOLS.md), and the target's content decides which of them run. To narrow the list:
 
-- `--tools trivy semgrep` or `--skip-tools zap` on the command line
+- `--tools trivy opengrep` or `--skip-tools zap` on the command line
 - a top-level `tools:` list in `jmo.yml`
 
 Removed, with no replacement flag:
@@ -31,7 +31,7 @@ jmo tools install --profile balanced
 
 # v2.0.0
 jmo scan --repo .
-jmo ci --repo . --tools trufflehog semgrep trivy --fail-on HIGH
+jmo ci --repo . --tools trufflehog opengrep trivy --fail-on HIGH
 jmo tools install
 ```
 
@@ -54,13 +54,40 @@ profiles:
         flags: [--no-progress]
 
 # v2.0.0
-tools: [trufflehog, semgrep, trivy]
+tools: [trufflehog, opengrep, trivy]
 threads: 4
 timeout: 600
 per_tool:
   trivy:
     flags: [--no-progress]
 ```
+
+### Semgrep is replaced by opengrep
+
+opengrep, a fork of Semgrep's engine, is the code scanner. It is a single static binary, and it runs a rule bundle that ships with JMo (`scripts/jmo_rules/`, 1,456 security rules; [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md)). A scan fetches no rule: it runs offline and gives the same rules on every machine, where `semgrep --config auto` asked semgrep.dev which rules applied.
+
+- **The tool's name changed.** `--tools semgrep`, `--skip-tools semgrep` and a `semgrep` entry in `tools:` fail with exit code 2, saying semgrep was removed in v2.0.0 and that opengrep replaced it. Use `opengrep`. The raw output is `opengrep.json`, where it was `semgrep.json`.
+- **`per_tool.semgrep` becomes `per_tool.opengrep`.** A `jmo.yml` that still carries `per_tool.semgrep` loads, logs one warning naming `per_tool.opengrep.configs`, and ignores the entry: your own packs stop applying until you move them.
+
+  ```yaml
+  # v1.x
+  per_tool:
+    semgrep:
+      configs: [p/python, ./rules/mine.yml]
+      flags: [--exclude, generated]
+
+  # v2.0.0
+  per_tool:
+    opengrep:
+      configs: [./rules/mine.yml]
+      flags: [--exclude, generated]
+  ```
+
+  `configs` replaces the bundle, as it replaced `auto`; it takes rule files and directories. A registry pack such as `p/python` still works through opengrep, but it fetches its rules over the network, which the bundle never does. A flag in `flags` that sets the output format, the number of jobs or rule-id rewriting is dropped with a warning, because JMo sets those itself ([docs/TOOLS.md](docs/TOOLS.md#opengrep)).
+- **Every SAST finding id changes, once.** A finding's id hashes the tool's name, so each finding that semgrep reported has a new id under opengrep, even when it is the same flaw at the same line. A suppression in `jmo.suppress.yml` that names a finding by its id stops matching, and `jmo diff` against a scan stored before the upgrade reports the old findings as fixed and the same flaws as new. Findings from every other tool keep their ids. Suppress by rule or path instead of by id where you can.
+- **The rules are the bundle's.** It holds security rules only, one file per language, and a scan loads the files of the languages the repository has. Do not expect the same findings as `--config auto`: read an empty result on JavaScript or TypeScript as the bundle's coverage, not as current coverage ([Known limitations](docs/KNOWN_LIMITATIONS.md#most-of-the-rule-bundle-is-a-frozen-snapshot-javascript-and-typescript-included)). A repository with no file in a language the bundle reads is `skipped:no files in a language the rule bundle reads`.
+- **The results directory holds matched source text.** opengrep's debug log lands in `<results-dir>/individual-*/<target>/.opengrep/semgrep.log` and records the source text of each match. Treat the results directory like the code it scanned, for example before uploading it as a CI artifact ([docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md#the-results-directory-structure)).
+- **Installing.** `jmo tools install opengrep` downloads the pinned release binary into `~/.jmo/bin/`. The semgrep virtual environment is not removed for you; `jmo tools clean --force` removes the isolated venvs, and checkov's is recreated by `jmo tools install checkov`.
 
 ### Removed tools
 
@@ -69,10 +96,10 @@ These 17 tools are no longer installed, run or parsed. Their `per_tool` blocks i
 | Tool | Why it was removed |
 |------|--------------------|
 | kubescape | Trivy's config scan covers the same ground, and kubescape fetched its rules at scan time |
-| semgrep-secrets, bandit (as a scanner) | semgrep-secrets scanned 0 files and bandit's results were dominated by `.venv` noise; SAST moves to a vendored rule bundle in a later release |
+| semgrep-secrets, bandit (as a scanner) | semgrep-secrets scanned 0 files and bandit's results were dominated by `.venv` noise; opengrep's rule bundle covers SAST |
 | trivy-rbac | Its output was identical to Trivy's config scan |
 | checkov-cicd | Folded into checkov, which never actually read `.github/workflows` under JMo (its `.git` exclusion also matched `.github`, #1313); checkov's repository run was then narrowed to Terraform and CloudFormation only, dropping its other CI/CD and secrets frameworks there. zizmor now audits workflows -- see [docs/TOOLS.md](docs/TOOLS.md#when-each-tool-runs) |
-| gosec | It examined 0 files on every run, because neither the image nor `jmo tools install` provides the Go toolchain it loads packages with. Semgrep covers Go until the vendored rule bundle arrives |
+| gosec | It examined 0 files on every run, because neither the image nor `jmo tools install` provides the Go toolchain it loads packages with. opengrep's Go rules cover Go |
 | noseyparker, prowler, akto, scancode, cdxgen, dependency-check, horusec, falco (with falcoctl), afl++, mobsf, lynis | Never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream |
 
 Bandit remains this repository's own pre-commit hook and lint step; only bandit as a JMo scanner is gone. Details: [docs/TOOLS.md](docs/TOOLS.md#removed-in-v200).

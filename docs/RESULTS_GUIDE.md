@@ -99,7 +99,8 @@ results/
 ├── individual-repos/          # Raw tool outputs per repository
 │   └── <repo-name>/
 │       ├── trivy.json
-│       ├── semgrep.json
+│       ├── opengrep.json         # code scanner (SAST)
+│       ├── .opengrep/            # opengrep's debug log; holds matched source text
 │       ├── trufflehog.json
 │       ├── trufflehog.git.json   # git history, when the repository has a .git
 │       ├── gitleaks.json
@@ -137,6 +138,14 @@ results/
     ├── dashboard.html         # Interactive web dashboard
     └── timings.json           # Performance profiling (if --profile used)
 ```
+
+**Treat the results directory like the code it scanned.** It holds source text.
+opengrep's debug log is `.opengrep/semgrep.log` in each target's folder, and it
+records the source text of every match; `opengrep.json` carries the matched lines
+too. A scan keeps the log there, in the scan's own scratch, and nothing of it lands
+in your home. A version check (`opengrep --version`, JMo's version probe) still
+creates an empty `~/.opengrep/semgrep.log`. Before you upload a results
+directory as a CI artifact, treat it as you would the code itself.
 
 Each target's folder is unique within its type. When two targets would share a
 folder name, they are told apart: repositories each by their parent folder

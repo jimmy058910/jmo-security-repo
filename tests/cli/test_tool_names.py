@@ -13,6 +13,7 @@ usage error too.
 
 from __future__ import annotations
 
+import logging
 import sys
 import types
 from pathlib import Path
@@ -47,6 +48,7 @@ def test_tools_split_on_commas_and_spaces(sub, argv, expected):
         ("bandit", "removed in v2.0.0"),
         ("kubescape", "removed in v2.0.0"),
         ("gosec", "removed in v2.0.0"),
+        ("semgrep", "removed in v2.0.0"),
         ("trivvy", "unknown tool 'trivvy'"),
     ],
 )
@@ -59,6 +61,81 @@ def test_an_unknown_name_is_a_usage_error_naming_it(flag, name, says, capsys):
     assert name in err
     assert says in err
     assert flag in err
+
+
+def test_semgrep_is_removed_and_the_error_names_its_replacement(capsys):
+    """semgrep is not a typo and not a retired tool with no successor: opengrep
+    replaced it, so a user who typed it is told what to type instead."""
+    with pytest.raises(SystemExit) as exc:
+        jmo.build_parser().parse_args(["scan", "--repo", ".", "--tools", "semgrep"])
+
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    said = err.split("error:", 1)[1].split("The tools are:")[0]
+    assert "removed in v2.0.0" in said
+    assert "opengrep" in said, "the replacement must be named outside the tool list"
+
+
+def test_a_v1_semgrep_config_is_named_not_dropped(tmp_path, caplog):
+    """A v1 `per_tool.semgrep.configs` holds the user's own packs. v2 reads
+    `per_tool.opengrep.configs`; the old key is read by nothing, so without a
+    word the user's packs would stop running and the scan would say nothing."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump({"per_tool": {"semgrep": {"configs": ["p/python"]}}}),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        loaded = jmo.load_config(str(cfg))
+
+    warnings = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    assert len(warnings) == 1, warnings
+    assert "per_tool.opengrep.configs" in warnings[0]
+    assert "p/python" in warnings[0], "the packs it names must be shown, not just a key"
+    assert "semgrep" in loaded.per_tool, "the user's entry is left as written"
+
+
+def test_a_v1_semgrep_config_written_as_one_bare_pack_is_named_whole(tmp_path, caplog):
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text("per_tool:\n  semgrep:\n    configs: p/python\n", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        jmo.load_config(str(cfg))
+
+    (warning,) = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    assert "(p/python)" in warning, warning
+
+
+def test_a_v1_semgrep_config_is_named_once_however_often_it_is_loaded(tmp_path, caplog):
+    """A scan loads jmo.yml about ten times (measured); the user reads one line."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump({"per_tool": {"semgrep": {"flags": ["--exclude", "x"]}}}),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        for _ in range(3):
+            jmo.load_config(str(cfg))
+
+    warnings = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    assert len(warnings) == 1, warnings
+    assert "per_tool.opengrep.flags" in warnings[0]
+
+
+def test_an_opengrep_config_raises_no_semgrep_warning(tmp_path, caplog):
+    """The control: the v2 spelling is the supported one."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump({"per_tool": {"opengrep": {"configs": ["rules/"]}}}),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        jmo.load_config(str(cfg))
+
+    assert not [r for r in caplog.records if "semgrep" in r.getMessage()]
 
 
 def _scan_args(tmp_path: Path, **overrides) -> types.SimpleNamespace:

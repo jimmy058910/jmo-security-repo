@@ -390,7 +390,7 @@ jobs:
         # WINDOWS-style path: Git Bash resolves POSIX entries like
         # /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine, but the
         # Python process inherits the raw PATH string and shutil.which() on Windows
-        # cannot interpret a POSIX path -- so every external tool lookup (semgrep,
+        # cannot interpret a POSIX path -- so every external tool lookup (opengrep,
         # checkov, trivy...) silently returns None and tool-discovery tests fail
         # while everything else passes. cygpath -w fixes it; the POSIX branch only
         # ever runs on Linux/macOS.

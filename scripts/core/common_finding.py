@@ -308,7 +308,7 @@ def fingerprint(
     collapsed to 38.
 
     Args:
-        tool: Tool name (e.g., "trufflehog", "semgrep")
+        tool: Tool name (e.g., "trufflehog", "opengrep")
         rule_id: Rule or vulnerability ID
         path: File path where finding occurred
         start_line: Line number (0 if not applicable)

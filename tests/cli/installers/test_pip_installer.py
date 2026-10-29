@@ -77,9 +77,9 @@ class TestPipInstallerProperties:
         """Test can_install rejects isolated tools (handled by IsolatedPipInstaller)."""
         installer = PipInstaller()
         with patch(
-            "scripts.cli.installers.pip_installer.ISOLATED_TOOLS", {"semgrep": {}}
+            "scripts.cli.installers.pip_installer.ISOLATED_TOOLS", {"checkov": {}}
         ):
-            assert installer.can_install(make_tool_info("semgrep")) is False
+            assert installer.can_install(make_tool_info("checkov")) is False
 
 
 # ========== PipInstaller: install() ==========
@@ -293,9 +293,9 @@ class TestIsolatedPipInstallerProperties:
         """Test can_install for tools in ISOLATED_TOOLS."""
         installer = IsolatedPipInstaller()
         with patch(
-            "scripts.cli.installers.pip_installer.ISOLATED_TOOLS", {"semgrep": {}}
+            "scripts.cli.installers.pip_installer.ISOLATED_TOOLS", {"checkov": {}}
         ):
-            assert installer.can_install(make_tool_info("semgrep")) is True
+            assert installer.can_install(make_tool_info("checkov")) is True
 
     def test_cannot_install_non_isolated(self):
         """Test can_install rejects non-isolated tools."""
@@ -325,15 +325,15 @@ class TestIsolatedPipInstallerInstall:
         with (
             patch(
                 "scripts.cli.installers.pip_installer.ISOLATED_TOOLS",
-                {"semgrep": {"package": "semgrep"}},
+                {"checkov": {"package": "checkov"}},
             ),
             patch.object(installer, "_install_in_venv") as mock_venv,
         ):
-            mock_venv.return_value = InstallResult(tool_name="semgrep", success=True)
-            installer.install("semgrep", make_tool_info("semgrep"))
+            mock_venv.return_value = InstallResult(tool_name="checkov", success=True)
+            installer.install("checkov", make_tool_info("checkov"))
             # Verify package spec was passed
             mock_venv.assert_called_once()
-            assert "semgrep==" in mock_venv.call_args[0][1]
+            assert "checkov==" in mock_venv.call_args[0][1]
 
 
 # ========== IsolatedPipInstaller: _install_in_venv() ==========
@@ -406,7 +406,7 @@ class TestGetToolVersion:
 
     def test_parses_version_from_output(self, tmp_path: Path):
         """Test version parsing from --version output."""
-        runner = make_runner(returncode=0, stdout="semgrep 1.50.0")
+        runner = make_runner(returncode=0, stdout="checkov 1.50.0")
         installer = IsolatedPipInstaller(subprocess_runner=runner)
         version = installer._get_tool_version(tmp_path / "tool", tmp_path / "bin")
         assert version == "1.50.0"
@@ -485,12 +485,12 @@ class TestWindowsVenvLauncher:
         """When pip produced a proper .exe, leave everything alone."""
         bin_dir = tmp_path / "Scripts"
         bin_dir.mkdir()
-        (bin_dir / "semgrep.exe").write_bytes(b"MZ")
-        (bin_dir / "semgrep").write_bytes(b"#!python\n")
+        (bin_dir / "checkov.exe").write_bytes(b"MZ")
+        (bin_dir / "checkov").write_bytes(b"#!python\n")
 
-        self._installer()._ensure_windows_launcher("semgrep", bin_dir)
+        self._installer()._ensure_windows_launcher("checkov", bin_dir)
 
-        assert not (bin_dir / "semgrep.cmd").exists()
+        assert not (bin_dir / "checkov.cmd").exists()
 
     def test_no_script_to_wrap_is_a_noop(self, tmp_path: Path):
         """Nothing to wrap -> write nothing, raise nothing."""

@@ -95,7 +95,7 @@ CHECKED_SECTIONS = ("python_tools", "binary_tools", "special_tools")
 
 # What the checker's own closer matches on (`_close_superseded_version_issues`):
 # its author, `--label dependencies`, and a title in either priority, e.g.
-# `Update ruff to v0.16.8` and `[CRITICAL] Update semgrep to v1.176.0`.
+# `Update ruff to v0.16.8` and `[CRITICAL] Update opengrep to v1.33.0`.
 _VERSION_ISSUE_AUTHOR = "app/github-actions"
 _VERSION_ISSUE_LABEL = "dependencies"
 _VERSION_ISSUE_TITLE = re.compile(r"^(?:\[CRITICAL\] )?Update (\S+) to v\S+$")

@@ -3,7 +3,7 @@
 
 `tests/conftest.py`'s `_guard_no_unmarked_scanner_spawn` fixture wraps
 `subprocess.Popen.__init__` for every test and fails the ones that spawn a
-real scanner binary (currently just `semgrep`, #907's subject) without
+real scanner binary (it began with `semgrep`, #907's subject) without
 declaring `@pytest.mark.requires_tools`. A guard that cannot fail is worse
 than no guard - it is confidence without substance (see
 tests/unit/test_conftest_import_guard.py for the same argument applied to a
@@ -25,8 +25,8 @@ import pytest
 
 from tests.conftest import (
     make_scanner_spawn_recorder,
+    opengrep_argv_uses_config_auto,
     scanner_binary_match,
-    semgrep_argv_uses_config_auto,
 )
 
 
@@ -56,16 +56,16 @@ def test_scanner_binary_match_detects_opengrep_variants(argv0):
     "argv0",
     [
         # `trufflehog` used to be here, asserting the narrow scope. It IS a
-        # matrix scanner, and the recorder watching only semgrep is the defect
+        # matrix scanner, and the recorder watching only one scanner is the defect
         # #994 fixed -- so a test pinning its absence pinned the bug. The
         # watched set is now derived from TOOL_MATRIX; see
         # tests/unit/test_spawn_guard_scope.py.
         "black",
         "python",
-        "semgrep-action",  # a different binary that merely starts with the name
-        "not-semgrep",
-        "/scratch/semgrep_report.json",  # a path that merely CONTAINS the substring
-        r"C:\fixtures\semgrep\repo",  # "semgrep" as a directory component, not the exe
+        "opengrep-action",  # a different binary that merely starts with the name
+        "not-opengrep",
+        "/scratch/opengrep_report.json",  # a path that merely CONTAINS the substring
+        r"C:\fixtures\opengrep\repo",  # "opengrep" as a directory component, not the exe
         "",
     ],
 )
@@ -127,23 +127,23 @@ def test_recorder_handles_a_string_command_defensively():
 @pytest.mark.parametrize(
     "argv",
     [
-        ["semgrep", "--config", "auto", "--json", "--output", "out.json", "."],
-        ["semgrep", "--config", "auto"],
+        ["opengrep", "--config", "auto", "--json", "--output", "out.json", "."],
+        ["opengrep", "--config", "auto"],
     ],
 )
-def test_semgrep_argv_uses_config_auto_detects_the_network_default(argv):
-    assert semgrep_argv_uses_config_auto(argv) is True
+def test_opengrep_argv_uses_config_auto_detects_the_network_default(argv):
+    assert opengrep_argv_uses_config_auto(argv) is True
 
 
 @pytest.mark.parametrize(
     "argv",
     [
-        ["semgrep", "--version"],  # the wizard's tool pre-flight probe, #907
-        ["semgrep", "--config", "/tmp/offline-rule.yml", "--json"],  # this task's fix
-        ["semgrep"],
+        ["opengrep", "--version"],  # the wizard's tool pre-flight probe, #907
+        ["opengrep", "--config", "/tmp/offline-rule.yml", "--json"],  # this task's fix
+        ["opengrep"],
         [],
-        ["semgrep", "--config"],  # malformed/truncated -- must not IndexError
+        ["opengrep", "--config"],  # malformed/truncated -- must not IndexError
     ],
 )
-def test_semgrep_argv_uses_config_auto_ignores_everything_else(argv):
-    assert semgrep_argv_uses_config_auto(argv) is False
+def test_opengrep_argv_uses_config_auto_ignores_everything_else(argv):
+    assert opengrep_argv_uses_config_auto(argv) is False

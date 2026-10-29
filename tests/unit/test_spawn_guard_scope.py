@@ -86,14 +86,14 @@ def test_the_derivation_actually_found_something() -> None:
 
 
 @pytest.mark.parametrize(
-    "argv0", ["git", "pytest", "python", "semgrep-action", "trivy_report.json", "node"]
+    "argv0", ["git", "pytest", "python", "opengrep-action", "trivy_report.json", "node"]
 )
 def test_unrelated_binaries_are_not_matched(argv0: str) -> None:
     """The negative control.
 
     A recorder that matches everything fails every test that shells out at all,
     gets silenced, and takes the real check with it. Substring matches
-    (`semgrep-action`, a fixture path ending `trivy_report.json`) must not
+    (`opengrep-action`, a fixture path ending `trivy_report.json`) must not
     count.
     """
     assert scanner_binary_match(argv0) is None
@@ -152,7 +152,7 @@ def test_an_install_or_download_is_recognised(argv: list[str], expected: str) ->
         ["python", "-c", "print(1)"],
         ["python", "-m", "pytest"],
         ["npm", "run", "build"],
-        ["semgrep", "--version"],
+        ["opengrep", "--version"],
         ["docker", "run", "--rm", "img"],
         [],
     ],

@@ -2263,6 +2263,10 @@ REMOVED_TOOLS: frozenset[str] = frozenset(
     }
 )
 
+#: A removed tool that has a successor says so: `--tools semgrep` is told to
+#: type `opengrep`, not left to read the removed-tools page for it.
+REPLACED_BY: dict[str, str] = {"semgrep": "opengrep"}
+
 _NAME_SEPARATORS = re.compile(r"[,\s]+")
 
 
@@ -2288,7 +2292,10 @@ def parse_tool_names(values: Iterable[str]) -> list[str]:
         unknown = [n for n in bad if n not in REMOVED_TOOLS]
         parts = []
         if removed:
-            parts.append(f"{', '.join(removed)}: removed in v2.0.0 (see docs/TOOLS.md)")
+            see = "docs/TOOLS.md" + "".join(
+                f"; {REPLACED_BY[n]} replaced {n}" for n in removed if n in REPLACED_BY
+            )
+            parts.append(f"{', '.join(removed)}: removed in v2.0.0 (see {see})")
         if unknown:
             parts.append(f"unknown tool {', '.join(repr(n) for n in unknown)}")
         raise UnknownToolError(

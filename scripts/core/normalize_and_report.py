@@ -7,7 +7,7 @@ Expected structure (flexible, supports 6 target types):
 results_dir/
   individual-repos/
     <repo>/trufflehog.json
-    <repo>/semgrep.json
+    <repo>/opengrep.json
     <repo>/trivy.json
     <repo>/... (28 active tools total)
 

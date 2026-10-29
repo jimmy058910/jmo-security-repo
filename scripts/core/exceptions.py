@@ -37,7 +37,7 @@ class ToolNotFoundException(JmoSecurityException):
     """Raised when a required security tool is not installed or not found in PATH.
 
     Attributes:
-        tool: Name of the missing tool (e.g., 'trivy', 'semgrep')
+        tool: Name of the missing tool (e.g., 'trivy', 'opengrep')
 
     Example:
         >>> if not tool_exists("trivy"):

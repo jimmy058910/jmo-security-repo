@@ -332,7 +332,7 @@ def test_could_not_check_is_reported_as_a_failure_not_a_pass(
     monkeypatch.setattr(uv, "check_pypi_version_exists", lambda *_a: uv.UNKNOWN)
 
     bucket, message = uv._validate_one(
-        "semgrep", {"version": "1.175.0", "pypi_package": "semgrep"}
+        "checkov", {"version": "3.3.30", "pypi_package": "checkov"}
     )
 
     assert bucket == "failed"
