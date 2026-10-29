@@ -456,6 +456,12 @@
       "source": "0xdea"
     },
     {
+      "id": "java.lang.security.audit.xss.no-direct-response-writer.no-direct-response-writer",
+      "kind": "license",
+      "reason": "metadata.license declares a proprietary license, \"proprietary license - copyright \u00a9 Semgrep, Inc.\", which the bundle's notices do not grant",
+      "source": "opengrep-rules"
+    },
+    {
       "id": "elttam.generic.jsp-likely-xss.jsp-likely-xss",
       "kind": "mode",
       "mode": "join",
@@ -501,8 +507,8 @@
       "sha256": "c95d85416ad091e02cb2bfdb1a550e18cf29f0b354a8c9b657578cc1e3299f5a"
     },
     "java.yaml": {
-      "rules": 164,
-      "sha256": "335d54faedcfa103b8e11557558471677d70aa9c17d77a56bcd7d523822c1ed8"
+      "rules": 163,
+      "sha256": "0c073070505ed6e54e7a349c8b1a047fd225461ecfce5543b493daa16439b0ad"
     },
     "javascript.yaml": {
       "rules": 170,
@@ -593,7 +599,7 @@
     "opengrep-rules": {
       "pin": "f1d2b562b414783763fd02a6ed2736eaed622efa",
       "prefix": "",
-      "rules": 1251,
+      "rules": 1250,
       "rules_root": "",
       "sha256": "9a5f1cd5c625418cc1c776120123e2d4371df9bb66e099426b17c3488e13619d",
       "url": "https://github.com/opengrep/opengrep-rules/archive/f1d2b562b414783763fd02a6ed2736eaed622efa.tar.gz"

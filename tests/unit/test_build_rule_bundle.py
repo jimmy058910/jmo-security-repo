@@ -327,6 +327,67 @@ def test_an_excluded_id_is_dropped_with_its_reason(trees, tmp_path):
     assert not any("raptor-use-after-free" in i for i in _ids(tmp_path / "out"))
 
 
+def test_a_proprietary_rule_is_dropped_with_its_reason(trees, tmp_path):
+    # R9: a rule that declares a proprietary license in its own metadata is not
+    # one the bundle's open-source notices cover. The guard is general (any
+    # source, any casing), and a rule under another license is untouched.
+    proprietary = {
+        "lgpl-cc": "Proprietary",
+        "opengrep-rules": "proprietary license - copyright \u00a9 Semgrep, Inc.",
+        "0xdea": "PROPRIETARY",
+        "elttam": "Commercial, all rights reserved (proprietary)",
+    }
+    assert set(proprietary) == set(bb.SOURCES)
+    dropped: dict[str, str] = {}
+    kept: set[str] = set()
+    for name, text in proprietary.items():
+        source = bb.SOURCES[name]
+        for stem, license_text in (("prop", text), ("open", "MIT")):
+            path = (
+                trees[name]
+                / source.rules_root
+                / "java"
+                / source.globs[0].replace("*", stem)
+            )
+            doc = {
+                "rules": [
+                    {
+                        "id": "lic",
+                        "languages": ["java"],
+                        "pattern": f"{name}_{stem}()",
+                        "message": "planted",
+                        "severity": "ERROR",
+                        "metadata": {"category": "security", "license": license_text},
+                    }
+                ]
+            }
+            path.write_bytes(yaml.safe_dump(doc, allow_unicode=True).encode("utf-8"))
+            rule_id = ".".join(
+                part for part in (source.prefix, "java", path.stem, "lic") if part
+            )
+            if stem == "prop":
+                dropped[rule_id] = text
+            else:
+                kept.add(rule_id)
+
+    manifest = bb.build(trees, tmp_path / "out")
+
+    ids = _ids(tmp_path / "out")
+    assert not set(dropped) & ids
+    assert kept <= ids  # the same rule under another license stays
+    records = _exclusions(manifest, "license")
+    assert {e["id"] for e in records} == set(dropped)
+    for record in records:
+        assert record["source"] in bb.SOURCES
+        assert dropped[record["id"]] in record["reason"]  # the license text, quoted
+        assert "proprietary" in record["reason"]
+    # a license given as a list is read too, and an absent one is not a finding
+    assert bb._proprietary_license({"metadata": {"license": ["MIT", "Proprietary"]}})
+    assert bb._proprietary_license({"metadata": {"license": ["MIT"]}}) is None
+    assert bb._proprietary_license({"metadata": {"category": "security"}}) is None
+    assert bb._proprietary_license({"id": "no-metadata"}) is None
+
+
 CONFIGURED_DIRS = [
     pytest.param(source.name, directory, id=f"{source.name}:{directory}")
     for source in bb.SOURCES.values()

@@ -26,10 +26,14 @@ the extension, with its parts joined by "." (never the OS separator, so a
 Windows build gives the same ids), then the rule's own id, with the source's
 prefix in front when it has one. A repeated namespaced id fails the build.
 
-What is left out is data, in each `Source`, and all of it is recorded with its
-reason in the manifest: whole directories, rules by `mode`, single namespaced
-ids, and body duplicates. A rule's body is the rule minus `id`, `message`,
-`metadata` and `severity`, as canonical JSON. Twins inside one source both stay.
+What is left out is recorded with its reason in the manifest: whole directories,
+rules by `mode`, single namespaced ids (all three configured in each `Source`),
+body duplicates, and proprietary licenses. A rule's body is the rule minus `id`,
+`message`, `metadata` and `severity`, as canonical JSON. Twins inside one source
+both stay. The license guard is general, not configured: a rule whose
+`metadata.license` contains "proprietary" (any casing), from any source, is not
+shipped, because the bundle's notices (`THIRD_PARTY_LICENSES.md`) grant only the
+open-source licenses of its sources. The reason quotes the license text.
 
 YAML is read with 1.2 booleans (only true/false, in their three casings), so a
 bare `on:` key stays the string "on" and not True. It is written with
@@ -47,6 +51,7 @@ as UTF-8 with LF endings, byte for byte, so two builds are identical.
         directory        "path" (under rules_root), "rules" (security rules in it)
         mode             "mode", "id"
         id               "id"
+        license          "id" (the reason quotes the rule's `metadata.license`)
         body-duplicate   "id" (dropped), "kept_id", "kept_source"
 
 Usage:
@@ -208,6 +213,16 @@ def _is_security(rule: dict[str, Any]) -> bool:
     return isinstance(metadata, dict) and metadata.get("category") == "security"
 
 
+def _proprietary_license(rule: dict[str, Any]) -> str | None:
+    """The rule's `metadata.license` text when it declares a proprietary license."""
+    metadata = rule.get("metadata")
+    value = metadata.get("license") if isinstance(metadata, dict) else None
+    if value is None:
+        return None
+    text = value if isinstance(value, str) else json.dumps(value, sort_keys=True)
+    return text if "proprietary" in text.lower() else None
+
+
 def _load_rules(path: Path, label: str) -> list[dict[str, Any]] | None:
     """The `rules` list of a rule file, or None for a YAML file that has none."""
     try:
@@ -289,6 +304,18 @@ def collect(
                         "source": source.name,
                         "id": rule_id,
                         "reason": source.skip_ids[rule_id],
+                    }
+                )
+            elif (proprietary := _proprietary_license(rule)) is not None:
+                dropped.append(
+                    {
+                        "kind": "license",
+                        "source": source.name,
+                        "id": rule_id,
+                        "reason": (
+                            f'metadata.license declares a proprietary license, "{proprietary}", '
+                            "which the bundle's notices do not grant"
+                        ),
                     }
                 )
             else:

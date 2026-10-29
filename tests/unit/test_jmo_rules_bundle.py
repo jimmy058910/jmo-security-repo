@@ -11,7 +11,7 @@ Nothing here parametrizes over the bundle's contents. A bundle that is missing
 would make that zero tests, which pytest reports as a skip, and the guard would
 read green exactly when it matters. Each test loads the bundle in its body.
 
-The counts (25 files, 1,421 rules) are the builder's output for today's pins.
+The counts (25 files, 1,420 rules) are the builder's output for today's pins.
 They appear in no assertion: a source bump changes both, and `--check` is the
 guard that the numbers are the sources'. The manifest is the reference here.
 """
@@ -150,6 +150,24 @@ def test_no_generic_secrets_rule_ships() -> None:
             f"{p.name} holds a private-key header"
         )
         assert not _SLACK_WEBHOOK.search(data), f"{p.name} holds a Slack webhook URL"
+
+
+def test_no_rule_declares_a_proprietary_license() -> None:
+    """The bundle's notices (THIRD_PARTY_LICENSES.md) grant the open-source
+    licenses of its four sources and nothing proprietary. One snapshot rule
+    declared `proprietary license - copyright (c) Semgrep, Inc.` in its own
+    metadata, so the builder drops any rule whose `metadata.license` says
+    "proprietary", from any source, and records it as a `license` exclusion."""
+    wrong = [
+        f"{p.name}: {rule['id']}: {(rule.get('metadata') or {}).get('license')!r}"
+        for p in _bundle_files()
+        for rule in _rules(p.name)
+        if "proprietary"
+        in json.dumps((rule.get("metadata") or {}).get("license")).lower()
+    ]
+    assert not wrong, f"{len(wrong)} rule(s) with a proprietary license:\n" + "\n".join(
+        wrong[:20]
+    )
 
 
 def test_the_wheel_carries_the_bundle() -> None:

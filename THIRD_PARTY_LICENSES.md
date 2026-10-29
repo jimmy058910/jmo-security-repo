@@ -4,7 +4,7 @@ JMo Security is licensed `MIT OR Apache-2.0` ([LICENSE](LICENSE)). One directory
 
 | Source | Pinned at | License | Rules in the bundle | Id prefix |
 |--------|-----------|---------|---------------------|-----------|
-| [opengrep-rules](#opengrep-rules) | commit `f1d2b562` | LGPL-2.1 with the Commons Clause | 1,251 | none |
+| [opengrep-rules](#opengrep-rules) | commit `f1d2b562` | LGPL-2.1 with the Commons Clause | 1,250 | none |
 | [GitLab sast-rules, `rules/lgpl-cc`](#gitlab-sast-rules-ruleslgpl-cc) | tag `v2.10.1` | LGPL-2.1 with the Commons Clause; three rules name another license | 100 | `lgpl-cc.` |
 | [0xdea/semgrep-rules, `rules/c`](#0xdeasemgrep-rules-rulesc) | commit `e0121ac1` | MIT | 48 | `0xdea.` |
 | [elttam/semgrep-rules, `rules/`](#elttamsemgrep-rules-rules) | commit `24426856` | MIT | 22 | `elttam.` |
@@ -16,6 +16,7 @@ A rule's source shows in its id: an id that starts `lgpl-cc.`, `0xdea.` or `eltt
 `scripts/dev/build_rule_bundle.py` changes the rules it takes, and every change is mechanical:
 
 - It keeps only rules with `metadata.category: security`.
+- It drops a rule whose `metadata.license` says "proprietary", from any source (one rule so far, under opengrep-rules below).
 - It prefixes each rule `id` with the path of the file the rule came from, and for the last three sources above with the source's prefix as well.
 - It merges the rules into one file per language and writes the YAML again. The sources' comments are not carried over, including the license header some rule files carry; the rules that named a license other than their directory's are listed below.
 - It drops a rule when a source it ranks higher has a rule with the same body.
@@ -42,7 +43,7 @@ License: LGPL 2.1 (GNU Lesser General Public License, Version 2.1)
 Licensor: Semgrep, Inc. (https://semgrep.dev)
 ```
 
-One rule in the bundle carries a license line of its own. `java.lang.security.audit.xss.no-direct-response-writer.no-direct-response-writer`, in `java.yaml`, has `license: proprietary license - copyright © Semgrep, Inc.` in its metadata. The notice above does not mention it, and this file claims no license for that rule.
+One rule from this archive is not in the bundle because of its license. `java.lang.security.audit.xss.no-direct-response-writer.no-direct-response-writer` has `license: proprietary license - copyright © Semgrep, Inc.` in its own metadata, which the notice above does not mention, and this file grants nothing for it. The builder drops any rule whose `metadata.license` says "proprietary", from any source, and `SOURCES.json` records the rule's id and the license text it quoted.
 
 ## GitLab sast-rules, `rules/lgpl-cc`
 

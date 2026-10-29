@@ -1,6 +1,6 @@
 # The rule bundle
 
-JMo's code scanner, opengrep, reads its rules from a bundle that ships with JMo, in `scripts/jmo_rules/`. A scan never fetches a rule: the bundle is committed to this repository and packaged with it. It holds 1,421 security rules in 25 files, about 2.4 MB.
+JMo's code scanner, opengrep, reads its rules from a bundle that ships with JMo, in `scripts/jmo_rules/`. A scan never fetches a rule: the bundle is committed to this repository and packaged with it. It holds 1,420 security rules in 25 files, about 2.4 MB.
 
 The bundle is generated, not written by hand. `scripts/dev/build_rule_bundle.py` builds it from four rule sources, each pinned to a commit or tag and to the sha256 of its archive. [`SOURCES.json`](../scripts/jmo_rules/SOURCES.json), beside the rules, records those pins, the sha256 and rule count of every bundle file, and everything the builder left out, with the reason. This page is the readable form of that file. Where the two disagree, `SOURCES.json` is right.
 
@@ -8,11 +8,11 @@ The bundle is generated, not written by hand. `scripts/dev/build_rule_bundle.py`
 
 | Source | Pinned at | License | Rules |
 |--------|-----------|---------|-------|
-| [opengrep-rules](https://github.com/opengrep/opengrep-rules), every language directory | commit `f1d2b562` | LGPL-2.1 with the Commons Clause | 1,251 |
+| [opengrep-rules](https://github.com/opengrep/opengrep-rules), every language directory | commit `f1d2b562` | LGPL-2.1 with the Commons Clause | 1,250 |
 | [GitLab sast-rules](https://gitlab.com/gitlab-org/security-products/sast-rules), `rules/lgpl-cc` | tag `v2.10.1` | LGPL-2.1 with the Commons Clause | 100 |
 | [0xdea/semgrep-rules](https://github.com/0xdea/semgrep-rules), `rules/c` | commit `e0121ac1` | MIT | 48 |
 | [elttam/semgrep-rules](https://github.com/elttam/semgrep-rules), `rules/` | commit `24426856` | MIT | 22 |
-| | | Total | 1,421 |
+| | | Total | 1,420 |
 
 The full pins are in `SOURCES.json`. The license texts, and what the builder changes in a rule, are in [THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md).
 
@@ -33,7 +33,7 @@ The rules are merged into one file per language, named for the language. The cou
 | `generic.yaml` | 23 | 23 | - | - | - |
 | `go.yaml` | 74 | 71 | - | - | 3 |
 | `html.yaml` | 4 | 4 | - | - | - |
-| `java.yaml` | 164 | 109 | 39 | - | 16 |
+| `java.yaml` | 163 | 108 | 39 | - | 16 |
 | `javascript.yaml` | 170 | 169 | 1 | - | - |
 | `json.yaml` | 4 | 4 | - | - | - |
 | `kotlin.yaml` | 14 | 14 | - | - | - |
@@ -49,7 +49,7 @@ The rules are merged into one file per language, named for the language. The cou
 | `terraform.yaml` | 260 | 260 | - | - | - |
 | `typescript.yaml` | 18 | 18 | - | - | - |
 | `yaml.yaml` | 41 | 38 | 1 | - | 2 |
-| Total, 25 files | 1,421 | 1,251 | 100 | 48 | 22 |
+| Total, 25 files | 1,420 | 1,250 | 100 | 48 | 22 |
 
 A scan reads the files for the languages it finds in the repository, plus `generic.yaml`. TypeScript also reads `javascript.yaml`, because opengrep runs a rule written for JavaScript on `.ts` files. The merge is also a memory saving. On one application at `-j 8`, the same unfiltered JavaScript and TypeScript rules took 575 to 598 MB merged into one file and 1,068 to 1,084 MB as separate per-directory configs, and gave the identical 212 findings in ten runs.
 
@@ -61,9 +61,10 @@ The builder fetches each archive from its pinned URL and refuses it unless the s
 
 1. It reads the `.yaml` and `.yml` files that hold a `rules` list. Test targets (`*.test.yaml`) are not rules, and from GitLab only `rule-*.yml` files are read.
 2. It keeps a rule only if its `metadata.category` is `security`.
-3. It puts the rule in the file named for its top directory under the source's rules root (`java/...` goes to `java.yaml`). Sources that share a language directory share the file.
-4. It drops a rule whose body equals a rule from a source it ranks higher. A rule's body is the rule minus `id`, `message`, `metadata` and `severity`, as canonical JSON. The order is GitLab `lgpl-cc`, then opengrep-rules, then the two MIT packs. GitLab gave every rule it took a new id, so only a match by body finds the overlap.
-5. It writes each file sorted by id, as UTF-8 with LF endings, so two builds are byte for byte the same.
+3. It drops a rule whose `metadata.license` says "proprietary", in any casing, from any source. The bundle's notices grant the open-source licenses of its four sources and nothing else.
+4. It puts the rule in the file named for its top directory under the source's rules root (`java/...` goes to `java.yaml`). Sources that share a language directory share the file.
+5. It drops a rule whose body equals a rule from a source it ranks higher. A rule's body is the rule minus `id`, `message`, `metadata` and `severity`, as canonical JSON. The order is GitLab `lgpl-cc`, then opengrep-rules, then the two MIT packs. GitLab gave every rule it took a new id, so only a match by body finds the overlap.
+6. It writes each file sorted by id, as UTF-8 with LF endings, so two builds are byte for byte the same.
 
 Of the opengrep-rules rules, 50 have the same body as a GitLab `lgpl-cc` rule and are dropped; GitLab's is kept because it is maintained. By the GitLab rule's language that is ruby 32, php 9, java 6, python 2 and properties 1. The MIT packs lost none. Two rules with the same body inside one source both stay.
 
@@ -76,6 +77,7 @@ The builder leaves these out, and `SOURCES.json` holds each one's reason.
 | opengrep-rules `generic/secrets/` | 225 | Finding secrets is Gitleaks' and TruffleHog's job. These rules include private-key and Slack-webhook patterns, so with them the bundle trips JMo's own secret scanning. |
 | opengrep-rules `problem-based-packs/` | 37 | A known gap. It holds Go security rules, none of which duplicates a rule in the bundle. It is laid out by problem, not by language, and the builder files each rule under its top directory, so these rules would land in a `problem-based-packs.yaml` that no scan selects. The builder counts them and skips the directory. The rules are missing for that reason, which says nothing about their quality. |
 | opengrep-rules `scripts/`, `stats/`, `.github/` | 0 | Repository tooling, coverage statistics and CI workflows, not rules. |
+| Any rule whose `metadata.license` says "proprietary" | 1 | The bundle's notices grant only the open-source licenses of its sources. The one rule so far is opengrep-rules' `java.lang.security.audit.xss.no-direct-response-writer`, whose metadata says `proprietary license - copyright © Semgrep, Inc.`. The guard is general, so a rule from any source is dropped the same way, and `SOURCES.json` records its id and quotes the license text. |
 | 0xdea `rules/noisy/` | 1 | The pack's own noisy tier, "potentially too noisy and unsuitable for general use". |
 | 0xdea `raptor-use-after-free` | 1 | It overflows opengrep 1.31.0's stack on its own test file. |
 | elttam `rules/yaml/kubernetes/` | 6 | The rules anchor on different lines from the same-named Kubernetes rules in opengrep-rules, so one pod spec would be reported twice. The bundle's Kubernetes rules, Checkov and Trivy already cover manifests. |
@@ -114,7 +116,7 @@ To move a source to a newer commit, change that source's `url`, `sha256` and `pi
 
 ## Licenses, and replacing the rules
 
-Two of the four sources, opengrep-rules and GitLab's `lgpl-cc`, are LGPL-2.1 with the Commons Clause, and they supply 1,351 of the 1,421 rules. The Commons Clause withholds "the right to Sell the Software", and it defines selling as providing a product or service "whose value derives, entirely or substantially, from the functionality of the Software", for a fee or other consideration. JMo is free and accepts that condition (decided 2026-09-12). This page does not say what counts as selling; the license text in [THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md) does.
+Two of the four sources, opengrep-rules and GitLab's `lgpl-cc`, are LGPL-2.1 with the Commons Clause, and they supply 1,350 of the 1,420 rules. The Commons Clause withholds "the right to Sell the Software", and it defines selling as providing a product or service "whose value derives, entirely or substantially, from the functionality of the Software", for a fee or other consideration. JMo is free and accepts that condition (decided 2026-09-12). This page does not say what counts as selling; the license text in [THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md) does.
 
 The bundle is one directory so that, if that condition ever stops fitting, the rules are what change and the tool does not. To replace them:
 

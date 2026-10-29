@@ -364,8 +364,9 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 - Modify: `.github/workflows/ci.yml` (a path-filtered `rule-bundle-reproducible` job)
 
 - [ ] **Step 1:** Build: `python scripts/dev/build_rule_bundle.py --out scripts/jmo_rules`.
-  Expect 25 files and 1,421 rules (1,401 − 50 + 48 + 22). A different number is a
-  finding to explain in the PR, not to absorb.
+  Expect 25 files and 1,420 rules (1,401 − 50 + 48 + 22 − 1; one proprietary-licensed
+  rule excluded, R9). A different number is a finding to explain in the PR, not to
+  absorb.
 - [ ] **Step 2: Offline tests** in `test_jmo_rules_bundle.py`:
   - `test_every_file_matches_its_manifest_entry` (sha256 and count).
   - `test_every_rule_is_security`, `test_ids_are_unique_across_the_bundle`.

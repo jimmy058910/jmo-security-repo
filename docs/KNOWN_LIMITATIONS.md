@@ -237,7 +237,7 @@ naming `verified`, in TruffleHog's flags counts as asking to verify.
 ### Most of the rule bundle is a frozen snapshot, JavaScript and TypeScript included
 
 JMo's code scanner reads the rule bundle in `scripts/jmo_rules/`
-([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,251 of its 1,421 rules come from one
+([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,250 of its 1,420 rules come from one
 snapshot of opengrep-rules whose commit is dated 2025-01-26. Nothing refreshes
 it: a rule written since is not in the bundle until someone moves the pin and
 rebuilds. GitLab's `lgpl-cc` rules (v2.10.1, 100 rules) are maintained and
