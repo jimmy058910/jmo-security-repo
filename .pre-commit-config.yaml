@@ -47,10 +47,12 @@ repos:
       - id: yamllint
         args: ["-c", ".yamllint.yaml"]
         # Exclude paths that may contain non-UTF-8 content or special YAML
+        # scripts/jmo_rules/ is generated (long message lines); opengrep validates it
         exclude: |
           (?x)^(
             results/|
             samples/|
+            scripts/jmo_rules/|
             tests/e2e/fixtures/
           )
 

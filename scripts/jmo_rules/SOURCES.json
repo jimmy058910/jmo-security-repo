@@ -1,0 +1,603 @@
+{
+  "exclusions": [
+    {
+      "id": "java.java-jwt.security.audit.jwt-decode-without-verify.java-jwt-decode-without-verify",
+      "kept_id": "lgpl-cc.java.crypto.rule-JwtDecodeWithoutVerify.java_crypto_rule_JwtDecodeWithoutVerify",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.java.crypto.rule-JwtDecodeWithoutVerify.java_crypto_rule_JwtDecodeWithoutVerify, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "java.jboss.security.seam-log-injection.seam-log-injection",
+      "kept_id": "lgpl-cc.java.inject.rule-SeamLogInjection.java_inject_rule-SeamLogInjection",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.java.inject.rule-SeamLogInjection.java_inject_rule-SeamLogInjection, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "java.lang.security.use-snakeyaml-constructor.use-snakeyaml-constructor",
+      "kept_id": "lgpl-cc.java.deserialization.rule-SnakeYamlConstructor.java_deserialization_rule-SnakeYamlConstructor",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.java.deserialization.rule-SnakeYamlConstructor.java_deserialization_rule-SnakeYamlConstructor, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "java.mongodb.security.injection.audit.mongodb-nosqli.mongodb-nosqli",
+      "kept_id": "lgpl-cc.java.inject.rule-MongodbNoSQLi.java_inject_rule-MongodbNoSQLi",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.java.inject.rule-MongodbNoSQLi.java_inject_rule-MongodbNoSQLi, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "java.spring.security.audit.spring-actuator-fully-enabled.spring-actuator-fully-enabled",
+      "kept_id": "lgpl-cc.properties.spring.accesscontrol.rule-SpringActuatorFullyEnabled.properties_spring_rule-SpringActuatorFullyEnabled",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.properties.spring.accesscontrol.rule-SpringActuatorFullyEnabled.properties_spring_rule-SpringActuatorFullyEnabled, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "java.spring.security.injection.tainted-file-path.tainted-file-path",
+      "kept_id": "lgpl-cc.java.traversal.rule-RelativePathTraversal.java_traversal_rule-RelativePathTraversal",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.java.traversal.rule-RelativePathTraversal.java_traversal_rule-RelativePathTraversal, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "java.spring.security.unrestricted-request-mapping.unrestricted-request-mapping",
+      "kept_id": "lgpl-cc.java.csrf.rule-UnrestrictedRequestMapping.java_csrf_rule-UnrestrictedRequestMapping",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.java.csrf.rule-UnrestrictedRequestMapping.java_csrf_rule-UnrestrictedRequestMapping, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.assert-use.assert-use",
+      "kept_id": "lgpl-cc.php.assert.rule-assert-use.php_assert_rule-assert-use",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.assert.rule-assert-use.php_assert_rule-assert-use, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.backticks-use.backticks-use",
+      "kept_id": "lgpl-cc.php.backticks.rule-backticks-use.php_backticks_rule-backticks-use",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.backticks.rule-backticks-use.php_backticks_rule-backticks-use, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.eval-use.eval-use",
+      "kept_id": "lgpl-cc.php.eval.rule-eval-use.php_eval_rule-eval-use",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.eval.rule-eval-use.php_eval_rule-eval-use, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.exec-use.exec-use",
+      "kept_id": "lgpl-cc.php.exec.rule-exec-use.php_exec_rule-exec-use",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.exec.rule-exec-use.php_exec_rule-exec-use, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.file-inclusion.file-inclusion",
+      "kept_id": "lgpl-cc.php.file.rule-file-inclusion.php_file_rule-file-inclusion",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.file.rule-file-inclusion.php_file_rule-file-inclusion, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.ftp-use.ftp-use",
+      "kept_id": "lgpl-cc.php.ftp.rule-ftp-use.php_ftp_rule-ftp-use",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.ftp.rule-ftp-use.php_ftp_rule-ftp-use, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.mcrypt-use.mcrypt-use",
+      "kept_id": "lgpl-cc.php.mcrypt.rule-mcrypt-use.php_mcrypt_rule-mcrypt-use",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.mcrypt.rule-mcrypt-use.php_mcrypt_rule-mcrypt-use, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.phpinfo-use.phpinfo-use",
+      "kept_id": "lgpl-cc.php.phpinfo.rule-phpinfo-use.php_phpinfo_rule-phpinfo-use",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.phpinfo.rule-phpinfo-use.php_phpinfo_rule-phpinfo-use, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "php.lang.security.weak-crypto.weak-crypto",
+      "kept_id": "lgpl-cc.php.crypto.rule-weak-crypto.php_crypto_rule-weak-crypto",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.php.crypto.rule-weak-crypto.php_crypto_rule-weak-crypto, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "python.flask.security.open-redirect.open-redirect",
+      "kept_id": "lgpl-cc.python.flask.security.redirection.rule-flask-open-redirect.python_flask_rule-flask-open-redirect",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.python.flask.security.redirection.rule-flask-open-redirect.python_flask_rule-flask-open-redirect, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "python.lang.security.audit.network.http-not-https-connection.http-not-https-connection",
+      "kept_id": "lgpl-cc.python.crypto.rule-HTTPConnectionPool.python_crypto_rule-HTTPConnectionPool",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.python.crypto.rule-HTTPConnectionPool.python_crypto_rule-HTTPConnectionPool, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.dangerous-exec.dangerous-exec",
+      "kept_id": "lgpl-cc.ruby.injection.rule-DangerousExec.ruby_injection_rule-DangerousExec",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.injection.rule-DangerousExec.ruby_injection_rule-DangerousExec, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.force-ssl-false.force-ssl-false",
+      "kept_id": "lgpl-cc.ruby.ssl.rule-ForceSSLFalse.ruby_ssl_rule-ForceSSLFalse",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.ssl.rule-ForceSSLFalse.ruby_ssl_rule-ForceSSLFalse, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.insufficient-rsa-key-size.insufficient-rsa-key-size",
+      "kept_id": "lgpl-cc.ruby.crypto.rule-InsufficientRSAKeySize.ruby_crypto_rule-InsufficientRSAKeySize",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.crypto.rule-InsufficientRSAKeySize.ruby_crypto_rule-InsufficientRSAKeySize, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.json-entity-escape.json-entity-escape",
+      "kept_id": "lgpl-cc.ruby.escaping.rule-JSONEntityEscape.ruby_escaping_rule-JSONEntityEscape",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.escaping.rule-JSONEntityEscape.ruby_escaping_rule-JSONEntityEscape, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.model-attr-accessible.model-attr-accessible",
+      "kept_id": "lgpl-cc.ruby.mass_assignment.rule-ModelAttrAccessible.ruby_mass_assignment_rule-ModelAttrAccessible",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.mass_assignment.rule-ModelAttrAccessible.ruby_mass_assignment_rule-ModelAttrAccessible, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.no-eval.ruby-eval",
+      "kept_id": "lgpl-cc.ruby.eval.rule-NoEval.ruby_eval_rule-NoEval",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.eval.rule-NoEval.ruby_eval_rule-NoEval, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.ssl-mode-no-verify.ssl-mode-no-verify",
+      "kept_id": "lgpl-cc.ruby.ssl.rule-SSLModeNoVerify.ruby_ssl_rule-SSLModeNoVerify",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.ssl.rule-SSLModeNoVerify.ruby_ssl_rule-SSLModeNoVerify, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.unprotected-mass-assign.mass-assignment-vuln",
+      "kept_id": "lgpl-cc.ruby.mass_assignment.rule-UnprotectedMassAssign.ruby_mass_assignment_rule-UnprotectedMassAssign",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.mass_assignment.rule-UnprotectedMassAssign.ruby_mass_assignment_rule-UnprotectedMassAssign, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.weak-hashes-md5.weak-hashes-md5",
+      "kept_id": "lgpl-cc.ruby.crypto.rule-WeakHashesMD5.ruby_crypto_rule-WeakHashesMD5",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.crypto.rule-WeakHashesMD5.ruby_crypto_rule-WeakHashesMD5, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.lang.security.weak-hashes-sha1.weak-hashes-sha1",
+      "kept_id": "lgpl-cc.ruby.crypto.rule-WeakHashesSHA1.ruby_crypto_rule-WeakHashesSHA1",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.crypto.rule-WeakHashesSHA1.ruby_crypto_rule-WeakHashesSHA1, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.avoid-session-manipulation.avoid-session-manipulation",
+      "kept_id": "lgpl-cc.ruby.session.rule-AvoidSessionManipulation.ruby_session_rule-AvoidSessionManipulation",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.session.rule-AvoidSessionManipulation.ruby_session_rule-AvoidSessionManipulation, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.avoid-tainted-file-access.avoid-tainted-file-access",
+      "kept_id": "lgpl-cc.ruby.file.rule-AvoidTaintedFileAccess.ruby_file_rule-AvoidTaintedFileAccess",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.file.rule-AvoidTaintedFileAccess.ruby_file_rule-AvoidTaintedFileAccess, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.avoid-tainted-ftp-call.avoid-tainted-ftp-call",
+      "kept_id": "lgpl-cc.ruby.ftp.rule-AvoidTaintedFTPCall.ruby_ftp_rule-AvoidTaintedFTPCall",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.ftp.rule-AvoidTaintedFTPCall.ruby_ftp_rule-AvoidTaintedFTPCall, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.avoid-tainted-http-request.avoid-tainted-http-request",
+      "kept_id": "lgpl-cc.ruby.http.rule-AvoidTaintedHTTPRequest.ruby_http_rule-AvoidTaintedHTTPRequest",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.http.rule-AvoidTaintedHTTPRequest.ruby_http_rule-AvoidTaintedHTTPRequest, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.avoid-tainted-shell-call.avoid-tainted-shell-call",
+      "kept_id": "lgpl-cc.ruby.injection.rule-AvoidTaintedShellCall.ruby_injection_rule-AvoidTaintedShellCall",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.injection.rule-AvoidTaintedShellCall.ruby_injection_rule-AvoidTaintedShellCall, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.detailed-exceptions.detailed-exceptions",
+      "kept_id": "lgpl-cc.ruby.exceptions.rule-DetailedExceptions.ruby_exceptions_rule-DetailedExceptions",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.exceptions.rule-DetailedExceptions.ruby_exceptions_rule-DetailedExceptions, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.xss.avoid-default-routes.avoid-default-routes",
+      "kept_id": "lgpl-cc.ruby.routes.rule-AvoidDefaultRoutes.ruby_routes_rule-AvoidDefaultRoutes",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.routes.rule-AvoidDefaultRoutes.ruby_routes_rule-AvoidDefaultRoutes, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.xss.avoid-link-to.avoid-link-to",
+      "kept_id": "lgpl-cc.ruby.xss.rule-AvoidLinkTo.ruby_xss_rule-AvoidLinkTo",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.xss.rule-AvoidLinkTo.ruby_xss_rule-AvoidLinkTo, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.xss.avoid-render-inline.avoid-render-inline",
+      "kept_id": "lgpl-cc.ruby.xss.rule-AvoidRenderInline.ruby_xss_rule-AvoidRenderInline",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.xss.rule-AvoidRenderInline.ruby_xss_rule-AvoidRenderInline, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.xss.avoid-render-text.avoid-render-text",
+      "kept_id": "lgpl-cc.ruby.xss.rule-AvoidRenderText.ruby_xss_rule-AvoidRenderText",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.xss.rule-AvoidRenderText.ruby_xss_rule-AvoidRenderText, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.audit.xss.manual-template-creation.manual-template-creation",
+      "kept_id": "lgpl-cc.ruby.xss.rule-ManualTemplateCreation.ruby_xss_rule-ManualTemplateCreation",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.xss.rule-ManualTemplateCreation.ruby_xss_rule-ManualTemplateCreation, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-cookie-store-session-security-attributes.check-cookie-store-session-security-attributes",
+      "kept_id": "lgpl-cc.ruby.cookie.rule-CheckCookieStoreSessionSecurityAttributes.ruby_cookie_rule-CheckCookieStoreSessionSecurityAttributes",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.cookie.rule-CheckCookieStoreSessionSecurityAttributes.ruby_cookie_rule-CheckCookieStoreSessionSecurityAttributes, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-http-verb-confusion.check-http-verb-confusion",
+      "kept_id": "lgpl-cc.ruby.http.rule-CheckHTTPVerbConfusion.ruby_http_rule-CheckHTTPVerbConfusion",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.http.rule-CheckHTTPVerbConfusion.ruby_http_rule-CheckHTTPVerbConfusion, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-redirect-to.check-redirect-to",
+      "kept_id": "lgpl-cc.ruby.redirect.rule-CheckRedirectTo.ruby_redirect_rule-CheckRedirectTo",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.redirect.rule-CheckRedirectTo.ruby_redirect_rule-CheckRedirectTo, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-regex-dos.check-regex-dos",
+      "kept_id": "lgpl-cc.ruby.regex.rule-CheckRegexDOS.ruby_regex_rule-CheckRegexDOS",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.regex.rule-CheckRegexDOS.ruby_regex_rule-CheckRegexDOS, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-render-local-file-include.check-render-local-file-include",
+      "kept_id": "lgpl-cc.ruby.file.rule-CheckRenderLocalFileInclude.ruby_file_rule-CheckRenderLocalFileInclude",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.file.rule-CheckRenderLocalFileInclude.ruby_file_rule-CheckRenderLocalFileInclude, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-send-file.check-send-file",
+      "kept_id": "lgpl-cc.ruby.file.rule-CheckSendFile.ruby_file_rule-CheckSendFile",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.file.rule-CheckSendFile.ruby_file_rule-CheckSendFile, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-sql.check-sql",
+      "kept_id": "lgpl-cc.ruby.sql.rule-CheckSQL.ruby_sql_rule-CheckSQL",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.sql.rule-CheckSQL.ruby_sql_rule-CheckSQL, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-unsafe-reflection-methods.check-unsafe-reflection-methods",
+      "kept_id": "lgpl-cc.ruby.reflection.rule-CheckUnsafeReflectionMethods.ruby_reflection_rule-CheckUnsafeReflectionMethods",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.reflection.rule-CheckUnsafeReflectionMethods.ruby_reflection_rule-CheckUnsafeReflectionMethods, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-unsafe-reflection.check-unsafe-reflection",
+      "kept_id": "lgpl-cc.ruby.reflection.rule-CheckUnsafeReflection.ruby_reflection_rule-CheckUnsafeReflection",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.reflection.rule-CheckUnsafeReflection.ruby_reflection_rule-CheckUnsafeReflection, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-unscoped-find.check-unscoped-find",
+      "kept_id": "lgpl-cc.ruby.find.rule-CheckUnscopedFind.ruby_find_rule-CheckUnscopedFind",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.find.rule-CheckUnscopedFind.ruby_find_rule-CheckUnscopedFind, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "ruby.rails.security.brakeman.check-validation-regex.check-validation-regex",
+      "kept_id": "lgpl-cc.ruby.regex.rule-CheckValidationRegex.ruby_regex_rule-CheckValidationRegex",
+      "kept_source": "lgpl-cc",
+      "kind": "body-duplicate",
+      "reason": "same rule body as lgpl-cc's lgpl-cc.ruby.regex.rule-CheckValidationRegex.ruby_regex_rule-CheckValidationRegex, a higher-precedence source",
+      "source": "opengrep-rules"
+    },
+    {
+      "kind": "directory",
+      "path": "noisy",
+      "reason": "the pack's own noisy tier, 'potentially too noisy and unsuitable for general use' (its README)",
+      "rules": 1,
+      "source": "0xdea"
+    },
+    {
+      "kind": "directory",
+      "path": "yaml/kubernetes",
+      "reason": "anchors on different lines from the snapshot's same-named Kubernetes rules, so one pod spec would report twice; the snapshot's Kubernetes rules, checkov and trivy already cover manifests",
+      "rules": 6,
+      "source": "elttam"
+    },
+    {
+      "kind": "directory",
+      "path": ".github",
+      "reason": "the rules repository's CI workflows, not rules",
+      "rules": 0,
+      "source": "opengrep-rules"
+    },
+    {
+      "kind": "directory",
+      "path": "generic/secrets",
+      "reason": "secret detection is gitleaks' and trufflehog's class; with these rules the bundle trips JMo's own secret scanning (private-key and Slack-webhook patterns)",
+      "rules": 225,
+      "source": "opengrep-rules"
+    },
+    {
+      "kind": "directory",
+      "path": "problem-based-packs",
+      "reason": "not a language directory: a problem-based layout outside the bundle's per-language scope",
+      "rules": 37,
+      "source": "opengrep-rules"
+    },
+    {
+      "kind": "directory",
+      "path": "scripts",
+      "reason": "repository tooling, not rules",
+      "rules": 0,
+      "source": "opengrep-rules"
+    },
+    {
+      "kind": "directory",
+      "path": "stats",
+      "reason": "coverage statistics, not rules",
+      "rules": 0,
+      "source": "opengrep-rules"
+    },
+    {
+      "id": "0xdea.c.use-after-free.raptor-use-after-free",
+      "kind": "id",
+      "reason": "overflows opengrep 1.31.0's stack on its own test file",
+      "source": "0xdea"
+    },
+    {
+      "id": "elttam.generic.jsp-likely-xss.jsp-likely-xss",
+      "kind": "mode",
+      "mode": "join",
+      "reason": "opengrep 1.31.0 does not load mode: join rules ('missing languages'), and one in a merged file fails the whole file",
+      "source": "elttam"
+    }
+  ],
+  "files": {
+    "apex.yaml": {
+      "rules": 11,
+      "sha256": "ef4bf29f641d827174e8cf72b35c374df31dd46b21e7426cded29f1bfa01252c"
+    },
+    "bash.yaml": {
+      "rules": 3,
+      "sha256": "461a187429e53249b33467aa468346c8237d4aa8364894a9c047649ab2296c7d"
+    },
+    "c.yaml": {
+      "rules": 60,
+      "sha256": "b8782f51eae7ad4af6e90a93a7aea936031718393d73f8a97d71ac1db15414ca"
+    },
+    "clojure.yaml": {
+      "rules": 5,
+      "sha256": "1b25d2db790251b5b3ca39df6c7bb29cb6ab94f681900c0a0df4d1e7466ae450"
+    },
+    "csharp.yaml": {
+      "rules": 48,
+      "sha256": "00fa1a655852e1c9d00e806fcaf7429523565d3feb627a8786e5d6b3eb6f5a8a"
+    },
+    "dockerfile.yaml": {
+      "rules": 6,
+      "sha256": "bd2efcdb08c472a02d305284458d51ae37ed95b8773ecd210efc8e4fe3ac22eb"
+    },
+    "generic.yaml": {
+      "rules": 23,
+      "sha256": "731813abc00a483aaaa7e9f17b401c7286100ff3f6b857171d21248873bf712b"
+    },
+    "go.yaml": {
+      "rules": 74,
+      "sha256": "58c29042bb2abbeb2326995dea51d571962c79277a571f33174fd7487a7e6140"
+    },
+    "html.yaml": {
+      "rules": 4,
+      "sha256": "c95d85416ad091e02cb2bfdb1a550e18cf29f0b354a8c9b657578cc1e3299f5a"
+    },
+    "java.yaml": {
+      "rules": 164,
+      "sha256": "335d54faedcfa103b8e11557558471677d70aa9c17d77a56bcd7d523822c1ed8"
+    },
+    "javascript.yaml": {
+      "rules": 170,
+      "sha256": "7c42a52bab457229b3f095936975d2759f91f87d2bc9e16c3d0cde7145274142"
+    },
+    "json.yaml": {
+      "rules": 4,
+      "sha256": "3989b566d72fedc0423b6b035a582dc46be304f83a563c4082cee2aa658ffeb1"
+    },
+    "kotlin.yaml": {
+      "rules": 14,
+      "sha256": "4693636a12f9738b0289a4cfa9d918d60aaefaad299b19e05c0784b5e06909d1"
+    },
+    "ocaml.yaml": {
+      "rules": 7,
+      "sha256": "c0b0196815c955ecbbc4028439fb1966715e861c6d8c1c90efb1d7bae205d753"
+    },
+    "php.yaml": {
+      "rules": 62,
+      "sha256": "e6d6190690938414262f8187cb73fb63df24c1257ea47a1de3f9915def148bf2"
+    },
+    "properties.yaml": {
+      "rules": 1,
+      "sha256": "2365de7ba9a6c5eecdd69aaecf3064468e191db433f9248d6ab770323a316eb1"
+    },
+    "python.yaml": {
+      "rules": 273,
+      "sha256": "dfd709e5ecf99a926170b42973c3999058f20bcac6e3f23520f0f8d070e48fae"
+    },
+    "ruby.yaml": {
+      "rules": 98,
+      "sha256": "5430db9050692c19080687364c85642adb3c242dfb8dde764f391984ba2dc2ce"
+    },
+    "rust.yaml": {
+      "rules": 10,
+      "sha256": "3f564bf87c6306b5a3acec95a252510c45578f800b4a77294390bae3f1468d96"
+    },
+    "scala.yaml": {
+      "rules": 26,
+      "sha256": "6b7f97615d12abd1c67a7b3b2c50729541c5ad6cf6a634d16cfd937094642840"
+    },
+    "solidity.yaml": {
+      "rules": 35,
+      "sha256": "cbb5efecfece817c099aeaa1cb5295eabbbcf769d68a721fba4c26a6b0e5e39e"
+    },
+    "swift.yaml": {
+      "rules": 4,
+      "sha256": "8a8247cb5899f37f4350172398b1e464c90af035d199bffd34faccb9d34a8230"
+    },
+    "terraform.yaml": {
+      "rules": 260,
+      "sha256": "27b681ea865726bdcf24198808e82cf4d8151c9c8f13364875a65519ef631c19"
+    },
+    "typescript.yaml": {
+      "rules": 18,
+      "sha256": "8dd3903a699ce782781304e475733baa8e3e28f72b5dfeed1c83fd09a6b8ea6f"
+    },
+    "yaml.yaml": {
+      "rules": 41,
+      "sha256": "06fb2dba98efd43b1dbda03b225dfbc5efc81b4027cf1d56a28299c733256885"
+    }
+  },
+  "sources": {
+    "0xdea": {
+      "pin": "e0121ac19d9fa259a44f3a24d3e42c95719b17c7",
+      "prefix": "0xdea",
+      "rules": 48,
+      "rules_root": "rules",
+      "sha256": "3a0095ef737f4413883e85201f06a66028e6f6173c711e89cb9ff5237667be32",
+      "url": "https://github.com/0xdea/semgrep-rules/archive/e0121ac19d9fa259a44f3a24d3e42c95719b17c7.tar.gz"
+    },
+    "elttam": {
+      "pin": "244268562cc92d33f54b8a60a187df5520f91b26",
+      "prefix": "elttam",
+      "rules": 22,
+      "rules_root": "rules",
+      "sha256": "4a1c064f24391ec8423e53b9d423c5ba2cdedd5b481a0c73237ca32d6cd9d748",
+      "url": "https://github.com/elttam/semgrep-rules/archive/244268562cc92d33f54b8a60a187df5520f91b26.tar.gz"
+    },
+    "lgpl-cc": {
+      "pin": "v2.10.1",
+      "prefix": "lgpl-cc",
+      "rules": 100,
+      "rules_root": "rules/lgpl-cc",
+      "sha256": "627a73135374fdb9122eb3dcca268ea0fbb11d889d1126c6c52fd28b9df2236b",
+      "url": "https://gitlab.com/gitlab-org/security-products/sast-rules/-/archive/v2.10.1/sast-rules-v2.10.1.tar.gz"
+    },
+    "opengrep-rules": {
+      "pin": "f1d2b562b414783763fd02a6ed2736eaed622efa",
+      "prefix": "",
+      "rules": 1251,
+      "rules_root": "",
+      "sha256": "9a5f1cd5c625418cc1c776120123e2d4371df9bb66e099426b17c3488e13619d",
+      "url": "https://github.com/opengrep/opengrep-rules/archive/f1d2b562b414783763fd02a6ed2736eaed622efa.tar.gz"
+    }
+  },
+  "version": 1
+}

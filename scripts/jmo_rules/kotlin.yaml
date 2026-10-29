@@ -1,0 +1,501 @@
+rules:
+- id: kotlin.gradle.security.build-gradle-password-hardcoded.build-gradle-password-hardcoded
+  message: A secret is hard-coded in the application. Secrets stored in source code,
+    such as credentials, identifiers, and other types of sensitive data, can be leaked
+    and used by internal or external malicious actors. It is recommended to rotate
+    the secret and retrieve them from a secure secret vault or Hardware Security Module
+    (HSM), alternatively environment variables can be used if allowed by your company
+    policy.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: HIGH
+    confidence: MEDIUM
+    category: security
+    subcategory:
+    - vuln
+    cwe:
+    - 'CWE-798: Use of Hard-coded Credentials'
+    cwe2020-top25: true
+    cwe2021-top25: true
+    cwe2022-top25: true
+    owasp:
+    - A07:2021 - Identification and Authentication Failures
+    references:
+    - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures
+    technology:
+    - secrets
+    vulnerability_class:
+    - Hard-coded Secrets
+    source_rule_url: https://semgrep.dev/playground/r/d8Ur5BA/achufistov6_personal_org.build-gradle-password-hardcoded
+  languages:
+  - kotlin
+  options:
+    symbolic_propagation: true
+  patterns:
+  - pattern-either:
+    - pattern: '$PASS = env[...] ?: $VALUE'
+  - metavariable-regex:
+      metavariable: $PASS
+      regex: (password|pass|passwd|loginPassword)
+  - metavariable-pattern:
+      language: generic
+      metavariable: $VALUE
+      patterns:
+      - pattern-either:
+        - pattern-regex: ^[A-Za-z0-9/+=]+$
+  paths:
+    include:
+    - '*build.gradle.kts'
+- id: kotlin.lang.security.anonymous-ldap-bind.anonymous-ldap-bind
+  metadata:
+    cwe:
+    - 'CWE-287: Improper Authentication'
+    owasp:
+    - A02:2017 - Broken Authentication
+    - A07:2021 - Identification and Authentication Failures
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#LDAP_ANONYMOUS
+    category: security
+    technology:
+    - kotlin
+    references:
+    - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+  message: Detected anonymous LDAP bind. This permits anonymous users to execute LDAP
+    statements. Consider enforcing authentication for LDAP. See https://docs.oracle.com/javase/tutorial/jndi/ldap/auth_mechs.html
+    for more information.
+  severity: WARNING
+  pattern: '$ENV.put($CTX.SECURITY_AUTHENTICATION, "none")
+
+    ...
+
+    $DCTX = InitialDirContext($ENV, ...)
+
+    '
+  languages:
+  - kt
+- id: kotlin.lang.security.bad-hexa-conversion.bad-hexa-conversion
+  metadata:
+    cwe:
+    - 'CWE-704: Incorrect Type Conversion or Cast'
+    owasp: A03:2017 - Sensitive Data Exposure
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#BAD_HEXA_CONVERSION
+    category: security
+    technology:
+    - kotlin
+    references:
+    - https://cwe.mitre.org/data/definitions/704.html
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  message: '''Integer.toHexString()'' strips leading zeroes from each byte if read
+    byte-by-byte. This mistake weakens the hash value computed since it introduces
+    more collisions. Use ''String.format("%02X", ...)'' instead.'
+  severity: WARNING
+  languages:
+  - kt
+  pattern: "fun $METHOD(...) {\n  ...\n  val $MD: MessageDigest = ...\n  ...\n  $MD.digest(...)\n\
+    \  ...\n  Integer.toHexString(...)\n}"
+- id: kotlin.lang.security.command-injection-formatted-runtime-call.command-injection-formatted-runtime-call
+  message: A formatted or concatenated string was detected as input to a java.lang.Runtime
+    call. This is dangerous if a variable is controlled by user input and could result
+    in a command injection. Ensure your variables are not controlled by users or sufficiently
+    sanitized.
+  metadata:
+    cwe:
+    - 'CWE-78: Improper Neutralization of Special Elements used in an OS Command (''OS
+      Command Injection'')'
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#COMMAND_INJECTION.
+    category: security
+    technology:
+    - kt
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+    confidence: LOW
+  severity: ERROR
+  languages:
+  - kt
+  pattern-either:
+  - pattern: $RUNTIME.exec($X + $Y)
+  - pattern: $RUNTIME.exec(String.format(...))
+  - pattern: $RUNTIME.loadLibrary($X + $Y)
+  - pattern: $RUNTIME.loadLibrary(String.format(...))
+- id: kotlin.lang.security.cookie-missing-httponly.cookie-missing-httponly
+  metadata:
+    cwe:
+    - 'CWE-1004: Sensitive Cookie Without ''HttpOnly'' Flag'
+    owasp:
+    - A05:2021 - Security Misconfiguration
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#HTTPONLY_COOKIE
+    category: security
+    technology:
+    - kt
+    references:
+    - https://owasp.org/Top10/A05_2021-Security_Misconfiguration
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  message: A cookie was detected without setting the 'HttpOnly' flag. The 'HttpOnly'
+    flag for cookies instructs the browser to forbid client-side scripts from reading
+    the cookie. Set the 'HttpOnly' flag by calling 'cookie.setHttpOnly(true);'
+  severity: WARNING
+  languages:
+  - kt
+  patterns:
+  - pattern-not-inside: '$COOKIE.setValue("")
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: $COOKIE.setHttpOnly(false)
+    - patterns:
+      - pattern-not-inside: '$COOKIE.setHttpOnly(...)
+
+          ...
+
+          '
+      - pattern: $RESPONSE.addCookie($COOKIE)
+- id: kotlin.lang.security.cookie-missing-secure-flag.cookie-missing-secure-flag
+  metadata:
+    cwe:
+    - 'CWE-614: Sensitive Cookie in HTTPS Session Without ''Secure'' Attribute'
+    owasp:
+    - A05:2021 - Security Misconfiguration
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#INSECURE_COOKIE
+    category: security
+    technology:
+    - kt
+    references:
+    - https://owasp.org/Top10/A05_2021-Security_Misconfiguration
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  message: A cookie was detected without setting the 'secure' flag. The 'secure' flag
+    for cookies prevents the client from transmitting the cookie over insecure channels
+    such as HTTP. Set the 'secure' flag by calling '$COOKIE.setSecure(true);'
+  severity: WARNING
+  languages:
+  - kt
+  patterns:
+  - pattern-not-inside: '$COOKIE.setValue("")
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: $COOKIE.setSecure(false)
+    - patterns:
+      - pattern-not-inside: '$COOKIE.setSecure(...)
+
+          ...
+
+          '
+      - pattern: $RESPONSE.addCookie($COOKIE)
+- id: kotlin.lang.security.defaulthttpclient-is-deprecated.defaulthttpclient-is-deprecated
+  metadata:
+    cwe:
+    - 'CWE-326: Inadequate Encryption Strength'
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#DEFAULT_HTTP_CLIENT
+    asvs:
+      section: V9 Communications Verification Requirements
+      control_id: 9.1.3 Weak TLS
+      control_url: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x17-V9-Communications.md#v91-client-communications-security-requirements
+      version: '4'
+    category: security
+    technology:
+    - kotlin
+    license: Commons Clause License Condition v1.0[LGPL-2.1-only]
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  message: DefaultHttpClient is deprecated. Further, it does not support connections
+    using TLS1.2, which makes using DefaultHttpClient a security hazard. Use SystemDefaultHttpClient
+    instead, which supports TLS1.2.
+  severity: WARNING
+  languages:
+  - kt
+  pattern: DefaultHttpClient(...)
+  fix-regex:
+    regex: DefaultHttpClient
+    replacement: SystemDefaultHttpClient
+- id: kotlin.lang.security.ecb-cipher.ecb-cipher
+  metadata:
+    cwe:
+    - 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#ECB_MODE
+    category: security
+    technology:
+    - kotlin
+    license: Commons Clause License Condition v1.0[LGPL-2.1-only]
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+  message: Cipher in ECB mode is detected. ECB mode produces the same output for the
+    same input each time which allows an attacker to intercept and replay the data.
+    Further, ECB mode does not provide any integrity checking. See https://find-sec-bugs.github.io/bugs.htm#CIPHER_INTEGRITY.
+  severity: WARNING
+  languages:
+  - kt
+  patterns:
+  - pattern-either:
+    - pattern: 'val $VAR : Cipher = $CIPHER.getInstance($MODE)
+
+        '
+    - pattern: 'var $VAR : Cipher = $CIPHER.getInstance($MODE)
+
+        '
+    - pattern: 'val $VAR = $CIPHER.getInstance($MODE)
+
+        '
+    - pattern: 'var $VAR = $CIPHER.getInstance($MODE)
+
+        '
+  - metavariable-regex:
+      metavariable: $MODE
+      regex: .*ECB.*
+- id: kotlin.lang.security.gcm-detection.gcm-detection
+  metadata:
+    category: security
+    cwe:
+    - 'CWE-323: Reusing a Nonce, Key Pair in Encryption'
+    references:
+    - https://cwe.mitre.org/data/definitions/323.html
+    technology:
+    - kotlin
+    license: Commons Clause License Condition v1.0[LGPL-2.1-only]
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  languages:
+  - kt
+  message: GCM detected, please check that IV/nonce is not reused, an Initialization
+    Vector (IV) is a nonce used to randomize the encryption, so that even if multiple
+    messages with identical plaintext are encrypted, the generated corresponding ciphertexts
+    are different.Unlike the Key, the IV usually does not need to be secret, rather
+    it is important that it is random and unique. Certain encryption schemes the IV
+    is exchanged in public as part of the ciphertext. Reusing same Initialization
+    Vector with the same Key to encrypt multiple plaintext blocks allows an attacker
+    to compare the ciphertexts and then, with some assumptions on the content of the
+    messages, to gain important information about the data being encrypted.
+  patterns:
+  - pattern-either:
+    - pattern: $METHOD.getInstance("AES/GCM/NoPadding",...)
+    - pattern: GCMParameterSpec(...)
+  severity: INFO
+- id: kotlin.lang.security.no-null-cipher.no-null-cipher
+  pattern: NullCipher(...)
+  metadata:
+    cwe:
+    - 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#NULL_CIPHER
+    asvs:
+      section: V6 Stored Cryptography Verification Requirements
+      control_id: 6.2.5 Insecure Algorithm
+      control_url: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x14-V6-Cryptography.md#v62-algorithms
+      version: '4'
+    category: security
+    technology:
+    - kotlin
+    license: Commons Clause License Condition v1.0[LGPL-2.1-only]
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+  message: 'NullCipher was detected. This will not encrypt anything; the cipher text
+    will be the same as the plain text. Use a valid, secure cipher: Cipher.getInstance("AES/CBC/PKCS7PADDING").
+    See https://owasp.org/www-community/Using_the_Java_Cryptographic_Extensions for
+    more information.'
+  severity: WARNING
+  languages:
+  - kt
+  - scala
+- id: kotlin.lang.security.unencrypted-socket.unencrypted-socket
+  metadata:
+    cwe:
+    - 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#UNENCRYPTED_SOCKET
+    asvs:
+      section: V6 Stored Cryptography Verification Requirements
+      control_id: 6.2.5 Insecure Algorithm
+      control_url: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x14-V6-Cryptography.md#v62-algorithms
+      version: '4'
+    category: security
+    technology:
+    - kotlin
+    license: Commons Clause License Condition v1.0[LGPL-2.1-only]
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  message: This socket is not encrypted. The traffic could be read by an attacker
+    intercepting the network traffic. Use an SSLSocket created by 'SSLSocketFactory'
+    or 'SSLServerSocketFactory' instead
+  severity: WARNING
+  languages:
+  - kt
+  pattern-either:
+  - pattern: ServerSocket(...)
+  - pattern: Socket(...)
+- id: kotlin.lang.security.use-of-md5.use-of-md5
+  message: Detected MD5 hash algorithm which is considered insecure. MD5 is not collision
+    resistant and is therefore not suitable as a cryptographic signature. Use SHA256
+    or SHA3 instead.
+  languages:
+  - kt
+  severity: WARNING
+  metadata:
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    cwe:
+    - 'CWE-328: Use of Weak Hash'
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#WEAK_MESSAGE_DIGEST_MD5
+    category: security
+    technology:
+    - kotlin
+    license: Commons Clause License Condition v1.0[LGPL-2.1-only]
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+  pattern-either:
+  - pattern: '$VAR = $MD.getInstance("MD5")
+
+      '
+  - pattern: '$DU.getMd5Digest().digest(...)
+
+      '
+- id: kotlin.lang.security.use-of-sha1.use-of-sha1
+  message: Detected SHA1 hash algorithm which is considered insecure. SHA1 is not
+    collision resistant and is therefore not suitable as a cryptographic signature.
+    Use SHA256 or SHA3 instead.
+  languages:
+  - kt
+  severity: WARNING
+  metadata:
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    cwe:
+    - 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#WEAK_MESSAGE_DIGEST_SHA1
+    asvs:
+      section: V6 Stored Cryptography Verification Requirements
+      control_id: 6.2.5 Insecure Algorithm
+      control_url: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x14-V6-Cryptography.md#v62-algorithms
+      version: '4'
+    category: security
+    technology:
+    - kotlin
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+  pattern-either:
+  - patterns:
+    - pattern: '$VAR = $MD.getInstance("$ALGO")
+
+        '
+    - metavariable-regex:
+        metavariable: $ALGO
+        regex: (SHA1|SHA-1)
+  - pattern: '$DU.getSha1Digest().digest(...)
+
+      '
+- id: kotlin.lang.security.weak-rsa.use-of-weak-rsa-key
+  message: RSA keys should be at least 2048 bits based on NIST recommendation.
+  languages:
+  - kt
+  severity: WARNING
+  metadata:
+    cwe:
+    - 'CWE-326: Inadequate Encryption Strength'
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#RSA_KEY_SIZE
+    asvs:
+      section: V6 Stored Cryptography Verification Requirements
+      control_id: 6.2.5 Insecure Algorithm
+      control_url: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x14-V6-Cryptography.md#v62-algorithms
+      version: '4'
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#algorithms
+    category: security
+    technology:
+    - kotlin
+    subcategory:
+    - audit
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+  patterns:
+  - pattern-either:
+    - pattern: '$KEY = $G.getInstance("RSA")
+
+        ...
+
+        $KEY.initialize($BITS)
+
+        '
+  - metavariable-comparison:
+      metavariable: $BITS
+      comparison: $BITS < 2048

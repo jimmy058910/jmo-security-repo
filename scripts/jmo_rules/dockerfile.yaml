@@ -1,0 +1,205 @@
+rules:
+- id: dockerfile.security.dockerd-socket-mount.dockerfile-dockerd-socket-mount
+  message: The Dockerfile(image) mounts docker.sock to the container which may allow
+    an attacker already inside of the container to escape container and execute arbitrary
+    commands on the host machine.
+  languages:
+  - dockerfile
+  - yaml
+  severity: ERROR
+  metadata:
+    cwe:
+    - 'CWE-862: Missing Authorization'
+    - 'CWE-269: Improper Privilege Management'
+    confidence: HIGH
+    likelihood: MEDIUM
+    impact: HIGH
+    subcategory:
+    - audit
+    technology:
+    - dockerfile
+    category: security
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+    - https://redfoxsec.com/blog/insecure-volume-mounts-in-docker/
+    - https://blog.quarkslab.com/why-is-exposing-the-docker-socket-a-really-bad-idea.html
+  pattern-either:
+  - patterns:
+    - pattern: VOLUME $X
+    - metavariable-regex:
+        metavariable: $X
+        regex: /var/run/docker.sock
+  - patterns:
+    - pattern-regex: '- "/var/run/docker.sock:.*"'
+    - pattern-inside: "volumes:\n  ...\n"
+- id: dockerfile.security.last-user-is-root.last-user-is-root
+  patterns:
+  - pattern: USER root
+  - pattern-not-inside:
+      patterns:
+      - pattern: 'USER root
+
+          ...
+
+          USER $X
+
+          '
+      - metavariable-pattern:
+          metavariable: $X
+          patterns:
+          - pattern-not: root
+  message: The last user in the container is 'root'. This is a security hazard because
+    if an attacker gains control of the container they will have root access. Switch
+    back to another user after running commands as 'root'.
+  severity: ERROR
+  languages:
+  - dockerfile
+  metadata:
+    cwe:
+    - 'CWE-269: Improper Privilege Management'
+    source-rule-url: https://github.com/hadolint/hadolint/wiki/DL3002
+    references:
+    - https://github.com/hadolint/hadolint/wiki/DL3002
+    category: security
+    technology:
+    - dockerfile
+    confidence: MEDIUM
+    owasp:
+    - A04:2021 - Insecure Design
+    subcategory:
+    - audit
+    likelihood: MEDIUM
+    impact: MEDIUM
+- id: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint
+  patterns:
+  - pattern: 'ENTRYPOINT $...VARS
+
+      '
+  - pattern-not-inside: 'USER $USER
+
+      ...
+
+      '
+  fix: 'USER non-root
+
+    ENTRYPOINT $...VARS
+
+    '
+  message: By not specifying a USER, a program in the container may run as 'root'.
+    This is a security hazard. If an attacker can control a process running as root,
+    they may have control over the container. Ensure that the last USER in a Dockerfile
+    is a USER other than 'root'.
+  severity: ERROR
+  languages:
+  - dockerfile
+  metadata:
+    cwe:
+    - 'CWE-269: Improper Privilege Management'
+    category: security
+    technology:
+    - dockerfile
+    confidence: MEDIUM
+    owasp:
+    - A04:2021 - Insecure Design
+    references:
+    - https://owasp.org/Top10/A04_2021-Insecure_Design
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+- id: dockerfile.security.missing-user.missing-user
+  patterns:
+  - pattern: 'CMD $...VARS
+
+      '
+  - pattern-not-inside: 'USER $USER
+
+      ...
+
+      '
+  fix: 'USER non-root
+
+    CMD $...VARS
+
+    '
+  message: By not specifying a USER, a program in the container may run as 'root'.
+    This is a security hazard. If an attacker can control a process running as root,
+    they may have control over the container. Ensure that the last USER in a Dockerfile
+    is a USER other than 'root'.
+  severity: ERROR
+  languages:
+  - dockerfile
+  metadata:
+    cwe:
+    - 'CWE-269: Improper Privilege Management'
+    category: security
+    technology:
+    - dockerfile
+    confidence: MEDIUM
+    owasp:
+    - A04:2021 - Insecure Design
+    references:
+    - https://owasp.org/Top10/A04_2021-Insecure_Design
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+- id: dockerfile.security.no-sudo-in-dockerfile.no-sudo-in-dockerfile
+  patterns:
+  - pattern: 'RUN sudo ...
+
+      '
+  message: Avoid using sudo in Dockerfiles. Running processes as a non-root user can
+    help  reduce the potential impact of configuration errors and security vulnerabilities.
+  metadata:
+    category: security
+    technology:
+    - dockerfile
+    cwe:
+    - 'CWE-250: Execution with Unnecessary Privileges'
+    owasp:
+    - A05:2021 - Security Misconfiguration
+    references:
+    - https://cwe.mitre.org/data/definitions/250.html
+    - https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: HIGH
+  languages:
+  - dockerfile
+  severity: WARNING
+- id: dockerfile.security.secret-in-build-arg.secret-in-build-arg
+  patterns:
+  - pattern-either:
+    - pattern: ARG $ARG
+    - pattern: ARG $ARG=...
+  - metavariable-regex:
+      metavariable: $ARG
+      regex: (?i).*(password|secret|token|key|cert|api|auth)
+  message: Docker build time arguments are not suited for secrets, because the argument
+    values are saved with the image. Running `docker image history` on the image will
+    show information on how the image was built, including arguments. If these contain
+    plain text secrets, anyone with access to the docker image can access those secrets
+    and exploit them.
+  metadata:
+    category: security
+    technology:
+    - dockerfile
+    cwe:
+    - 'CWE-538: Insertion of Sensitive Information into Externally-Accessible File
+      or Directory'
+    owasp:
+    - A01:2021 - Broken Access Control
+    references:
+    - https://cwe.mitre.org/data/definitions/538.html
+    - https://docs.docker.com/engine/reference/builder/#arg
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+    confidence: LOW
+  languages:
+  - dockerfile
+  severity: WARNING

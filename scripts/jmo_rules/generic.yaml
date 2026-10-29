@@ -1,0 +1,917 @@
+rules:
+- id: generic.bicep.security.secure-parameter-for-secrets.secure-parameter-for-secrets
+  patterns:
+  - pattern: param $NAME string
+  - pattern-not-inside: '@secure()
+
+      param $NAME string
+
+      '
+  - metavariable-regex:
+      metavariable: $NAME
+      regex: (?i).*(password|secret|token)
+  message: Mark sensitive parameters with the @secure() decorator. This avoids logging
+    the value or displaying it in the Azure portal, Azure CLI, or Azure PowerShell.
+  metadata:
+    category: security
+    technology:
+    - bicep
+    cwe:
+    - 'CWE-532: Insertion of Sensitive Information into Log File'
+    references:
+    - https://cwe.mitre.org/data/definitions/532.html
+    - https://docs.microsoft.com/en-us/azure/azure-resource-manager/bicep/scenarios-secrets
+    owasp:
+    - A09:2021 - Security Logging and Monitoring Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  languages:
+  - generic
+  paths:
+    include:
+    - '*.bicep'
+  severity: WARNING
+- id: generic.ci.security.bash-reverse-shell.bash_reverse_shell
+  metadata:
+    cwe:
+    - 'CWE-94: Improper Control of Generation of Code (''Code Injection'')'
+    category: security
+    technology:
+    - ci
+    confidence: HIGH
+    owasp:
+    - A03:2021 - Injection
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection
+    cwe2022-top25: true
+    subcategory:
+    - audit
+    likelihood: MEDIUM
+    impact: HIGH
+  message: Semgrep found a bash reverse shell
+  severity: ERROR
+  languages:
+  - generic
+  pattern-either:
+  - pattern: 'sh -i >& /dev/udp/.../... 0>&1
+
+      '
+  - pattern: '<...>/dev/tcp/.../...; sh <&... >&... 2>&
+
+      '
+  - pattern: '<...>/dev/tcp/.../...; cat <&... | while read line; do $line 2>&...
+      >&...;done
+
+      '
+  - pattern: 'sh -i ...<...> /dev/tcp/.../... ...<&... 1>&... 2>&
+
+      '
+- id: generic.gradle.security.build-gradle-password-hardcoded.build-gradle-password-hardcoded
+  message: A secret is hard-coded in the application. Secrets stored in source code,
+    such as credentials, identifiers, and other types of sensitive data, can be leaked
+    and used by internal or external malicious actors. It is recommended to rotate
+    the secret and retrieve them from a secure secret vault or Hardware Security Module
+    (HSM), alternatively environment variables can be used if allowed by your company
+    policy.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: HIGH
+    confidence: LOW
+    category: security
+    subcategory:
+    - vuln
+    cwe:
+    - 'CWE-798: Use of Hard-coded Credentials'
+    cwe2020-top25: true
+    cwe2021-top25: true
+    cwe2022-top25: true
+    owasp:
+    - A07:2021 - Identification and Authentication Failures
+    references:
+    - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures
+    technology:
+    - secrets
+    vulnerability_class:
+    - Hard-coded Secrets
+    source_rule_url: https://semgrep.dev/playground/r/qNU2d1G/achufistov6_personal_org.groovy-build-gradle-password-hardcoded
+  languages:
+  - generic
+  patterns:
+  - pattern: 'password = env[...] ?: "$SECRET"
+
+      '
+  paths:
+    include:
+    - '*build.gradle'
+- id: generic.html-templates.security.unquoted-attribute-var.unquoted-attribute-var
+  message: 'Detected a unquoted template variable as an attribute. If unquoted, a
+    malicious actor could inject custom JavaScript handlers. To fix this, add quotes
+    around the template expression, like this: "{{ expr }}".'
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://flask.palletsprojects.com/en/1.1.x/security/#cross-site-scripting-xss
+    category: security
+    technology:
+    - html-templates
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  languages:
+  - generic
+  paths:
+    include:
+    - '*.html'
+    - '*.mustache'
+    - '*.hbs'
+  severity: WARNING
+  patterns:
+  - pattern-inside: <$TAG ...>
+  - pattern-not-inside: ="..."
+  - pattern-not-inside: ='...'
+  - pattern: '{{ ... }}'
+  fix-regex:
+    regex: '{{(.*?)}}'
+    replacement: '"{{\1}}"'
+- id: generic.html-templates.security.var-in-href.var-in-href
+  message: Detected a template variable used in an anchor tag with the 'href' attribute.
+    This allows a malicious actor to input the 'javascript:' URI and is subject to
+    cross- site scripting (XSS) attacks. If using Flask, use 'url_for()' to safely
+    generate a URL. If using Django, use the 'url' filter to safely generate a URL.
+    If using Mustache, use a URL encoding library, or prepend a slash '/' to the variable
+    for relative links (`href="/{{link}}"`). You may also consider setting the Content
+    Security Policy (CSP) header.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://flask.palletsprojects.com/en/1.1.x/security/#cross-site-scripting-xss#:~:text=javascript:%20URI
+    - https://docs.djangoproject.com/en/3.1/ref/templates/builtins/#url
+    - https://github.com/pugjs/pug/issues/2952
+    - https://content-security-policy.com/
+    category: security
+    technology:
+    - html-templates
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  languages:
+  - generic
+  paths:
+    include:
+    - '*.html'
+    - '*.mustache'
+    - '*.hbs'
+  severity: WARNING
+  patterns:
+  - pattern-inside: <a ...>
+  - pattern-either:
+    - pattern: href = {{ ... }}
+    - pattern: href = "{{ ... }}"
+    - pattern: href = '{{ ... }}'
+  - pattern-not-inside: href = {{ url_for(...) ... }}
+  - pattern-not-inside: href = "{{ url_for(...) ... }}"
+  - pattern-not-inside: href = '{{ url_for(...) ... }}'
+  - pattern-not-inside: href = "/{{ ... }}"
+  - pattern-not-inside: href = '/{{ ... }}'
+- id: generic.html-templates.security.var-in-script-src.var-in-script-src
+  message: Detected a template variable used as the 'src' in a script tag. Although
+    template variables are HTML escaped, HTML escaping does not always prevent malicious
+    URLs from being injected and could results in a cross-site scripting (XSS) vulnerability.
+    Prefer not to dynamically generate the 'src' attribute and use static URLs instead.
+    If you must do this, carefully check URLs against an allowlist and be sure to
+    URL-encode the result.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://adamj.eu/tech/2020/02/18/safely-including-data-for-javascript-in-a-django-template/?utm_campaign=Django%2BNewsletter&utm_medium=rss&utm_source=Django_Newsletter_12A
+    - https://www.veracode.com/blog/secure-development/nodejs-template-engines-why-default-encoders-are-not-enough
+    - https://github.com/ESAPI/owasp-esapi-js
+    category: security
+    technology:
+    - html-templates
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  languages:
+  - generic
+  paths:
+    include:
+    - '*.mustache'
+    - '*.hbs'
+    - '*.html'
+  severity: WARNING
+  patterns:
+  - pattern-inside: <script ...>
+  - pattern-not-inside: src = '...'
+  - pattern-not-inside: src = "..."
+  - pattern-not-inside: nonce = '...'
+  - pattern-not-inside: nonce = "..."
+  - pattern: '{{ ... }}'
+- id: generic.html-templates.security.var-in-script-tag.var-in-script-tag
+  message: Detected a template variable used in a script tag. Although template variables
+    are HTML escaped, HTML escaping does not always prevent cross-site scripting (XSS)
+    attacks when used directly in JavaScript. If you need this data on the rendered
+    page, consider placing it in the HTML portion (outside of a script tag). Alternatively,
+    use a JavaScript-specific encoder, such as the one available in OWASP ESAPI. For
+    Django, you may also consider using the 'json_script' template tag and retrieving
+    the data in your script by using the element ID (e.g., `document.getElementById`).
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://adamj.eu/tech/2020/02/18/safely-including-data-for-javascript-in-a-django-template/?utm_campaign=Django%2BNewsletter&utm_medium=rss&utm_source=Django_Newsletter_12A
+    - https://www.veracode.com/blog/secure-development/nodejs-template-engines-why-default-encoders-are-not-enough
+    - https://github.com/ESAPI/owasp-esapi-js
+    category: security
+    technology:
+    - html-templates
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  languages:
+  - generic
+  paths:
+    include:
+    - '*.mustache'
+    - '*.hbs'
+    - '*.html'
+  severity: WARNING
+  patterns:
+  - pattern-inside: <script ...> ... </script>
+  - pattern-not-inside: <script ... $ATTR = "..." ...>
+  - pattern-not-inside: <script ... $ATTR = '...' ...>
+  - pattern: '{{ ... }}'
+- id: generic.nginx.security.alias-path-traversal.alias-path-traversal
+  patterns:
+  - pattern: "location $...LOCATION {\n  ...\n  alias .../;\n  ...\n}\n"
+  - metavariable-pattern:
+      metavariable: $...LOCATION
+      pattern-regex: ^.*[^/]$
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  fix-regex:
+    regex: location\s+([A-Za-z0-9/-_\.]+)
+    replacement: location \1/
+  languages:
+  - generic
+  severity: WARNING
+  message: The alias in this location block is subject to a path traversal because
+    the location path does not end in a path separator (e.g., '/'). To fix, add a
+    path separator to the end of the path.
+  metadata:
+    cwe:
+    - 'CWE-22: Improper Limitation of a Pathname to a Restricted Directory (''Path
+      Traversal'')'
+    source-rule-url: https://github.com/yandex/gixy/blob/master/docs/en/plugins/aliastraversal.md
+    category: security
+    technology:
+    - nginx
+    confidence: LOW
+    owasp:
+    - A05:2017 - Broken Access Control
+    - A01:2021 - Broken Access Control
+    references:
+    - https://owasp.org/Top10/A01_2021-Broken_Access_Control
+    - https://www.acunetix.com/vulnerabilities/web/path-traversal-via-misconfigured-nginx-alias/
+    - https://www.youtube.com/watch?v=CIhHpkybYsY
+    - https://github.com/orangetw/My-Presentation-Slides/blob/main/data/2018-Breaking-Parser-Logic-Take-Your-Path-Normalization-Off-And-Pop-0days-Out.pdf
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+- id: generic.nginx.security.dynamic-proxy-host.dynamic-proxy-host
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: WARNING
+  message: The host for this proxy URL is dynamically determined. This can be dangerous
+    if the host can be injected by an attacker because it may forcibly alter destination
+    of the proxy. Consider hardcoding acceptable destinations and retrieving them
+    with 'map' or something similar.
+  metadata:
+    source-rule-url: https://github.com/yandex/gixy/blob/master/docs/en/plugins/ssrf.md
+    references:
+    - https://nginx.org/en/docs/http/ngx_http_map_module.html
+    category: security
+    technology:
+    - nginx
+    confidence: MEDIUM
+    cwe:
+    - 'CWE-441: Unintended Proxy or Intermediary (''Confused Deputy'')'
+    owasp:
+    - A01:2021 - Broken Access Control
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  pattern-either:
+  - pattern: proxy_pass $SCHEME://$$HOST ...;
+  - pattern: proxy_pass $$SCHEME://$$HOST ...;
+- id: generic.nginx.security.dynamic-proxy-scheme.dynamic-proxy-scheme
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: WARNING
+  message: The protocol scheme for this proxy is dynamically determined. This can
+    be dangerous if the scheme can be injected by an attacker because it may forcibly
+    alter the connection scheme. Consider hardcoding a scheme for this proxy.
+  metadata:
+    cwe:
+    - 'CWE-16: CWE CATEGORY: Configuration'
+    references:
+    - https://github.com/yandex/gixy/blob/master/docs/en/plugins/ssrf.md
+    category: security
+    technology:
+    - nginx
+    confidence: MEDIUM
+    owasp:
+    - A06:2017 - Security Misconfiguration
+    - A05:2021 - Security Misconfiguration
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+  pattern: proxy_pass $$SCHEME:// ...;
+- id: generic.nginx.security.header-injection.header-injection
+  pattern: "location ... <$VARIABLE> ... {\n  ...\n  add_header ... $$VARIABLE\n \
+    \ ...\n}\n"
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: ERROR
+  message: 'The $$VARIABLE path parameter is added as a header in the response. This
+    could allow an attacker to inject a newline and add a new header into the response.
+    This is called HTTP response splitting. To fix, do not allow whitespace in the
+    path parameter: ''[^\s]+''.'
+  metadata:
+    cwe:
+    - 'CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers (''HTTP
+      Request/Response Splitting'')'
+    references:
+    - https://github.com/yandex/gixy/blob/master/docs/en/plugins/httpsplitting.md
+    - https://owasp.org/www-community/attacks/HTTP_Response_Splitting
+    category: security
+    technology:
+    - nginx
+    confidence: MEDIUM
+    owasp:
+    - A03:2021 - Injection
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+- id: generic.nginx.security.header-redefinition.header-redefinition
+  patterns:
+  - pattern-inside: "server {\n  ...\n  add_header ...;\n  ...\n  ...\n}\n"
+  - pattern-inside: "location ... {\n  ...\n  ...\n}\n"
+  - pattern: add_header ...;
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: WARNING
+  message: The 'add_header' directive is called in a 'location' block after headers
+    have been set at the server block. Calling 'add_header' in the location block
+    will actually overwrite the headers defined in the server block, no matter which
+    headers are set. To fix this, explicitly set all headers or set all headers in
+    the server block.
+  metadata:
+    cwe:
+    - 'CWE-16: CWE CATEGORY: Configuration'
+    references:
+    - https://github.com/yandex/gixy/blob/master/docs/en/plugins/addheaderredefinition.md
+    category: security
+    technology:
+    - nginx
+    confidence: LOW
+    owasp:
+    - A06:2017 - Security Misconfiguration
+    - A05:2021 - Security Misconfiguration
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+- id: generic.nginx.security.insecure-redirect.insecure-redirect
+  patterns:
+  - pattern-either:
+    - pattern: rewrite ... redirect
+    - pattern: rewrite ... permanent
+  - pattern-not-inside: rewrite ... https ... $host ... redirect
+  - pattern-not-inside: rewrite ... https ... $host ... permanent
+  - pattern-not-regex: (?i)https:\/\/
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  message: Detected an insecure redirect in this nginx configuration. If no scheme
+    is specified, nginx will forward the request with the incoming scheme. This could
+    result in unencrypted communications. To fix this, include the 'https' scheme.
+  languages:
+  - generic
+  severity: WARNING
+  metadata:
+    cwe:
+    - 'CWE-319: Cleartext Transmission of Sensitive Information'
+    category: security
+    technology:
+    - nginx
+    confidence: LOW
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+- id: generic.nginx.security.insecure-ssl-version.insecure-ssl-version
+  patterns:
+  - pattern-not: ssl_protocols TLSv1.2 TLSv1.3;
+  - pattern-not: ssl_protocols TLSv1.3 TLSv1.2;
+  - pattern-not: ssl_protocols TLSv1.2;
+  - pattern-not: ssl_protocols TLSv1.3;
+  - pattern: ssl_protocols ...;
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: WARNING
+  message: Detected use of an insecure SSL version. Secure SSL versions are TLSv1.2
+    and TLS1.3; older versions are known to be broken and are susceptible to attacks.
+    Prefer use of TLSv1.2 or later.
+  metadata:
+    cwe:
+    - 'CWE-326: Inadequate Encryption Strength'
+    references:
+    - https://www.acunetix.com/blog/web-security-zone/hardening-nginx/
+    - https://www.acunetix.com/blog/articles/tls-ssl-cipher-hardening/
+    category: security
+    technology:
+    - nginx
+    confidence: HIGH
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    subcategory:
+    - audit
+    likelihood: MEDIUM
+    impact: MEDIUM
+- id: generic.nginx.security.missing-internal.missing-internal
+  options:
+    generic_ellipsis_max_span: 0
+    generic_engine: aliengrep
+  patterns:
+  - pattern-inside: "location ... {\n  ....\n  ....\n}\n"
+  - pattern-not-inside: "location ... {\n  ....\n  internal;\n  ....\n}\n"
+  - pattern: proxy_pass $...URL;
+  - metavariable-regex:
+      metavariable: $...URL
+      regex: (.*\$.*)
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: WARNING
+  message: This location block contains a 'proxy_pass' directive but does not contain
+    the 'internal' directive. The 'internal' directive restricts access to this location
+    to internal requests. Without 'internal', an attacker could use your server for
+    server-side request forgeries (SSRF). Include the 'internal' directive in this
+    block to limit exposure.
+  metadata:
+    cwe:
+    - 'CWE-16: CWE CATEGORY: Configuration'
+    references:
+    - https://github.com/yandex/gixy/blob/master/docs/en/plugins/ssrf.md
+    - https://nginx.org/en/docs/http/ngx_http_core_module.html#internal
+    category: security
+    technology:
+    - nginx
+    confidence: LOW
+    owasp:
+    - A06:2017 - Security Misconfiguration
+    - A05:2021 - Security Misconfiguration
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+- id: generic.nginx.security.missing-ssl-version.missing-ssl-version
+  patterns:
+  - pattern: server { ... listen $PORT ssl; ... }
+  - pattern-not-inside: server { ... ssl_protocols ... }
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: WARNING
+  message: This server configuration is missing the 'ssl_protocols' directive. By
+    default, this server will use 'ssl_protocols TLSv1 TLSv1.1 TLSv1.2', and versions
+    older than TLSv1.2 are known to be broken. Explicitly specify 'ssl_protocols TLSv1.2
+    TLSv1.3' to use secure TLS versions.
+  metadata:
+    cwe:
+    - 'CWE-326: Inadequate Encryption Strength'
+    references:
+    - https://www.acunetix.com/blog/web-security-zone/hardening-nginx/
+    - https://nginx.org/en/docs/http/configuring_https_servers.html
+    category: security
+    technology:
+    - nginx
+    confidence: MEDIUM
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+- id: generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling
+  patterns:
+  - pattern-either:
+    - pattern: 'proxy_http_version 1.1 ...;
+
+        ...
+
+        proxy_set_header Upgrade ...;
+
+        ...
+
+        proxy_set_header Connection ...;
+
+        '
+    - pattern: 'proxy_set_header Upgrade ...;
+
+        ...
+
+        proxy_set_header Connection ...;
+
+        ...
+
+        proxy_http_version 1.1 ...;
+
+        '
+    - pattern: 'proxy_set_header Upgrade ...;
+
+        ...
+
+        proxy_http_version 1.1 ...;
+
+        ...
+
+        proxy_set_header Connection ...;
+
+        '
+  - pattern-inside: "location ... {\n  ...\n}\n"
+  languages:
+  - generic
+  severity: WARNING
+  message: 'Conditions for Nginx H2C smuggling identified. H2C smuggling allows upgrading
+    HTTP/1.1 connections to lesser-known HTTP/2 over cleartext (h2c) connections which
+    can allow a bypass of reverse proxy access controls, and lead to long-lived, unrestricted
+    HTTP traffic directly to back-end servers. To mitigate: WebSocket support required:
+    Allow only the value websocket for HTTP/1.1 upgrade headers (e.g., Upgrade: websocket).
+    WebSocket support not required: Do not forward Upgrade headers.'
+  paths:
+    include:
+    - '*.conf'
+    - '*.vhost'
+    - sites-available/*
+    - sites-enabled/*
+  metadata:
+    cwe:
+    - 'CWE-444: Inconsistent Interpretation of HTTP Requests (''HTTP Request/Response
+      Smuggling'')'
+    references:
+    - https://labs.bishopfox.com/tech-blog/h2c-smuggling-request-smuggling-via-http/2-cleartext-h2c
+    category: security
+    technology:
+    - nginx
+    confidence: MEDIUM
+    owasp:
+    - A04:2021 - Insecure Design
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+- id: generic.nginx.security.request-host-used.request-host-used
+  pattern-either:
+  - pattern: $http_host
+  - pattern: $host
+  paths:
+    include:
+    - '*conf*'
+    - '*nginx*'
+    - '*vhost*'
+    - sites-available/*
+    - sites-enabled/*
+  languages:
+  - generic
+  severity: WARNING
+  message: '''$http_host'' and ''$host'' variables may contain a malicious value from
+    attacker controlled ''Host'' request header. Use an explicitly configured host
+    value or a allow list for validation.'
+  metadata:
+    cwe:
+    - 'CWE-290: Authentication Bypass by Spoofing'
+    references:
+    - https://github.com/yandex/gixy/blob/master/docs/en/plugins/hostspoofing.md
+    - https://portswigger.net/web-security/host-header
+    category: security
+    technology:
+    - nginx
+    confidence: MEDIUM
+    owasp:
+    - A07:2021 - Identification and Authentication Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+- id: generic.unicode.security.bidi.contains-bidirectional-characters
+  patterns:
+  - pattern-either:
+    - pattern-regex: ‪
+    - pattern-regex: ‫
+    - pattern-regex: ‭
+    - pattern-regex: ‮
+    - pattern-regex: ⁦
+    - pattern-regex: ⁧
+    - pattern-regex: ⁨
+    - pattern-regex: ‬
+    - pattern-regex: ⁩
+  message: This code contains bidirectional (bidi) characters. While this is useful
+    for support of right-to-left languages such as Arabic or Hebrew, it can also be
+    used to trick language parsers into executing code in a manner that is different
+    from how it is displayed in code editing and review tools. If this is not what
+    you were expecting, please review this code in an editor that can reveal hidden
+    Unicode characters.
+  metadata:
+    cwe:
+    - 'CWE-94: Improper Control of Generation of Code (''Code Injection'')'
+    category: security
+    technology:
+    - unicode
+    references:
+    - https://trojansource.codes/
+    confidence: LOW
+    owasp:
+    - A03:2021 - Injection
+    cwe2022-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+  languages:
+  - bash
+  - c
+  - csharp
+  - go
+  - java
+  - javascript
+  - json
+  - kotlin
+  - lua
+  - ocaml
+  - php
+  - python
+  - ruby
+  - rust
+  - scala
+  - sh
+  - typescript
+  - yaml
+  severity: WARNING
+- id: generic.visualforce.security.ncino.html.UseSRIForCDNs.use-SRI-for-CDNs
+  languages:
+  - generic
+  severity: WARNING
+  message: 'Consuming CDNs without including a SubResource Integrity (SRI) can expose
+    your application and its users to compromised code. SRIs allow you to consume
+    specific versions of content where if even a single byte is compromised, the resource
+    will not be loaded. Add an integrity attribute to your <script> and <link> tags
+    pointing to CDN content to ensure the resources have not been compromised. A crossorigin
+    attribute should also be added. For a more thorough explanation along with explicit
+    instructions on remediating, follow the directions from Mozilla here: https://developer.mozilla.org/en-US/blog/securing-cdn-using-sri-why-how/'
+  metadata:
+    cwe:
+    - 'CWE-346: Origin Validation Error'
+    owasp:
+    - A07:2021 - Identification and Authentication Failures
+    cwe2020-top25': true
+    cwe2021-top25': true
+    cwe2022-top25': true
+    impact: MEDIUM
+    likelihood: MEDIUM
+    confidence: MEDIUM
+    category: security
+    subcategory:
+    - vuln
+    technology:
+    - salesforce
+    - visualforce
+    references:
+    - https://cwe.mitre.org/data/definitions/352.html
+    - https://developer.mozilla.org/en-US/blog/securing-cdn-using-sri-why-how/
+  patterns:
+  - pattern-either:
+    - pattern: <link...href="$URL..."...>
+    - pattern: <script...src="$URL..."...>
+  - metavariable-regex:
+      metavariable: $URL
+      regex: http[A-Za-z0-9\/\.\-\:]
+  - pattern-not: <script...integrity="..."...src="..."...>
+  - pattern-not: <script...src="..."...integrity="..."...>
+  - pattern-not: <link...integrity="..."...href="..."...>
+  - pattern-not: <link...href="..."...integrity="..."...>
+  paths:
+    include:
+    - '*.component'
+    - '*.page'
+- id: generic.visualforce.security.ncino.vf.XSSFromUnescapedURLParam.xss-from-unescaped-url-param
+  languages:
+  - generic
+  severity: ERROR
+  message: To remediate this issue, ensure that all URL parameters are properly escaped
+    before including them in scripts. Please update your code to use either the JSENCODE
+    method to escape URL parameters or the escape="true" attribute on <apex:outputText>
+    tags. Passing URL parameters directly into scripts and DOM sinks creates an opportunity
+    for Cross-Site Scripting attacks. Cross-Site Scripting (XSS) attacks are a type
+    of injection, in which malicious scripts are injected into otherwise benign and
+    trusted websites. To remediate this issue, ensure that all URL parameters are
+    properly escaped before including them in scripts.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/pages_security_tips_xss.htm
+    category: security
+    subcategory:
+    - vuln
+    technology:
+    - salesforce
+    - visualforce
+    cwe2022-top25: true
+    cwe2021-top25: true
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+  patterns:
+  - pattern-either:
+    - pattern: <apex:outputText...escape="false"...value="{!...CurrentPage.parameters.$URL_PARAM}".../>
+    - pattern: <apex:outputText...value="{!...CurrentPage.parameters.$URL_PARAM}"...escape="false".../>
+    - pattern: <script>...'{!...CurrentPage.parameters.$URL_PARAM}'...</script>
+  - pattern-not: <script>...'{!...JSENCODE(...CurrentPage.parameters.$URL_PARAM})'...</script>
+  paths:
+    include:
+    - '*.component'
+    - '*.page'
+- id: generic.visualforce.security.ncino.xml.CSPHeaderAttribute.csp-header-attribute
+  languages:
+  - generic
+  severity: INFO
+  message: Visualforce Pages must have the cspHeader attribute set to true. This attribute
+    is available in API version 55 or higher.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://help.salesforce.com/s/articleView?id=sf.csp_trusted_sites.htm&type=5
+    category: security
+    subcategory:
+    - vuln
+    technology:
+    - salesforce
+    - visualforce
+    cwe2022-top25: true
+    cwe2021-top25: true
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+  patterns:
+  - pattern: <apex:page...>...</apex:page>
+  - pattern-not: <apex:page...cspHeader="true"...>...</apex:page>
+  - pattern-not: <apex:page...>...<!--deprecated-->...</apex:page>
+  - pattern-not: <apex:page...>...<!-- deprecated -->...</apex:page>
+  paths:
+    include:
+    - '*.page'
+- id: generic.visualforce.security.ncino.xml.VisualForceAPIVersion.visualforce-page-api-version
+  languages:
+  - generic
+  severity: WARNING
+  message: Visualforce Pages must use API version 55 or higher for required use of
+    the cspHeader attribute set to true.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_pages.htm
+    category: security
+    subcategory:
+    - vuln
+    technology:
+    - salesforce
+    - visualforce
+    cwe2022-top25: true
+    cwe2021-top25: true
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+  patterns:
+  - pattern-inside: <apiVersion.../apiVersion>
+  - pattern-either:
+    - pattern-regex: '[>][0-9].[0-9][<]'
+    - pattern-regex: '[>][1-4][0-9].[0-9][<]'
+    - pattern-regex: '[>][5][0-4].[0-9][<]'
+  paths:
+    include:
+    - '*.page-meta.xml'

@@ -1,0 +1,2135 @@
+rules:
+- id: csharp.dotnet.security.audit.ldap-injection.ldap-injection
+  message: LDAP queries are constructed dynamically on user-controlled input. This
+    vulnerability in code could lead to an arbitrary LDAP query execution.
+  severity: ERROR
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-90: Improper Neutralization of Special Elements used in an LDAP Query (''LDAP
+      Injection'')'
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection/
+    - https://cwe.mitre.org/data/definitions/90
+    - https://cheatsheetseries.owasp.org/cheatsheets/LDAP_Injection_Prevention_Cheat_Sheet.html#safe-c-sharp-net-tba-example
+    subcategory:
+    - vuln
+    technology:
+    - .net
+  languages:
+  - csharp
+  mode: taint
+  options:
+    taint_unify_mvars: true
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $INPUT
+    - pattern-inside: $T $M($INPUT,...) {...}
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $S.Filter = ... + $INPUT + ...
+      - pattern: $S.Filter = String.Format(...,$INPUT)
+      - pattern: $S.Filter = String.Concat(...,$INPUT)
+  pattern-sanitizers:
+  - pattern-either:
+    - pattern: Regex.Replace($INPUT, ...)
+    - pattern: $ENCODER.LdapFilterEncode($INPUT)
+    - pattern: $ENCODER.LdapDistinguishedNameEncode($INPUT)
+- id: csharp.dotnet.security.audit.mass-assignment.mass-assignment
+  message: Mass assignment or Autobinding vulnerability in code allows an attacker
+    to execute over-posting attacks, which could create a new parameter in the binding
+    request and manipulate the underlying object in the application.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-915: Improperly Controlled Modification of Dynamically-Determined Object
+      Attributes'
+    owasp:
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://cwe.mitre.org/data/definitions/915.html
+    - https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa6-mass-assignment.md
+    subcategory:
+    - vuln
+    technology:
+    - .net
+  languages:
+  - csharp
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern: "public IActionResult $METHOD(..., $TYPE $ARG, ...){\n  ...\n}\n"
+      - pattern: "public ActionResult $METHOD(..., $TYPE $ARG, ...){\n  ...\n}\n"
+    - pattern-inside: 'using Microsoft.AspNetCore.Mvc;
+
+        ...
+
+        '
+    - pattern-not: "public IActionResult $METHOD(..., [Bind(...)] $TYPE $ARG, ...){\n\
+        \  ...\n}\n"
+    - pattern-not: "public ActionResult $METHOD(..., [Bind(...)] $TYPE $ARG, ...){\n\
+        \  ...\n}\n"
+    - focus-metavariable: $ARG
+  pattern-sinks:
+  - pattern: View(...)
+- id: csharp.dotnet.security.audit.misconfigured-lockout-option.misconfigured-lockout-option
+  message: A misconfigured lockout mechanism allows an attacker to execute brute-force
+    attacks. Account lockout must be correctly configured and enabled to prevent these
+    attacks.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: HIGH
+    confidence: LOW
+    category: security
+    cwe:
+    - 'CWE-307: Improper Restriction of Excessive Authentication Attempts'
+    owasp:
+    - A07:2021 - Identification and Authentication Failures
+    references:
+    - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures
+    - https://cwe.mitre.org/data/definitions/307.html
+    subcategory:
+    - audit
+    technology:
+    - dotnet
+  languages:
+  - csharp
+  patterns:
+  - pattern-either:
+    - pattern: '$SIGNIN.PasswordSignInAsync(...,lockoutOnFailure: false,...);
+
+        '
+    - pattern: '$SIGNIN.CheckPasswordSignInAsync(...,lockoutOnFailure: false,...);
+
+        '
+  - pattern-inside: "public async $TYPE<IActionResult> $METHOD(...) {\n  ...\n}\n"
+- id: csharp.dotnet.security.audit.missing-or-broken-authorization.missing-or-broken-authorization
+  message: Anonymous access shouldn't be allowed unless explicit by design. Access
+    control checks are missing and potentially can be bypassed. This finding violates
+    the principle of least privilege or deny by default, where access should only
+    be permitted for a specific set of roles or conforms to a custom policy or users.
+  severity: INFO
+  metadata:
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-862: Missing Authorization'
+    cwe2021-top25: true
+    cwe2022-top25: true
+    cwe2023-top25: true
+    owasp:
+    - A01:2021 - Broken Access Control
+    references:
+    - https://owasp.org/Top10/A01_2021-Broken_Access_Control
+    - https://cwe.mitre.org/data/definitions/862.html
+    - https://docs.microsoft.com/en-us/aspnet/core/security/authorization/simple?view=aspnetcore-7.0
+    subcategory:
+    - vuln
+    technology:
+    - .net
+    - mvc
+  languages:
+  - csharp
+  patterns:
+  - pattern: "public class $CLASS : Controller {\n  ...\n}\n"
+  - pattern-inside: 'using Microsoft.AspNetCore.Mvc;
+
+      ...
+
+      '
+  - pattern-not: "[AllowAnonymous]\npublic class $CLASS : Controller {\n  ...\n}\n"
+  - pattern-not: "[Authorize]\npublic class $CLASS : Controller {\n  ...\n}\n"
+  - pattern-not: "[Authorize(Roles = ...)]\npublic class $CLASS : Controller {\n \
+      \ ...\n}\n"
+  - pattern-not: "[Authorize(Policy = ...)]\npublic class $CLASS : Controller {\n\
+      \  ...\n}\n"
+- id: csharp.dotnet.security.audit.open-directory-listing.open-directory-listing
+  message: An open directory listing is potentially exposed, potentially revealing
+    sensitive information to attackers.
+  severity: INFO
+  metadata:
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-548: Exposure of Information Through Directory Listing'
+    owasp:
+    - A06:2017 - Security Misconfiguration
+    - A01:2021 - Broken Access Control
+    references:
+    - https://cwe.mitre.org/data/definitions/548.html
+    - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+    - https://docs.microsoft.com/en-us/aspnet/core/fundamentals/static-files?view=aspnetcore-7.0#directory-browsing
+    subcategory:
+    - vuln
+    technology:
+    - .net
+    - mvc
+  languages:
+  - csharp
+  patterns:
+  - pattern-either:
+    - pattern: (IApplicationBuilder $APP).UseDirectoryBrowser(...);
+    - pattern: $BUILDER.Services.AddDirectoryBrowser(...);
+  - pattern-inside: "public void Configure(...) {\n  ...\n}\n"
+- id: csharp.dotnet.security.audit.razor-use-of-htmlstring.razor-use-of-htmlstring
+  message: ASP.NET Core MVC provides an HtmlString class which isn't automatically
+    encoded upon output. This should never be used in combination with untrusted input
+    as this will expose an XSS vulnerability.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: LOW
+    category: security
+    cwe:
+    - 'CWE-116: Improper Encoding or Escaping of Output'
+    owasp:
+    - A03:2021 - Injection
+    references:
+    - https://cwe.mitre.org/data/definitions/116.html
+    - https://owasp.org/Top10/A03_2021-Injection/
+    - https://docs.microsoft.com/en-us/aspnet/core/security/cross-site-scripting?view=aspnetcore-6.0#html-encoding-using-razor
+    subcategory:
+    - audit
+    technology:
+    - .net
+  languages:
+  - generic
+  paths:
+    include:
+    - '*.cshtml'
+  patterns:
+  - pattern-either:
+    - pattern: new ...HtmlString(...)
+    - pattern: '@(new ...HtmlString(...))'
+  - pattern-not-inside: '@(new ...HtmlString(...HtmlEncode(...)))'
+  - pattern-not-inside: '@(new ...HtmlString(...Encode(...)))'
+  - pattern-not-inside: new ...HtmlString(...HtmlEncode(...))
+  - pattern-not-inside: new ...HtmlString(...Encode(...))
+- id: csharp.dotnet.security.audit.xpath-injection.xpath-injection
+  message: XPath queries are constructed dynamically on user-controlled input. This
+    vulnerability in code could lead to an XPath Injection exploitation.
+  severity: ERROR
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-643: Improper Neutralization of Data within XPath Expressions (''XPath
+      Injection'')'
+    owasp:
+    - A03:2021 - Injection
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection/
+    - https://cwe.mitre.org/data/definitions/643.html
+    subcategory:
+    - vuln
+    technology:
+    - .net
+  languages:
+  - csharp
+  mode: taint
+  pattern-sources:
+  - pattern-either:
+    - pattern: $T $M($INPUT,...) {...}
+    - pattern: "$T $M(...) {\n  ...\n  string $INPUT;\n}\n"
+  pattern-sinks:
+  - pattern-either:
+    - pattern: XPathExpression $EXPR = $NAV.Compile("..." + $INPUT + "...");
+    - pattern: var $EXPR = $NAV.Compile("..." + $INPUT + "...");
+    - pattern: XPathNodeIterator $NODE = $NAV.Select("..." + $INPUT + "...");
+    - pattern: var $NODE = $NAV.Select("..." + $INPUT + "...");
+    - pattern: Object $OBJ = $NAV.Evaluate("..." + $INPUT + "...");
+    - pattern: var $OBJ = $NAV.Evaluate("..." + $INPUT + "...");
+- id: csharp.dotnet.security.mvc-missing-antiforgery.mvc-missing-antiforgery
+  message: $METHOD is a state-changing MVC method that does not validate the antiforgery
+    token or do strict content-type checking. State-changing controller methods should
+    either enforce antiforgery tokens or do strict content-type checking to prevent
+    simple HTTP request types from bypassing CORS preflight controls.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: LOW
+    category: security
+    cwe:
+    - 'CWE-352: Cross-Site Request Forgery (CSRF)'
+    cwe2021-top25: true
+    cwe2022-top25: true
+    owasp:
+    - A01:2021 - Broken Access Control
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/DotNet_Security_Cheat_Sheet.html#cross-site-request-forgery
+    - https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#simple_requests
+    subcategory:
+    - audit
+    technology:
+    - .net
+    - mvc
+  languages:
+  - csharp
+  patterns:
+  - pattern: "[$HTTPMETHOD]\npublic IActionResult $METHOD(...){\n    ...\n}\n"
+  - pattern-inside: 'using Microsoft.AspNetCore.Mvc;
+
+      ...
+
+      '
+  - pattern-not: "[ValidateAntiForgeryToken]\npublic IActionResult $METHOD(...){\n\
+      \    ...\n}\n"
+  - pattern-not: "[Consumes(...)]\npublic IActionResult $METHOD(...){\n  ...\n}\n"
+  - metavariable-regex:
+      metavariable: $HTTPMETHOD
+      regex: Http(Post|Put|Delete|Patch)
+- id: csharp.dotnet.security.net-webconfig-debug.net-webconfig-debug
+  message: ASP.NET applications built with `debug` set to true in production may leak
+    debug information to attackers. Debug mode also affects performance and reliability.
+    Set `debug` to `false` or remove it from `<compilation ... />`
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+    category: security
+    cwe:
+    - 'CWE-11: ASP.NET Misconfiguration: Creating Debug Binary'
+    owasp:
+    - A05:2021 - Security Misconfiguration
+    references:
+    - https://web.archive.org/web/20190919105353/https://blogs.msdn.microsoft.com/prashant_upadhyay/2011/07/14/why-debugfalse-in-asp-net-applications-in-production-environment/
+    - https://msdn.microsoft.com/en-us/library/e8z01xdh.aspx
+    subcategory:
+    - audit
+    technology:
+    - .net
+  languages:
+  - generic
+  paths:
+    include:
+    - '*web.config*'
+  patterns:
+  - pattern: '<compilation ... debug = "true" ... />
+
+      '
+  - pattern-inside: "<system.web>\n  ...\n</system.web>\n"
+- id: csharp.dotnet.security.net-webconfig-trace-enabled.net-webconfig-trace-enabled
+  message: OWASP guidance recommends disabling tracing for production applications
+    to prevent accidental leakage of sensitive application information.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: LOW
+    category: security
+    cwe:
+    - 'CWE-1323: Improper Management of Sensitive Trace Data'
+    owasp: A05:2021 - Security Misconfiguration
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/DotNet_Security_Cheat_Sheet.html#asp-net-web-forms-guidance
+    - https://msdn.microsoft.com/en-us/library/e8z01xdh.aspx
+    subcategory:
+    - audit
+    technology:
+    - .net
+  languages:
+  - generic
+  paths:
+    include:
+    - '*web.config*'
+  patterns:
+  - pattern: '<trace ... enabled = "true" ... />
+
+      '
+  - pattern-inside: "<system.web>\n  ...\n</system.web>\n"
+- id: csharp.dotnet.security.razor-template-injection.razor-template-injection
+  message: User-controllable string passed to Razor.Parse. This leads directly to
+    code execution in the context of the process.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-94: Improper Control of Generation of Code (''Code Injection'')'
+    cwe2022-top25: true
+    owasp:
+    - A03:2021 - Injection
+    references:
+    - https://clement.notin.org/blog/2020/04/15/Server-Side-Template-Injection-(SSTI)-in-ASP.NET-Razor/
+    subcategory:
+    - vuln
+    technology:
+    - .net
+    - razor
+    - asp
+  languages:
+  - csharp
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $ARG
+    - pattern-inside: 'public ActionResult $METHOD(..., string $ARG,...){...}
+
+        '
+  pattern-sinks:
+  - pattern: 'Razor.Parse(...)
+
+      '
+  pattern-sanitizers:
+  - not_conflicting: true
+    pattern: $F(...)
+- id: csharp.dotnet.security.use_deprecated_cipher_algorithm.use_deprecated_cipher_algorithm
+  message: Usage of deprecated cipher algorithm detected. Use Aes or ChaCha20Poly1305
+    instead.
+  severity: ERROR
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    references:
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.des?view=net-6.0#remarks
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.rc2?view=net-6.0#remarks
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.aes?view=net-6.0
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.chacha20poly1305?view=net-6.0
+    subcategory:
+    - vuln
+    technology:
+    - .net
+  languages:
+  - csharp
+  patterns:
+  - pattern: $KEYTYPE.Create(...);
+  - metavariable-pattern:
+      metavariable: $KEYTYPE
+      pattern-either:
+      - pattern: DES
+      - pattern: RC2
+- id: csharp.dotnet.security.use_ecb_mode.use_ecb_mode
+  message: Usage of the insecure ECB mode detected. You should use an authenticated
+    encryption mode instead, which is implemented by the classes AesGcm or ChaCha20Poly1305.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+    category: security
+    cwe:
+    - 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    references:
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.chacha20poly1305?view=net-6.0
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.aesgcm?view=net-6.0
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.ciphermode?view=net-6.0
+    - https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#cipher-modes
+    subcategory:
+    - vuln
+    technology:
+    - .net
+  languages:
+  - csharp
+  patterns:
+  - pattern-either:
+    - pattern: ($KEYTYPE $KEY).EncryptEcb(...);
+    - pattern: ($KEYTYPE $KEY).DecryptEcb(...);
+    - pattern: ($KEYTYPE $KEY).Mode = CipherMode.ECB;
+  - metavariable-pattern:
+      metavariable: $KEYTYPE
+      pattern-either:
+      - pattern: SymmetricAlgorithm
+      - pattern: Aes
+      - pattern: Rijndael
+      - pattern: DES
+      - pattern: TripleDES
+      - pattern: RC2
+- id: csharp.dotnet.security.use_weak_rng_for_keygeneration.use_weak_rng_for_keygeneration
+  message: You are using an insecure random number generator (RNG) to create a cryptographic
+    key. System.Random must never be used for cryptographic purposes. Use System.Security.Cryptography.RandomNumberGenerator
+    instead.
+  severity: ERROR
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+    category: security
+    cwe:
+    - 'CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)'
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    references:
+    - https://learn.microsoft.com/en-us/dotnet/api/system.random?view=net-6.0#remarks
+    - https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.randomnumbergenerator?view=net-6.0
+    - https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.aesgcm?view=net-6.0#constructors
+    - https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.symmetricalgorithm.key?view=net-6.0#system-security-cryptography-symmetricalgorithm-key
+    subcategory:
+    - vuln
+    technology:
+    - .net
+  languages:
+  - csharp
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-inside: (System.Random $RNG).NextBytes($KEY); ...
+    - pattern: $KEY
+  pattern-sinks:
+  - pattern-either:
+    - patterns:
+      - pattern: ($KEYTYPE $CIPHER).Key = $SINK;
+      - focus-metavariable: $SINK
+      - metavariable-pattern:
+          metavariable: $KEYTYPE
+          pattern-either:
+          - pattern: SymmetricAlgorithm
+          - pattern: Aes
+          - pattern: Rijndael
+          - pattern: DES
+          - pattern: TripleDES
+          - pattern: RC2
+    - pattern: new AesGcm(...)
+    - pattern: new AesCcm(...)
+    - pattern: new ChaCha20Poly1305(...)
+- id: csharp.dotnet.security.use_weak_rsa_encryption_padding.use_weak_rsa_encryption_padding
+  message: You are using the outdated PKCS#1 v1.5 encryption padding for your RSA
+    key. Use the OAEP padding instead.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe:
+    - 'CWE-780: Use of RSA Algorithm without OAEP'
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    references:
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.rsapkcs1keyexchangeformatter
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.rsaoaepkeyexchangeformatter
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.rsapkcs1keyexchangedeformatter
+    - https://learn.microsoft.com/en-gb/dotnet/api/system.security.cryptography.rsaoaepkeyexchangedeformatter
+    subcategory:
+    - vuln
+    technology:
+    - .net
+  languages:
+  - csharp
+  pattern-either:
+  - pattern: (RSAPKCS1KeyExchangeFormatter $FORMATER).CreateKeyExchange(...);
+  - pattern: (RSAPKCS1KeyExchangeDeformatter $DEFORMATER).DecryptKeyExchange(...);
+- id: csharp.dotnet.security.web-config-insecure-cookie-settings.web-config-insecure-cookie-settings
+  message: Cookie Secure flag is explicitly disabled. You should enforce this value
+    to avoid accidentally presenting sensitive cookie values over plaintext HTTP connections.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+    category: security
+    cwe:
+    - 'CWE-614: Sensitive Cookie in HTTPS Session Without ''Secure'' Attribute'
+    owasp:
+    - A05:2021 - Security Misconfiguration
+    references:
+    - https://docs.microsoft.com/en-us/aspnet/web-api/overview/advanced/http-cookies
+    - https://docs.microsoft.com/en-us/dotnet/api/system.web.security.formsauthentication.requiressl?redirectedfrom=MSDN&view=netframework-4.8#System_Web_Security_FormsAuthentication_RequireSSL
+    - https://docs.microsoft.com/en-us/dotnet/api/system.web.security.roles.cookierequiressl?redirectedfrom=MSDN&view=netframework-4.8#System_Web_Security_Roles_CookieRequireSSL
+    subcategory:
+    - audit
+    technology:
+    - .net
+    - asp
+    - webforms
+  languages:
+  - generic
+  paths:
+    include:
+    - '*web.config'
+  patterns:
+  - pattern-either:
+    - pattern: 'requireSSL="false"
+
+        '
+    - pattern: 'cookieRequireSSL="false"
+
+        '
+  - pattern-either:
+    - pattern-inside: '<httpCookies ...>
+
+        '
+    - pattern-inside: '<forms ...>
+
+        '
+    - pattern-inside: '<roleManager ...>
+
+        '
+- id: csharp.lang.security.ad.jwt-tokenvalidationparameters-no-expiry-validation.jwt-tokenvalidationparameters-no-expiry-validation
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern: $LIFETIME = $FALSE
+      - pattern-inside: new TokenValidationParameters {...}
+    - patterns:
+      - pattern: '(TokenValidationParameters $OPTS). ... .$LIFETIME = $FALSE
+
+          '
+  - metavariable-regex:
+      metavariable: $LIFETIME
+      regex: (RequireExpirationTime|ValidateLifetime)
+  - metavariable-regex:
+      metavariable: $FALSE
+      regex: (false)
+  - focus-metavariable: $FALSE
+  fix: 'true
+
+    '
+  message: The TokenValidationParameters.$LIFETIME is set to $FALSE, this means the
+    JWT tokens lifetime is not validated. This can lead to an JWT token being used
+    after it has expired, which has security implications. It is recommended to validate
+    the JWT lifetime to ensure only valid tokens are used.
+  metadata:
+    category: security
+    technology:
+    - csharp
+    owasp:
+    - A02:2017 - Broken Authentication
+    - A07:2021 - Identification and Authentication Failures
+    cwe:
+    - 'CWE-613: Insufficient Session Expiration'
+    references:
+    - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+    - https://cwe.mitre.org/data/definitions/613.html
+    - https://docs.microsoft.com/en-us/dotnet/api/microsoft.identitymodel.tokens.tokenvalidationparameters?view=azure-dotnet
+    subcategory:
+    - audit
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+  languages:
+  - csharp
+  severity: WARNING
+- id: csharp.lang.security.cryptography.X509-subject-name-validation.X509-subject-name-validation
+  severity: WARNING
+  languages:
+  - csharp
+  metadata:
+    cwe:
+    - 'CWE-295: Improper Certificate Validation'
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A07:2021 - Identification and Authentication Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.identitymodel.tokens.issuernameregistry?view=netframework-4.8
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: LOW
+  message: Validating certificates based on subject name is bad practice. Use the
+    X509Certificate2.Verify() method instead.
+  patterns:
+  - pattern-inside: 'using System.IdentityModel.Tokens;
+
+      ...
+
+      '
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern-inside: 'X509SecurityToken $TOK = $RHS;
+
+            ...
+
+            '
+        - pattern-inside: "$T $M(..., X509SecurityToken $TOK, ...) {\n    ...\n}\n"
+      - metavariable-pattern:
+          metavariable: $RHS
+          pattern-either:
+          - pattern: $T as X509SecurityToken
+          - pattern: new X509SecurityToken(...)
+    - patterns:
+      - pattern-either:
+        - pattern-inside: 'X509Certificate2 $CERT = new X509Certificate2(...);
+
+            ...
+
+            '
+        - pattern-inside: "$T $M(..., X509Certificate2 $CERT, ...) {\n    ...\n}\n"
+        - pattern-inside: "foreach (X509Certificate2 $CERT in $COLLECTION) {\n   \
+            \ ...\n}\n"
+  - patterns:
+    - pattern-either:
+      - pattern: String.Equals($NAME, "...")
+      - pattern: String.Equals("...", $NAME)
+      - pattern: $NAME.Equals("...")
+      - pattern: $NAME == "..."
+      - pattern: $NAME != "..."
+      - pattern: '"..." == $NAME
+
+          '
+      - pattern: '"..." != $NAME
+
+          '
+    - metavariable-pattern:
+        metavariable: $NAME
+        pattern-either:
+        - pattern: $TOK.Certificate.SubjectName.Name
+        - pattern: $CERT.SubjectName.Name
+        - pattern: $CERT.GetNameInfo(...)
+- id: csharp.lang.security.cryptography.X509Certificate2-privkey.X509Certificate2-privkey
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-310: CWE CATEGORY: Cryptographic Issues'
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.security.cryptography.x509certificates.x509certificate2.privatekey
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+  message: 'X509Certificate2.PrivateKey is obsolete. Use a method such as GetRSAPrivateKey()
+    or GetECDsaPrivateKey(). Alternatively, use the CopyWithPrivateKey() method to
+    create a new instance with a private key. Further, if you set X509Certificate2.PrivateKey
+    to `null` or set it to another key without deleting it first, the private key
+    will be left on disk. '
+  patterns:
+  - pattern-inside: 'using System.Security.Cryptography;
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern-inside: 'X509Certificate2Collection $COLLECTION = ...;
+
+        ...
+
+        '
+    - pattern-inside: 'X509Certificate2 $CERT = ...;
+
+        ...
+
+        '
+  - pattern: $CERT.PrivateKey
+- id: csharp.lang.security.cryptography.unsigned-security-token.unsigned-security-token
+  patterns:
+  - pattern: RequireSignedTokens = false
+  - pattern-inside: "new TokenValidationParameters {\n  ...\n}\n"
+  fix: RequireSignedTokens = true
+  message: Accepting unsigned security tokens as valid security tokens allows an attacker
+    to remove its signature and potentially forge an identity. As a fix, set RequireSignedTokens
+    to be true.
+  metadata:
+    category: security
+    technology:
+    - csharp
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    cwe:
+    - 'CWE-347: Improper Verification of Cryptographic Signature'
+    references:
+    - https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+    - https://cwe.mitre.org/data/definitions/347
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+  languages:
+  - csharp
+  severity: ERROR
+- id: csharp.lang.security.filesystem.unsafe-path-combine.unsafe-path-combine
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern: $A
+    - pattern-inside: 'Path.Combine(...,$A,...)
+
+        '
+    - pattern-inside: 'public $TYPE $M(...,$A,...){...}
+
+        '
+    - pattern-not-inside: '<... Path.GetFileName($A) != $A ...>
+
+        '
+  pattern-sinks:
+  - patterns:
+    - focus-metavariable: $X
+    - pattern: 'File.$METHOD($X,...)
+
+        '
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: (?i)^(read|write)
+  pattern-sanitizers:
+  - pattern: 'Path.GetFileName(...)
+
+      '
+  - patterns:
+    - pattern-inside: '$X = Path.GetFileName(...);
+
+        ...
+
+        '
+    - pattern: $X
+  - patterns:
+    - pattern: $X
+    - pattern-inside: "if(<... Path.GetFileName($X) != $X ...>){\n  ...\n  throw new\
+        \ $EXCEPTION(...);\n}\n...\n"
+  message: String argument $A is used to read or write data from a file via Path.Combine
+    without direct sanitization via Path.GetFileName. If the path is user-supplied
+    data this can lead to path traversal.
+  languages:
+  - csharp
+  severity: WARNING
+  metadata:
+    category: security
+    confidence: MEDIUM
+    references:
+    - https://www.praetorian.com/blog/pathcombine-security-issues-in-aspnet-applications/
+    - https://docs.microsoft.com/en-us/dotnet/api/system.io.path.combine?view=net-6.0#remarks
+    technology:
+    - .net
+    cwe:
+    - 'CWE-22: Improper Limitation of a Pathname to a Restricted Directory (''Path
+      Traversal'')'
+    owasp:
+    - A05:2017 - Broken Access Control
+    - A01:2021 - Broken Access Control
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: MEDIUM
+- id: csharp.lang.security.http.http-listener-wildcard-bindings.http-listener-wildcard-bindings
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-706: Use of Incorrectly-Resolved Name or Reference'
+    owasp:
+    - A01:2021 - Broken Access Control
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.net.httplistener?view=net-6.0
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: LOW
+  message: The top level wildcard bindings $PREFIX leaves your application open to
+    security vulnerabilities and give attackers more control over where traffic is
+    routed. If you must use wildcards, consider using subdomain wildcard binding.
+    For example, you can use "*.asdf.gov" if you own all of "asdf.gov".
+  patterns:
+  - pattern-inside: 'using System.Net;
+
+      ...
+
+      '
+  - pattern: $LISTENER.Prefixes.Add("$PREFIX")
+  - metavariable-regex:
+      metavariable: $PREFIX
+      regex: (http|https)://(\*|\+)(.[a-zA-Z]{2,})?:[0-9]+
+- id: csharp.lang.security.injections.os-command.os-command-injection
+  severity: ERROR
+  languages:
+  - csharp
+  metadata:
+    cwe:
+    - 'CWE-78: Improper Neutralization of Special Elements used in an OS Command (''OS
+      Command Injection'')'
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    references:
+    - https://owasp.org/www-community/attacks/Command_Injection
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+  message: The software constructs all or part of an OS command using externally-influenced
+    input from an upstream component, but it does not neutralize or incorrectly neutralizes
+    special elements that could modify the intended OS command when it is sent to
+    a downstream component.
+  patterns:
+  - pattern-inside: 'using System.Diagnostics;
+
+      ...
+
+      '
+  - pattern-inside: "public $T $F(..., $ARG, ...)\n{\n  ...\n}\n"
+  - pattern-either:
+    - patterns:
+      - pattern: 'Process.Start($ARG, ...);
+
+          '
+      - focus-metavariable: $ARG
+    - patterns:
+      - pattern-inside: 'Process $PROC = new Process();
+
+          ...
+
+          '
+      - pattern-either:
+        - pattern-inside: '$PROC.StartInfo.FileName = $ARG;
+
+            ...
+
+            '
+        - pattern-inside: '$PROC.StartInfo.Arguments = <... $ARG ...>;
+
+            ...
+
+            '
+      - pattern: '$PROC.Start();
+
+          '
+    - patterns:
+      - patterns:
+        - pattern-inside: "ProcessStartInfo $PSINFO = new ProcessStartInfo()\n{\n\
+            \  ...\n};\n...\n"
+        - pattern-either:
+          - pattern-inside: 'FileName = $ARG;
+
+              ...
+
+              '
+          - pattern-inside: 'Arguments = <... $ARG ...>;
+
+              ...
+
+              '
+      - pattern: 'Process.Start($PSINFO);
+
+          '
+      - focus-metavariable: $PSINFO
+    - patterns:
+      - pattern-inside: "Process $PROC = new Process()\n{\n  StartInfo = new ProcessStartInfo()\n\
+          \  {\n    ...\n  }\n};\n...\n"
+      - pattern-either:
+        - pattern-inside: 'FileName = $ARG;
+
+            ...
+
+            '
+        - pattern-inside: 'Arguments = $ARG;
+
+            ...
+
+            '
+      - pattern: '$PROC.Start();
+
+          '
+- id: csharp.lang.security.insecure-deserialization.binary-formatter.insecure-binaryformatter-deserialization
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-security-guide
+    category: security
+    technology:
+    - .net
+    confidence: HIGH
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: HIGH
+  message: The BinaryFormatter type is dangerous and is not recommended for data processing.
+    Applications should stop using BinaryFormatter as soon as possible, even if they
+    believe the data they're processing to be trustworthy. BinaryFormatter is insecure
+    and can't be made secure
+  patterns:
+  - pattern-inside: 'using System.Runtime.Serialization.Formatters.Binary;
+
+      ...
+
+      '
+  - pattern: 'new BinaryFormatter();
+
+      '
+- id: csharp.lang.security.insecure-deserialization.data-contract-resolver.data-contract-resolver
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-security-guide
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+  message: Only use DataContractResolver if you are completely sure of what information
+    is being serialized. Malicious types can cause unexpected behavior.
+  patterns:
+  - pattern: 'class $MYDCR : DataContractResolver { ... }
+
+      '
+- id: csharp.lang.security.insecure-deserialization.fast-json.insecure-fastjson-deserialization
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://github.com/mgholam/fastJSON#security-warning-update
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+  message: $type extension has the potential to be unsafe, so use it with common sense
+    and known json sources and not public facing ones to be safe
+  patterns:
+  - pattern-inside: 'using fastJSON;
+
+      ...
+
+      '
+  - pattern: "new JSONParameters\n{\n  BadListTypeChecking = false\n}\n"
+- id: csharp.lang.security.insecure-deserialization.fs-pickler.insecure-fspickler-deserialization
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://mbraceproject.github.io/FsPickler/tutorial.html#Disabling-Subtype-Resolution
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: HIGH
+  message: The FsPickler is dangerous and is not recommended for data processing.
+    Default configuration tend to insecure deserialization vulnerability.
+  patterns:
+  - pattern-inside: 'using MBrace.FsPickler.Json;
+
+      ...
+
+      '
+  - pattern: 'FsPickler.CreateJsonSerializer();
+
+      '
+- id: csharp.lang.security.insecure-deserialization.insecure-typefilterlevel-full.insecure-typefilterlevel-full
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.runtime.serialization.formatters.typefilterlevel?view=net-6.0
+    - https://www.synacktiv.com/en/publications/izi-izi-pwn2own-ics-miami.html
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+  message: Using a .NET remoting service can lead to RCE, even if you try to configure
+    TypeFilterLevel. Recommended to switch from .NET Remoting to WCF https://docs.microsoft.com/en-us/dotnet/framework/wcf/migrating-from-net-remoting-to-wcf
+  pattern-either:
+  - patterns:
+    - pattern-either:
+      - pattern: new BinaryServerFormatterSinkProvider { TypeFilterLevel = $LEVEL
+          }
+      - patterns:
+        - pattern-inside: '$TYPE $SP = new BinaryServerFormatterSinkProvider(...);
+
+            ...
+
+            '
+        - pattern: '$SP.TypeFilterLevel = $LEVEL
+
+            '
+    - metavariable-regex:
+        metavariable: $LEVEL
+        regex: (.*)TypeFilterLevel\.(Full|Low)
+  - patterns:
+    - pattern-inside: '$DICT["typeFilterLevel"] = $VAL;
+
+        ...
+
+        '
+    - pattern: new BinaryServerFormatterSinkProvider(..., $DICT, ...)
+    - metavariable-regex:
+        metavariable: $VAL
+        regex: (\"Full\"|\"Low\")
+- id: csharp.lang.security.insecure-deserialization.javascript-serializer.insecure-javascriptserializer-deserialization
+  severity: ERROR
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.web.script.serialization.simpletyperesolver?view=netframework-4.8#remarks
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: The SimpleTypeResolver class is insecure and should not be used. Using
+    SimpleTypeResolver to deserialize JSON could allow the remote client to execute
+    malicious code within the app and take control of the web server.
+  patterns:
+  - pattern-inside: 'using System.Web.Script.Serialization;
+
+      ...
+
+      '
+  - pattern: 'new JavaScriptSerializer((SimpleTypeResolver $RESOLVER))
+
+      '
+- id: csharp.lang.security.insecure-deserialization.los-formatter.insecure-losformatter-deserialization
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.web.ui.losformatter?view=netframework-4.8
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: HIGH
+  message: The LosFormatter type is dangerous and is not recommended for data processing.
+    Applications should stop using LosFormatter as soon as possible, even if they
+    believe the data they're processing to be trustworthy. LosFormatter is insecure
+    and can't be made secure
+  patterns:
+  - pattern-inside: 'using System.Web.UI;
+
+      ...
+
+      '
+  - pattern: 'new LosFormatter();
+
+      '
+- id: csharp.lang.security.insecure-deserialization.net-data-contract.insecure-netdatacontract-deserialization
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.runtime.serialization.netdatacontractserializer?view=netframework-4.8#security
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: HIGH
+  message: The NetDataContractSerializer type is dangerous and is not recommended
+    for data processing. Applications should stop using NetDataContractSerializer
+    as soon as possible, even if they believe the data they're processing to be trustworthy.
+    NetDataContractSerializer is insecure and can't be made secure
+  patterns:
+  - pattern-inside: 'using System.Runtime.Serialization;
+
+      ...
+
+      '
+  - pattern: 'new NetDataContractSerializer();
+
+      '
+- id: csharp.lang.security.insecure-deserialization.newtonsoft.insecure-newtonsoft-deserialization
+  patterns:
+  - pattern-either:
+    - pattern: TypeNameHandling = TypeNameHandling.$TYPEHANDLER
+    - pattern: '$SETTINGS.TypeNameHandling = TypeNameHandling.$TYPEHANDLER;
+
+        ...
+
+        JsonConvert.DeserializeObject<$TYPE>(...,$SETTINGS);
+
+        '
+    - pattern: '$SETTINGS.TypeNameHandling = TypeNameHandling.$TYPEHANDLER;
+
+        ...
+
+        JsonConvert.DeserializeObject(...,$SETTINGS);
+
+        '
+  - pattern-inside: 'using Newtonsoft.Json;
+
+      ...
+
+      '
+  - metavariable-regex:
+      metavariable: $TYPEHANDLER
+      regex: (All|Auto|Objects|Arrays)
+  message: TypeNameHandling $TYPEHANDLER is unsafe and can lead to arbitrary code
+    execution in the context of the process. Use a custom SerializationBinder whenever
+    using a setting other than TypeNameHandling.None.
+  languages:
+  - csharp
+  severity: WARNING
+  metadata:
+    category: security
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://www.newtonsoft.com/json/help/html/T_Newtonsoft_Json_TypeNameHandling.htm#remarks
+    technology:
+    - .net
+    - newtonsoft
+    - json
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+- id: csharp.lang.security.insecure-deserialization.soap-formatter.insecure-soapformatter-deserialization
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.runtime.serialization.formatters.soap.soapformatter?view=netframework-4.8#remarks
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: HIGH
+  message: The SoapFormatter type is dangerous and is not recommended for data processing.
+    Applications should stop using SoapFormatter as soon as possible, even if they
+    believe the data they're processing to be trustworthy. SoapFormatter is insecure
+    and can't be made secure
+  patterns:
+  - pattern-inside: 'using System.Runtime.Serialization.Formatters.Soap;
+
+      ...
+
+      '
+  - pattern: 'new SoapFormatter();
+
+      '
+- id: csharp.lang.security.memory.memory-marshal-create-span.memory-marshal-create-span
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-125: Out-of-bounds Read'
+    owasp:
+    - A04:2021 - Insecure Design
+    references:
+    - https://docs.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.memorymarshal.createspan?view=net-6.0
+    - https://docs.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.memorymarshal.createreadonlyspan?view=net-6.0
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: MemoryMarshal.CreateSpan and MemoryMarshal.CreateReadOnlySpan should be
+    used with caution, as the length argument is not checked.
+  pattern-either:
+  - pattern: MemoryMarshal.CreateSpan(...)
+  - pattern: MemoryMarshal.CreateReadOnlySpan(...)
+- id: csharp.lang.security.missing-hsts-header.missing-hsts-header
+  pattern-either:
+  - patterns:
+    - pattern-inside: "public void Configure(...) {\n    ...\n    (IApplicationBuilder\
+        \ $APP). ...;\n    ...\n}\n"
+    - focus-metavariable: $APP
+    - pattern-not-inside: "public void Configure(...) {\n    ...\n    (IApplicationBuilder\
+        \ $APP).UseHsts(...);\n    ...\n}\n"
+  - patterns:
+    - pattern-inside: "public void ConfigureServices(...) {\n    ...\n    (IServiceCollection\
+        \ $SERVICES). ...;\n    ...\n}\n"
+    - focus-metavariable: $SERVICES
+    - pattern-not-inside: "public void ConfigureServices(...) {\n    ...\n    (IServiceCollection\
+        \ $SERVICES).AddHsts(...);\n    ...\n}\n"
+  message: The HSTS HTTP response security header is missing, allowing interaction
+    and communication to be sent over the insecure HTTP protocol.
+  metadata:
+    category: security
+    technology:
+    - dotnet
+    owasp:
+    - A07:2021 - Identification and Authentication Failures
+    cwe:
+    - 'CWE-346: Origin Validation Error'
+    references:
+    - https://cwe.mitre.org/data/definitions/346.html
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: LOW
+  languages:
+  - csharp
+  severity: WARNING
+- id: csharp.lang.security.open-redirect.open-redirect
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $PARAM
+    - pattern-inside: "public $TYPE $FUNCNAME (..., string $PARAM, ...) {\n  ...\n\
+        }\n"
+  pattern-sinks:
+  - patterns:
+    - pattern: Redirect(...)
+    - pattern-not-inside: "if (IsLocalUrl(...)) { \n    ... \n    Redirect(...); \n\
+        \    ...\n}\n"
+    - pattern-not-inside: "if ($URL.IsLocalUrl(...)) { \n    ... \n    Redirect(...);\
+        \ \n    ...\n}\n"
+  message: A query string parameter may contain a URL value that could cause the web
+    application to redirect the request to a malicious website controlled by an attacker.
+    Make sure to sanitize this parameter sufficiently.
+  metadata:
+    category: security
+    technology:
+    - csharp
+    cwe:
+    - 'CWE-601: URL Redirection to Untrusted Site (''Open Redirect'')'
+    references:
+    - https://cwe.mitre.org/data/definitions/601.html
+    owasp:
+    - A01:2021 - Broken Access Control
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: LOW
+  languages:
+  - csharp
+  severity: ERROR
+- id: csharp.lang.security.regular-expression-dos.regular-expression-dos-infinite-timeout.regular-expression-dos-infinite-timeout
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-1333: Inefficient Regular Expression Complexity'
+    owasp: A01:2017 - Injection
+    references:
+    - https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS
+    - https://docs.microsoft.com/en-us/dotnet/api/system.text.regularexpressions.regex.infinitematchtimeout
+    - https://docs.microsoft.com/en-us/dotnet/api/system.text.regularexpressions.regex.-ctor?view=net-6.0
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: 'Specifying the regex timeout leaves the system vulnerable to a regex-based
+    Denial of Service (DoS) attack. Consider setting the timeout to a short amount
+    of time like 2 or 3 seconds. If you are sure you need an infinite timeout, double
+    check that your context meets the conditions outlined in the "Notes to Callers"
+    section at the bottom of this page: https://docs.microsoft.com/en-us/dotnet/api/system.text.regularexpressions.regex.-ctor?view=net-6.0'
+  patterns:
+  - pattern-inside: 'using System.Text.RegularExpressions;
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: new Regex(..., TimeSpan.InfiniteMatchTimeout)
+    - patterns:
+      - pattern: new Regex(..., TimeSpan.FromSeconds($TIME))
+      - metavariable-comparison:
+          metavariable: $TIME
+          comparison: $TIME > 5
+    - pattern: new Regex(..., TimeSpan.FromMinutes(...))
+    - pattern: new Regex(..., TimeSpan.FromHours(...))
+- id: csharp.lang.security.regular-expression-dos.regular-expression-dos.regular-expression-dos
+  severity: WARNING
+  languages:
+  - C#
+  metadata:
+    cwe:
+    - 'CWE-1333: Inefficient Regular Expression Complexity'
+    owasp: A01:2017 - Injection
+    references:
+    - https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS
+    - https://docs.microsoft.com/en-us/dotnet/standard/base-types/regular-expressions#regular-expression-examples
+    category: security
+    technology:
+    - .net
+    confidence: MEDIUM
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: When using `System.Text.RegularExpressions` to process untrusted input,
+    pass a timeout.  A malicious user can provide input to `RegularExpressions` that
+    abuses the backtracking behaviour of this regular expression engine. This will
+    lead to excessive CPU usage, causing a Denial-of-Service attack
+  patterns:
+  - pattern-inside: 'using System.Text.RegularExpressions;
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: "public $T $F($X)\n{\n  Regex $Y = new Regex($P);\n  ...\n  $Y.Match($X);\n\
+        }\n"
+    - pattern: "public $T $F($X)\n{\n  Regex $Y = new Regex($P, $O);\n  ...\n  $Y.Match($X);\n\
+        }\n"
+    - pattern: "public $T $F($X)\n{\n  ... Regex.Match($X, $P);\n}\n"
+    - pattern: "public $T $F($X)\n{\n  ... Regex.Match($X, $P, $O);\n}\n"
+- id: csharp.lang.security.sqli.csharp-sqli.csharp-sqli
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern: '(string $X)
+
+        '
+    - pattern-not: '"..."
+
+        '
+  pattern-propagators:
+  - pattern: (StringBuilder $B).$ANY(...,(string $X),...)
+    from: $X
+    to: $B
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - patterns:
+        - pattern: 'new $PATTERN($CMD,...)
+
+            '
+        - focus-metavariable: $CMD
+      - patterns:
+        - pattern: '$CMD.$PATTERN = $VALUE;
+
+            '
+        - focus-metavariable: $VALUE
+    - metavariable-regex:
+        metavariable: $PATTERN
+        regex: ^(SqlCommand|CommandText|OleDbCommand|OdbcCommand|OracleCommand)$
+  pattern-sanitizers:
+  - pattern-either:
+    - pattern: '$CMD.Parameters.add(...)
+
+        '
+    - pattern: '$CMD.Parameters[$IDX] = ...
+
+        '
+    by-side-effect: true
+  message: Detected a formatted string in a SQL statement. This could lead to SQL
+    injection if variables in the SQL statement are not properly sanitized. Use a
+    prepared statements instead. You can obtain a PreparedStatement using 'SqlCommand'
+    and 'SqlParameter'.
+  metadata:
+    category: security
+    technology:
+    - csharp
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    confidence: MEDIUM
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: HIGH
+  languages:
+  - csharp
+  severity: ERROR
+- id: csharp.lang.security.ssrf.http-client.ssrf
+  severity: ERROR
+  languages:
+  - csharp
+  metadata:
+    cwe:
+    - 'CWE-918: Server-Side Request Forgery (SSRF)'
+    owasp:
+    - A10:2021 - Server-Side Request Forgery (SSRF)
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: SSRF is an attack vector that abuses an application to interact with the
+    internal/external network or the machine itself.
+  patterns:
+  - pattern-inside: 'using System.Net.Http;
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        HttpClient $Y = new HttpClient();
+
+        ...
+
+        ... $Y.GetAsync(<... $X ...>, ...);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        HttpClient $Y = new HttpClient();
+
+        ...
+
+        ... $Y.GetAsync($B, ...);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        HttpClient $Y = new HttpClient();
+
+        ...
+
+        ... $Y.GetStringAsync(<... $X ...>);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        HttpClient $Y = new HttpClient();
+
+        ...
+
+        ... $Y.GetStringAsync($B);
+
+        }
+
+        '
+- id: csharp.lang.security.ssrf.rest-client.ssrf
+  severity: ERROR
+  languages:
+  - csharp
+  metadata:
+    cwe:
+    - 'CWE-918: Server-Side Request Forgery (SSRF)'
+    owasp:
+    - A10:2021 - Server-Side Request Forgery (SSRF)
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: SSRF is an attack vector that abuses an application to interact with the
+    internal/external network or the machine itself.
+  patterns:
+  - pattern-inside: 'using RestSharp;
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        ... new RestClient(<... $X ...>);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        ... new RestClient($B);
+
+        }
+
+        '
+- id: csharp.lang.security.ssrf.web-client.ssrf
+  severity: ERROR
+  languages:
+  - csharp
+  metadata:
+    cwe:
+    - 'CWE-918: Server-Side Request Forgery (SSRF)'
+    owasp:
+    - A10:2021 - Server-Side Request Forgery (SSRF)
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: SSRF is an attack vector that abuses an application to interact with the
+    internal/external network or the machine itself.
+  patterns:
+  - pattern-inside: 'using System.Net;
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        WebClient $Y = new WebClient();
+
+        ...
+
+        ... $Y.OpenRead(<... $X ...>);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        WebClient $Y = new WebClient();
+
+        ...
+
+        ... $Y.OpenRead($B);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        WebClient $Y = new WebClient();
+
+        ...
+
+        ... $Y.OpenReadAsync(<... $X ...>, ...);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        WebClient $Y = new WebClient();
+
+        ...
+
+        ... $Y.OpenReadAsync($B, ...);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        WebClient $Y = new WebClient();
+
+        ...
+
+        ... $Y.DownloadString(<... $X ...>);
+
+        }
+
+        '
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        WebClient $Y = new WebClient();
+
+        ...
+
+        ... $Y.DownloadString($B);
+
+        }
+
+        '
+- id: csharp.lang.security.ssrf.web-request.ssrf
+  severity: ERROR
+  languages:
+  - csharp
+  metadata:
+    cwe:
+    - 'CWE-918: Server-Side Request Forgery (SSRF)'
+    owasp:
+    - A10:2021 - Server-Side Request Forgery (SSRF)
+    references:
+    - https://cwe.mitre.org/data/definitions/918.html
+    - https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+    category: security
+    technology:
+    - .net
+    confidence: LOW
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+  message: The web server receives a URL or similar request from an upstream component
+    and retrieves the contents of this URL, but it does not sufficiently ensure that
+    the request is being sent to the expected destination. Many different options
+    exist to fix this issue depending the use case (Application can send request only
+    to identified and trusted applications, Application can send requests to ANY external
+    IP address or domain name).
+  patterns:
+  - pattern-inside: 'using System.Net;
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: '$T $F(..., $X, ...)
+
+        {
+
+        ...
+
+        ... WebRequest.Create(<... $X ...>);
+
+        }
+
+        '
+    - pattern: '$T $F($X)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        ... WebRequest.Create($B);
+
+        }
+
+        '
+    - pattern: '$T $F($X)
+
+        {
+
+        ...
+
+        $A $B = <... $X ...>;
+
+        ...
+
+        $C $D = <... $B ...>;
+
+        ...
+
+        ... WebRequest.Create($D);
+
+        }
+
+        '
+- id: csharp.lang.security.stacktrace-disclosure.stacktrace-disclosure
+  patterns:
+  - pattern: $APP.UseDeveloperExceptionPage(...);
+  - pattern-not-inside: "if ($ENV.IsDevelopment(...)) {\n  ...\n}\n"
+  message: Stacktrace information is displayed in a non-Development environment. Accidentally
+    disclosing sensitive stack trace information in a production environment aids
+    an attacker in reconnaissance and information gathering.
+  metadata:
+    category: security
+    technology:
+    - csharp
+    owasp:
+    - A06:2017 - Security Misconfiguration
+    - A04:2021 - Insecure Design
+    cwe:
+    - 'CWE-209: Generation of Error Message Containing Sensitive Information'
+    references:
+    - https://cwe.mitre.org/data/definitions/209.html
+    - https://owasp.org/Top10/A04_2021-Insecure_Design/
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: LOW
+    confidence: HIGH
+  languages:
+  - csharp
+  severity: WARNING
+- id: csharp.lang.security.xxe.xmldocument-unsafe-parser-override.xmldocument-unsafe-parser-override
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $ARG
+    - pattern-inside: 'public $T $M(...,string $ARG,...){...}
+
+        '
+  pattern-sinks:
+  - patterns:
+    - pattern: '$XMLDOCUMENT.$METHOD(...)
+
+        '
+    - pattern-inside: "XmlDocument $XMLDOCUMENT = new XmlDocument(...);\n...\n$XMLDOCUMENT.XmlResolver\
+        \ = new XmlUrlResolver(...);\n...  \n"
+  message: XmlReaderSettings found with DtdProcessing.Parse on an XmlReader handling
+    a string argument from a public method. Enabling Document Type Definition (DTD)
+    parsing may cause XML External Entity (XXE) injection if supplied with user-controllable
+    data.
+  languages:
+  - csharp
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://www.jardinesoftware.net/2016/05/26/xxe-and-net/
+    - https://docs.microsoft.com/en-us/dotnet/api/system.xml.xmldocument.xmlresolver?view=net-6.0#remarks
+    technology:
+    - .net
+    - xml
+    cwe:
+    - 'CWE-611: Improper Restriction of XML External Entity Reference'
+    owasp:
+    - A04:2017 - XML External Entities (XXE)
+    - A05:2021 - Security Misconfiguration
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    impact: MEDIUM
+    likelihood: LOW
+    confidence: MEDIUM
+- id: csharp.lang.security.xxe.xmlreadersettings-unsafe-parser-override.xmlreadersettings-unsafe-parser-override
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $ARG
+    - pattern-inside: 'public $T $M(...,string $ARG,...){...}
+
+        '
+  pattern-sinks:
+  - patterns:
+    - pattern: 'XmlReader $READER = XmlReader.Create(...,$RS,...);
+
+        '
+    - pattern-inside: "XmlReaderSettings $RS = new XmlReaderSettings();\n...\n$RS.DtdProcessing\
+        \ = DtdProcessing.Parse;\n...        \n"
+  message: XmlReaderSettings found with DtdProcessing.Parse on an XmlReader handling
+    a string argument from a public method. Enabling Document Type Definition (DTD)
+    parsing may cause XML External Entity (XXE) injection if supplied with user-controllable
+    data.
+  languages:
+  - csharp
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://www.jardinesoftware.net/2016/05/26/xxe-and-net/
+    - https://docs.microsoft.com/en-us/dotnet/api/system.xml.xmldocument.xmlresolver?view=net-6.0#remarks
+    technology:
+    - .net
+    - xml
+    cwe:
+    - 'CWE-611: Improper Restriction of XML External Entity Reference'
+    owasp:
+    - A04:2017 - XML External Entities (XXE)
+    - A05:2021 - Security Misconfiguration
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    impact: MEDIUM
+    likelihood: LOW
+    confidence: MEDIUM
+- id: csharp.lang.security.xxe.xmltextreader-unsafe-defaults.xmltextreader-unsafe-defaults
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $ARG
+    - pattern-inside: 'public $T $M(...,string $ARG,...){...}
+
+        '
+  pattern-sinks:
+  - patterns:
+    - pattern: '$READER.$METHOD(...)
+
+        '
+    - pattern-not-inside: '$READER.DtdProcessing = DtdProcessing.Prohibit;
+
+        ...
+
+        '
+    - pattern-inside: 'XmlTextReader $READER = new XmlTextReader(...);
+
+        ...
+
+        '
+  message: XmlReaderSettings found with DtdProcessing.Parse on an XmlReader handling
+    a string argument from a public method. Enabling Document Type Definition (DTD)
+    parsing may cause XML External Entity (XXE) injection if supplied with user-controllable
+    data.
+  languages:
+  - csharp
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://www.jardinesoftware.net/2016/05/26/xxe-and-net/
+    - https://docs.microsoft.com/en-us/dotnet/api/system.xml.xmldocument.xmlresolver?view=net-6.0#remarks
+    technology:
+    - .net
+    - xml
+    cwe:
+    - 'CWE-611: Improper Restriction of XML External Entity Reference'
+    owasp:
+    - A04:2017 - XML External Entities (XXE)
+    - A05:2021 - Security Misconfiguration
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    impact: MEDIUM
+    likelihood: LOW
+    confidence: MEDIUM
+- id: csharp.razor.security.html-raw-json.html-raw-json
+  patterns:
+  - pattern-either:
+    - pattern: '@Html.Raw(Json.Encode(...))'
+    - pattern: '@Html.Raw(JsonConvert.SerializeObject(...))'
+    - pattern: '@Html.Raw(...ToJson(...))'
+  message: Unencoded JSON in HTML context is vulnerable to cross-site scripting, because
+    `</script>` is not properly encoded.
+  languages:
+  - generic
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    category: security
+    technology:
+    - razor
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: LOW
+  paths:
+    include:
+    - '*.cshtml'
+  severity: ERROR

@@ -1,0 +1,191 @@
+rules:
+- id: ocaml.lang.security.digest.ocamllint-digest
+  pattern-either:
+  - pattern: Digest.string
+  - pattern: Digest.bytes
+  - pattern: Digest.substring
+  - pattern: Digest.subbytes
+  - pattern: Digest.channel
+  - pattern: Digest.file
+  message: Digest uses MD5 and should not be used for security purposes. Consider
+    using SHA256 instead.
+  languages:
+  - ocaml
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://v2.ocaml.org/api/Digest.html
+    technology:
+    - ocaml
+    cwe: 'CWE-328: Use of Weak Hash (4.12)'
+    confidence: LOW
+    likelihood: MEDIUM
+    impact: MEDIUM
+    subcategory:
+    - audit
+- id: ocaml.lang.security.exec.ocamllint-exec
+  patterns:
+  - pattern-either:
+    - pattern: Unix.execve $STR
+    - pattern: Unix.execvp $STR
+    - pattern: Unix.execvpe $STR
+    - pattern: Unix.system $STR
+    - pattern: Sys.command $STR
+  - pattern-not: Unix.execve "..."
+  - pattern-not: Unix.execvp "..."
+  - pattern-not: Unix.execvpe "..."
+  - pattern-not: Unix.system "..."
+  - pattern-not: Sys.command "..."
+  message: Executing external programs might lead to comand or argument injection
+    vulnerabilities.
+  languages:
+  - ocaml
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://v2.ocaml.org/api/Unix.html
+    technology:
+    - ocaml
+    cwe: 'CWE-78: OS Command Injection'
+    confidence: LOW
+    likelihood: MEDIUM
+    impact: HIGH
+    subcategory:
+    - audit
+- id: ocaml.lang.security.filenameconcat.ocamllint-filenameconcat
+  pattern: Filename.concat
+  message: When attacker supplied data is passed to Filename.concat directory traversal
+    attacks might be possible.
+  languages:
+  - ocaml
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://v2.ocaml.org/api/Filename.html
+    technology:
+    - ocaml
+    cwe: 'CWE-35: Path Traversal'
+    confidence: LOW
+    likelihood: MEDIUM
+    impact: MEDIUM
+    subcategory:
+    - audit
+- id: ocaml.lang.security.hashtable-dos.ocamllint-hashtable-dos
+  patterns:
+  - pattern: Hashtbl.create $Y
+  - pattern-not: Hashtbl.create $Y ~random:true
+  message: Creating a Hashtbl without the optional random number parameter makes it
+    prone to DoS attacks when attackers are able to fill the table with malicious
+    content. Hashtbl.randomize or the R flag in the OCAMLRUNPARAM are other ways to
+    randomize it.
+  languages:
+  - ocaml
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://v2.ocaml.org/api/Hashtbl.html
+    technology:
+    - ocaml
+    cwe: 'CWE-399: Resource Management Errors (4.12)'
+    confidence: LOW
+    likelihood: LOW
+    impact: LOW
+    subcategory:
+    - audit
+- id: ocaml.lang.security.marshal.ocamllint-marshal
+  pattern-either:
+  - pattern: input_value
+  - pattern: Marshal.from_channel
+  - pattern: Marshal.from_bytes
+  - pattern: Marshal.from_string
+  message: Marshaling is currently not type-safe and can lead to insecure behaviour
+    when untrusted data is marshalled. Marshalling can lead to out-of-bound reads
+    as well.
+  languages:
+  - ocaml
+  severity: WARNING
+  metadata:
+    category: security
+    technology:
+    - ocaml
+    cwe: 'CWE-502: Deserialization of Untrusted Data'
+    references:
+    - https://eternal.red/2021/secure-ocaml-sandbox/
+    confidence: LOW
+    likelihood: MEDIUM
+    impact: HIGH
+    subcategory:
+    - vuln
+- id: ocaml.lang.security.tempfile.ocamllint-tempfile
+  pattern: Filename.temp_file
+  message: Filename.temp_file might lead to race conditions, since the file could
+    be altered or replaced by a symlink before being opened.
+  languages:
+  - ocaml
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://v2.ocaml.org/api/Filename.html
+    technology:
+    - ocaml
+    cwe: 'CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition'
+    confidence: LOW
+    likelihood: MEDIUM
+    impact: MEDIUM
+    subcategory:
+    - audit
+- id: ocaml.lang.security.unsafe.ocamllint-unsafe
+  pattern-either:
+  - pattern: $X.unsafe_get
+  - pattern: $X.unsafe_set
+  - pattern: $X.unsafe_to_string
+  - pattern: $X.unsafe_of_string
+  - pattern: $X.unsafe_blit
+  - pattern: $X.unsafe_blit_string
+  - pattern: $X.unsafe_fill
+  - pattern: $X.unsafe_to_string
+  - pattern: $X.unsafe_getenv
+  - pattern: $X.unsafe_environment
+  - pattern: $X.unsafe_chr
+  - pattern: $X.unsafe_of_int
+  - pattern: $X.unsafe_output
+  - pattern: $X.unsafe_output_string
+  - pattern: $X.unsafe_read
+  - pattern: $X.unsafe_recv
+  - pattern: $X.unsafe_recvfrom
+  - pattern: $X.unsafe_send
+  - pattern: $X.unsafe_sendto
+  - pattern: $X.unsafe_set
+  - pattern: $X.unsafe_set_int16
+  - pattern: $X.unsafe_set_int32
+  - pattern: $X.unsafe_set_int64
+  - pattern: $X.unsafe_set_int8
+  - pattern: $X.unsafe_set_uint16_ne
+  - pattern: $X.unsafe_set_uint8
+  - pattern: $X.unsafe_single_write
+  - pattern: $X.unsafe_string
+  - pattern: $X.unsafe_sub
+  - pattern: $X.unsafe_write
+  message: Unsafe functions do not perform boundary checks or have other side effects,
+    use with care.
+  languages:
+  - ocaml
+  severity: WARNING
+  metadata:
+    category: security
+    references:
+    - https://v2.ocaml.org/api/Bigarray.Array1.html#VALunsafe_get
+    - https://v2.ocaml.org/api/Bytes.html#VALunsafe_to_string
+    technology:
+    - ocaml
+    cwe: 'CWE-242: Use of Inherently Dangerous Function (4.12)'
+    confidence: MEDIUM
+    likelihood: MEDIUM
+    impact: MEDIUM
+    subcategory:
+    - audit

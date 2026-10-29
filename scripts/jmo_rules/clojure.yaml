@@ -1,0 +1,217 @@
+rules:
+- id: clojure.lang.security.command-injection-shell-call.command-injection-shell-call
+  metadata:
+    author: Gabriel Marquet <gab.marquet@gmail.com>
+    category: security
+    confidence: LOW
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    cwe:
+    - 'CWE-78: Improper Neutralization of Special Elements used in an OS Command (''OS
+      Command Injection'')'
+    likelihood: MEDIUM
+    impact: HIGH
+    subcategory:
+    - audit
+    technology:
+    - clojure
+    references:
+    - https://clojuredocs.org/clojure.java.shell/sh
+  patterns:
+  - pattern-either:
+    - pattern-inside: "(ns ...\n...\n(:require \n... \n[clojure.java.shell ... [sh]]\n\
+        ...\n))\n...\n"
+    - pattern-inside: "(ns ...\n...\n(:use \n... \n[clojure.java.shell ... [sh]]\n\
+        ...\n))\n...\n"
+  - pattern-either:
+    - patterns:
+      - pattern: (sh $BASH ...)
+      - metavariable-regex:
+          metavariable: $BASH
+          regex: (.*)(sh|bash|ksh|csh|tcsh|zsh)
+    - patterns:
+      - pattern: (sh $ARG ...)
+      - pattern-not: (sh "..." ...)
+  languages:
+  - clojure
+  severity: ERROR
+  message: A call to clojure.java.shell has been found, this could lead to an RCE
+    if the inputs are user-controllable. Please ensure their origin is validated and
+    sanitized.
+- id: clojure.lang.security.documentbuilderfactory-xxe.documentbuilderfactory-xxe
+  languages:
+  - clojure
+  severity: ERROR
+  metadata:
+    cwe:
+    - 'CWE-611: Improper Restriction of XML External Entity Reference'
+    owasp:
+    - A04:2017 - XML External Entities (XXE)
+    - A05:2021 - Security Misconfiguration
+    asvs:
+      section: V5 Validation, Sanitization and Encoding
+      control_id: 5.5.2 Insecue XML Deserialization
+      control_url: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x13-V5-Validation-Sanitization-Encoding.md#v55-deserialization-prevention
+      version: '4'
+    references:
+    - https://semgrep.dev/blog/2022/xml-security-in-java
+    - https://semgrep.dev/docs/cheat-sheets/java-xxe/
+    - https://xerces.apache.org/xerces2-j/features.html
+    source-rule-url: https://github.com/clj-holmes/clj-holmes-rules/blob/main/security/xxe-clojure-xml/xxe-clojure-xml.yml
+    category: security
+    technology:
+    - clojure
+    - xml
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: HIGH
+    confidence: HIGH
+  message: DOCTYPE declarations are enabled for javax.xml.parsers.SAXParserFactory.
+    Without prohibiting external entity declarations, this is vulnerable to XML external
+    entity attacks. Disable this by setting the feature "http://apache.org/xml/features/disallow-doctype-decl"
+    to true. Alternatively, allow DOCTYPE declarations and only prohibit external
+    entities declarations. This can be done by setting the features "http://xml.org/sax/features/external-general-entities"
+    and "http://xml.org/sax/features/external-parameter-entities" to false.
+  patterns:
+  - pattern-inside: '(ns ... (:require [clojure.xml :as ...]))
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern-inside: '(def ... ... ( ... ))
+
+        '
+    - pattern-inside: '(defn ... ... ( ... ))
+
+        '
+  - pattern-either:
+    - pattern: (clojure.xml/parse $INPUT)
+    - patterns:
+      - pattern-inside: '(doto (javax.xml.parsers.SAXParserFactory/newInstance) ...)
+
+          '
+      - pattern: (.setFeature "http://apache.org/xml/features/disallow-doctype-decl"
+          false)
+      - pattern-not-inside: "(doto (javax.xml.parsers.SAXParserFactory/newInstance)\n\
+          \  ...\n  (.setFeature \"http://xml.org/sax/features/external-general-entities\"\
+          \ false)\n  ...\n  (.setFeature \"http://xml.org/sax/features/external-parameter-entities\"\
+          \ false)\n  ...)\n"
+      - pattern-not-inside: "(doto (javax.xml.parsers.SAXParserFactory/newInstance)\n\
+          \  ...\n  (.setFeature \"http://xml.org/sax/features/external-parameter-entities\"\
+          \ false)\n  ...\n  (.setFeature \"http://xml.org/sax/features/external-general-entities\"\
+          \ false)\n  ...)\n"
+- id: clojure.lang.security.use-of-md5.use-of-md5
+  languages:
+  - clojure
+  severity: WARNING
+  message: MD5 hash algorithm detected. This is not collision resistant and leads
+    to easily-cracked password hashes. Replace with current recommended hashing algorithms.
+  metadata:
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+    - https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+    technology:
+    - clojure
+    source-rule-url: https://github.com/clj-holmes/clj-holmes-rules/blob/main/security/weak-hash-function-md5.yml
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    cwe:
+    - 'CWE-328: Use of Weak Hash'
+    author: Gabriel Marquet <gab.marquet@gmail.com>
+    category: security
+    subcategory:
+    - vuln
+    confidence: HIGH
+    likelihood: MEDIUM
+    impact: HIGH
+  pattern-either:
+  - pattern: (MessageDigest/getInstance "MD5")
+  - pattern: (MessageDigest/getInstance MessageDigestAlgorithms/MD5)
+  - pattern: (MessageDigest/getInstance org.apache.commons.codec.digest.MessageDigestAlgorithms/MD5)
+  - pattern: (java.security.MessageDigest/getInstance "MD5")
+  - pattern: (java.security.MessageDigest/getInstance MessageDigestAlgorithms/MD5)
+  - pattern: (java.security.MessageDigest/getInstance org.apache.commons.codec.digest.MessageDigestAlgorithms/MD5)
+- id: clojure.lang.security.use-of-sha1.use-of-sha1
+  languages:
+  - clojure
+  severity: WARNING
+  message: Detected SHA1 hash algorithm which is considered insecure. SHA1 is not
+    collision resistant and is therefore not suitable as a cryptographic signature.
+    Instead, use PBKDF2 for password hashing or SHA256 or SHA512 for other hash function
+    applications.
+  metadata:
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+    - https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+    technology:
+    - clojure
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    cwe:
+    - 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+    - 'CWE-328: Use of Weak Hash'
+    category: security
+    subcategory:
+    - vuln
+    confidence: HIGH
+    likelihood: MEDIUM
+    impact: HIGH
+  patterns:
+  - pattern-either:
+    - pattern: (MessageDigest/getInstance $ALGO)
+    - pattern: (java.security.MessageDigest/getInstance $ALGO)
+  - metavariable-regex:
+      metavariable: $ALGO
+      regex: (((org\.apache\.commons\.codec\.digest\.)?MessageDigestAlgorithms/)?"?(SHA-1|SHA1)"?)
+- id: clojure.security.clojure-read-string.read-string-unsafe.read-string-unsafe
+  metadata:
+    author: Gabriel Marquet <gab.marquet@gmail.com>
+    category: security
+    confidence: LOW
+    references:
+    - http://www.learningclojure.com/2013/02/clojures-reader-is-unsafe.html#post-body-2898830171141471587
+    - https://ericnormand.me/article/clojure-web-security
+    - https://github.com/jafingerhut/jafingerhut.github.com/blob/master/clojure-info/using-edn-safely.md#vulnerabilities-in-clojurecores-read-and-read-string
+    source-rule-url: https://github.com/clj-holmes/clj-holmes-rules/tree/main/security/clojure-read-string
+    owasp:
+    - A08:2017 - Insecure Deserialization
+    - A08:2021 - Software and Data Integrity Failures
+    cwe:
+    - 'CWE-502: Deserialization of Untrusted Data'
+    likelihood: MEDIUM
+    impact: HIGH
+    subcategory:
+    - audit
+    cwe2022-top25: true
+    cwe2021-top25: true
+    cwe2020-top25: true
+    technology:
+    - clojure
+  patterns:
+  - pattern-not-inside: '(ns ...
+
+      (... :exclude [read read-string]))
+
+      ...
+
+      (defn $VAR [$X]...)
+
+      '
+  - pattern-inside: '(defn $VAR [$X]...)
+
+      '
+  - pattern: '(read-string $X)
+
+      '
+  message: The default core Clojure read-string method is dangerous and can lead to
+    deserialization vulnerabilities. Use the edn/read-string instead.
+  languages:
+  - clojure
+  severity: ERROR

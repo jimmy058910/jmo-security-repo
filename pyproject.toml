@@ -154,8 +154,13 @@ include = ["scripts*"]
 # so it is the whole dashboard. The sibling `stats.html` is the bundle
 # visualiser's output and embeds absolute build-machine paths; it is gitignored
 # and must not ship.
+#
+# The opengrep rule bundle is shipped the same way: `jmo_rules/` is generated
+# by scripts/dev/build_rule_bundle.py and has no `__init__.py`. Only the rule
+# files and their manifest; tests/unit/test_jmo_rules_bundle.py asserts these
+# patterns cover every file the bundle holds.
 [tool.setuptools.package-data]
-scripts = ["dashboard/dist/index.html"]
+scripts = ["dashboard/dist/index.html", "jmo_rules/*.yaml", "jmo_rules/SOURCES.json"]
 
 [tool.mypy]
 python_version = "3.12"
