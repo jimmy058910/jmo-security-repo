@@ -26,6 +26,7 @@ Fixture contents (what each file is for is in its own `message:`):
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import hashlib
 import http.client
 import io
@@ -582,6 +583,27 @@ def test_the_configured_exclusions_are_the_decided_ones():
             assert all(reason.strip() for reason in exclusion.values()), source.name
 
 
+# The pins and the date they were last changed, recorded together. Each generated
+# file's header says when its rules last changed from their sources (LGPL-2.1
+# section 2(b)), and nothing else ties that date to a pin. When a source moves,
+# set BUNDLE_DATE to the day of the move and put the new pair here.
+RECORDED_PINS = ("494414c41af27355", "2026-10-29")
+
+
+def _pins_fingerprint() -> str:
+    pins = [[name, s.pin, s.sha256] for name, s in bb.SOURCES.items()]
+    return hashlib.sha256(json.dumps(pins).encode("utf-8")).hexdigest()[:16]
+
+
+def test_the_bundle_date_is_bumped_with_the_pins():
+    assert (_pins_fingerprint(), bb.BUNDLE_DATE) == RECORDED_PINS, (
+        "a source's pin or BUNDLE_DATE changed without the other. A pin change needs "
+        "BUNDLE_DATE set to the day of the change (it is written into every file's "
+        f"header); then record ({_pins_fingerprint()!r}, {bb.BUNDLE_DATE!r}) as "
+        "RECORDED_PINS"
+    )
+
+
 def test_the_pins_are_exact():
     for source in bb.SOURCES.values():
         assert source.url.startswith("https://"), source.name
@@ -1008,7 +1030,39 @@ def test_a_rule_json_cannot_hold_exits_2_not_1(cli, trees, capsys):
     )
     assert cli() == 2
     assert cli("--check") == 2
-    assert "error:" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "error:" in err
+    assert "javascript.dated.dated" in err  # the failing rule, not a bare TypeError
+
+
+def test_rule_body_names_the_rule_when_json_cannot_hold_a_value():
+    # The input error is a ValueError that says where; main() exits 2 on it.
+    with pytest.raises(ValueError, match="javascript.dated.dated"):
+        bb.rule_body(
+            {"id": "javascript.dated.dated", "min-version": datetime.date(2020, 1, 2)}
+        )
+    with pytest.raises(ValueError, match="mixed"):  # keys JSON cannot sort
+        bb.rule_body({"id": "mixed", "metadata": {}, "pattern": {1: "a", "b": "c"}})
+
+
+def test_a_license_json_cannot_hold_is_read_not_fatal():
+    # Only a substring is matched, so a date in `metadata.license` needs no JSON round trip.
+    day = datetime.date(2020, 1, 2)
+    assert bb._proprietary_license({"metadata": {"license": day}}) is None
+    assert bb._proprietary_license({"metadata": {"license": [day, "Proprietary"]}})
+
+
+def test_a_programming_typeerror_is_not_reported_as_bad_input(cli, monkeypatch):
+    # TypeError used to be caught in main() with the input errors, so a bug in the
+    # builder exited 2 ("a source could not be read") with no traceback location.
+    def buggy(trees: dict[str, Path], out_dir: Path) -> dict[str, Any]:
+        raise TypeError("a bug in the builder")
+
+    monkeypatch.setattr(bb, "build", buggy)
+    with pytest.raises(TypeError, match="a bug in the builder"):
+        cli()
+    with pytest.raises(TypeError, match="a bug in the builder"):
+        cli("--check")
 
 
 def test_main_reports_a_failed_fetch_and_exits_2(tmp_path, monkeypatch, capsys):

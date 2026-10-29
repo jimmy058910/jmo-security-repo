@@ -112,7 +112,7 @@ opengrep-rules is a snapshot. Its commit is dated 2025-01-26, and its README des
 python scripts/dev/build_rule_bundle.py --out scripts/jmo_rules
 ```
 
-The first run downloads the four archives into `~/.cache/jmo-rule-sources` (`--cache` changes the directory) and checks each against its pinned sha256. Later runs use the cache. The exit code is 0 for a built bundle and 2 when an archive cannot be fetched, verified or unpacked.
+The first run downloads the four archives into `~/.cache/jmo-rule-sources` (`--cache` changes the directory) and checks each against its pinned sha256. Later runs use the cache. The exit code is 0 for a built bundle and 2 when an archive cannot be fetched, verified or unpacked, or when a rule in one cannot be read (for example a file that is not valid YAML, a rule without an id, or a value that JSON cannot hold, such as a bare date).
 
 `--check` builds into a temporary directory instead and exits 1, naming each file that differs from the committed bundle. CI's `rule-bundle-reproducible` job runs it whenever `scripts/jmo_rules/` or the builder changes. It fails when a rule was edited by hand or the builder changed without a rebuild, and it fails with exit 2 when an upstream archive no longer matches its pinned sha256. Do not edit a rule file by hand: the next rebuild would erase the edit, and CI refuses it first.
 

@@ -238,10 +238,16 @@ _Yaml12Loader.add_implicit_resolver(
 
 
 def rule_body(rule: dict[str, Any]) -> str:
-    """The rule minus id, message, metadata and severity, as canonical JSON."""
-    return json.dumps(
-        {k: v for k, v in rule.items() if k not in _BODY_IGNORED}, sort_keys=True
-    )
+    """The rule minus id, message, metadata and severity, as canonical JSON.
+
+    A value JSON cannot hold, such as a YAML date, is bad input: ValueError, naming the rule.
+    """
+    try:
+        return json.dumps(
+            {k: v for k, v in rule.items() if k not in _BODY_IGNORED}, sort_keys=True
+        )
+    except TypeError as exc:
+        raise ValueError(f"rule {rule.get('id')!r}: {exc}") from exc
 
 
 def _is_security(rule: dict[str, Any]) -> bool:
@@ -255,7 +261,9 @@ def _proprietary_license(rule: dict[str, Any]) -> str | None:
     value = metadata.get("license") if isinstance(metadata, dict) else None
     if value is None:
         return None
-    text = value if isinstance(value, str) else json.dumps(value, sort_keys=True)
+    # Only a substring is matched, so a value JSON cannot hold (a YAML date) is stringified.
+    dumped = json.dumps(value, sort_keys=True, default=str)
+    text = value if isinstance(value, str) else dumped
     return text if "proprietary" in text.lower() else None
 
 
@@ -648,8 +656,7 @@ def main(argv: list[str] | None = None) -> int:
                 manifest = build(trees, args.out)
                 problems = []
     except (
-        ValueError,
-        TypeError,  # a rule value JSON cannot hold, such as a YAML date, in rule_body
+        ValueError,  # includes a rule value JSON cannot hold (rule_body)
         OSError,  # covers URLError
         http.client.HTTPException,  # a truncated download is IncompleteRead, not an OSError
         tarfile.TarError,

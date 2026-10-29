@@ -276,6 +276,27 @@ def _header(name: str) -> list[str]:
     return lines
 
 
+def _notice_licenses(notices: str, prefixes: dict[str, str]) -> dict[str, str]:
+    """source name -> the license THIRD_PARTY_LICENSES.md's table gives it.
+
+    A row is `| [name](#anchor) | pin | license | rules | prefix |`; a license cell may
+    go on with a `;` and a remark (GitLab's does), which is not part of the name.
+    """
+    by_prefix = {}
+    for line in notices.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if line.startswith("| [") and len(cells) == 5:
+            prefix = cells[4].strip("`").rstrip(".")
+            by_prefix["" if prefix == "none" else prefix] = (
+                cells[2].split(";")[0].strip()
+            )
+    assert set(by_prefix) == set(prefixes.values()), (
+        f"THIRD_PARTY_LICENSES.md's source table has prefixes {sorted(by_prefix)}, "
+        f"the manifest's sources have {sorted(prefixes.values())}"
+    )
+    return {name: by_prefix[prefix] for name, prefix in prefixes.items()}
+
+
 def test_every_file_opens_with_the_license_header() -> None:
     """LGPL-2.1 asks that notices referring to the license stay with the files
     (section 1) and that a modified file say that it was changed, and when
@@ -284,12 +305,15 @@ def test_every_file_opens_with_the_license_header() -> None:
 
     The sources a header names must be the ones the file's rule ids come from
     (the manifest's prefixes say which), each with the pin the manifest records
-    and a license `THIRD_PARTY_LICENSES.md` itself names."""
+    and, in that source's own line, exactly the license `THIRD_PARTY_LICENSES.md`'s
+    table names for it (not a license that merely appears somewhere in that file:
+    "MIT" is in every license text)."""
     manifest = _manifest()
     prefixes = {name: s["prefix"] for name, s in manifest["sources"].items()}
     bare = [name for name, prefix in prefixes.items() if not prefix]
     assert len(bare) == 1, f"exactly one source has no id prefix: {prefixes}"
     notices = (REPO_ROOT / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    licenses = _notice_licenses(notices, prefixes)
 
     wrong = []
     for p in _bundle_files():
@@ -329,9 +353,10 @@ def test_every_file_opens_with_the_license_header() -> None:
                 wrong.append(
                     f"{p.name}: {name} pinned at {pin}, manifest says {manifest['sources'][name]['pin']}"
                 )
-            if license_name not in notices:
+            if name in licenses and license_name != licenses[name]:
                 wrong.append(
-                    f"{p.name}: license {license_name!r} is not named in THIRD_PARTY_LICENSES.md"
+                    f"{p.name}: {name} is under {license_name!r}, THIRD_PARTY_LICENSES.md "
+                    f"names {licenses[name]!r}"
                 )
     assert not wrong, "\n".join(wrong)
 
