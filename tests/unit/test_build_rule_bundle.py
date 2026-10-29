@@ -812,13 +812,17 @@ def test_the_note_counts_the_rules_and_lists_each_other_license_once(trees, tmp_
 
 def test_a_license_text_cannot_break_out_of_the_header(trees, tmp_path):
     # The note quotes text from a rule's metadata. A line break in it must not end
-    # the comment and start YAML of its own.
+    # the comment and start YAML of its own. `\\n` in the bytes is the two characters
+    # backslash-n in the YAML, which a double-quoted scalar loads as a real newline (a
+    # raw newline there would be folded to a space before the builder saw it).
     path = trees["elttam"] / "rules" / "java" / "lang" / "f.yml"
     path.write_bytes(
         path.read_bytes().replace(
-            b"license: Apache-2.0", b'license: "Apache-2.0\n- id: injected"'
+            b"license: Apache-2.0", b'license: "Apache-2.0\\n- id: injected"'
         )
     )
+    planted = yaml.safe_load(path.read_bytes())["rules"][0]["metadata"]["license"]
+    assert planted == "Apache-2.0\n- id: injected"  # the input does carry a newline
     out = _build(trees, tmp_path)
     assert _other_license_notes(out / "java.yaml") == {
         "elttam": (1, "Apache-2.0 - id: injected")
@@ -1120,6 +1124,25 @@ def test_a_license_json_cannot_hold_is_read_not_fatal():
     day = datetime.date(2020, 1, 2)
     assert bb._proprietary_license({"metadata": {"license": day}}) is None
     assert bb._proprietary_license({"metadata": {"license": [day, "Proprietary"]}})
+    # Nor does a mapping whose keys JSON cannot sort or hold: both used to raise a
+    # bare TypeError, which main() no longer maps to exit 2.
+    for odd in ({1: "a", "b": "c"}, {day: "Proprietary"}):
+        text = bb._license_text({"metadata": {"license": odd}})
+        assert isinstance(text, str), odd
+    assert (
+        bb._proprietary_license({"metadata": {"license": {1: "a", "b": "c"}}}) is None
+    )
+    assert bb._proprietary_license({"metadata": {"license": {day: "Proprietary"}}})
+
+
+def test_a_license_with_odd_keys_does_not_stop_the_build(cli, trees):
+    # The same shapes through main(): bad-looking metadata is read, not a crash.
+    planted = trees["opengrep-rules"] / "javascript" / "odd.yaml"
+    planted.write_bytes(
+        b"rules:\n  - id: odd\n    languages: [javascript]\n    pattern: x\n"
+        b"    metadata: {category: security, license: {1: a, b: c}}\n"
+    )
+    assert cli() == 0
 
 
 def test_a_programming_typeerror_is_not_reported_as_bad_input(cli, monkeypatch):

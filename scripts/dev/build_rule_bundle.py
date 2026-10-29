@@ -204,7 +204,10 @@ SOURCES: dict[str, Source] = {
             },
             skip_modes={"join": _JOIN_REASON},
             skip_ids={
-                "0xdea.c.use-after-free.raptor-use-after-free": "overflows opengrep 1.31.0's stack on its own test file",
+                "0xdea.c.use-after-free.raptor-use-after-free": (
+                    "fails opengrep 1.31.0 and 1.32.0 on its own test file: a timeout by default, "
+                    "a stack overflow once the timeout and the stack limit are lifted"
+                ),
             },
         ),
         Source(
@@ -271,8 +274,11 @@ def _license_text(rule: dict[str, Any]) -> str | None:
     if value is None or isinstance(value, str):
         return value
     # Only a substring or a spelling is compared, so a value JSON cannot hold (a YAML
-    # date) is stringified rather than refused.
-    return json.dumps(value, sort_keys=True, default=str)
+    # date, or keys it cannot sort or write) is stringified rather than refused.
+    try:
+        return json.dumps(value, sort_keys=True, default=str)
+    except TypeError:
+        return str(value)
 
 
 def _proprietary_license(rule: dict[str, Any]) -> str | None:
