@@ -234,6 +234,30 @@ because nothing verified them.
 and `zero-secrets` then blocks the live ones. `--only-verified`, or `--results`
 naming `verified`, in TruffleHog's flags counts as asking to verify.
 
+### Most of the rule bundle is a frozen snapshot, JavaScript and TypeScript included
+
+JMo's code scanner reads the rule bundle in `scripts/jmo_rules/`
+([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,251 of its 1,421 rules come from one
+snapshot of opengrep-rules whose commit is dated 2025-01-26. Nothing refreshes
+it: a rule written since is not in the bundle until someone moves the pin and
+rebuilds. GitLab's `lgpl-cc` rules (v2.10.1, 100 rules) are maintained and
+cover Java, Ruby, PHP and Python, with one rule each for JavaScript, YAML and
+`.properties` files. Every other language is the snapshot's alone.
+
+That includes JavaScript and TypeScript: `javascript.yaml` holds 169 snapshot
+rules and 1 from GitLab, and `typescript.yaml` holds 18 snapshot rules. GitLab's
+maintained JavaScript set, `rules/lgpl`, is not in the bundle. It is LGPL-3.0,
+and its rules are to be scored one at a time after v2.0.0
+([#1465](https://github.com/jimmy058910/jmo-security-repo/issues/1465)).
+jmo-native runs beside the bundle, but it reads only Next.js, Supabase,
+Firebase and browser LLM keys ([TOOLS.md](TOOLS.md#jmo-native)).
+
+**What to do:** read an empty code-scanner result on JavaScript or TypeScript as
+"nothing matched rules as of January 2025", not as current coverage. Dependency
+scanning is separate and is not affected. To take newer rules, move a source's
+pin in `scripts/dev/build_rule_bundle.py` and rebuild
+([RULE_BUNDLE.md](RULE_BUNDLE.md#rebuilding)).
+
 ### Semgrep also skips tests, build output and vendored code
 
 Semgrep brings its own ignore list. When the scanned directory has no
@@ -568,10 +592,10 @@ already there ([#1129](https://github.com/jimmy058910/jmo-security-repo/issues/1
 
 ---
 
-## Defects shipping in v1.1.0
+## Defects shipping in v1.1.1
 
 Everything above is behaviour we intend to keep documenting. **This section is
-different.** These are open defects a user can hit in v1.1.0, listed because the
+different.** These are open defects a user can hit in v1.1.1, listed because the
 symptom is hard to interpret without knowing the cause. Each links to the issue
 that will close it.
 
@@ -579,23 +603,13 @@ The v1.1.0 pre-release fix program
 ([the plan](superpowers/plans/2026-08-22-v1.1.0-pre-release-fix-program.md))
 fixed every issue scheduled before the tag rather than shipping with
 dispositions; the 42 issues this section listed at v1.0.8 are all closed. What
-remains is the after-tag set. Regenerate it rather than trust it:
+remains is scheduled in the v2.0.0 program, or after its tag. Regenerate it
+rather than trust it:
 
 ```bash
 gh issue list --repo jimmy058910/jmo-security-repo --state open --label user-reachable
 ```
 
-- **Excluding an in-tree results directory is by NAME, so it can exclude one
-  directory too many.** When `--results-dir` resolves inside the repository
-  being scanned, JMo tells every tool to skip that directory so it does not
-  read its own output back as findings — but the per-tool `--exclude` grammars
-  only agree on a bare directory *name*, not a path. So if your results
-  directory is `./results` and your source also has, say, `src/results/`, that
-  second directory is skipped too. Point `--results-dir` outside the repository
-  (the usual CI setup) and nothing is excluded at all. JMo's own file
-  enumeration is exact and skips only the real results directory, so the tools
-  that take file arguments — hadolint, shellcheck — are unaffected.
-  [#1156](https://github.com/jimmy058910/jmo-security-repo/issues/1156)
 - **Three output rough edges:** the scan progress line is written even when
   stderr is redirected, so a captured log carries `\r` frames; the history
   database flag is `--history-db` on `scan` and `ci` but `--db` on `diff` and
