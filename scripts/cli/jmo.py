@@ -2502,12 +2502,42 @@ def _collect_email_opt_in(args) -> None:
         _update_jmo_config(config_path, {"onboarding_completed": True})
 
 
+def _stream_is_tty(stream) -> bool:
+    """Whether ``stream`` is a terminal; False for one that is missing or closed.
+
+    ``sys.stdin`` is None when the process started with stdin closed
+    (``jmo scan <&-``), and ``isatty()`` raises on a closed file. The reminder
+    runs after the scan, so asking must not take the scan down.
+    """
+    try:
+        return bool(stream.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
 def _show_kofi_reminder(args) -> None:
     """Show Ko-Fi support reminder every 3rd scan (non-intrusive).
 
     Tracks scan count in ~/.jmo/config.yml and displays friendly reminder
     every 3 scans to support full-time development.
+
+    Returns before it creates ``~/.jmo`` or reads the config when nobody is
+    there to read the reminder (#1506): CI, cron, a pipe, a redirect. That is
+    this file's usual "no one will answer" test (stdin not a terminal,
+    ``JMO_NON_INTERACTIVE``, ``CI``, ``DOCKER_CONTAINER``) plus stdout, because
+    the reminder is output and a scan redirected to a file from a terminal has
+    a live stdin and no reader. Counting those scans edited the maintainer's
+    real config from every test and routine that ran ``jmo scan``.
     """
+    if (
+        not _stream_is_tty(sys.stdin)
+        or not _stream_is_tty(sys.stdout)
+        or os.environ.get("JMO_NON_INTERACTIVE")
+        or os.environ.get("CI")
+        or os.environ.get("DOCKER_CONTAINER") == "1"
+    ):
+        return
+
     config_path = Path.home() / ".jmo" / "config.yml"
     config_path.parent.mkdir(exist_ok=True)
 
