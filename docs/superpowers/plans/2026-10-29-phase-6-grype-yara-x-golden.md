@@ -447,6 +447,27 @@ output in a directory that has no timings file.
 - [ ] **Step 3:** Commit `fix: a target whose scanner raised reports none of an earlier
   scan's findings`, body `Closes #1518`.
 
+## Task A2c: A GitLab repository keeps its rows when its image step fails (folded in, no issue)
+
+Found by A2b's review (2026-10-30); folded into PR A on Jimmy's word rather than filed.
+
+**Files:** `scripts/cli/scan_jobs/gitlab_scanner.py` (`scan_gitlab_repo`: `scan_repository`
+then `_scan_named_images` inside one `try`, whose generic `except` calls
+`_record_abandoned_target`), its tests.
+
+The generic `except` replaces the repository's own `ran` rows and outputs with
+`failed:target not scanned` when anything after `scan_repository` raises, so the report
+withholds the repository's real findings; `_record_abandoned_target`'s docstring says a
+failure after the repository's scan never comes there.
+
+- [ ] **Step 1: Measure first:** what can raise out of `_scan_named_images` (it catches
+  per image at `:549` and `:564`) and reach that `except`; if nothing can, record it and
+  pin the docstring's promise with a test instead of changing code.
+- [ ] **Step 2: Failing test:** a GitLab target whose repository scan writes `ran` rows and
+  output, then an image step that raises → the report holds the repository's findings
+  and its rows read `ran`; the image failure is logged and recorded.
+- [ ] **Step 3:** Commit `fix: a GitLab repository keeps its findings when its image step fails`.
+
 ## Task A3: Every finding names its target (#1309)
 
 **Files:** `scripts/core/normalize_and_report.py:221-310` (`_normalize_paths_and_ids`), `:59`
