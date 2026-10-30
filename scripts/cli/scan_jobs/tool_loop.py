@@ -59,6 +59,7 @@ from ...core.tool_descriptors import (
     Invocation,
     ScanContext,
     Shortfall,
+    SkipIfEmpty,
     ToolDescriptor,
     read_history,
     scan_root,
@@ -406,6 +407,7 @@ def _row_from_results(
     stub: Callable[[str, Path], None],
     labels: Mapping[Path, str] | None = None,
     handed: Sequence[str] = (),
+    skip_if_empty: Mapping[Path, SkipIfEmpty] | None = None,
 ) -> ToolRun:
     tool = d.name
     if not results:
@@ -490,7 +492,24 @@ def _row_from_results(
     )
     exit_code = primary.returncode
     if d.scanned_count is not None:
-        examined = d.scanned_count(primary.output_file or out_dir / f"{tool}.json")
+        output = primary.output_file or out_dir / f"{tool}.json"
+        examined = d.scanned_count(output)
+        asked = (skip_if_empty or {}).get(output) if examined == 0 else None
+        if asked is not None:
+            # The command line asked for a set of files that came up empty
+            # (`--baseline-commit`): a worked run with nothing to read. Its
+            # output, an empty result, stays for the report.
+            logger.info("%s: %s", tool, asked.detail)
+            return ToolRun(
+                tool,
+                State.SKIPPED,
+                asked.reason,
+                seconds=seconds,
+                exit_code=exit_code,
+                attempts=attempts,
+                invocations=invocations,
+                detail=asked.detail,
+            )
         if examined == 0:
             # "Scanned 4 files, found nothing" and "scanned 0 files" were
             # indistinguishable in every artifact (#1231).
@@ -898,6 +917,11 @@ def run_tools(
             stub,
             labels,
             tuple(f for inv in invocations for f in inv.inputs),
+            {
+                inv.output_file: inv.skip_if_empty
+                for inv in invocations
+                if inv.skip_if_empty is not None
+            },
         )
         if tool in fallen:
             # What the replaced run cost is part of what the row cost.

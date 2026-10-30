@@ -361,6 +361,21 @@ class Invocation:
     # The files it was handed, `/`-separated and relative to `cwd`, for a row
     # to name the ones the tool could not read (`ToolDescriptor.unread_inputs`).
     inputs: tuple[str, ...] = ()
+    # What the row is when this run examined 0 files, if the command line is
+    # what limits it to a set that can be empty (opengrep's `--baseline-commit`).
+    # Not set: 0 files is a failure, `EXAMINED_ZERO`.
+    skip_if_empty: SkipIfEmpty | None = None
+
+
+@dataclass(frozen=True)
+class SkipIfEmpty:
+    """The row a run that examined 0 files gets, when its command line asks for
+    a set of files that may be empty: `skipped:<reason>`, `detail` saying which
+    ask it was. Without it, a tool that read nothing is `failed:examined 0 files`
+    (G2, #1231): the target was there and went unscanned."""
+
+    reason: Reason
+    detail: str
 
 
 @dataclass(frozen=True)
@@ -672,6 +687,9 @@ def _opengrep_scanned(path: Path) -> int | None:
     whose path was handed with a `tests/` component (its built-in ignore list;
     the row now hands it `.`), and on semgrep for a git-based walk that
     resolved to an enclosing repository with no tracked files (#1231, 0 vs 4).
+    The same `[]` is what `--baseline-commit` writes when no changed file is one
+    it scans: the output cannot tell the two apart, so the invocation says
+    which it was (`Invocation.skip_if_empty`).
     The row's own run names its files relative to the target."""
     data = _load(path)
     if not isinstance(data, dict):
@@ -829,6 +847,37 @@ def _absolute_if_a_file(config: Any) -> str:
         return text
 
 
+def _baseline_commit(flags: Sequence[str]) -> str | None:
+    """The commit named by `--baseline-commit` in these flags, spelled
+    `--baseline-commit X` or `--baseline-commit=X`; None when it is not there.
+    The last spelling wins, as it would for a parser that took the last value
+    (opengrep reports a repeat itself)."""
+    found: str | None = None
+    for i, flag in enumerate(flags):
+        if flag == "--baseline-commit" and i + 1 < len(flags):
+            found = flags[i + 1]
+        elif flag.startswith("--baseline-commit="):
+            found = flag.split("=", 1)[1]
+    return found
+
+
+def _opengrep_skip_if_empty(flags: Sequence[str]) -> SkipIfEmpty | None:
+    """`--baseline-commit` scans only the files changed since the commit, so a
+    commit that only deletes files, or changes only paths opengrep's default
+    ignore list skips (`tests/`, `*_test.go`, `*.min.js`, `build/`), leaves it
+    nothing to read: `paths.scanned` is `[]`, rc 0 (measured, 1.32.0). That is
+    what the flag asks for, and not a scan that did not work. The commit is in
+    the detail, since the label is a closed set."""
+    commit = _baseline_commit(flags)
+    if commit is None:
+        return None
+    return SkipIfEmpty(
+        Reason.NO_CHANGED_FILES,
+        f"--baseline-commit {commit}: no file changed since it is one opengrep "
+        "scans (deleted files, and paths its default ignore list skips, are not)",
+    )
+
+
 # opengrep's debug log, in the scan's scratch beside the outputs: dot-prefixed,
 # as `.zap-plan.yaml` is, so the report reads no `<tool>.json` out of it.
 OPENGREP_LOG = ".opengrep/semgrep.log"
@@ -886,6 +935,7 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
             # (`~/.cache/opengrep`) stays where it is: moving it into every
             # scan would cost that much per scan.
             env={"SEMGREP_LOG_FILE": str((ctx.out_dir / OPENGREP_LOG).resolve())},
+            skip_if_empty=_opengrep_skip_if_empty(ctx.flags),
             # Measured on 1.32.0 (2026-10-29): a run whose files carry errors
             # (a syntax error, a Timeout, a Stack overflow) is rc 0, with every
             # other file's results in the output and the errors in `errors`. An

@@ -77,6 +77,10 @@ class Reason(StrEnum):
     # opengrep's: none of the target's files is in a language the committed
     # rule bundle has rules for, so it would load them and scan nothing.
     NO_RULE_LANGUAGES = "no files in a language the rule bundle reads"
+    # opengrep's, after the run: `--baseline-commit` limits it to the files
+    # changed since a commit, and none of them is one it scans (a commit that
+    # only deletes files, or touches only paths its default ignore list skips).
+    NO_CHANGED_FILES = "no changed file opengrep reads since the baseline commit"
     NO_LOCKFILE = "no lockfile"
     # jmo-native's: everything its checks read, since the label is all a
     # skipped row prints.
@@ -107,6 +111,7 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NO_WORKFLOWS,
         Reason.NO_READABLE_WORKFLOWS,
         Reason.NO_RULE_LANGUAGES,
+        Reason.NO_CHANGED_FILES,
         Reason.NO_LOCKFILE,
         Reason.NO_WEB_APP_FILES,
     }

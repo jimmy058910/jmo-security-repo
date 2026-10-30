@@ -886,6 +886,216 @@ def test_the_exclusions_and_the_examined_count_hold_from_inside_the_target(
     assert DESCRIPTORS["opengrep"].scanned_count(out / "opengrep.json") == 1
 
 
+# --- a baseline scan that has nothing to read (F1) ---------------------------------
+
+BASELINE_FLAGS = [
+    ["--baseline-commit", "HEAD~1"],
+    ["--baseline-commit=HEAD~1"],
+]
+
+
+def _scanning(scanned: list[str]):
+    """A runner whose opengrep exits 0 and writes `paths.scanned`, as measured on
+    1.32.0 for every scan, `scanned` being what the run read."""
+    from scripts.core.tool_runner import ToolResult
+
+    class Scanner:
+        def __init__(self, tools, progress_callback=None):
+            self.tools = tools
+
+        def run_all_parallel(self):
+            results = []
+            for definition in self.tools:
+                definition.output_file.write_text(
+                    json.dumps({"results": [], "paths": {"scanned": scanned}}),
+                    encoding="utf-8",
+                )
+                results.append(
+                    ToolResult(
+                        tool=definition.name,
+                        status="success",
+                        returncode=0,
+                        duration=1.0,
+                        output_file=definition.output_file,
+                    )
+                )
+            return results
+
+    return Scanner
+
+
+def _row_of(repo: Path, out: Path, scanned: list[str], flags: list[str]):
+    out.mkdir(exist_ok=True)
+    return tool_loop.run_tools(
+        tools=["opengrep"],
+        target_type="repo",
+        target=repo,
+        target_label="t",
+        out_dir=out,
+        timeout=60,
+        retries=0,
+        per_tool_config={"opengrep": {"flags": flags}} if flags else {},
+        allow_missing_tools=False,
+        runner_cls=_scanning(scanned),
+        find_tool_func=lambda name: "/bin/opengrep",
+        repo_root=repo,
+    )["opengrep"]
+
+
+@pytest.mark.parametrize("flags", BASELINE_FLAGS)
+def test_a_baseline_scan_that_examined_nothing_is_a_skip(tmp_path, flags) -> None:
+    """`--baseline-commit HEAD~1` scans only the files that changed since the
+    commit. A commit that deletes files, or touches only paths opengrep's default
+    ignore list skips (`tests/`, `*_test.go`, `*.min.js`, `build/`), leaves it
+    nothing to read, and `paths.scanned` is `[]` (measured, 1.32.0): the ordinary
+    outcome of a test-only commit, and not a scan that did not work. The docs'
+    incremental recipe would otherwise exit 1 on it."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["src/app.py"])
+
+    row = _row_of(repo, tmp_path / "out", [], flags)
+
+    assert row.state is State.SKIPPED
+    assert row.reason is Reason.NO_CHANGED_FILES
+    # The label names baseline mode; the commit is in the detail.
+    assert row.label == (
+        "skipped:no changed file opengrep reads since the baseline commit"
+    )
+    assert "HEAD~1" in (row.detail or "")
+    assert row.exit_code == 0
+    # The run's own output stays: the report reads it as an empty result.
+    assert (
+        json.loads((tmp_path / "out" / "opengrep.json").read_bytes())["results"] == []
+    )
+
+
+@pytest.mark.parametrize("flags", BASELINE_FLAGS)
+def test_a_baseline_scan_that_read_a_file_is_ran(tmp_path, flags) -> None:
+    repo = tmp_path / "repo"
+    _plant(repo, ["src/app.py"])
+
+    row = _row_of(repo, tmp_path / "out", ["src/app.py"], flags)
+
+    assert row.state is State.RAN
+    assert row.reason is None
+
+
+def test_zero_files_without_a_baseline_flag_is_still_a_failure(tmp_path) -> None:
+    """The skip is for baseline mode only: a target whose walk found nothing
+    (a gitignored tree, an ancestor the ignore list names) is the bug the row
+    exists to report, and reads `failed:examined 0 files` as before."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["src/app.py"])
+
+    row = _row_of(repo, tmp_path / "out", [], [])
+
+    assert row.state is State.FAILED
+    assert row.reason is Reason.EXAMINED_ZERO
+
+
+def test_other_flags_do_not_make_zero_files_a_skip(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    _plant(repo, ["src/app.py"])
+
+    row = _row_of(repo, tmp_path / "out", [], ["--verbose", "--max-memory", "4000"])
+
+    assert row.state is State.FAILED
+    assert row.reason is Reason.EXAMINED_ZERO
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
+def _commit(repo: Path, files: dict[str, bytes | None], message: str) -> None:
+    """Write (or, for None, delete) `files` and commit them."""
+    for rel, data in files.items():
+        path = repo / rel
+        if data is None:
+            path.unlink()
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+
+
+def _history(tmp_path: Path) -> Path:
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _commit(
+        repo,
+        {
+            "src/a.py": b"x = 1\n",
+            "tests/test_a.py": b"x = 1\n",
+            "gone.py": b"y = 1\n",
+            "README.md": b"# t\n",
+        },
+        "base",
+    )
+    return repo
+
+
+@pytest.mark.requires_tools
+@pytest.mark.parametrize(
+    ("commit", "scanned"),
+    [
+        # Each is the last commit of a repository scanned with
+        # `--baseline-commit HEAD~1`, as docs/SCAN_OPTIMIZATION.md runs it.
+        pytest.param({"tests/test_a.py": TWO_FINDINGS}, None, id="test-only"),
+        pytest.param({"gone.py": None}, None, id="deletion-only"),
+        pytest.param({"app.min.js": b"var a=1;\n"}, None, id="min-js-only"),
+        pytest.param({"src/a.py": TWO_FINDINGS}, ["src/a.py"], id="source"),
+        # `generic.yaml` is loaded for every scan, and one of its rules reads any
+        # file, so a changed README is read.
+        pytest.param({"README.md": b"# changed\n"}, ["README.md"], id="readme-only"),
+    ],
+)
+def test_the_incremental_recipe_through_the_real_binary(
+    tmp_path, commit, scanned
+) -> None:
+    """The recipe in docs/SCAN_OPTIMIZATION.md, run for real on a repository
+    whose last commit is each kind. Measured before the skip: a test-only
+    commit read `failed:examined 0 files` and a deletion-only one the same, so
+    a CI job that scanned every push exited 1 on them; a commit with source
+    still reads `ran`, having read only what the commit changed."""
+    repo = _history(tmp_path)
+    _commit(repo, commit, "last")
+    out = tmp_path / "out"
+    out.mkdir()
+    from scripts.core.tool_runner import ToolRunner
+
+    row = tool_loop.run_tools(
+        tools=["opengrep"],
+        target_type="repo",
+        target=repo,
+        target_label="app",
+        out_dir=out,
+        timeout=300,
+        retries=0,
+        per_tool_config={"opengrep": {"flags": ["--baseline-commit", "HEAD~1"]}},
+        allow_missing_tools=False,
+        runner_cls=ToolRunner,
+        repo_root=repo,
+    )["opengrep"]
+
+    if scanned is None:
+        assert row.state is State.SKIPPED, row
+        assert row.reason is Reason.NO_CHANGED_FILES
+    else:
+        assert row.state is State.RAN, row
+        document = json.loads((out / "opengrep.json").read_bytes())
+        assert document["paths"]["scanned"] == scanned
+
+
 def _stat_of(path: Path) -> tuple[int, int] | None:
     """(mtime in ns, size) of a file, or None when it is not there."""
     try:

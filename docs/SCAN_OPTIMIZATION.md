@@ -151,6 +151,8 @@ jmo scan --repo . --tools opengrep --config jmo.yml
 
 The baseline has to exist: a clone without `HEAD~1` (a CI checkout of depth 1) fails the row as `failed:unaccepted exit code`, opengrep's exit code 2. Fetch at least two commits (`actions/checkout` with `fetch-depth: 2`).
 
+A commit that changes no file opengrep reads (it only deletes files, or touches only paths its default ignore list skips: `tests/`, `test/`, `*_test.go`, `build/`, `dist/`, `*.min.js`) leaves it nothing to scan. That row reads `skipped:no changed file opengrep reads since the baseline commit`, and the scan still exits 0. A scan of a target that read nothing without `--baseline-commit` is still `failed:examined 0 files`.
+
 ### 5. Trivy Optimizations
 
 On a repository, trivy already runs `--scanners vuln,misconfig --include-dev-deps
@@ -339,6 +341,8 @@ per_tool:
 EOF
 jmo scan --repo . --tools opengrep --config jmo-incremental.yml
 ```
+
+A commit that changes nothing opengrep reads (a test-only or deletion-only commit) is `skipped:no changed file opengrep reads since the baseline commit`, and the scan exits 0. When opengrep is the only tool, no tool ran, so the scan is not stored in the history database either.
 
 **CI/CD example (GitHub Actions):**
 
