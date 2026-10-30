@@ -665,7 +665,9 @@ def _opengrep_trigger(ctx: ScanContext) -> Reason | None:
     A known gap: `generic.yaml` has no file-name pattern, so a repository whose
     only files are ones its rules read (an nginx config) is skipped.
     """
-    if ctx.tool_config.get("configs"):
+    # A malformed value is let through, for the precheck to name: skipped here
+    # it would read as a repository with no language (`configs: 0`).
+    if ctx.tool_config.get("configs") or _configs_problem(ctx.tool_config):
         return None
     chosen = rule_bundle.select_configs(_opengrep_files(ctx))
     return None if len(chosen) > 1 else Reason.NO_RULE_LANGUAGES
@@ -822,6 +824,33 @@ def _gitleaks_repo(ctx: ScanContext) -> list[Invocation]:
         )
         for mode, output, flags in modes
     ]
+
+
+def _configs_problem(tool_config: Mapping[str, Any]) -> str | None:
+    """What is wrong with `per_tool.opengrep.configs`, or None. It is unset
+    (absent or null), a string, or a list or tuple of strings; anything else was
+    iterated by the command builder, and `configs: 5` raised out of it and
+    failed every tool on the target with "'int' object is not iterable"."""
+    own = tool_config.get("configs")
+    if own is None or isinstance(own, str):
+        return None
+    if isinstance(own, (list, tuple)):
+        wrong = [c for c in own if not isinstance(c, str)]
+        if not wrong:
+            return None
+        got = f"a {type(own).__name__} holding {type(wrong[0]).__name__}"
+    else:
+        got = type(own).__name__
+    return (
+        "per_tool.opengrep.configs must be a rule file name or a list of them, "
+        f"not {got}"
+    )
+
+
+def _opengrep_precheck(ctx: ScanContext) -> Shortfall | None:
+    """Fail the row, and only it, for a `configs` it cannot read."""
+    problem = _configs_problem(ctx.tool_config)
+    return Shortfall(Reason.COULD_NOT_RUN, problem, ()) if problem else None
 
 
 def _opengrep_configs(ctx: ScanContext) -> list[str]:
@@ -1955,6 +1984,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # gap: `generic.yaml` has no file-name pattern, so a tree whose only
             # files are ones its rules read (an nginx config) is skipped too.
             trigger=_opengrep_trigger,
+            precheck=_opengrep_precheck,
             # Its cost is its rule count, not the tree: 409.8 s and 583 s for
             # identical work on one machine (#1204, semgrep). A floor caps
             # wasted time.

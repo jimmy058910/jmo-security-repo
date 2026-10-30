@@ -326,6 +326,97 @@ def test_user_configs_replace_the_bundle(tmp_path) -> None:
     assert str(BUNDLE_DIR) not in " ".join(command)
 
 
+def test_a_bare_string_or_a_tuple_of_configs_is_accepted(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    for own in ("/rules/mine.yaml", ("/rules/mine.yaml",), ["/rules/mine.yaml"]):
+        _, (definition,) = _recorded(repo, out, {"opengrep": {"configs": own}})
+        assert definition.command[2:4] == ["--config", "/rules/mine.yaml"], own
+
+
+@pytest.mark.parametrize(
+    ("configs", "said"),
+    [
+        (5, "int"),
+        (0, "int"),
+        (True, "bool"),
+        (False, "bool"),
+        ({"a": 1}, "dict"),
+        ({}, "dict"),
+        (1.5, "float"),
+        ([5], "int"),
+        (["ok.yaml", None], "NoneType"),
+        ([["nested.yaml"]], "list"),
+    ],
+)
+def test_a_malformed_configs_fails_only_the_opengrep_row_and_names_its_key(
+    tmp_path, caplog, configs, said
+) -> None:
+    """`configs: 5` raised "'int' object is not iterable" out of the command
+    builder, which failed the whole target: every tool on it, with a message
+    that names no key (measured: "Scan failed for repo t7"). The row alone
+    fails, `could not be run`, naming `per_tool.opengrep.configs` and the type
+    it got; the tool beside it still runs."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+    captured: list = []
+    scanner = _scanning(["app.py"])
+
+    class Recorder(scanner):
+        def __init__(self, tools, progress_callback=None):
+            super().__init__(tools, progress_callback)
+            captured.extend(tools)
+
+    caplog.set_level(logging.ERROR)
+    rows = tool_loop.run_tools(
+        tools=["opengrep", "syft"],
+        target_type="repo",
+        target=repo,
+        target_label="t",
+        out_dir=out,
+        timeout=60,
+        retries=0,
+        per_tool_config={"opengrep": {"configs": configs}},
+        allow_missing_tools=False,
+        runner_cls=Recorder,
+        find_tool_func=lambda name: f"/bin/{name}",
+        repo_root=repo,
+    )
+
+    row = rows["opengrep"]
+    assert row.state is State.FAILED
+    assert row.reason is Reason.COULD_NOT_RUN
+    assert "per_tool.opengrep.configs" in (row.detail or "")
+    assert said in (row.detail or "")
+    assert "per_tool.opengrep.configs" in caplog.text
+    # The other tool on the same target was planned and ran.
+    assert [d.name for d in captured] == ["syft"]
+    assert rows["syft"].state is State.RAN
+
+
+def test_a_malformed_configs_is_reported_even_where_the_trigger_would_skip(
+    tmp_path,
+) -> None:
+    """`configs: 0` is falsy, and a repository with no bundle language is
+    skipped before the command is built: the user's mistake must still be
+    named, not read as `no files in a language the rule bundle reads`."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["README.md"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    rows, definitions = _recorded(repo, out, {"opengrep": {"configs": 0}})
+
+    assert definitions == []
+    assert rows["opengrep"].reason is Reason.COULD_NOT_RUN
+    assert "per_tool.opengrep.configs" in (rows["opengrep"].detail or "")
+
+
 def test_it_runs_from_inside_the_target_with_every_other_path_absolute(
     tmp_path, monkeypatch
 ) -> None:
