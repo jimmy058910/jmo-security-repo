@@ -814,15 +814,20 @@ All notable changes to JMo Security will be documented in this file.
   are read from each Dockerfile's `FROM` instructions (continuations joined, heredoc bodies
   skipped, as Docker reads them), the `image:` of each service that has no `build:` in a
   `docker-compose*` or `compose*` file, and the `containers` and `initContainers` of each
-  Kubernetes manifest (a YAML document with an `apiVersion` and a `kind`: a Pod's, or a
-  workload's pod template, a CronJob's included), whatever the file is called (#1410). One target
+  Kubernetes manifest (a YAML document with an `apiVersion` and a `kind`, of any kind, read
+  at its `spec`, its `spec.template.spec` or a CronJob's `spec.jobTemplate.spec.template.spec`:
+  a Pod, a Deployment, a StatefulSet, a DaemonSet, a Job, a ReplicaSet or a custom kind with
+  a pod template), whatever the file is called (#1410). Compose files and manifests under
+  `node_modules`, `vendor`, `.venv`, `venv` and `.git` are not read. One target
   per reference per scan: a reference another target already covers (an `--image`, or an
   image a second project names) is logged at INFO naming the target that scans it. Build
   arguments (`FROM $BASE`), build stages and `scratch` are skipped, and a value that is not
   an image reference (`FROM {{ base }}`) is named, file and line, in a WARNING and skipped.
   An image that cannot be pulled (a private registry, an unknown tag) is a `failed` image
   row, so the scan exits 1, as `--image` does (#1311). A registry with a port is an image
-  reference like any other, for `--image` too (#1405).
+  reference like any other, for `--image` too (#1405), and `--image`, `--images-file` and
+  scheduled scans now refuse a repository path in upper case (`MyApp:1`, `ghcr.io/Org/app`),
+  as Docker does.
 - **A GitLab project named `results` is no longer scanned together with its own output.**
   The clone's scan results went to a folder inside the clone when the project shared that
   name; they now go straight to the target's folder in the results directory (#1364).

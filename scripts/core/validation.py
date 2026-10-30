@@ -550,6 +550,12 @@ def validate_container_image(image: str) -> bool:
     """
     Validate container image reference format.
 
+    The repository path must be lower case, as Docker requires, so `MyApp:1`
+    and `ghcr.io/Org/app` are refused: by `--image`, `--images-file` and
+    scheduled scans alike. So is `Org/app`, by JMo's rule (#1405) that a first
+    component is a registry only when it holds `.` or `:` or is `localhost`;
+    Docker would read `Org` as a registry host.
+
     Args:
         image: Container image reference to validate
 

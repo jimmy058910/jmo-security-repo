@@ -392,9 +392,11 @@ class TestContainerImageValidation:
             pytest.param("nginx\n", id="trailing-newline"),
         ],
     )
-    def test_a_reference_docker_refuses_is_invalid(self, image):
-        """Only a first component holding `.` or `:`, or `localhost`, is a
-        registry, and the repository path is lower case (#1405)."""
+    def test_a_malformed_or_upper_case_reference_is_invalid(self, image):
+        """JMo's rule (#1405): only a first component holding `.` or `:`, or
+        `localhost`, is a registry, and the repository path is lower case. So
+        `Org/app` is refused as an upper-case path, where Docker would read
+        `Org` as a registry host; the other rows are refused by Docker too."""
         assert validate_container_image(image) is False
 
 

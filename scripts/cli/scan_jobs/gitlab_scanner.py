@@ -76,18 +76,22 @@ _DIRECTIVE = re.compile(r"\s*#\s*([a-zA-Z][a-zA-Z0-9]*)\s*=\s*(.+?)\s*$")
 _DIRECTIVES = frozenset({"syntax", "escape", "check"})
 # A heredoc's opening word (`<<EOF`, `<<-EOF`, `<<"EOF"`), as a word of its
 # own: `<<<` is a here-string. Its body runs to the line holding the word
-# alone, leading tabs stripped first for `<<-`. A quoted span (`echo "cat
-# <<EOF here"`) is matched too, to be stepped over, and has no marker group.
-# The scan runs left to right, so the quote that opens the word itself
-# (`<<"EOF"`) is part of the word: the match starts at the space before `<<`.
+# alone, leading tabs stripped first for `<<-`. What shell reads as one unit
+# is matched too, to be stepped over, and has no marker group: a quoted span
+# (`echo "cat <<EOF here"`) and a backslash with the character it escapes
+# (`don\'t` opens no span; inside double quotes `\"` does not close one;
+# inside single quotes a backslash is a plain character). The scan runs left
+# to right, so the quote that opens the word itself (`<<"EOF"`) is part of
+# the word: the match starts at the space before `<<`.
 _HEREDOC = re.compile(
-    r"""(?:^|\s)\d*<<(-?)(["']?)([^\s"'<]+)\2(?=\s|$)|"[^"]*"|'[^']*'"""
+    r"""(?:^|\s)\d*<<(-?)(["']?)([^\s"'<]+)\2(?=\s|$)"""
+    r"""|\\.|"(?:[^"\\]|\\.)*"|'[^']*'"""
 )
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
 
 # The Compose specification's file names, `compose.yaml` first, and the
-# `docker-compose` ones it superseded. Every other YAML file is read as
-# Kubernetes manifests.
+# `docker-compose` ones it superseded. A file with one of these names is read
+# as compose; every YAML file is read for manifests, whatever it is called.
 _COMPOSE_NAMES = ("docker-compose*.y*ml", "compose*.y*ml")
 _YAML_PATTERNS = ("**/*.yaml", "**/*.yml")
 # Where a manifest keeps a pod spec: a Pod's `spec`, a Deployment's,
@@ -147,7 +151,7 @@ def _instructions(
         if words[0].lower() in _HEREDOC_INSTRUCTIONS:
             for opening in _HEREDOC.finditer(line):
                 chomp, word = opening.group(1), opening.group(3)
-                if word is None:  # a quoted span
+                if word is None:  # a quoted span or an escaped character
                     continue
                 while at < len(lines):
                     body = lines[at].lstrip("\t") if chomp else lines[at]
@@ -363,7 +367,8 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     - each compose file's (`docker-compose*` or `compose*`, `.yml`/`.yaml`)
       service `image:`, unless the service has `build:`
     - each Kubernetes manifest's `containers` and `initContainers` images: a
-      manifest is any YAML document with a string `apiVersion` and `kind`,
+      manifest is any YAML document, in a file of any name, with a string
+      `apiVersion` and `kind`,
       and its pod spec is a Pod's `spec`, a workload's `spec.template.spec`
       or a CronJob's `spec.jobTemplate.spec.template.spec`
 
@@ -425,19 +430,20 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
             continue  # Skip files that can't be read
 
     # Patterns 2 and 3 read the YAML files of one walk, the Dockerfiles' (a
-    # vendored tree is skipped): a compose file by its name, every other file
-    # as manifests. A name is matched with its case (`fnmatchcase`): the glob
-    # ignores it on Windows.
+    # vendored tree is skipped): a compose file by its name, every file as
+    # manifests, since a name says nothing of what a file holds (a Deployment
+    # in `compose-prod.yaml`). Pattern 3 parses a file only if its text names
+    # `apiVersion` and `kind`, which a real compose file seldom does. A name is
+    # matched with its case (`fnmatchcase`): the glob ignores it on Windows.
     compose_files: list[Path] = []
     manifest_files: list[Path] = []
     for found in collect_files(
         repo_path, _YAML_PATTERNS, "image discovery", max_files=None
     ):
         yaml_file = Path(found)
+        manifest_files.append(yaml_file)
         if any(fnmatchcase(yaml_file.name, name) for name in _COMPOSE_NAMES):
             compose_files.append(yaml_file)
-        else:
-            manifest_files.append(yaml_file)
 
     # Pattern 2: compose images
     # services:

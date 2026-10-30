@@ -1071,10 +1071,12 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
 class TestAReferenceNoToolIsGivenIsAFailedImageRow:
     """A reference the validator refuses never reaches a tool's command line:
     `--file=<path>` is a syft flag. Discovery keeps only what Docker's grammar
-    accepts and the validator accepts the same grammar, so no file can name
-    one today; the job's refusal is a guard, and these tests reach it through
-    a patched discovery. It is still an image the repository names, so it is a
-    failed image target, not a silent skip."""
+    accepts and the validator accepts the same grammar, so a file can name one
+    only by length: the validator also refuses a reference over 255
+    characters, which discovery does not check. The job's refusal is otherwise
+    a guard, and these tests reach it through a patched discovery. It is still
+    an image the repository names, so it is a failed image target, not a
+    silent skip."""
 
     def test_it_is_failed_and_recorded_where_the_report_reads(self, tmp_path):
         image = "--file=/tmp/owned.json"
@@ -1498,6 +1500,12 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
                 {"python:3.12"},
                 id="syntax-directive-and-lower-case",
             ),
+            # A guard: the word read past ONBUILD is not a heredoc instruction.
+            pytest.param(
+                "FROM alpine:3.19\nONBUILD ENV X=1\nFROM nginx:1.27\n",
+                {"alpine:3.19", "nginx:1.27"},
+                id="guard-onbuild-with-a-non-heredoc-instruction",
+            ),
         ],
     )
     def test_instructions_are_read_as_docker_reads_them(
@@ -1533,6 +1541,8 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         [
             pytest.param('RUN echo "usage: cat <<EOF here"', id="double-quoted"),
             pytest.param("RUN echo 'a <<EOF b'", id="single-quoted"),
+            # An escaped quote does not end a double-quoted span (this failed).
+            pytest.param(r'RUN echo "a \" <<EOF b"', id="escaped-quote-inside-double"),
             # The last two already passed: the regex wants whitespace before
             # `<<`, and a quote is not whitespace. They guard the fix, which
             # must not make a quote after the word read differently.
@@ -1544,6 +1554,43 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         """#1416: `<<EOF` in a quoted string was taken as a heredoc, and the
         body that never ended swallowed every later FROM, silently."""
         dockerfile = f"FROM alpine:3.19\n{line}\nFROM nginx:1.27\n"
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {
+            "alpine:3.19",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # The first three failed: in shell an escaped quote opens no
+            # quoted span, but the scan took it for one, and the span
+            # swallowed the real marker after it.
+            pytest.param(
+                r"RUN echo don\'t && cat <<'EOF' > /x", id="escaped-apostrophe-1"
+            ),
+            pytest.param(
+                r"RUN echo can\'t; cat <<EOF > 'out file'", id="escaped-apostrophe-2"
+            ),
+            pytest.param(
+                r'RUN printf \"x && cat <<EOF > "/y"', id="escaped-double-quote"
+            ),
+            # The rest passed before the fix (found by probe). They guard it:
+            # a quote that closes and one that never does read as shell reads them.
+            pytest.param(
+                'RUN echo "x y" && cat <<EOF > /x', id="guard-closed-quoted-span"
+            ),
+            pytest.param("RUN echo it's <<EOF", id="guard-unbalanced-apostrophe"),
+        ],
+    )
+    def test_an_escaped_quote_does_not_hide_a_heredoc_marker(self, tmp_path, line):
+        """#1415 again, by another road: a quote after a backslash opens no
+        quoted span in shell, so `don\\'t && cat <<'EOF'` still opens a heredoc.
+        The scan took `'t && cat <<'` for a span, never saw the marker, and read
+        the heredoc body as Dockerfile lines: `from os import path` named the
+        image `os`, which failed as an image target and made the scan exit 1."""
+        dockerfile = (
+            f"FROM alpine:3.19\n{line}\nfrom os import path\nEOF\nFROM nginx:1.27\n"
+        )
         assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {
             "alpine:3.19",
             "nginx:1.27",
@@ -1679,6 +1726,19 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
             },
         )
         assert images == {"nginx:1.27"}
+
+    @pytest.mark.parametrize("name", ["compose-prod.yaml", "docker-compose.prod.yml"])
+    def test_a_manifest_in_a_compose_named_file_is_read(self, tmp_path, name):
+        """A file is a manifest by its content, not its name: the name only
+        says which reader a file goes to first. A Deployment kept in
+        `compose-prod.yaml` named no image, though a manifest is read
+        "whatever the file is called"."""
+        deployment = (
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: d\nspec:\n"
+            "  template:\n    spec:\n      containers:\n"
+            "      - name: web\n        image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {name: deployment}) == {"nginx:1.27"}
 
     def test_a_pods_init_containers_are_images_to_scan(self, tmp_path):
         """An init container's image runs in the cluster as the app's does."""
