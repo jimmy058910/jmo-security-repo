@@ -1838,7 +1838,11 @@ jobs:
   #      the user's profile) and `scan --validate` on every bundle file.
   #   3. `jmo scan` with per_tool.opengrep.configs holding a drive-letter path
   #      (C:\...\javascript.yaml) reads `ran`, finds the fixture's four
-  #      findings, and opengrep's own log shows it loaded that path.
+  #      findings, and opengrep's own log shows it loaded that path. The four
+  #      are checked twice: in opengrep's own document, whose paths carry
+  #      backslashes here, and in the report phase's summaries/findings.json,
+  #      where they must be forward-slash: that file is what a Windows user
+  #      reads, uploads and diffs.
   #   4. That scan's debug log is in its scratch, and no semgrep.log under the
   #      profile gained content.
   #   5. REPORT ONLY: whether Microsoft Defender is on, and whether it flags the
@@ -2111,9 +2115,22 @@ jobs:
           if ($row[0].state -ne 'ran') { throw "the opengrep row is $($row[0].state): $($row[0].reason) $($row[0].detail)" }
 
           # The findings: the guard's four, by (rule, path, line).
+          #
+          # opengrep names a file with the separator of the OS it runs on, so its
+          # own document says `routes\login.ts` here (measured, the first run of
+          # this job). The report phase puts every tool's location.path through
+          # normalize_finding_path (scripts/core/adapters/common.py), which turns
+          # a backslash into a slash; -replace '\\', '/' is that step for a path
+          # relative to the target, as these are, and the pytest step above
+          # compares through the function itself.
           $document = Get-Content -Raw -LiteralPath (Join-Path $out 'opengrep.json') | ConvertFrom-Json
-          $found = @($document.results | ForEach-Object { '{0} {1}:{2}' -f ($_.check_id -split '\.')[-1], $_.path, $_.start.line })
-          Write-Host "files read: $($document.paths.scanned -join ', ')"
+          $spelled = { param($path) $path -replace '\\', '/' }
+          $found = @($document.results | ForEach-Object {
+            '{0} {1}:{2}' -f ($_.check_id -split '\.')[-1], (& $spelled $_.path), $_.start.line
+          })
+          $read = @($document.paths.scanned | ForEach-Object { & $spelled $_ })
+          Write-Host "files read, as opengrep writes them: $($document.paths.scanned -join ', ')"
+          Write-Host "files read, as the report phase spells them: $($read -join ', ')"
           Write-Host "findings ($($found.Count)):"
           $found | Sort-Object | ForEach-Object { Write-Host "  $_" }
           $expected = @(
@@ -2124,6 +2141,24 @@ jobs:
           )
           $missing = @($expected | Where-Object { $found -notcontains $_ })
           if ($missing.Count -ne 0) { throw "findings missing: $($missing -join '; ')" }
+
+          # What the report phase wrote for the user: summaries/findings.json
+          # holds the same four, and every path in it is repo-relative with
+          # forward slashes, neither a backslash nor a drive letter. This, not
+          # the document above, is what proves a Windows user's report is right.
+          $report = Get-Content -Raw -LiteralPath (Join-Path $results 'summaries/findings.json') | ConvertFrom-Json
+          $reported = @($report.findings | Where-Object { $_.tool.name -eq 'opengrep' })
+          $reportedKeys = @($reported | ForEach-Object {
+            '{0} {1}:{2}' -f ($_.ruleId -split '\.')[-1], $_.location.path, $_.location.startLine
+          })
+          Write-Host "findings.json: $(@($report.findings).Count) findings, $($reported.Count) from opengrep"
+          $reportedKeys | Sort-Object | ForEach-Object { Write-Host "  $_" }
+          $missing = @($expected | Where-Object { $reportedKeys -notcontains $_ })
+          if ($missing.Count -ne 0) { throw "summaries/findings.json is missing: $($missing -join '; ')" }
+          $unclean = @($report.findings | ForEach-Object { $_.location.path } | Where-Object { $_ -match '\\|^[A-Za-z]:' })
+          if ($unclean.Count -ne 0) {
+            throw "summaries/findings.json holds paths that are not repo-relative with forward slashes: $($unclean -join '; ')"
+          }
 
           # The debug log is in the scan's scratch, and opengrep loaded that
           # drive-letter path and no other rule file.
