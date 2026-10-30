@@ -4,18 +4,22 @@ An answer key is somebody else's file a test grades JMo against: here the lockfi
 QuackatronHQ/sca-kitchen-sink, which are vulnerable on purpose, so committing them would
 raise Dependabot alerts on JMo's own repository. They are fetched by commit, checked
 against a sha256 each BEFORE a byte is written, and kept outside the repository.
-Every test here is offline: the one network call, `download`, is replaced.
+Every test here is offline: the one network call, `download`, is replaced (and the
+one that checks its retry replaces `fetch_rule_fixture._get`, beneath it).
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import re
+import urllib.error
 from pathlib import Path
 
 import pytest
 
 from scripts.dev import fetch_answer_keys as fak
+from scripts.dev import fetch_rule_fixture as frf
 
 
 def _sha(data: bytes) -> str:
@@ -135,6 +139,30 @@ def test_a_download_is_written_byte_for_byte(keys_dir, monkeypatch) -> None:
     assert fak.sca_kitchen_sink() == []
 
     assert (_landed(keys_dir) / "a/b.lock").read_bytes() == data
+
+
+def test_a_server_error_is_asked_for_once_more(monkeypatch) -> None:
+    """`download` is `fetch_rule_fixture.fetch_bytes`, so it keeps that script's
+    one retry on a 5xx. The seam below it, `_get`, is the only thing replaced."""
+    outcomes: list[object] = [
+        urllib.error.HTTPError("https://x/y", 503, "unavailable", {}, io.BytesIO()),  # type: ignore[arg-type]
+        b"body",
+    ]
+    asked: list[str] = []
+
+    def get(url: str) -> bytes:
+        asked.append(url)
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        assert isinstance(outcome, bytes)
+        return outcome
+
+    monkeypatch.setattr(frf, "_get", get)
+    monkeypatch.setattr(frf, "RETRY_DELAY_S", 0)
+
+    assert fak.download("https://x/y") == b"body"
+    assert asked == ["https://x/y", "https://x/y"]
 
 
 # --- what is refused -------------------------------------------------------------

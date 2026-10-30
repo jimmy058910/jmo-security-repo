@@ -3,8 +3,9 @@
 
     python scripts/dev/build_lockfile_osv_db.py [--out DIR]
 
-`tests/integration/test_lockfile_formats.py` proves that every lockfile format
-JMo claims (`osv_database.LOCKFILE_ECOSYSTEMS`) reaches osv-scanner. Its inputs
+`tests/integration/test_lockfile_formats.py` proves that 16 of the 23 lockfile
+patterns JMo claims (`osv_database.LOCKFILE_ECOSYSTEMS`) reach osv-scanner (its
+docstring names the seven it lacks a file for). Its inputs
 are the lockfiles of QuackatronHQ/sca-kitchen-sink, fetched and never committed
 (`fetch_answer_keys.py`); this is the answer key: one synthetic advisory per
 lockfile, each affecting exactly one package at exactly the version that

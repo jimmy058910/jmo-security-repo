@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -158,6 +159,26 @@ class TestLoadFindings:
             load_findings(tmp_path)
 
 
+def _fake_subprocess_run(monkeypatch, fake_run) -> None:
+    """Make ``targets.py`` call ``fake_run``, and nothing else in the process.
+
+    ``targets.subprocess`` is the real module, so patching its ``run`` would
+    replace ``subprocess.run`` everywhere until teardown, including in the
+    autouse fixtures that tear down first and call it (the first import of
+    ``scripts.cli.jmo`` shells out to ``platform``). Swap the module's name
+    for a stand-in carrying what ``targets.py`` uses.
+    """
+    monkeypatch.setattr(
+        targets,
+        "subprocess",
+        SimpleNamespace(
+            run=fake_run,
+            CalledProcessError=subprocess.CalledProcessError,
+            CompletedProcess=subprocess.CompletedProcess,
+        ),
+    )
+
+
 class TestRunScan:
     """The scan runs real tools, so only its contract with the product is tested."""
 
@@ -174,7 +195,7 @@ class TestRunScan:
             config.write_bytes(b"scan_count: 8\n")  # what _show_kofi_reminder does
             return subprocess.CompletedProcess(cmd, returncode, "out", "err")
 
-        monkeypatch.setattr(targets.subprocess, "run", fake_run)
+        _fake_subprocess_run(monkeypatch, fake_run)
         results = tmp_path / "work" / "results"
         outcome = run_scan(tmp_path / "target", results)
         return outcome, calls, config, results
@@ -270,7 +291,7 @@ class TestCloneAtCommit:
                 return subprocess.CompletedProcess(cmd, 0, second + "\n", "")
             return done
 
-        monkeypatch.setattr(targets.subprocess, "run", lying_rev_parse)
+        _fake_subprocess_run(monkeypatch, lying_rev_parse)
         with pytest.raises(RuntimeError, match="HEAD is"):
             clone_at_commit(url, first, tmp_path / "clone")
 
@@ -285,7 +306,7 @@ class TestCloneAtCommit:
             calls.append((cmd, kwargs))
             return real_run(cmd, **kwargs)
 
-        monkeypatch.setattr(targets.subprocess, "run", recording_run)
+        _fake_subprocess_run(monkeypatch, recording_run)
         clone_at_commit(url, first, tmp_path / "clone", timeout=17)
         assert len(calls) >= 4, "init, fetch, checkout and rev-parse"
         for cmd, kwargs in calls:

@@ -1,9 +1,15 @@
-"""Every lockfile format JMo claims reaches osv-scanner, offline (v2.0.0 Phase 6, T4).
+"""Sixteen of the 23 lockfile patterns JMo claims reach osv-scanner, offline (Phase 6, T4).
 
 `osv_database.LOCKFILE_ECOSYSTEMS` is what JMo says osv-scanner reads. Until this test
 nothing held a real lockfile of each format up to the real binary: a mapping that
-named a file osv-scanner reads but JMo never hands over, or an ecosystem whose database
-JMo never fills, left that format with no findings and nothing said.
+named a file osv-scanner reads but JMo never hands over left that format with no
+findings and nothing said. The scan reads the frozen database below, so it cannot
+catch an ecosystem whose database JMo never fills.
+
+Not covered, because sca-kitchen-sink has no such file: `npm-shrinkwrap.json`,
+`Pipfile.lock`, `pdm.lock`, `pylock.toml`, `pubspec.lock`, `mix.lock` and `renv.lock`.
+Pub, Hex and CRAN have no lockfile there at all, so those ecosystems have no
+coverage here.
 
 The inputs are QuackatronHQ/sca-kitchen-sink's lockfiles at a pinned commit, fetched by
 `scripts/dev/fetch_answer_keys.py` and never committed (they are vulnerable on purpose,

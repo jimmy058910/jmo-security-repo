@@ -38,6 +38,7 @@ from tests.integration.juice_shop_markers import (
     recall_by_type,
 )
 from tests.integration.targets import (
+    CLONE_TIMEOUT,
     JUICE_SHOP_COMMIT,
     PINNED_TARGETS,
     SCAN_TIMEOUT,
@@ -52,10 +53,12 @@ from tests.integration.targets import (
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 BASELINES_DIR = PROJECT_ROOT / "tests" / "integration" / "baselines"
 
-# Clone and scan of one target. Above run_scan's own timeout on purpose: with
+# Clone and scan of one target: the four git calls of clone_at_commit, each
+# allowed CLONE_TIMEOUT, then the scan, allowed SCAN_TIMEOUT, and a margin for
+# the work between them. Above all of those on purpose: with
 # timeout_method = "thread", pytest-timeout firing first kills the whole run,
-# where the scan's TimeoutExpired is an ordinary failure.
-TARGET_TEST_TIMEOUT = SCAN_TIMEOUT + 900
+# where a subprocess TimeoutExpired is an ordinary failure.
+TARGET_TEST_TIMEOUT = SCAN_TIMEOUT + 4 * CLONE_TIMEOUT + 300
 
 # stderr lines quoted when the scan itself fails.
 STDERR_TAIL_LINES = 20

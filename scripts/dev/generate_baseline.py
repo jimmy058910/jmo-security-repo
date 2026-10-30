@@ -227,11 +227,6 @@ def main() -> int:
         help=f"Target to scan ({', '.join(PINNED_TARGETS)}, or local path)",
     )
     parser.add_argument(
-        "--update",
-        action="store_true",
-        help="Update existing baseline instead of creating new",
-    )
-    parser.add_argument(
         "--validate",
         metavar="FILE",
         help="Validate a baseline file against the schema",

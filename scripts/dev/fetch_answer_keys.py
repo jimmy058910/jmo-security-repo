@@ -31,12 +31,20 @@ import hashlib
 import http.client
 import os
 import sys
-import urllib.request
 from collections.abc import Callable, Mapping
 from pathlib import Path, PureWindowsPath
 
+ROOT = Path(__file__).resolve().parents[2]
+
+# Run directly (`python scripts/dev/fetch_answer_keys.py`) and sys.path[0] is
+# scripts/dev, not the repo root - so scripts.dev is not importable without
+# this. Same bootstrap as scripts/dev/generate_baseline.py.
+if __package__ in (None, ""):  # pragma: no cover - only on direct execution
+    sys.path.insert(0, str(ROOT))
+
+from scripts.dev.fetch_rule_fixture import fetch_bytes  # noqa: E402
+
 ENV_VAR = "JMO_ANSWER_KEYS_DIR"
-FETCH_TIMEOUT_S = 60
 
 SCA_KITCHEN_SINK = "sca-kitchen-sink"
 SCA_KITCHEN_SINK_COMMIT = "eeddfe4d92fddb749915a98a7b02956eae33af22"
@@ -78,14 +86,12 @@ def sca_kitchen_sink_dir(root: Path | None = None) -> Path:
 
 
 def download(url: str) -> bytes:
-    """The body of `url`. The one network call here, so a test replaces it."""
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "jmo-security answer key fetch"}
-    )
-    # The URL is built from the pinned constants above, never from user input.
-    with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_S) as response:  # nosec B310
-        body: bytes = response.read()
-    return body
+    """The body of `url`. The one network call here, so a test replaces it.
+
+    It is `fetch_rule_fixture.fetch_bytes`, which asks a second time after a 5xx
+    or a timeout: raw.githubusercontent.com is flaky enough to have reddened CI.
+    """
+    return fetch_bytes(url)
 
 
 def relative_path_problem(path: str) -> str | None:
