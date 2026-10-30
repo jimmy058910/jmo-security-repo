@@ -484,11 +484,16 @@ def test_zero_secrets_says_what_it_does_not_block(tmp_path, monkeypatch, capsys)
 #
 # Cross-tool clustering merges one secret's reports into one consensus finding
 # whose `tool` is its lead's. On a severity tie the lead is the first tool by
-# name, so gitleaks leads a gitleaks + TruffleHog pair and opengrep a opengrep +
-# TruffleHog one -- and neither is a tool these policies select secrets by. A
-# policy reading `tool.name` alone passed a verified TruffleHog secret whenever
-# another scanner also reported it. juice-shop `1618a611`'s
-# `terraform/networking.tf:171` shape; no key material.
+# name, so gitleaks leads a gitleaks + TruffleHog pair -- and gitleaks is not a
+# tool these policies select secrets by. A policy reading `tool.name` alone
+# passed a verified TruffleHog secret whenever another scanner also reported it.
+# juice-shop `1618a611`'s `terraform/networking.tf:171` shape; no key material.
+#
+# opengrep is not a member: semgrep's `generic.secrets.*` rules once reported
+# this key and clustered with TruffleHog's, but opengrep's bundle excludes
+# `generic/secrets/` (secrets are gitleaks' and TruffleHog's class) and
+# `rule_equivalence.py` pairs no opengrep rule with a private key, so an
+# opengrep finding here would be a separate finding, not a consensus member.
 
 _KEY_PATH, _KEY_LINE = "terraform/networking.tf", 171
 
@@ -536,28 +541,6 @@ def _one_key_from(tools: tuple[str, ...], verified: bool) -> list[dict[str, Any]
                             ],
                         }
                     ],
-                }
-            ),
-        ),
-        "opengrep": (
-            OpengrepAdapter,
-            "opengrep.json",
-            json.dumps(
-                {
-                    "results": [
-                        {
-                            "check_id": "generic.secrets.security.detected-private-key",
-                            "path": _KEY_PATH,
-                            "start": {"line": _KEY_LINE},
-                            "end": {"line": _KEY_LINE},
-                            "extra": {
-                                "message": "Private Key detected.",
-                                "severity": "ERROR",
-                                "metadata": {"cwe": ["CWE-798"]},
-                            },
-                        }
-                    ],
-                    "errors": [],
                 }
             ),
         ),
@@ -710,15 +693,14 @@ def test_a_hadolint_dockerfile_issue_trivy_leads_keeps_its_category(hadolint_fir
 def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
     """The general guard for the secret rules, over every load order.
 
-    Members: gitleaks, opengrep and TruffleHog reporting one key, in four
-    TruffleHog shapes -- verified (both signals), the tag alone, `raw.Verified`
-    alone (the degenerate inputs `test_each_verification_signal_blocks_on_its_own`
-    requires the policy to handle) and unverified. Every subset holding the
-    TruffleHog record, in every order, through the real report phase; each
-    output finding must be flagged if any member it stands for is flagged when
-    evaluated alone.
+    Members: gitleaks and TruffleHog reporting one key, in four TruffleHog
+    shapes -- verified (both signals), the tag alone, `raw.Verified` alone (the
+    degenerate inputs `test_each_verification_signal_blocks_on_its_own` requires
+    the policy to handle) and unverified. Every subset holding the TruffleHog
+    record, in every order, through the real report phase; each output finding
+    must be flagged if any member it stands for is flagged when evaluated alone.
     """
-    base = {f["tool"]["name"]: f for f in _one_key_from(("gitleaks", "opengrep"), True)}
+    base = {f["tool"]["name"]: f for f in _one_key_from(("gitleaks",), True)}
     verified = _one_key_from(("trufflehog",), verified=True)[0]
     shapes = {
         "verified": verified,
@@ -735,7 +717,7 @@ def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
     alone = {policy: _flagged(policy, members) for policy in _SECRET_RULES}
     # Meta-guard: what each rule flags alone, so the property is not vacuous:
     # zero-secrets every verified shape, production-hardening every TruffleHog
-    # secret; neither gitleaks nor opengrep, which is the point.
+    # secret; not gitleaks, which is the point.
     ids = {shape: f["id"] for shape, f in shapes.items()}
     assert alone["zero-secrets"] == {
         ids["verified"],
@@ -747,7 +729,7 @@ def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
     outputs: list[dict[str, Any]] = []
     covers: dict[str, list[str]] = {}
     for shape, trufflehog in shapes.items():
-        for others in ((), ("gitleaks",), ("opengrep",), ("gitleaks", "opengrep")):
+        for others in ((), ("gitleaks",)):
             group = [trufflehog, *(base[t] for t in others)]
             for n, order in enumerate(itertools.permutations(group)):
                 for f in _report_phase(list(order)):
@@ -770,14 +752,17 @@ def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
         assert not missed, f"{policy}: {len(missed)} finding(s) missed, {missed[:3]}"
         # Meta-guard: the case that regressed -- another tool leads a
         # consensus holding a flagged TruffleHog member -- is exercised: every
-        # order of every group with a second tool (10 per shape).
+        # order of every group with a second tool. One such group remains,
+        # (gitleaks, trufflehog), in 2! = 2 orders, and gitleaks leads each, so
+        # 2 outputs per shape. (With opengrep the groups were gitleaks 2! +
+        # opengrep 2! + both 3! = 10.) A shape counts if `alone` flags it.
         led_by_another = [
             f["id"]
             for f in outputs
             if f["tool"]["name"] != "trufflehog"
             and any(m in alone[policy] for m in covers[f["id"]])
         ]
-        assert len(led_by_another) == 10 * len(alone[policy]), (
+        assert len(led_by_another) == 2 * len(alone[policy]), (
             policy,
             len(led_by_another),
         )

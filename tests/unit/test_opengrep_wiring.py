@@ -57,6 +57,7 @@ import yaml
 from scripts.cli.scan_jobs import tool_loop
 from scripts.cli.tool_installer import ToolInstaller
 from scripts.cli.tool_manager import ToolManager
+from scripts.core.adapters.common import normalize_finding_path
 from scripts.core.rule_bundle import BUNDLE_DIR
 from scripts.core.scan_timings import SKIP_REASONS, Reason, State
 from scripts.core.tool_descriptors import (
@@ -885,10 +886,28 @@ def _real_scan(repo: Path, out: Path):
     )["opengrep"]
 
 
+# opengrep names a file with the separator of the OS it runs on: `src\a.py` on
+# Windows (measured on the windows-opengrep job), `src/a.py` elsewhere. The report
+# phase puts every tool's `location.path` through `normalize_finding_path`, so the
+# real-binary tests compare paths through it too, never through a `.replace` of
+# their own: what they check is the spelling a user's report ends up with.
+
+
+def _scanned(out: Path) -> list[str]:
+    """`paths.scanned` of the scan in `out`, as the report phase spells a path."""
+    document = json.loads((out / "opengrep.json").read_bytes())
+    return [normalize_finding_path(path) for path in document["paths"]["scanned"]]
+
+
 def _hits(out: Path) -> list[tuple[str, str, int]]:
+    """(rule, path, line) of each result, the path as the report phase spells it."""
     document = json.loads((out / "opengrep.json").read_bytes())
     return sorted(
-        (r["check_id"].rsplit(".", 1)[-1], r["path"], r["start"]["line"])
+        (
+            r["check_id"].rsplit(".", 1)[-1],
+            normalize_finding_path(r["path"]),
+            r["start"]["line"],
+        )
         for r in document["results"]
     )
 
@@ -908,8 +927,7 @@ def test_a_target_under_a_directory_the_default_ignore_list_names_is_scanned(
     row = _real_scan(repo, out)
 
     assert row.state is State.RAN, row
-    document = json.loads((out / "opengrep.json").read_bytes())
-    assert document["paths"]["scanned"] == ["src/a.py"]
+    assert _scanned(out) == ["src/a.py"]
     assert {path for _, path, _ in _hits(out)} == {"src/a.py"}
     assert len(_hits(out)) >= 2
 
@@ -1017,8 +1035,7 @@ def test_the_exclusions_and_the_examined_count_hold_from_inside_the_target(
     )["opengrep"]
 
     assert row.state is State.RAN, row
-    document = json.loads((out / "opengrep.json").read_bytes())
-    assert document["paths"]["scanned"] == ["src/a.py"]
+    assert _scanned(out) == ["src/a.py"]
     assert DESCRIPTORS["opengrep"].scanned_count(out / "opengrep.json") == 1
 
 
@@ -1249,8 +1266,7 @@ def test_the_incremental_recipe_through_the_real_binary(
         assert row.reason is Reason.NO_CHANGED_FILES
     else:
         assert row.state is State.RAN, row
-        document = json.loads((out / "opengrep.json").read_bytes())
-        assert document["paths"]["scanned"] == scanned
+        assert _scanned(out) == scanned
 
 
 def _stat_of(path: Path) -> tuple[int, int] | None:

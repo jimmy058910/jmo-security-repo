@@ -39,8 +39,10 @@ import pytest
 import yaml
 
 from scripts.cli.scan_jobs import tool_loop
+from scripts.core.adapters.common import normalize_finding_path
 from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 from scripts.core.scan_timings import State, ToolRun
+from scripts.core.tool_descriptors import OPENGREP_LOG
 from scripts.core.tool_runner import ToolResult, ToolRunner
 from scripts.dev import fetch_rule_fixture
 
@@ -60,8 +62,11 @@ EXPECTED = {
 }
 
 PROXY_VARS = ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")
-# What a refused connection looks like in opengrep's stderr (measured, 1.32.0:
-# `ProxyError ... host='127.0.0.1', port=9 ... Connection refused`).
+# What a refused connection looks like in what opengrep says (measured, 1.32.0:
+# `ProxyError ... host='127.0.0.1', port=9 ... Connection refused`). It says it on
+# stderr, but on STDOUT when `GITHUB_ACTIONS` is set, as it is on the CI runners
+# (measured: the same command, rc 2, with the variable stdout holds the error and
+# stderr is empty, without it the reverse). So a check for it reads both.
 CONNECTION_ERRORS = ("proxyerror", "connection", "refused", "max retries", "127.0.0.1")
 
 
@@ -129,9 +134,27 @@ def _document(out: Path) -> dict:
     return json.loads((out / "opengrep.json").read_bytes())
 
 
+# opengrep names a file with the separator of the OS it runs on: `lib\insecurity.ts`
+# on Windows (measured on the windows-opengrep job), `lib/insecurity.ts` elsewhere.
+# The report phase puts every tool's `location.path` through
+# `normalize_finding_path`, so these tests compare paths through it too, never
+# through a `.replace` of their own: what they check is the spelling a user's report
+# ends up with.
+
+
+def _scanned(out: Path) -> list[str]:
+    """`paths.scanned` of the scan in `out`, as the report phase spells a path."""
+    return [normalize_finding_path(path) for path in _document(out)["paths"]["scanned"]]
+
+
 def _triples(out: Path) -> set[tuple[str, str, int]]:
+    """(rule, path, line) of each result, the path as the report phase spells it."""
     return {
-        (r["check_id"].rsplit(".", 1)[-1], r["path"], r["start"]["line"])
+        (
+            r["check_id"].rsplit(".", 1)[-1],
+            normalize_finding_path(r["path"]),
+            r["start"]["line"],
+        )
         for r in _document(out)["results"]
     }
 
@@ -143,9 +166,7 @@ def test_the_fixture_is_read(tmp_path, target) -> None:
     row, _ = _scan(target, tmp_path / "out")
 
     assert row.state is State.RAN, row
-    assert sorted(_document(tmp_path / "out")["paths"]["scanned"]) == sorted(
-        fetch_rule_fixture.FILES
-    ), (
+    assert sorted(_scanned(tmp_path / "out")) == sorted(fetch_rule_fixture.FILES), (
         "opengrep did not read the four files; is the target inside an ignored directory?"
     )
 
@@ -208,7 +229,8 @@ def _proxied(monkeypatch) -> dict[str, str]:
 def test_the_proxy_variables_reach_opengrep(tmp_path, monkeypatch) -> None:
     """The control for the test below: a run that DOES ask for the network fails on
     the dead proxy. If opengrep ever stopped honouring the variables, that test would
-    pass and prove nothing."""
+    pass and prove nothing. The error is read from stdout and stderr together: which
+    one opengrep writes it to depends on the environment (`GITHUB_ACTIONS`)."""
     binary = shutil.which("opengrep")
     if binary is None:
         pytest.skip("opengrep is not on PATH")
@@ -236,9 +258,10 @@ def test_the_proxy_variables_reach_opengrep(tmp_path, monkeypatch) -> None:
         timeout=300,
     )
 
-    tail = done.stderr[-600:]
-    assert done.returncode != 0, done.stdout
-    assert "port=9" in done.stderr and "refused" in done.stderr.lower(), tail
+    said = done.stdout + done.stderr
+    tail = said[-600:]
+    assert done.returncode != 0, tail
+    assert "port=9" in said and "refused" in said.lower(), tail
 
 
 def test_a_scan_makes_no_network_call(tmp_path, target, monkeypatch) -> None:
@@ -251,17 +274,31 @@ def test_a_scan_makes_no_network_call(tmp_path, target, monkeypatch) -> None:
     is no `--metrics` option to turn off (rc 2, "unknown option"). This scan ran,
     exited 0, found the four findings and wrote no connection error.
 
+    The connection errors are looked for in everything the row keeps of what opengrep
+    says: its stdout and stderr (opengrep puts the error on stdout under
+    `GITHUB_ACTIONS`, see CONNECTION_ERRORS) and its debug log in the scan's scratch,
+    which holds the same error whichever stream it went to (measured: the control's
+    `port=9` is in the log with or without the variable). The row discards stdout
+    (the document goes to `--output`), so the log is the one place an error on that
+    stream would still be.
+
     This does NOT prove the absence of a raw socket, which ignores proxy variables.
     Task B8 step 3 proves the stronger claim: `unshare -rn` around the same
     `jmo scan` gives the same finding set as the networked run."""
     _proxied(monkeypatch)
+    out = tmp_path / "out"
 
-    row, results = _scan(target, tmp_path / "out")
+    row, results = _scan(target, out)
 
     assert row.state is State.RAN, row
     (result,) = results
-    tail = result.stderr[-600:]
-    assert result.returncode == 0, tail
-    stderr = result.stderr.lower()
-    assert not [word for word in CONNECTION_ERRORS if word in stderr], tail
-    assert _triples(tmp_path / "out") >= EXPECTED
+    log = (out / OPENGREP_LOG).read_text(encoding="utf-8", errors="replace")
+    said = "\n".join((result.stdout, result.stderr, log))
+    assert result.returncode == 0, (result.stderr or log)[-600:]
+    seen = [
+        line[:300]
+        for line in said.splitlines()
+        if any(word in line.lower() for word in CONNECTION_ERRORS)
+    ]
+    assert not seen, seen[:3]
+    assert _triples(out) >= EXPECTED
