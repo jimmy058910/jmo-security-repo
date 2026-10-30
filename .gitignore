@@ -233,3 +233,8 @@ e2e-screenshots/
 # Conductor orchestration files (local development artifacts)
 /conductor/
 tests/integration/juice_shop_fixture/
+
+# juice-shop files the rule-bundle guard scans, fetched by
+# scripts/dev/fetch_rule_fixture.py. Never commit them: lib/insecurity.ts holds
+# an RSA private key and routes/login.ts trips gitleaks' generic-api-key.
+tests/fixtures/rule_bundle/juice-shop/

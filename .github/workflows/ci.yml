@@ -1019,15 +1019,17 @@ jobs:
   # (CI was pinned to Node 20). Tracked in #461.
   #
   # Same pattern as tool-contract-tests: always runs (stable required-check
-  # name for future branch protection), but only does real work when
-  # scripts/dashboard/** actually changed. The build path uses `tsc && vite
-  # build` per scripts/dashboard/package.json:"build", which is the same path
-  # the release pipeline bundles, so build success here implies release
+  # name for future branch protection). The wheel checks (1 and 2 below) run on
+  # every push; the Node steps (3) do real work only when scripts/dashboard/**
+  # or the files in its filter actually changed. The build path uses `tsc &&
+  # vite build` per scripts/dashboard/package.json:"build", which is the same
+  # path the release pipeline bundles, so build success here implies release
   # bundleability.
-  # Owns the two halves of the dashboard contract that the test shards cannot.
+  # Owns three checks of what the package ships that the test shards cannot:
+  # two halves of the dashboard contract, and the opengrep rule bundle's.
   #
-  #   1. The wheel actually carries the bundle. Before #862 it did not: a wheel
-  #      built from a clean checkout held 196 entries and 0 under
+  #   1. The wheel actually carries the dashboard bundle. Before #862 it did
+  #      not: a wheel built from a clean checkout held 196 entries and 0 under
   #      scripts/dashboard/, because `dist/` was covered by a blanket
   #      `.gitignore` rule and `packages.find` collects Python packages only.
   #      A pip-installed `jmo report` produced a 2,468-byte static page every
@@ -1035,11 +1037,19 @@ jobs:
   #      the bundle is present in the TREE; only building a wheel proves it is
   #      in the DISTRIBUTION, so that check is here and is unconditional.
   #
-  #   2. The tracked bundle still matches its sources. That needs Node, so it
-  #      cannot live in the shards. It replaces the mtime check that used to be
-  #      in html_reporter: with `dist/` tracked, git checkout order made every
-  #      build input newer than the bundle, so that check reported "stale" on
-  #      every fresh clone (measured: 17.3 ms of spread, all 7 inputs newer).
+  #   2. The wheel carries the rule bundle, in the same step and for the same
+  #      reason: scripts/jmo_rules/ is generated, committed and shipped as
+  #      package data, and a pip-installed `jmo` without it has no rule to scan
+  #      with. Every file in the tree must be a member of the wheel with the
+  #      same bytes, and the wheel holds nothing else under that directory.
+  #      Unconditional too.
+  #
+  #   3. The tracked dashboard bundle still matches its sources. That needs
+  #      Node, so it cannot live in the shards. It replaces the mtime check
+  #      that used to be in html_reporter: with `dist/` tracked, git checkout
+  #      order made every build input newer than the bundle, so that check
+  #      reported "stale" on every fresh clone (measured: 17.3 ms of spread,
+  #      all 7 inputs newer).
   #
   # The paths filter is deliberately wider than `scripts/dashboard/**`.
   # `html_reporter.py` depends on the build contract (it string-replaces a
@@ -1519,6 +1529,10 @@ jobs:
           # and how the two secret scanners' output is read (#1326). The
           # pairing and the row accounting have unit tests on every shard.
           # tool_pins.py is how the install step reads versions.yaml.
+          # opengrep's are the rule bundle itself (scripts/jmo_rules/ is what
+          # the fixture guard keeps firing, so an edit to it must run the
+          # guard), the code that picks its rule files and reads its output,
+          # and the script that fetches the guard's fixture.
           filters: |
             versions:
               - 'versions.yaml'
@@ -1526,15 +1540,22 @@ jobs:
               - 'Dockerfile'
               - 'tests/integration/test_tool_contracts.py'
               - 'tests/integration/test_git_history_secrets.py'
+              - 'tests/integration/test_rule_bundle_fixture.py'
               - 'tests/unit/test_gitleaks_wiring.py'
               - 'tests/unit/test_zizmor_wiring.py'
               - 'tests/unit/test_osv_scanner_wiring.py'
+              - 'tests/unit/test_opengrep_wiring.py'
+              - 'tests/unit/test_jmo_rules_bundle.py'
               - 'tests/unit/test_own_config_announcement.py'
               - 'scripts/core/osv_database.py'
               - 'scripts/core/tool_descriptors.py'
+              - 'scripts/core/rule_bundle.py'
               - 'scripts/cli/scan_utils.py'
               - 'scripts/core/adapters/trufflehog_adapter.py'
               - 'scripts/core/adapters/gitleaks_adapter.py'
+              - 'scripts/core/adapters/opengrep_adapter.py'
+              - 'scripts/dev/fetch_rule_fixture.py'
+              - 'scripts/jmo_rules/**'
 
       - name: Set up uv
         if: steps.changes.outputs.versions == 'true'
@@ -1665,6 +1686,17 @@ jobs:
           grype version || echo "grype not available"
           syft version || echo "syft not available"
 
+      - name: Fetch the rule-bundle fixture
+        if: steps.changes.outputs.versions == 'true'
+        # Four files of juice-shop, by commit and sha256, into a gitignored
+        # directory: lib/insecurity.ts holds a private key, so they are never
+        # committed. Without them test_rule_bundle_fixture.py skips, and a skip
+        # is not a pass, so this step fails the job when a file cannot be
+        # fetched or does not match its pin. The tests copy them into pytest's
+        # tmp_path, which must stay outside the checkout (opengrep honours its
+        # .gitignore), so no pytest step here passes --basetemp.
+        run: python3 scripts/dev/fetch_rule_fixture.py
+
       - name: Run tool contract tests
         if: steps.changes.outputs.versions == 'true'
         env:
@@ -1673,11 +1705,17 @@ jobs:
           # The git-history tests (G1) run trufflehog and gitleaks for real,
           # so they are requires_tools and ran in no job until this one
           # installed gitleaks (#1326). They skip without either binary.
+          # The same holds for opengrep's: its wiring tests and the rule
+          # bundle's test_every_file_validates ran in no job until this one
+          # installed it, and the fixture guard keeps four findings firing.
           pytest tests/integration/test_tool_contracts.py \
             tests/integration/test_git_history_secrets.py \
+            tests/integration/test_rule_bundle_fixture.py \
             tests/unit/test_gitleaks_wiring.py \
             tests/unit/test_zizmor_wiring.py \
             tests/unit/test_osv_scanner_wiring.py \
+            tests/unit/test_opengrep_wiring.py \
+            tests/unit/test_jmo_rules_bundle.py \
             tests/unit/test_own_config_announcement.py \
             -v \
             -m "requires_tools" \
@@ -1689,6 +1727,7 @@ jobs:
         run: |
           echo "No version-affecting files changed — contract tests not required."
           echo "Paths watched: versions.yaml and its reader, Dockerfile, the contract and G1 tests, and the code G1 exercises"
+          echo "Also opengrep's rule bundle, its wiring and the fixture guard"
 
   # ==========================================================================
   # rule-bundle-reproducible -- is the committed opengrep bundle still a rebuild?

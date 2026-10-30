@@ -275,12 +275,26 @@ all the same.
 
 JMo leaves the list on: it does not pass the flag that turns it off.
 
+When the scanned directory lies inside a git work tree, opengrep also honours that
+repository's `.gitignore`. A target that is itself gitignored, such as a `dist/` or
+`vendor/` folder scanned on its own, examines 0 files, and its row reads
+`failed:examined 0 files`; scanning the whole repository leaves the same folder out.
+Measured with opengrep 1.32.0 in a scratch git repository whose `.gitignore` lists
+`gen/`: a scan of `gen/` read `failed:examined 0 files`, and a scan of the repository
+read `src/a.py` and not `gen/a.py`.
+
 **What to do:** to have opengrep read the directories above, either put an empty
 `.semgrepignore` at the root of the scanned repository, or add
 `--x-ignore-semgrepignore-files` to `per_tool.opengrep.flags` in `jmo.yml`, which
 changes nothing in the repository. Measured on 1.32.0 with the fixture above: with
 either, all eight files were scanned. JMo still keeps the vendored trees and its
 results directory out through its own flags.
+
+For a gitignored target, add `--no-git-ignore` to `per_tool.opengrep.flags`. Measured on
+1.32.0 through JMo's scan loop, which runs opengrep from inside the target: the `gen/`
+scan above went from 0 files to 1, and the row from `failed` to `ran`. The flag reads
+gitignored files for every repository that config scans, so set it for the one scan that
+needs it.
 
 ### zizmor runs offline, so its online audits never run
 
