@@ -167,6 +167,9 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
       } else if (sortKey === 'ruleId') {
         av = a.ruleId
         bv = b.ruleId
+      } else if (sortKey === 'target') {
+        av = a.target?.name ?? ''
+        bv = b.target?.name ?? ''
       } else if (sortKey === 'path') {
         av = a.location.path
         bv = b.location.path
@@ -261,6 +264,12 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
             </th>
             <th
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+              onClick={() => toggleSort('target')}
+            >
+              Target {sortKey === 'target' && (sortDir === 'asc' ? '▲' : '▼')}
+            </th>
+            <th
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
               onClick={() => toggleSort('path')}
             >
               Path {sortKey === 'path' && (sortDir === 'asc' ? '▲' : '▼')}
@@ -313,6 +322,14 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
                   </Tooltip.Root>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  <span
+                    className="truncate max-w-xs block"
+                    title={finding.target ? `${finding.target.type}: ${finding.target.name}` : undefined}
+                  >
+                    {finding.target?.name ?? ''}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
                       <span className="cursor-help truncate max-w-xs block">
@@ -358,7 +375,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
               {/* Expandable detail row */}
               {expandedRows.has(finding.id) && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 bg-gray-50 dark:bg-gray-700">
+                  <td colSpan={7} className="px-6 py-4 bg-gray-50 dark:bg-gray-700">
                     <div className="space-y-2">
                       <p className="text-sm text-gray-700 dark:text-gray-300">{finding.description || finding.message}</p>
 

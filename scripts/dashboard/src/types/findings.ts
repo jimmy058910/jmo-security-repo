@@ -17,6 +17,13 @@ export interface CommonFinding {
   }
   message: string
 
+  // The scan target the finding came from, set by the report phase (#1309).
+  // location.path is relative to it.
+  target?: {
+    type: 'repo' | 'image' | 'iac' | 'url' | 'gitlab' | 'k8s'
+    name: string
+  }
+
   // Optional fields
   title?: string
   description?: string

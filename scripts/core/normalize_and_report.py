@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import normalize_finding_path
-from scripts.core.common_finding import fingerprint, package_of
+from scripts.core.common_finding import fingerprint, package_of, target_id
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.cwe_extraction import backfill_risk_cwe
 from scripts.core.exceptions import AdapterParseException
@@ -316,6 +316,21 @@ def _normalize_paths_and_ids(
     return paths_changed, ids_rekeyed
 
 
+def _scope_ids_to_targets(findings: list[dict[str, Any]]) -> None:
+    """Replace each finding's id with `target_id` of it and its target (#1309).
+
+    Every finding, whatever its adapter hashed: the id is derived from the
+    adapter's own, so zap's and nuclei's URL-keyed ids are scoped the same as
+    a path-keyed one. A finding with no id keeps none, and deduplication says
+    so (#848).
+    """
+    for finding in findings:
+        current = finding.get("id")
+        target = finding.get("target")
+        if isinstance(current, str) and current and isinstance(target, dict):
+            finding["id"] = target_id(current, target["type"], target["name"])
+
+
 def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
     """Files the tools said they could not analyse (#837).
 
@@ -448,6 +463,19 @@ def pair_history_with_tree(
     return [f for f in findings if id(f) not in dropped]
 
 
+# The six kinds of target a scan can have, as `scan_orchestrator` names them,
+# and the results folder each one's output lands in.
+TARGET_FOLDERS: dict[str, str] = {
+    "repo": "individual-repos",
+    "image": "individual-images",
+    "iac": "individual-iac",
+    "url": "individual-web",
+    "gitlab": "individual-gitlab",
+    "k8s": "individual-k8s",
+}
+_TARGET_TYPES = {folder: kind for kind, folder in TARGET_FOLDERS.items()}
+
+
 def _target_dirs(results_dir: Path) -> list[Path]:
     """The six target-type directories a scan can write.
 
@@ -455,14 +483,7 @@ def _target_dirs(results_dir: Path) -> list[Path]:
     walk the same set - a seventh target type added to one and not the other
     would go unreported in exactly the silent way #837 is about.
     """
-    return [
-        results_dir / "individual-repos",
-        results_dir / "individual-images",
-        results_dir / "individual-iac",
-        results_dir / "individual-web",
-        results_dir / "individual-gitlab",
-        results_dir / "individual-k8s",
-    ]
+    return [results_dir / folder for folder in TARGET_FOLDERS.values()]
 
 
 def _scan_rows(target: Path, warn: Callable[..., None]) -> dict[str, ToolRun] | None:
@@ -579,8 +600,8 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     loader = get_plugin_loader()
 
     # Each load job, and the results folder it reads: the pairing keeps two
-    # targets' records apart (#1323).
-    jobs: dict[Future[list[dict[str, Any]]], str] = {}
+    # targets' records apart (#1323), and every finding names its target (#1309).
+    jobs: dict[Future[list[dict[str, Any]]], tuple[str, str]] = {}
     target_of: dict[int, str] = {}
     max_workers = 8
     try:
@@ -639,12 +660,16 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                     future = ex.submit(
                         _safe_load_plugin, plugin_class, tool_output, profiling
                     )
-                    jobs[future] = f"{target_dir.name}/{target.name}"
+                    jobs[future] = (target_dir.name, target.name)
         for fut in as_completed(jobs):
             try:
                 loaded = fut.result()
+                folder, name = jobs[fut]
                 for finding in loaded:
-                    target_of[id(finding)] = jobs[fut]
+                    target_of[id(finding)] = f"{folder}/{name}"
+                    # From where `jmo scan` put the output, never from the
+                    # adapter or from `scan-timings.json`, which is optional.
+                    finding["target"] = {"type": _TARGET_TYPES[folder], "name": name}
                 findings.extend(loaded)
             except (
                 Exception
@@ -681,6 +706,12 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             paths_changed,
             ids_rekeyed,
         )
+
+    # Scope every id to its target (#1309), once the paths are normalised: the
+    # re-keying above recognises an id by recomputing it from the adapter's own
+    # inputs, so it has to see the adapter's id. Before dedup, which keys on
+    # `id`, so the same finding in two targets is two findings.
+    _scope_ids_to_targets(findings)
 
     # After the paths are normalised, since a tree record's absolute path and
     # a history record's relative one must compare equal; before dedup, which

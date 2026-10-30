@@ -2,7 +2,7 @@
 """CSV reporter for CommonFindings: Enterprise-friendly Excel export.
 
 Supports configurable columns for different use cases:
-- Default: priority, severity, ruleId, path, line, message, tool
+- Default: priority, severity, ruleId, target, path, line, message, tool
 - Full: All fields including compliance, EPSS, KEV
 - Minimal: severity, ruleId, path, message (for quick triage)
 """
@@ -21,6 +21,7 @@ DEFAULT_COLUMNS = [
     "epss",
     "severity",
     "ruleId",
+    "target",  # #1309: the scan target the path is relative to
     "path",
     "line",
     "message",
@@ -122,6 +123,9 @@ def _extract_row(
             row.append(finding.get("severity", "INFO"))
         elif col == "ruleId":
             row.append(finding.get("ruleId", ""))
+        elif col == "target":
+            target = finding.get("target")
+            row.append(str(target.get("name", "")) if isinstance(target, dict) else "")
         elif col == "path":
             location = finding.get("location", {})
             if isinstance(location, dict):

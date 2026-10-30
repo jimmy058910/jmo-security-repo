@@ -133,14 +133,17 @@ _NAME_SEPARATORS = re.compile(r"[-_.]+")
 _VERSION_V = re.compile(r"^v(?=\d)")
 
 
-def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
-    """(lockfile, package name, installed version) of a dependency finding,
-    folded so two tools' spellings of one package are equal; ``None`` for a
-    finding without a `dependency` naming both a package and a version.
+def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str, str] | None:
+    """(target, lockfile, package name, installed version) of a dependency
+    finding, folded so two tools' spellings of one package are equal; ``None``
+    for a finding without a `dependency` naming both a package and a version.
 
     The lockfile is ``location.path`` as the report phase leaves it
     (repo-relative, one separator), so two lockfiles are two keys however
-    alike their packages are.
+    alike their packages are. That path is relative to the target, so two
+    repositories' root ``package-lock.json`` are one path: the target
+    (``type/name`` of the finding's `target`, empty for a finding built without
+    the report phase) keeps them two (#1309).
     """
     dependency = finding.get("dependency")
     if not isinstance(dependency, dict):
@@ -150,7 +153,11 @@ def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
         return None
     location = finding.get("location")
     path = location.get("path") if isinstance(location, dict) else None
+    target = finding.get("target")
     return (
+        f"{target.get('type')}/{target.get('name')}"
+        if isinstance(target, dict)
+        else "",
         str(path or "").replace("\\", "/").removeprefix("./"),
         _NAME_SEPARATORS.sub("-", name).casefold(),
         _VERSION_V.sub("", version),
@@ -901,7 +908,7 @@ def cluster_dependency_findings(
 
     One vulnerability in one installed package version is one finding,
     whichever dependency scanners report it: two findings are one when their
-    `dependency_key` (lockfile, name, version) is equal and their
+    `dependency_key` (target, lockfile, name, version) is equal and their
     `advisory_ids` intersect -- one tool's id is the other's id or alias.
     Measured before this, on a real lockfile: trivy and osv-scanner reported
     the same 47 and the report held 85, clustered 0.

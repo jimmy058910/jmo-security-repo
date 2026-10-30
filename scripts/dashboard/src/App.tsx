@@ -110,7 +110,8 @@ export default function App() {
         const matches =
           f.ruleId.toLowerCase().includes(q) ||
           f.message.toLowerCase().includes(q) ||
-          f.location.path.toLowerCase().includes(q)
+          f.location.path.toLowerCase().includes(q) ||
+          (f.target?.name.toLowerCase().includes(q) ?? false)
         if (!matches) return false
       }
 

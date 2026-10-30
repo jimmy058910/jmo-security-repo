@@ -151,6 +151,11 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
             "locations": [location_obj],
         }
 
+        # The scan target the uri is relative to (#1309). In `properties`, not
+        # in the uri: a prefix would make the uri a path no checkout has.
+        if isinstance(f.get("target"), dict):
+            result.setdefault("properties", {})["target"] = f["target"]
+
         # Add remediation guidance if available.
         #
         # This used to emit `result.fixes`, but a SARIF `fix` REQUIRES

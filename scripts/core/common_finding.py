@@ -335,6 +335,28 @@ def fingerprint(
     return hashlib.sha256(base.encode("utf-8")).hexdigest()[:FINGERPRINT_LENGTH]
 
 
+def target_id(adapter_id: str, target_type: str, target_name: str) -> str:
+    """A finding's id in a report: the adapter's id, scoped to its target (#1309).
+
+    ``fingerprint`` hashes what the finding is: tool, rule, scan-root-relative
+    path, line, message. The same file in two repositories of one scan hashes
+    alike, so deduplication kept the first and deleted the second. The report
+    phase knows which target an output came from and the adapter does not, so
+    it derives the id here, from the adapter's own, for every finding. It cannot
+    recompute an adapter's id from the finding's fields (zap and nuclei hash a
+    URL, not ``location.path``), and a third-party adapter would never be
+    passed a new keyword argument.
+
+    ``target_type`` is the scan's word for the kind of target (``repo``,
+    ``image``, ``iac``, ``url``, ``gitlab``, ``k8s``) and ``target_name`` the
+    name of its results folder, so renaming a checkout changes every id in it.
+
+    Same format as `fingerprint`: hex SHA256, FINGERPRINT_LENGTH characters.
+    """
+    base = f"{adapter_id}|target:{target_type}:{target_name}"
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:FINGERPRINT_LENGTH]
+
+
 def extract_code_snippet(
     file_path: str,
     start_line: int,
