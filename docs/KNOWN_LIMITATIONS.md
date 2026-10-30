@@ -274,7 +274,9 @@ Measured with opengrep 1.32.0 on a fixture with one Python file in each of `test
 `main_test.go` and `app.min.js` and read the rest, so the Go convention is the only
 test file name on the list. A repository whose only files are of the skipped kinds
 (Go test files and nothing else) examines 0 files, and its row reads
-`failed:examined 0 files`. The list is matched against the
+`failed:examined 0 files`; under `--baseline-commit` the same result is
+`skipped:no changed file opengrep reads since the baseline commit`
+([SCAN_OPTIMIZATION.md](SCAN_OPTIMIZATION.md)). The list is matched against the
 path opengrep is handed, so JMo runs it from inside the target and names the target
 `.`: a repository checked out under a directory called `build/` or `tests/` is scanned
 all the same.

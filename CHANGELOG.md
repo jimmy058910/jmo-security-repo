@@ -191,8 +191,13 @@ All notable changes to JMo Security will be documented in this file.
   ignored with one warning that names each key the entry carries under `per_tool.opengrep`
   (`configs` for your own packs, `flags` for flags), where they now go. The tool's name
   is hashed into every finding id, so **every SAST finding id changes once**. A
-  repository with no file in a language the bundle reads is
-  `skipped:no files in a language the rule bundle reads`, where Semgrep always ran.
+  repository with no file in a language the bundle covers, and none that only
+  `generic.yaml`'s rules read (an nginx config, Bicep, Handlebars), is
+  `skipped:no files in a language the rule bundle reads`, where Semgrep always ran; one
+  that has such a file runs with `generic.yaml`. A scan limited by `--baseline-commit` in
+  `per_tool.opengrep.flags` whose changed files opengrep does not read (a commit that only
+  deletes files, or touches only `tests/` or `*.min.js`) is
+  `skipped:no changed file opengrep reads since the baseline commit`, not failed.
   opengrep runs from inside the target, so a repository cloned under a directory named
   `build/` or `tests/` is scanned, and its debug log, which holds matched source text,
   stays in the scan's own `.opengrep/` scratch rather than `~/.opengrep` (#1229: Semgrep
@@ -226,7 +231,8 @@ All notable changes to JMo Security will be documented in this file.
 - **Breaking. A scan of nothing fails.** A repository with no file outside the excluded
   directories fails every tool that reads it (`failed:no files to scan`, exit 1). On an
   empty tree, trivy and semgrep used to be graded a success. A tool whose own output
-  reports 0 files examined is `failed:examined 0 files`: opengrep (`paths.scanned`) and
+  reports 0 files examined is `failed:examined 0 files`: opengrep (`paths.scanned`; a
+  `--baseline-commit` scan with no changed file it reads is a skip instead) and
   gosec (`Stats.files`). gosec reads 0 on every machine without a Go toolchain, the image
   included, so on a Go repository it now fails where it used to pass (#1231, #1310).
 - **Breaking. Tool names are checked.** `--tools`, `--skip-tools` and `tools:` split on

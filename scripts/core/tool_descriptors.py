@@ -662,11 +662,12 @@ def _opengrep_trigger(ctx: ScanContext) -> Reason | None:
     A file is read when its name is one of a language the bundle covers, or
     when generic.yaml's rules read it (`rule_bundle.has_rules_for`: an nginx
     config, Bicep, Handlebars, Visualforce, `build.gradle`). `select_configs`
-    always names `generic.yaml`, so that file is no evidence of its own. Two of
-    its rules have no file pattern and read any file (a reverse shell, a
-    bidirectional character), so opengrep run with it alone does read a
-    README: a repository of such files is skipped on purpose, as one with no
-    code in a language the bundle covers, not because nothing would be read.
+    always names `generic.yaml`, so that file is no evidence of its own.
+    `generic.yaml` also holds two catch-all rules (a reverse shell, a
+    bidirectional character) that read any file. A tree that no language and no
+    generic pattern covers is skipped before opengrep starts, so those two are
+    not run on it: a repository of only a README or a Makefile gets no scan
+    from them (decided, R50).
 
     A `trigger` and not `file_patterns`: the scan loop's glob for `file_patterns`
     walks the whole tree once per pattern, vendored trees included (61 of

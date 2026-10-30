@@ -82,7 +82,8 @@ LANGUAGE_PATTERNS: dict[str, tuple[str, ...]] = {
     # against each name and each directory above it; a pattern ending `/*`
     # names a directory. They are broad on purpose (`*conf*` reads `config.txt`).
     # Two rules have no include at all and read any file (a reverse shell, a
-    # bidirectional character): no pattern stands for them.
+    # bidirectional character): no pattern stands for them, so they alone do
+    # not make a tree worth scanning.
     "generic": (
         *("*.bicep", "*.component", "*.conf", "*.hbs", "*.html", "*.mustache"),
         *("*.page", "*.page-meta.xml", "*.vhost", "*build.gradle"),
