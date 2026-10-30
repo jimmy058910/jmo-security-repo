@@ -370,14 +370,17 @@ def test_map_rule_to_owasp_opengrep_django():
     assert "A05:2021" in result
 
 
-def test_map_rule_to_owasp_opengrep_secrets():
-    """Test opengrep secrets rules map to OWASP A02."""
+def test_map_rule_to_owasp_opengrep_has_no_secrets_rows():
+    """The rule bundle leaves out `generic/secrets/` (the secret scanners read
+    secrets), so no opengrep finding has a `generic.secrets.*` id and the two
+    globs that mapped them to A02 could never match. They are gone; an id of
+    that family maps to nothing, as it did for any rule with no row."""
     from scripts.core.compliance_mapper import map_rule_to_owasp_top10_2021
 
     result = map_rule_to_owasp_top10_2021(
         "opengrep", "generic.secrets.gitleaks.aws-key"
     )
-    assert "A02:2021" in result
+    assert result == []
 
 
 def test_map_rule_to_owasp_unknown_rule():

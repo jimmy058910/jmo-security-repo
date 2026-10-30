@@ -239,8 +239,6 @@ TOOL_RULE_TO_OWASP_TOP10_2021 = {
         "*": ["A02:2021"],
     },
     "opengrep": {
-        "generic.secrets.gitleaks.*": ["A02:2021"],
-        "generic.secrets.*": ["A02:2021"],
         "generic.html-templates.*": ["A03:2021"],
         "javascript.express.security.*": ["A05:2021"],
         "python.django.security.*": ["A05:2021"],
