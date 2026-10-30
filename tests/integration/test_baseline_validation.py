@@ -8,8 +8,8 @@ well-known vulnerable applications.
 
 Requires:
 - Security tools installed (`jmo tools install`)
-- Network access to clone target repositories
-- ~45 minutes runtime for full validation
+- Network access to clone each target at its pinned commit (tests/integration/targets.py)
+- About two minutes per target on a workstation (measured), clone and scan
 
 Targets:
 - OWASP Juice Shop (Node.js)
@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
 import sys
 import tempfile
 from collections import Counter
@@ -29,12 +28,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
 
 from tests.integration.targets import (
-    JUICE_SHOP_URL,
+    PINNED_TARGETS,
     SCAN_TIMEOUT,
-    WEBGOAT_URL,
+    clone_at_commit,
     count_by_tool,
     finding_cwes,
     load_findings,
@@ -52,8 +52,6 @@ TARGET_TEST_TIMEOUT = SCAN_TIMEOUT + 900
 
 # stderr lines quoted when the scan itself fails.
 STDERR_TAIL_LINES = 20
-
-REPO_URLS = {"juice-shop": JUICE_SHOP_URL, "webgoat": WEBGOAT_URL}
 
 
 @dataclass
@@ -85,30 +83,6 @@ def load_baseline(baseline_file: Path) -> dict[str, Any]:
     """Load a baseline file."""
     with open(baseline_file, encoding="utf-8") as f:
         return json.load(f)
-
-
-def clone_target(repo_url: str, dest: Path, depth: int = 1) -> None:
-    """Clone a target repository.
-
-    Uses core.longpaths=true to support Windows extended-length paths,
-    preventing failures when repos have deep directory structures
-    (e.g., juice-shop's node_modules).
-    """
-    subprocess.run(
-        [
-            "git",
-            "clone",
-            "--depth",
-            str(depth),
-            "--config",
-            "core.longpaths=true",
-            repo_url,
-            str(dest),
-        ],
-        check=True,
-        capture_output=True,
-        timeout=600,
-    )
 
 
 def extract_rule_ids(findings: list[dict[str, Any]]) -> Counter[str]:
@@ -203,7 +177,8 @@ def scanned_target(
 
     A full scan takes minutes, so a second test about the same target (the
     marker-recall test reads juice-shop's findings too) must not pay for another.
-    A clone that fails or times out raises, and is not cached.
+    A clone that fails or times out raises, and is not cached. The commit is the
+    one the target's baseline was derived at (see tests/integration/targets.py).
     """
     scans: dict[str, TargetScan] = {}
     short_dirs: list[Path] = []
@@ -224,7 +199,8 @@ def scanned_target(
             root = scratch_dir(name)
             target_path = root / "target"
             results_dir = root / "results"
-            clone_target(REPO_URLS[name], target_path)
+            pin = PINNED_TARGETS[name]
+            clone_at_commit(pin.url, pin.commit, target_path)
             done = run_scan(target_path, results_dir)
             scans[name] = TargetScan(
                 target_path, results_dir, done.returncode, done.stderr
@@ -244,7 +220,7 @@ def scanned_target(
 class TestBaselineValidation:
     """Validate scan results against known vulnerability baselines."""
 
-    @pytest.mark.parametrize("name", ["juice-shop", "webgoat"])
+    @pytest.mark.parametrize("name", list(PINNED_TARGETS))
     @pytest.mark.timeout(TARGET_TEST_TIMEOUT)
     def test_scan_matches_baseline(
         self, name: str, scanned_target: Callable[[str], TargetScan]
@@ -271,7 +247,7 @@ class TestBaselineValidation:
         print(f"  Missing MEDIUM: {result.missing_medium}")
 
         # Tools: each one recorded as producing findings must still produce some.
-        recorded = baseline["metadata"].get("findings_per_tool", {})
+        recorded = baseline["metadata"]["findings_per_tool"]
         current = count_by_tool(findings)
         for tool, was in sorted(recorded.items()):
             print(f"  {tool}: {current.get(tool, 0)} findings (recorded {was})")
@@ -322,6 +298,42 @@ class TestBaselineSchemaValidation:
             assert "version" in metadata, (
                 f"{baseline_file.name} metadata missing version"
             )
+
+            # What the scan test asserts tool by tool; an empty map asserts nothing.
+            per_tool = metadata.get("findings_per_tool")
+            assert per_tool, f"{baseline_file.name} has no findings_per_tool"
+            assert all(isinstance(n, int) and n >= 1 for n in per_tool.values()), (
+                f"{baseline_file.name} lists a tool with no findings: {per_tool}"
+            )
+            assert metadata.get("tools_used") == sorted(per_tool), (
+                f"{baseline_file.name} tools_used disagrees with findings_per_tool"
+            )
+
+    def test_baseline_files_match_the_schema(self):
+        """Every baseline validates against baseline_schema.json."""
+        with open(BASELINES_DIR / "baseline_schema.json", encoding="utf-8") as f:
+            schema = json.load(f)
+
+        baseline_files = list(BASELINES_DIR.glob("*.baseline.json"))
+        assert baseline_files, "No baseline files found"
+        for baseline_file in baseline_files:
+            jsonschema.validate(load_baseline(baseline_file), schema)
+
+    @pytest.mark.parametrize("name", list(PINNED_TARGETS))
+    def test_baselines_pin_the_commit_the_test_scans(self, name: str):
+        """A baseline describes one revision; the test must scan that revision.
+
+        Bumping a pin without re-deriving the baseline (or the reverse) would
+        compare one revision's findings against another's expectations.
+        """
+        pin = PINNED_TARGETS[name]
+        metadata = load_baseline(BASELINES_DIR / f"{name}.baseline.json")["metadata"]
+        assert metadata["target"] == pin.slug
+        assert metadata["version"] == pin.commit, (
+            f"{name}.baseline.json was derived at {metadata['version']} but the "
+            f"test scans {pin.commit}: re-run scripts/dev/generate_baseline.py "
+            f"--target {name}"
+        )
 
     def test_expected_findings_have_required_fields(self):
         """Each expected finding should have required fields."""

@@ -1,10 +1,20 @@
-"""Shared scan helpers for the baseline test and scripts/dev/generate_baseline.py.
+"""Pinned scan targets and the scan helpers the baseline test and generator share.
 
-Both scan a vulnerable application with ``jmo scan``, read what the product
-wrote, and compare or record per-CWE and per-tool counts. They share one
-implementation so the number the generator records is the number the test
-asserts: two copies of the CWE or tool counting would drift apart, and a
-baseline derived by one would then fail the other.
+The baseline test and scripts/dev/generate_baseline.py both scan a vulnerable
+application with ``jmo scan``, read what the product wrote, and compare or
+record per-CWE and per-tool counts. They share one implementation so the number
+the generator records is the number the test asserts: two copies of the CWE or
+tool counting would drift apart, and a baseline derived by one would then fail
+the other.
+
+Why every target is a commit sha, never a tag or a branch. juice-shop's pin is
+one commit after its v20.2.0 tag, so no tag names it, and a moving branch turns
+upstream drift into a red nightly run with no change of ours behind it: the
+baseline counts findings in specific files at a specific revision. A sha is the
+only spelling that names the same tree tomorrow. Bumping a pin means
+re-deriving its baseline (``python scripts/dev/generate_baseline.py --target
+<name>``) in the same commit; ``test_baselines_pin_the_commit_the_test_scans``
+fails until both agree.
 """
 
 from __future__ import annotations
@@ -14,19 +24,101 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 JUICE_SHOP_URL = "https://github.com/juice-shop/juice-shop.git"
+# One commit after the v20.2.0 tag.
+JUICE_SHOP_COMMIT = "1618a611b173b4bf114028e6e02549950606e29d"
+
 WEBGOAT_URL = "https://github.com/WebGoat/WebGoat.git"
+# Release v2026.5, 2026-10-12.
+WEBGOAT_COMMIT = "7e198f39189f33e1912f7cbb60e24e42635ca06a"
+
+
+@dataclass(frozen=True)
+class PinnedTarget:
+    """A vulnerable application at the one commit its baseline describes."""
+
+    slug: str  # the baseline's metadata.target
+    url: str
+    commit: str
+    note: str  # the baseline's metadata.notes
+
+
+# Keyed by the baseline's file stem: tests/integration/baselines/<key>.baseline.json
+PINNED_TARGETS = {
+    "juice-shop": PinnedTarget(
+        "juice-shop/juice-shop",
+        JUICE_SHOP_URL,
+        JUICE_SHOP_COMMIT,
+        "OWASP Juice Shop at the commit one after the v20.2.0 tag",
+    ),
+    "webgoat": PinnedTarget(
+        "WebGoat/WebGoat",
+        WEBGOAT_URL,
+        WEBGOAT_COMMIT,
+        "OWASP WebGoat at release v2026.5",
+    ),
+}
 
 # One full scan of a vulnerable application: measured 118 s (juice-shop) and
 # 62 s (WebGoat) on a workstation; a slow CI runner gets a wide margin.
 SCAN_TIMEOUT = 1800
+# One git call of a depth-1 clone; each of the four gets this long.
+CLONE_TIMEOUT = 300
 
 _CWE_ID = re.compile(r"^\s*(?:CWE[-_ ]?)?(\d+)\b", re.IGNORECASE)
+
+
+def clone_at_commit(
+    url: str, commit: str, dest: Path, timeout: float = CLONE_TIMEOUT
+) -> None:
+    """Fetch exactly ``commit`` from ``url`` into ``dest`` and check it out.
+
+    ``git init`` plus a depth-1 fetch of the sha, because ``git clone --branch``
+    cannot name a commit that is not a tag or a branch tip. Raises on a failed
+    or timed-out git call, and when ``dest`` does not end up at ``commit``: the
+    caller scans a tree it can name, or does not scan.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+
+    def git(*args: str) -> str:
+        try:
+            done = subprocess.run(
+                ["git", *args],
+                cwd=dest,
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                f"git {' '.join(args)} failed ({exc.returncode}): {exc.stderr.strip()}"
+            ) from exc
+        return done.stdout
+
+    longpaths = ["-c", "core.longpaths=true"]  # deep node_modules on Windows
+    git("init", "--quiet")
+    git(*longpaths, "fetch", "--quiet", "--depth", "1", url, commit)
+    git(
+        *longpaths,
+        "-c",
+        "advice.detachedHead=false",
+        "checkout",
+        "--quiet",
+        "FETCH_HEAD",
+    )
+
+    head = git("rev-parse", "HEAD").strip()
+    if head != commit:
+        raise RuntimeError(f"fetched {url} at {commit} but HEAD is {head}")
 
 
 def run_scan(target_path: Path, results_dir: Path) -> subprocess.CompletedProcess[str]:

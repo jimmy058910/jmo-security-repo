@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
 """
-Generate vulnerability baselines from known-vulnerable targets.
+Derive vulnerability baselines from known-vulnerable targets.
 
-Baselines define expected vulnerabilities for integration testing. They enable
-automated validation that JMo Security correctly detects known issues.
+Baselines define what a scan of a pinned target must still find. The test in
+tests/integration/test_baseline_validation.py scans the same commit and fails
+when a row goes unmet or a recorded tool stops reporting; this script is how a
+baseline is (re-)derived, so re-run it whenever a pin or the tool matrix changes.
 
 Usage:
-    # Generate baseline for Juice Shop
+    # Re-derive Juice Shop's baseline (clones the commit pinned in
+    # tests/integration/targets.py)
     python scripts/dev/generate_baseline.py --target juice-shop
 
-    # Update existing baseline
-    python scripts/dev/generate_baseline.py --target juice-shop --update
-
-    # Generate baseline from local directory
+    # Derive a baseline from a local directory
     python scripts/dev/generate_baseline.py --target ./path/to/repo
 
     # Validate baseline schema
     python scripts/dev/generate_baseline.py --validate tests/integration/baselines/juice-shop.baseline.json
 
 Supported Targets:
-    - juice-shop: OWASP Juice Shop (cloned automatically)
-    - webgoat: OWASP WebGoat (cloned automatically)
-    - dvwa: Damn Vulnerable Web Application
+    - juice-shop: OWASP Juice Shop, at its pinned commit
+    - webgoat: OWASP WebGoat, at its pinned commit
     - ./local/path: Any local directory
+
+Run it where the tests run real tools: a scratch HOME that holds the installed
+tools (the scan bumps a counter in ~/.jmo/config.yml, which is put back
+afterwards), and TMPDIR on a disk with room, since the clone and the scan's
+scratch (~150 MB for juice-shop) live in the system temp directory.
 
 Output:
     tests/integration/baselines/{target}.baseline.json
@@ -33,7 +37,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import subprocess
 import sys
 import tempfile
 from collections import Counter
@@ -52,25 +55,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Paths
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BASELINES_DIR = PROJECT_ROOT / "tests" / "integration" / "baselines"
 SCHEMA_FILE = BASELINES_DIR / "baseline_schema.json"
 
-# Known target repositories
-KNOWN_TARGETS = {
-    "juice-shop": {
-        "repo": "https://github.com/juice-shop/juice-shop.git",
-        "version_cmd": ["git", "describe", "--tags", "--always"],
-    },
-    "webgoat": {
-        "repo": "https://github.com/WebGoat/WebGoat.git",
-        "version_cmd": ["git", "describe", "--tags", "--always"],
-    },
-    "dvwa": {
-        "repo": "https://github.com/digininja/DVWA.git",
-        "version_cmd": ["git", "describe", "--tags", "--always"],
-    },
-}
+# Run directly (`python scripts/dev/generate_baseline.py`) and sys.path[0] is
+# scripts/dev, not the repo root, so tests.integration is not importable
+# without this. Same bootstrap as scripts/dev/phase_audit.py.
+if __package__ in (None, ""):  # pragma: no cover - only on direct execution
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from tests.integration.targets import (  # noqa: E402
+    PINNED_TARGETS,
+    clone_at_commit,
+    count_by_tool,
+    finding_cwes,
+    load_findings,
+    run_scan,
+)
 
 # CWE to category mapping
 CWE_CATEGORIES = {
@@ -88,196 +90,107 @@ CWE_CATEGORIES = {
 }
 
 
-def clone_target(target: str, dest: Path) -> str:
-    """Clone a known target repository and return its version."""
-    if target not in KNOWN_TARGETS:
-        raise ValueError(
-            f"Unknown target: {target}. Known: {list(KNOWN_TARGETS.keys())}"
-        )
-
-    config = KNOWN_TARGETS[target]
-    logger.info(f"Cloning {target} from {config['repo']}...")
-
-    subprocess.run(
-        ["git", "clone", "--depth", "1", config["repo"], str(dest)],  # type: ignore[list-item]
-        check=True,
-        capture_output=True,
-    )
-
-    # Get version
-    result = subprocess.run(
-        config["version_cmd"],
-        cwd=dest,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    version = result.stdout.strip() if result.returncode == 0 else "unknown"
-
-    logger.info(f"Cloned {target} version: {version}")
-    return version
-
-
-def run_scan(target_path: Path, results_dir: Path) -> int:
-    """Run JMo Security scan on target."""
-    logger.info("Running scan...")
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.cli.jmo",
-        "scan",
-        "--repo",
-        str(target_path),
-        "--results-dir",
-        str(results_dir),
-    ]
-
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
-    )
-
-    if result.returncode != 0:
-        logger.warning(f"Scan exited with code {result.returncode}")
-        if result.stderr:
-            logger.warning(f"Stderr: {result.stderr[:500]}")
-
-    return result.returncode
-
-
-def load_findings(results_dir: Path) -> list[dict[str, Any]]:
-    """Load findings from scan results."""
-    findings_file = results_dir / "findings.json"
-
-    if not findings_file.exists():
-        logger.warning(f"No findings.json found in {results_dir}")
-        return []
-
-    with open(findings_file, encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Handle both list and dict formats
-    if isinstance(data, list):
-        return data
-    elif isinstance(data, dict) and "findings" in data:
-        return data["findings"]  # type: ignore[no-any-return]
-    else:
-        return []
+SEVERITY_RANK = {"INFO": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
 
 
 def categorize_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Categorize findings into expected baseline format.
+    """Turn findings into baseline rows: one per bare CWE id, all severities pooled.
 
-    Extracts CWE identifiers from ``risk.cwe`` (CommonFinding v1.2.0 schema)
-    with a fallback to ``metadata.cwe`` for legacy tools. Non-CWE findings
-    are recorded by their tool-specific ruleId.
+    ``min_count`` is the number of findings carrying the id (a finding counts
+    once per distinct id, however many spellings it lists) and ``severity`` the
+    highest seen with it. Findings with no CWE produce no row: nothing but a
+    tool's own rule id would name them, and rule ids change with the bundle.
+    Rows run from most to least common, ties by CWE number, so a re-derivation
+    diffs cleanly.
     """
-    # Count by rule_id and severity
-    rule_counts: Counter[tuple[str, str]] = Counter()
+    counts: Counter[str] = Counter()
+    highest: dict[str, str] = {}
 
     for finding in findings:
-        rule_id = finding.get("ruleId", finding.get("rule_id", "unknown"))
         severity = finding.get("severity", "MEDIUM")
+        for cwe in finding_cwes(finding):
+            counts[cwe] += 1
+            if SEVERITY_RANK.get(severity, -1) > SEVERITY_RANK.get(
+                highest.get(cwe, ""), -1
+            ):
+                highest[cwe] = severity
 
-        cwe_found = False
-
-        # Primary: Extract CWE from risk.cwe (CommonFinding v1.2.0)
-        risk = finding.get("risk", {})
-        if isinstance(risk, dict):
-            cwe_list = risk.get("cwe", [])
-            if isinstance(cwe_list, list):
-                for cwe in cwe_list:
-                    normalized = cwe if cwe.startswith("CWE-") else f"CWE-{cwe}"
-                    rule_counts[(normalized, severity)] += 1
-                    cwe_found = True
-
-        # Fallback: CWE in metadata.cwe (legacy/other tools)
-        if not cwe_found:
-            metadata = finding.get("metadata", {})
-            if isinstance(metadata, dict):
-                cwe = metadata.get("cwe", metadata.get("CWE"))
-                if cwe:
-                    rule_counts[(f"CWE-{cwe}", severity)] += 1
-                    cwe_found = True
-
-        # No CWE found — use ruleId as-is
-        if not cwe_found:
-            rule_counts[(rule_id, severity)] += 1
-
-    # Convert to baseline format
-    expected = []
-    for (rule_id, severity), count in rule_counts.most_common():
-        category = CWE_CATEGORIES.get(rule_id, rule_id.lower().replace("-", "_"))
-
-        expected.append(
-            {
-                "rule_id": rule_id,
-                "severity": severity,
-                "category": category,
-                "min_count": max(1, count - 1),  # Allow some variance
-            }
-        )
-
-    return expected
+    return [
+        {
+            "rule_id": cwe,
+            "severity": highest[cwe],
+            "category": CWE_CATEGORIES.get(cwe, cwe.lower()),
+            "min_count": counts[cwe],
+        }
+        for cwe in sorted(counts, key=lambda c: (-counts[c], int(c[len("CWE-") :])))
+    ]
 
 
-def calculate_tolerance(findings: list[dict[str, Any]]) -> dict[str, Any]:
-    """Calculate appropriate tolerance values based on finding distribution."""
-    severity_counts = Counter(f.get("severity", "MEDIUM") for f in findings)
+def calculate_tolerance() -> dict[str, Any]:
+    """Tolerance for a derived baseline: every expected row must be met.
 
-    # Calculate tolerance based on distribution
-    high = severity_counts.get("HIGH", 0)
-    medium = severity_counts.get("MEDIUM", 0)
-
+    A row's ``min_count`` is what the scan found when it was derived, so any
+    shortfall is a real loss rather than variance. The test asserts no extra
+    findings ratio; the key stays because the schema documents it.
+    """
     return {
-        "missing_critical": 0,  # Never allow missing critical
-        "missing_high": min(2, high // 5) if high > 0 else 0,
-        "missing_medium": min(5, medium // 4) if medium > 0 else 0,
-        "extra_findings_ratio": 0.3,  # Allow 30% more findings
+        "missing_critical": 0,
+        "missing_high": 0,
+        "missing_medium": 0,
+        "extra_findings_ratio": 0.3,
     }
 
 
 def generate_baseline(target: str) -> dict[str, Any]:
-    """Generate or update a baseline for the given target."""
+    """Scan a target and derive its baseline."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
 
         # Determine target path
-        if target in KNOWN_TARGETS:
+        pin = PINNED_TARGETS.get(target)
+        if pin:
             target_path = tmp_path / target
-            version = clone_target(target, target_path)
+            logger.info(f"Cloning {pin.url} at {pin.commit}...")
+            clone_at_commit(pin.url, pin.commit, target_path)
+            slug, version, notes = pin.slug, pin.commit, pin.note
         elif Path(target).is_dir():
             target_path = Path(target).resolve()
-            version = "local"
+            slug, version, notes = target, "local", f"Derived from {target}"
         else:
-            raise ValueError(f"Target not found: {target}")
+            raise ValueError(
+                f"Target not found: {target}. Pinned: {list(PINNED_TARGETS)}"
+            )
 
         # Run scan
         results_dir = tmp_path / "results"
         results_dir.mkdir(parents=True)
 
-        run_scan(target_path, results_dir)
+        logger.info("Running scan...")
+        done = run_scan(target_path, results_dir)
+        if done.returncode != 0:
+            tail = "\n".join(done.stderr.splitlines()[-20:])
+            raise RuntimeError(f"jmo scan exited {done.returncode}:\n{tail}")
 
         # Load and analyze findings
         findings = load_findings(results_dir)
-
         if not findings:
-            logger.warning("No findings detected - baseline may be incomplete")
+            raise RuntimeError(
+                "The scan found nothing; a baseline of nothing would assert nothing"
+            )
 
-        # Determine tools used
-        tools_used = list({f.get("tool", {}).get("name", "unknown") for f in findings})
-
+        tool_counts = count_by_tool(findings)
         return {
             "metadata": {
-                "target": f"{target}/{target}" if target in KNOWN_TARGETS else target,
+                "target": slug,
                 "version": version,
-                "generated": datetime.now(UTC).isoformat(),
-                "tools_used": sorted(tools_used),
-                "notes": f"Auto-generated baseline from {len(findings)} findings",
+                "generated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "tools_used": sorted(tool_counts),
+                "findings_per_tool": dict(sorted(tool_counts.items())),
+                "finding_count": len(findings),
+                "notes": notes,
             },
             "expected_findings": categorize_findings(findings),
-            "tolerance": calculate_tolerance(findings),
+            "tolerance": calculate_tolerance(),
         }
 
 
@@ -311,7 +224,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--target",
-        help="Target to scan (juice-shop, webgoat, dvwa, or local path)",
+        help=f"Target to scan ({', '.join(PINNED_TARGETS)}, or local path)",
     )
     parser.add_argument(
         "--update",
@@ -355,17 +268,18 @@ def main() -> int:
             output_path = Path(args.output)
         else:
             target_name = args.target.replace("/", "-").replace("\\", "-")
-            if args.target in KNOWN_TARGETS:
+            if args.target in PINNED_TARGETS:
                 target_name = args.target
             output_path = BASELINES_DIR / f"{target_name}.baseline.json"
 
         # Ensure directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write baseline
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(baseline, f, indent=2)
-            f.write("\n")
+        # Write baseline, keeping the line endings the file already has
+        text = json.dumps(baseline, indent=2) + "\n"
+        if output_path.exists() and b"\r\n" in output_path.read_bytes():
+            text = text.replace("\n", "\r\n")
+        output_path.write_bytes(text.encode("utf-8"))
 
         logger.info(f"Baseline written to: {output_path}")
         logger.info(f"Expected findings: {len(baseline['expected_findings'])}")
