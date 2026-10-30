@@ -110,6 +110,18 @@ def test_each_config_file_is_named_once_on_its_own(tmp_path, caplog):
     assert any(str(first) in m for m in named) and any(str(second) in m for m in named)
 
 
+def test_every_test_starts_with_no_config_warning_remembered(request):
+    """tests/conftest.py clears the once-per-file memory around every test.
+    Without it the first test to load a config file consumes its warning, and a
+    later guard that asserts on the log can no longer fail:
+    test_the_shipped_jmo_yml_has_no_unrecognised_keys passed with an unrecognised
+    key planted in jmo.yml, because four tests before it had loaded the file."""
+    from scripts.core import config
+
+    assert "_forget_config_warnings" in request.fixturenames
+    assert not config._WARNED
+
+
 def test_every_recognised_key_is_accepted_without_warning(tmp_path, caplog):
     """The negative control.
 

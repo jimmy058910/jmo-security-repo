@@ -243,9 +243,13 @@ def test_the_proxy_variables_reach_opengrep(tmp_path, monkeypatch) -> None:
 
 def test_a_scan_makes_no_network_call(tmp_path, target, monkeypatch) -> None:
     """Every proxy variable points at a closed port and nothing is exempt from it, so
-    a scan that opened an HTTP(S) connection through a client that honours them (the
-    registry, a rule URL, a version check, metrics) would fail. It ran, exited 0, found
-    the four findings and wrote no connection error.
+    a scan that fetched a rule configuration over HTTP(S) would fail: the control
+    above shows opengrep's client honours them, and a rule URL given as `--config` is
+    the one network path observed (rc 2, `ProxyError`). Measured on 1.32.0, and seen
+    NOT to use the network: a local config under `--enable-version-check` (rc 0, no
+    connection error; the row passes `--disable-version-check` regardless), and there
+    is no `--metrics` option to turn off (rc 2, "unknown option"). This scan ran,
+    exited 0, found the four findings and wrote no connection error.
 
     This does NOT prove the absence of a raw socket, which ignores proxy variables.
     Task B8 step 3 proves the stronger claim: `unshare -rn` around the same

@@ -1071,6 +1071,29 @@ def _restore_scan_logging():
 
 
 # ---------------------------------------------------------------------------
+# A config warning is given once per file, process-wide.
+# ---------------------------------------------------------------------------
+# `scripts.core.config` names an unrecognised key (and a v1 `per_tool.semgrep`
+# entry) once per config file, because a scan loads `jmo.yml` about ten times.
+# That memory is a module-level set, so without a reset the first test to load a
+# file consumes the warning and every later test that loads the same file and
+# asserts on the log sees nothing. `test_the_shipped_jmo_yml_has_no_unrecognised_keys`
+# was that test: four tests before it loaded the shipped `jmo.yml`, so with
+# `profiles: {}` planted in it the whole file passed and the guard alone failed.
+# Under `-n` it would have depended on which worker ran what.
+
+
+@pytest.fixture(autouse=True)
+def _forget_config_warnings():
+    """Start and end every test with no config warning remembered."""
+    from scripts.core import config
+
+    config._WARNED.clear()
+    yield
+    config._WARNED.clear()
+
+
+# ---------------------------------------------------------------------------
 # Timing a wall-clock budget without measuring the runner's mood.
 # ---------------------------------------------------------------------------
 

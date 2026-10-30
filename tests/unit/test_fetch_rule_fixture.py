@@ -115,9 +115,11 @@ def test_a_mismatch_names_the_path_and_both_hashes_and_lands_nothing(
     )
 
 
-def test_a_mismatch_does_not_replace_a_good_file(tmp_path, pins, monkeypatch) -> None:
+def test_a_failed_download_leaves_what_stands_in_its_place_untouched(
+    tmp_path, pins, monkeypatch
+) -> None:
     """The temp name is verified before the rename, so a bad download never
-    reaches the place a good file may already stand."""
+    reaches the place a file may already stand, wrong as that file may be."""
     (tmp_path / "lib").mkdir()
     (tmp_path / "lib" / "b.ts").write_bytes(b"edited by hand\n")
     monkeypatch.setattr(frf, "fetch_bytes", lambda url: b"wrong\n")
@@ -128,6 +130,28 @@ def test_a_mismatch_does_not_replace_a_good_file(tmp_path, pins, monkeypatch) ->
     assert sorted(p.name for p in (tmp_path / "lib").iterdir()) == ["b.ts"], (
         "a temporary file was left beside it"
     )
+
+
+def test_a_file_that_matches_its_pin_is_kept_beside_one_that_fails(
+    tmp_path, pins, monkeypatch
+) -> None:
+    """A good file is not asked for again, so a download that does not match
+    cannot replace it; the other file's failure leaves it where it was."""
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "a.ts").write_bytes(GOOD["routes/a.ts"])
+    asked: list[str] = []
+
+    def wrong(url: str) -> bytes:
+        asked.append(url)
+        return b"wrong\n"
+
+    monkeypatch.setattr(frf, "fetch_bytes", wrong)
+
+    assert frf.main(["--dest", str(tmp_path)]) != 0
+
+    assert (tmp_path / "routes" / "a.ts").read_bytes() == GOOD["routes/a.ts"]
+    assert [u for u in asked if u.endswith("a.ts")] == []
+    assert not (tmp_path / "lib" / "b.ts").exists()
 
 
 def test_a_network_failure_names_the_path_and_exits_non_zero(
@@ -142,7 +166,7 @@ def test_a_network_failure_names_the_path_and_exits_non_zero(
 
     err = capsys.readouterr().err
     assert code != 0
-    assert "routes/a.ts" in err or "lib/b.ts" in err
+    assert "routes/a.ts" in err and "lib/b.ts" in err
     assert "no route to host" in err
     assert not any(p.is_file() for p in tmp_path.rglob("*"))
 
@@ -165,6 +189,151 @@ def test_every_request_has_a_timeout(monkeypatch) -> None:
 
     assert frf.fetch_bytes("https://raw.githubusercontent.com/x/y/z/p") == b"x"
     assert isinstance(seen["timeout"], (int, float)) and 0 < seen["timeout"] <= 120
+
+
+def _http_error(code: int) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError("https://x/y", code, "status", {}, io.BytesIO())  # type: ignore[arg-type]
+
+
+TRANSIENT = [
+    pytest.param(lambda: _http_error(500), id="500"),
+    pytest.param(lambda: _http_error(502), id="502"),
+    pytest.param(lambda: _http_error(503), id="503"),
+    pytest.param(lambda: TimeoutError("timed out"), id="timeout"),
+    pytest.param(
+        lambda: urllib.error.URLError(TimeoutError("timed out")), id="urlerror-timeout"
+    ),
+]
+PERMANENT = [
+    pytest.param(lambda: _http_error(404), id="404"),
+    pytest.param(lambda: _http_error(403), id="403"),
+    pytest.param(lambda: urllib.error.URLError(ConnectionRefusedError()), id="refused"),
+    pytest.param(lambda: urllib.error.URLError("no route to host"), id="no-route"),
+]
+
+
+class _Body(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _script_urlopen(monkeypatch, outcomes):
+    """urlopen that raises or returns what `outcomes` says, one per call; returns
+    the call count (a list) and the waits made between attempts."""
+    calls: list[str] = []
+    slept: list[float] = []
+    remaining = list(outcomes)
+
+    def urlopen(request, timeout=None):
+        calls.append(request.full_url)
+        outcome = remaining.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return _Body(outcome)
+
+    monkeypatch.setattr(frf.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(frf.time, "sleep", slept.append)
+    return calls, slept
+
+
+@pytest.mark.parametrize("failure", TRANSIENT)
+def test_a_server_error_or_a_timeout_is_retried_once(monkeypatch, failure) -> None:
+    calls, slept = _script_urlopen(monkeypatch, [failure(), b"body"])
+
+    assert frf.fetch_bytes("https://x/y") == b"body"
+
+    assert len(calls) == 2
+    assert slept == [frf.RETRY_DELAY_S]
+
+
+@pytest.mark.parametrize("failure", TRANSIENT)
+def test_a_second_failure_is_raised_not_retried_again(monkeypatch, failure) -> None:
+    calls, _ = _script_urlopen(monkeypatch, [failure(), failure(), b"never read"])
+
+    with pytest.raises(OSError):
+        frf.fetch_bytes("https://x/y")
+
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("failure", PERMANENT)
+def test_a_client_error_or_a_refused_connection_is_not_retried(
+    monkeypatch, failure
+) -> None:
+    calls, slept = _script_urlopen(monkeypatch, [failure(), b"never read"])
+
+    with pytest.raises(OSError):
+        frf.fetch_bytes("https://x/y")
+
+    assert len(calls) == 1
+    assert slept == []
+
+
+def test_a_flaky_server_still_gives_the_files_and_exit_0(tmp_path, monkeypatch) -> None:
+    """Through `main`: each file's first request is a 503."""
+    monkeypatch.setattr(frf, "FILES", {p: _sha(d) for p, d in GOOD.items()})
+    monkeypatch.setattr(frf, "COMMIT", "c0ffee")
+    failed: set[str] = set()
+    monkeypatch.setattr(frf.time, "sleep", lambda s: None)
+
+    def urlopen(request, timeout=None):
+        url = request.full_url
+        if url not in failed:
+            failed.add(url)
+            raise _http_error(503)
+        return _Body(next(d for p, d in GOOD.items() if url.endswith("/" + p)))
+
+    monkeypatch.setattr(frf.urllib.request, "urlopen", urlopen)
+
+    assert frf.main(["--dest", str(tmp_path)]) == 0
+
+    for path, data in GOOD.items():
+        assert (tmp_path / path).read_bytes() == data
+
+
+def test_a_destination_that_cannot_be_made_is_exit_2_naming_the_path(
+    tmp_path, pins, capsys
+) -> None:
+    """A file where the directory should be: `mkdir` raises, which used to be a
+    traceback and exit 1 because it stood outside the `try`."""
+    blocker = tmp_path / "blocked"
+    blocker.write_bytes(b"a file, not a directory\n")
+
+    code = frf.main(["--dest", str(blocker)])
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "routes/a.ts" in err and "lib/b.ts" in err
+    assert "could not write" in err
+    assert blocker.read_bytes() == b"a file, not a directory\n"
+
+
+def test_a_write_that_fails_part_way_removes_its_temporary_file(
+    tmp_path, pins, monkeypatch, capsys
+) -> None:
+    """The rename fails after the bytes were written: the `.part` file is there
+    when it does, and gone afterwards, and nothing lands under the real name."""
+    part_existed: list[bool] = []
+
+    def full_disk(src, dst):
+        part_existed.append(Path(src).is_file())
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(frf.os, "replace", full_disk)
+
+    code = frf.main(["--dest", str(tmp_path)])
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert part_existed == [True, True], "the failing branch was not reached"
+    assert "no space left on device" in err
+    assert "routes/a.ts" in err and "lib/b.ts" in err
+    assert not any(p.is_file() for p in tmp_path.rglob("*")), sorted(
+        str(p) for p in tmp_path.rglob("*")
+    )
 
 
 def test_nothing_is_fetched_over_anything_but_https() -> None:

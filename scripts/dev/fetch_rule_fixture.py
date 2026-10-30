@@ -14,20 +14,25 @@ gitleaks' `generic-api-key` (both measured), so the destination,
 A present file with the right hash is left alone. A file that is missing, or
 whose hash is wrong, is fetched; the bytes are written to a temporary name
 beside it and renamed only after they verify, so a bad download never replaces
-a good file and never leaves one behind.
+a good file and never leaves one behind. A request that fails with a 5xx or a
+timeout is made once more after a short wait, so a flaky raw.githubusercontent.com
+does not redden the CI job; nothing else is retried.
 
-Exit status: 0 when all four files are in place; 2 when one could not be fetched
-or did not match its pin (each is named on stderr, with the expected and actual
-sha256 for a mismatch).
+Exit status: 0 when all four files are in place; 2 when one could not be fetched,
+did not match its pin or could not be written (each is named on stderr, with the
+expected and actual sha256 for a mismatch).
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import http.client
 import os
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -44,10 +49,10 @@ FILES: dict[str, str] = {
 }
 URL = "https://raw.githubusercontent.com/juice-shop/juice-shop/{commit}/{path}"
 FETCH_TIMEOUT_S = 60
+RETRY_DELAY_S = 2
 
 
-def fetch_bytes(url: str) -> bytes:
-    """The body of `url`; raises OSError (URLError, a timeout) or HTTPException."""
+def _get(url: str) -> bytes:
     request = urllib.request.Request(
         url, headers={"User-Agent": "jmo-security rule fixture fetch"}
     )
@@ -55,6 +60,27 @@ def fetch_bytes(url: str) -> bytes:
     with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_S) as response:  # nosec B310
         body: bytes = response.read()
     return body
+
+
+def _transient(exc: OSError) -> bool:
+    """A server error or a timeout: the failures a second request can cure."""
+    if isinstance(exc, urllib.error.HTTPError):  # before URLError, its base
+        return exc.code >= 500
+    if isinstance(exc, urllib.error.URLError):
+        return isinstance(exc.reason, TimeoutError)
+    return isinstance(exc, TimeoutError)
+
+
+def fetch_bytes(url: str) -> bytes:
+    """The body of `url`, asked for twice at most; raises OSError (URLError, a
+    timeout) or HTTPException."""
+    try:
+        return _get(url)
+    except OSError as exc:
+        if not _transient(exc):
+            raise
+    time.sleep(RETRY_DELAY_S)
+    return _get(url)
 
 
 def _sha256(data: bytes) -> str:
@@ -81,13 +107,14 @@ def fetch_file(dest: Path, path: str, expected: str) -> str | None:
     actual = _sha256(data)
     if actual != expected:
         return f"{path}: sha256 mismatch for {url}: expected {expected}, got {actual}"
-    target.parent.mkdir(parents=True, exist_ok=True)
     part = target.with_name(target.name + ".part")
     try:
+        target.parent.mkdir(parents=True, exist_ok=True)
         part.write_bytes(data)
         os.replace(part, target)
     except OSError as exc:
-        part.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            part.unlink(missing_ok=True)
         return f"{path}: could not write {target}: {exc}"
     return None
 
