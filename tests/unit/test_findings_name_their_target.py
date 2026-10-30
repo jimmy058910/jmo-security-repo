@@ -37,6 +37,8 @@ from scripts.core import normalize_and_report as nr
 from scripts.core.common_finding import FINGERPRINT_LENGTH, target_id
 from scripts.core.dedup_enhanced import (
     FindingClusterer,
+    LSHClusterer,
+    LSHSignatureGenerator,
     SimilarityCalculator,
     cluster_dependency_findings,
     dependency_key,
@@ -608,3 +610,60 @@ def test_findings_of_two_targets_have_no_similarity():
 
     assert same >= calculator.threshold
     assert apart == 0.0
+
+
+def one_pair_per_target(count: int) -> list[dict[str, Any]]:
+    """trivy's and checkov's finding of one rule at one place, in each of
+    `count` targets: what a large `--repos-dir` scan holds for a Dockerfile
+    every repository copied."""
+    return [
+        misconfig(f"{tool}-{n}", tool, f"app-{n:03}")
+        for n in range(count)
+        for tool in ("trivy", "checkov")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("algorithm", "targets"),
+    [("lsh", 60), ("auto", 250)],
+    ids=["lsh-60-targets", "auto-250-targets"],
+)
+def test_a_large_scan_still_clusters_within_each_target(
+    algorithm, targets, monkeypatch
+):
+    """LSH skips a bucket of more than `MAX_BUCKET_SIZE` entries, and every
+    target's pair lands in the same buckets (the path and line are relative to
+    the target). Before the target was in the bucket, each target added its own
+    entries: at 51 targets the bucket passed 100 and the pairs of ALL targets
+    went unmerged (measured: 51 targets, 102 clusters; greedy, 51). `auto`
+    selects LSH from 500 findings."""
+    findings = one_pair_per_target(targets)
+
+    # The test must be able to see the cap: unscoped, one band holds every
+    # finding, and that is more than LSH will compare.
+    generator = LSHSignatureGenerator()
+    buckets: dict[str, int] = {}
+    for finding in findings:
+        for signature in generator.generate_signatures(finding):
+            buckets[signature] = buckets.get(signature, 0) + 1
+    assert max(buckets.values()) > LSHClusterer.MAX_BUCKET_SIZE
+
+    # ... and must really go through LSH.
+    used = []
+    original = LSHClusterer.cluster
+
+    def spy(self, *args, **kwargs):
+        used.append(len(args[0]))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(LSHClusterer, "cluster", spy)
+
+    clusters = FindingClusterer(algorithm=algorithm).cluster(findings)
+
+    assert used == [len(findings)]
+    assert membership(clusters) == {
+        frozenset({f"trivy-{n}", f"checkov-{n}"}) for n in range(targets)
+    }
+    assert {c.representative["target"]["name"] for c in clusters} == {
+        f"app-{n:03}" for n in range(targets)
+    }

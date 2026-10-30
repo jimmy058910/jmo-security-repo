@@ -1566,13 +1566,23 @@ class LSHClusterer:
         if progress_callback:
             progress_callback(0, n, "Building LSH signatures...")
 
-        buckets: dict[str, list[int]] = {}
+        # Bucketed per target (#1309). A signature is built from a path and a
+        # line relative to the target, so it is the same string in every target
+        # that has the file, and one bucket would hold all of their findings.
+        # Past MAX_BUCKET_SIZE the bucket is skipped, which silently ended
+        # cross-tool clustering at 51 targets (a pair per target is 102
+        # entries). Findings of two targets are never compared anyway
+        # (`SimilarityCalculator.calculate_similarity`). A finding with no
+        # target is bucketed with the others that have none, as before.
+        buckets: dict[tuple[str, str], list[int]] = {}
         for idx, finding in enumerate(findings):
             signatures = self.lsh.generate_signatures(finding)
+            scope = _canonical(finding.get("target"))
             for sig in signatures:
-                if sig not in buckets:
-                    buckets[sig] = []
-                buckets[sig].append(idx)
+                key = (scope, sig)
+                if key not in buckets:
+                    buckets[key] = []
+                buckets[key].append(idx)
 
         # Phase 2: Identify candidate pairs from buckets
         if progress_callback:
