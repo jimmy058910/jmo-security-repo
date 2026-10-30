@@ -4,7 +4,9 @@ opengrep loads every rule of every ``--config`` file before it scans a file, so
 a scan hands it the files of the languages the repository has, plus
 ``generic.yaml`` (rules matched by file name, whatever the language), and not
 all 25. ``select_configs`` reads the names of the files the scan's walk found;
-it never opens one.
+it never opens one. ``has_rules_for`` says whether any of them is a file the
+bundle has a rule for at all, generic.yaml's own included: the row is skipped
+when none is.
 
 ``LANGUAGE_PATTERNS`` is data: for each bundle file (named by its language
 stem), the file names that select it. They are the extensions opengrep itself
@@ -69,9 +71,23 @@ LANGUAGE_PATTERNS: dict[str, tuple[str, ...]] = {
         *("Dockerfile", "Dockerfile.*", "*.Dockerfile"),
         *("dockerfile", "*.dockerfile"),
     ),
-    # Chosen by no file name: every scan gets it, and a pattern here would
-    # walk every file of a repository into the scan's file list.
-    "generic": (),
+    # generic.yaml is always loaded (below), so these choose nothing. They say
+    # which files its rules read, for `has_rules_for`: a repository of nothing
+    # but an nginx config has no language and is still read. They are the
+    # union of the `paths.include` globs of the rules in generic.yaml, and a
+    # test keeps them so. opengrep matches an include glob against the whole
+    # path (measured on 1.32.0): `*conf*` reads `conf/app` and `etc/nginx/plain`
+    # as it reads `my.conf`, and `sites-enabled/*` reads a file under such a
+    # directory at any depth. So these are not file names, and are matched
+    # against each name and each directory above it; a pattern ending `/*`
+    # names a directory. They are broad on purpose (`*conf*` reads `config.txt`).
+    # Two rules have no include at all and read any file (a reverse shell, a
+    # bidirectional character): no pattern stands for them.
+    "generic": (
+        *("*.bicep", "*.component", "*.conf", "*.hbs", "*.html", "*.mustache"),
+        *("*.page", "*.page-meta.xml", "*.vhost", "*build.gradle"),
+        *("*conf*", "*nginx*", "*vhost*", "sites-available/*", "sites-enabled/*"),
+    ),
     "go": ("*.go",),
     "html": ("*.html", "*.htm"),
     "java": ("*.java",),
@@ -102,21 +118,70 @@ LANGUAGE_PATTERNS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _fold(
+    patterns: dict[str, tuple[str, ...]], names: set[str], dirs: set[str]
+) -> tuple[dict[str, tuple[str, ...]], set[str], set[str]]:
+    """The patterns and the names to match them against, folded to lowercase
+    where the platform ignores case (see `GLOB_CASE_SENSITIVE`)."""
+    if GLOB_CASE_SENSITIVE:
+        return patterns, names, dirs
+    return (
+        {stem: tuple(p.lower() for p in group) for stem, group in patterns.items()},
+        {name.lower() for name in names},
+        {d.lower() for d in dirs},
+    )
+
+
+def _language_stems(files: Iterable[str | Path]) -> set[str]:
+    """The stems of the languages whose file names match one of these files
+    (`generic` is not a language: it is chosen by no name)."""
+    patterns, names, _ = _fold(LANGUAGE_PATTERNS, {Path(f).name for f in files}, set())
+    return {
+        stem
+        for stem, group in patterns.items()
+        if stem != "generic"
+        and any(fnmatchcase(name, pattern) for pattern in group for name in names)
+    }
+
+
+def _reads_generic(files: Iterable[str | Path]) -> bool:
+    """Whether a rule in generic.yaml reads one of these files: a name or a
+    directory above it matches a pattern of its row, or the file is under a
+    directory a `<dir>/*` pattern names. `files` are relative to the scan root,
+    or an ancestor of the target would match (`~/nginx/` and a README)."""
+    names: set[str] = set()
+    dirs: set[str] = set()
+    for f in files:
+        path = Path(f)
+        names.add(path.name)
+        dirs.update(path.parts[:-1])
+    patterns, names, dirs = _fold(LANGUAGE_PATTERNS, names, dirs)
+    anywhere = names | dirs
+    for pattern in patterns.get("generic", ()):
+        if pattern.endswith("/*"):
+            if any(fnmatchcase(d, pattern[:-2]) for d in dirs):
+                return True
+        elif any(fnmatchcase(part, pattern) for part in anywhere):
+            return True
+    return False
+
+
+def has_rules_for(files: Iterable[str | Path]) -> bool:
+    """Whether the bundle has a rule for at least one of these files: one has
+    the name of a language it covers, or is one only generic.yaml reads. A
+    repository with none is nothing to scan (the row is skipped), whatever
+    ``select_configs`` names for it.
+
+    ``files`` are the scan's walked files **relative to the scan root**."""
+    files = list(files)
+    return bool(_language_stems(files)) or _reads_generic(files)
+
+
 def select_configs(files: Iterable[str | Path]) -> list[Path]:
     """The bundle files for these files' languages, ``generic.yaml`` always, sorted.
 
     ``files`` are the scan's walked files, as ``Path`` or as the ``str`` the
     walk's ``collect_files`` returns. Only each file's name is read.
     """
-    names = {Path(f).name for f in files}
-    patterns = LANGUAGE_PATTERNS
-    if not GLOB_CASE_SENSITIVE:
-        names = {name.lower() for name in names}
-        patterns = {
-            stem: tuple(p.lower() for p in group) for stem, group in patterns.items()
-        }
-    stems = {"generic"}
-    for stem, group in patterns.items():
-        if any(fnmatchcase(name, pattern) for pattern in group for name in names):
-            stems.add(stem)
+    stems = {"generic"} | _language_stems(files)
     return sorted(BUNDLE_DIR / f"{stem}.yaml" for stem in stems)

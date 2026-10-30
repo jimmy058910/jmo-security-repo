@@ -75,7 +75,7 @@ class Reason(StrEnum):
     # another framework, a YAML file that does not parse).
     NO_READABLE_WORKFLOWS = "no workflow zizmor could read"
     # opengrep's: none of the target's files is in a language the committed
-    # rule bundle has rules for, so it would load them and scan nothing.
+    # rule bundle covers, or one that generic.yaml's rules read by name.
     NO_RULE_LANGUAGES = "no files in a language the rule bundle reads"
     # opengrep's, after the run: `--baseline-commit` limits it to the files
     # changed since a commit, and none of them is one it scans (a commit that

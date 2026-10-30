@@ -641,19 +641,34 @@ def _native_trigger(ctx: ScanContext) -> Reason | None:
 
 def _opengrep_files(ctx: ScanContext) -> Iterable[Path | str]:
     """Every file of the scan's pruned walk (vendored trees and JMo's own
-    results directory left out), or `ctx.files` for a context built without one.
-    Not `ctx.files` in a scan, which the loop caps at 300 sorted paths for the
-    tools it hands files to: a language whose only file sorts after 300 of
-    another's would lose its rules without a word."""
-    return ctx.iter_files() if ctx.iter_files is not None else ctx.files
+    results directory left out), or `ctx.files` for a context built without one,
+    each relative to the target. Not `ctx.files` in a scan, which the loop caps
+    at 300 sorted paths for the tools it hands files to: a language whose only
+    file sorts after 300 of another's would lose its rules without a word.
+    Relative, since generic.yaml's patterns read directory names: a repository
+    cloned into `~/nginx/` is not an nginx repository."""
+    root = Path(ctx.target)
+    files = ctx.iter_files() if ctx.iter_files is not None else ctx.files
+    for f in files:
+        try:
+            yield Path(f).relative_to(root)
+        except ValueError:
+            yield Path(f)
 
 
 def _opengrep_trigger(ctx: ScanContext) -> Reason | None:
-    """Skip a repository with no file in a language the rule bundle reads.
+    """Skip a repository with no file the rule bundle has a rule for.
 
-    `select_configs` always names `generic.yaml`, and opengrep loaded with it
-    alone scans nothing, so the row would read `ran` with 0 findings. A
-    `trigger` and not `file_patterns`: the scan loop's glob for `file_patterns`
+    A file is read when its name is one of a language the bundle covers, or
+    when generic.yaml's rules read it (`rule_bundle.has_rules_for`: an nginx
+    config, Bicep, Handlebars, Visualforce, `build.gradle`). `select_configs`
+    always names `generic.yaml`, so that file is no evidence of its own. Two of
+    its rules have no file pattern and read any file (a reverse shell, a
+    bidirectional character), so opengrep run with it alone does read a
+    README: a repository of such files is skipped on purpose, as one with no
+    code in a language the bundle covers, not because nothing would be read.
+
+    A `trigger` and not `file_patterns`: the scan loop's glob for `file_patterns`
     walks the whole tree once per pattern, vendored trees included (61 of
     them: 1.78 s on a tree holding 30,000 `node_modules` files, against 0.00 s
     for the pruned walk), and warns that every file past 300 was "NOT
@@ -661,16 +676,16 @@ def _opengrep_trigger(ctx: ScanContext) -> Reason | None:
     juice-shop: "911 matching files in juice-shop, scanning the first 300 -
     611 file(s) NOT scanned"). The user's own `configs` replace the bundle,
     and with it the languages: they may read what the bundle does not.
-
-    A known gap: `generic.yaml` has no file-name pattern, so a repository whose
-    only files are ones its rules read (an nginx config) is skipped.
     """
     # A malformed value is let through, for the precheck to name: skipped here
     # it would read as a repository with no language (`configs: 0`).
     if ctx.tool_config.get("configs") or _configs_problem(ctx.tool_config):
         return None
-    chosen = rule_bundle.select_configs(_opengrep_files(ctx))
-    return None if len(chosen) > 1 else Reason.NO_RULE_LANGUAGES
+    return (
+        None
+        if rule_bundle.has_rules_for(_opengrep_files(ctx))
+        else Reason.NO_RULE_LANGUAGES
+    )
 
 
 # --- examined-files readers (G2, #1231) -----------------------------------------
@@ -1980,9 +1995,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 EXIT_CODE=("--error", "--strict"),
             ),
             short_switches=frozenset({"-a", "-d", "-q", "-v"}),
-            # Skips a tree with no file in a language the bundle reads. A known
-            # gap: `generic.yaml` has no file-name pattern, so a tree whose only
-            # files are ones its rules read (an nginx config) is skipped too.
+            # Skips a tree with no file the bundle has a rule for: a language it
+            # covers, or a name generic.yaml's rules read (an nginx config).
             trigger=_opengrep_trigger,
             precheck=_opengrep_precheck,
             # Its cost is its rule count, not the tree: 409.8 s and 583 s for

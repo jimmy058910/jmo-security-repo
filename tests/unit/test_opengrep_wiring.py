@@ -570,6 +570,51 @@ def test_a_repo_with_no_bundle_language_is_skipped_and_says_why(
     assert json.loads((out / "opengrep.json").read_bytes()) == {"results": []}
 
 
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"nginx.conf": b"server { listen 80; }\n"},
+        {"infra/main.bicep": b"param adminPassword string\n"},
+        {"views/page.hbs": b"{{{ raw }}}\n"},
+        {"force-app/Foo.page": b"<apex:page/>\n", "README.md": b"# t\n"},
+        {"etc/nginx/sites-enabled/default": b"server {}\n"},
+        {"android/app/build.gradle": b"android {}\n"},
+    ],
+)
+def test_a_repo_only_generic_yaml_reads_is_scanned_with_it(tmp_path, files) -> None:
+    """A repository of nothing but an nginx config has no bundle language and was
+    skipped as having none, though generic.yaml's rules read exactly that file
+    (their `paths.include` globs). It runs, with generic.yaml alone."""
+    repo = tmp_path / "repo"
+    for rel, data in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(data)
+    out = tmp_path / "out"
+    out.mkdir()
+
+    rows, (definition,) = _recorded(repo, out)
+
+    assert rows["opengrep"].state is not State.SKIPPED
+    assert definition.command[2:4] == _bundle("generic")
+    assert definition.command[4] == "--no-rewrite-rule-ids"
+
+
+def test_the_target_s_own_ancestors_do_not_stand_for_its_files(tmp_path) -> None:
+    """The patterns read directory names, so the path they are matched against is
+    the file's inside the target: a repository cloned into `~/nginx/conf/` whose
+    only file is a README has no file generic.yaml reads."""
+    repo = tmp_path / "nginx" / "conf" / "sites-enabled" / "repo"
+    repo.mkdir(parents=True)
+    (repo / "README.md").write_bytes(b"# t\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    rows, definitions = _recorded(repo, out)
+
+    assert definitions == []
+    assert rows["opengrep"].reason is Reason.NO_RULE_LANGUAGES
+
+
 def test_the_results_directory_is_not_a_language_file(tmp_path) -> None:
     """JMo's own earlier output, inside the tree, is not the repository's."""
     repo = tmp_path / "repo"
@@ -1092,6 +1137,27 @@ def test_other_flags_do_not_make_zero_files_a_skip(tmp_path) -> None:
 
     assert row.state is State.FAILED
     assert row.reason is Reason.EXAMINED_ZERO
+
+
+@pytest.mark.requires_tools
+@pytest.mark.parametrize("name", ["nginx.conf", "etc/nginx/sites-enabled/default"])
+def test_an_nginx_only_repository_is_scanned_and_its_config_read(
+    tmp_path, name
+) -> None:
+    """Through the real binary: the repository has no file in a language of the
+    bundle, so it was skipped, yet generic.yaml's `missing-ssl-version` rule
+    reads exactly this file, with or without an extension."""
+    repo = tmp_path / "repo"
+    (repo / name).parent.mkdir(parents=True)
+    (repo / name).write_bytes(b"server {\n  listen 443 ssl;\n  server_name x;\n}\n")
+    out = tmp_path / "out"
+
+    row = _real_scan(repo, out)
+
+    assert row.state is State.RAN, row
+    assert [(rule, path) for rule, path, _ in _hits(out)] == [
+        ("missing-ssl-version", name)
+    ]
 
 
 def _git(repo: Path, *args: str) -> None:

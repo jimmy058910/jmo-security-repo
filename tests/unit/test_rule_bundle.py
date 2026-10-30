@@ -94,11 +94,24 @@ def test_the_patterns_are_bare_names_because_only_the_name_is_matched():
     """`select_configs` matches a file's last component. A pattern with a
     separator in it could never match, and would select nothing without a word.
     The scan's walk adds its own `**/` in front (the way every descriptor row
-    writes its file patterns), so the table keeps none."""
-    patterns = [p for group in LANGUAGE_PATTERNS.values() for p in group]
+    writes its file patterns), so the table keeps none. Except generic's, which
+    are opengrep's own include globs and read the path (below)."""
+    patterns = [
+        p
+        for stem, group in LANGUAGE_PATTERNS.items()
+        if stem != "generic"
+        for p in group
+    ]
 
     assert patterns
     assert [p for p in patterns if "/" in p or "\\" in p] == []
+    # The only separator generic's carry is the `<directory>/*` form, which the
+    # trigger reads as a directory name.
+    assert [
+        p
+        for p in LANGUAGE_PATTERNS["generic"]
+        if ("/" in p or "\\" in p) and not (p.count("/") == 1 and p.endswith("/*"))
+    ] == []
 
 
 def test_a_directory_named_like_a_language_selects_nothing():
@@ -205,3 +218,99 @@ def test_names_are_matched_by_the_case_rule_collect_files_uses(
     assert ("javascript" in selected) is expected
     # What the walk handed back, as `ctx.files` carries it, selects the same.
     assert ("typescript" in _stems(globbed)) is expected
+
+
+# --- generic.yaml's own file patterns (F3) ----------------------------------------
+
+
+def _generic_include_globs() -> set[str]:
+    """Every `paths.include` glob of every rule in generic.yaml: the files
+    opengrep reads those rules on."""
+    import yaml
+
+    rules = yaml.safe_load(GENERIC.read_text(encoding="utf-8"))["rules"]
+    return {
+        glob for rule in rules for glob in (rule.get("paths") or {}).get("include", [])
+    }
+
+
+def test_generics_patterns_are_its_rules_include_globs():
+    """The table's `generic` row IS the union of the include globs of the rules in
+    generic.yaml. A rebuilt bundle that adds a rule for another file name fails
+    here until the row learns it; one the row lists and no rule reads would keep
+    a repository of nothing else from being skipped, for no reason."""
+    assert _generic_include_globs()
+    assert set(LANGUAGE_PATTERNS["generic"]) == _generic_include_globs()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "nginx.conf",
+        "conf.d/default.conf",
+        "infra/main.bicep",
+        "views/layout.hbs",
+        "views/layout.mustache",
+        "force-app/Foo.page",
+        "force-app/Foo.component",
+        "force-app/Foo.page-meta.xml",
+        "app/build.gradle",
+        "app/mobile-build.gradle",
+        "hosts/site.vhost",
+        # Measured on opengrep 1.32.0: the globs read the whole path, so a file
+        # with no extension is read when a directory above it is named for one.
+        "etc/nginx/sites-enabled/default",
+        "sites-available/example.com",
+        "etc/nginx/plain",
+        "conf/app",
+        "vhosts/example",
+    ],
+)
+def test_a_file_only_generic_reads_has_rules(path):
+    """A repository of nothing but an nginx or Visualforce file is read by the
+    rules generic.yaml carries, so it must not be skipped as having no language."""
+    assert rule_bundle.has_rules_for([Path(path)])
+    assert rule_bundle.has_rules_for([path])
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "README.md",
+        "LICENSE",
+        "notes.txt",
+        "docs/guide.md",
+        # `*build.gradle` ends the name; Kotlin's script is kotlin.yaml's.
+        "build.gradle.backup",
+        "pkg/sites/enabled/default",
+    ],
+)
+def test_a_file_no_rule_reads_has_no_rules(path):
+    assert not rule_bundle.has_rules_for([Path(path)])
+
+
+def test_a_language_file_has_rules_and_nothing_walked_has_none():
+    assert rule_bundle.has_rules_for([Path("a.py")])
+    assert rule_bundle.has_rules_for(iter([Path("README.md"), Path("a.go")]))
+    assert not rule_bundle.has_rules_for([])
+    assert not rule_bundle.has_rules_for(iter(()))
+
+
+def test_generic_is_still_always_selected_and_selects_no_other_file():
+    """`select_configs` names generic.yaml for any repository, an nginx one
+    included, and gives it no language's file."""
+    assert select_configs([Path("nginx.conf")]) == [GENERIC]
+    assert select_configs([Path("README.md")]) == [GENERIC]
+
+
+@pytest.mark.parametrize("case_sensitive", [True, False])
+def test_generic_patterns_follow_the_case_rule_too(monkeypatch, case_sensitive):
+    """Where case is ignored (Windows), `NGINX.CONF` is a `*.conf`, as it is to
+    the walk's own glob; where it counts, it is not."""
+    monkeypatch.setattr(rule_bundle, "GLOB_CASE_SENSITIVE", case_sensitive)
+
+    assert rule_bundle.has_rules_for([Path("etc/NGINX.CONF")]) is (not case_sensitive)
+    assert rule_bundle.has_rules_for([Path("X.BICEP")]) is (not case_sensitive)
+    assert rule_bundle.has_rules_for([Path("SITES-ENABLED/default")]) is (
+        not case_sensitive
+    )
