@@ -28,6 +28,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
+from functools import partial
 from pathlib import Path
 
 import yaml
@@ -72,16 +73,19 @@ _DIRECTIVE = re.compile(r"\s*#\s*([a-zA-Z][a-zA-Z0-9]*)\s*=\s*(.+?)\s*$")
 _DIRECTIVES = frozenset({"syntax", "escape", "check"})
 # A heredoc's opening word (`<<EOF`, `<<-EOF`, `<<"EOF"`), as a word of its
 # own: `<<<` is a here-string. Its body runs to the line holding the word
-# alone, leading tabs stripped first for `<<-`.
-# TODO(issue-#1416): a `<<EOF` inside a quoted string matches too, and the
-# unterminated "body" then swallows every later FROM silently.
-_HEREDOC = re.compile(r"(?:^|\s)\d*<<(-?)([\"']?)([^\s\"'<]+)\2(?=\s|$)")
-# TODO(issue-#1415): `ONBUILD RUN <<EOF` starts with ONBUILD, so its body is
-# read as instructions.
+# alone, leading tabs stripped first for `<<-`. A quoted span (`echo "cat
+# <<EOF here"`) is matched too, to be stepped over, and has no marker group.
+# The scan runs left to right, so the quote that opens the word itself
+# (`<<"EOF"`) is part of the word: the match starts at the space before `<<`.
+_HEREDOC = re.compile(
+    r"""(?:^|\s)\d*<<(-?)(["']?)([^\s"'<]+)\2(?=\s|$)|"[^"]*"|'[^']*'"""
+)
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
 
 
-def _instructions(text: str) -> Iterator[tuple[int, str]]:
+def _instructions(
+    text: str, where: Callable[[int], str] | None = None
+) -> Iterator[tuple[int, str]]:
     """Each instruction of a Dockerfile, with the line it starts on, read as
     Docker reads one.
 
@@ -90,7 +94,9 @@ def _instructions(text: str) -> Iterator[tuple[int, str]]:
     Python in a BuildKit heredoc (`COPY <<EOF app.py`) or in a continued
     `RUN python -c` gave `flask` and `os` (measured). So continuations are
     joined, with the escape character a `# escape=` directive sets, a comment
-    or blank line inside one is dropped, and a heredoc's body is skipped.
+    or blank line inside one is dropped, and a heredoc's body is skipped, also
+    behind `ONBUILD`. A body no line closes runs to the end of the file, as
+    BuildKit reads it, and `where(line)` names where it opened in a WARNING.
     """
     lines = text.splitlines()
     escape = "\\"
@@ -119,13 +125,29 @@ def _instructions(text: str) -> Iterator[tuple[int, str]]:
             line += lines[at]
             at += 1
         yield start, line
-        if line.split(None, 1)[0].lower() in _HEREDOC_INSTRUCTIONS:
-            for chomp, _quote, word in _HEREDOC.findall(line):
+        words = line.split(None, 2)
+        if words[0].lower() == "onbuild" and len(words) > 1:
+            words = words[1:]
+        if words[0].lower() in _HEREDOC_INSTRUCTIONS:
+            for opening in _HEREDOC.finditer(line):
+                chomp, word = opening.group(1), opening.group(3)
+                if word is None:  # a quoted span
+                    continue
                 while at < len(lines):
                     body = lines[at].lstrip("\t") if chomp else lines[at]
                     at += 1
                     if body == word:
                         break
+                else:
+                    if where:
+                        logger.warning(
+                            "%s opens the heredoc %r, which is never closed: "
+                            "the rest of the file is its body, so no later "
+                            "FROM is read",
+                            where(start),
+                            word,
+                        )
+                    return
 
 
 class _Located(str):
@@ -339,7 +361,8 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
             # `utf-8-sig`: a byte-order mark hid the first FROM (measured).
             content = dockerfile.read_text(encoding="utf-8-sig", errors="ignore")
             stages: set[str] = set()
-            for line, instruction in _instructions(content):
+            opened_at = partial(_where, dockerfile, repo_path, label=label)
+            for line, instruction in _instructions(content, opened_at):
                 match = _FROM_LINE.match(instruction)
                 if not match:
                     continue

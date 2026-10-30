@@ -1006,6 +1006,14 @@ class TestOnlyAnImageReferenceBecomesAnImageTarget:
                 id="heredoc",
             ),
             pytest.param(
+                {
+                    "Dockerfile": b"FROM python:3.12\nONBUILD RUN <<EOF\n"
+                    b"python -c 'import os'\nfrom os import path\nEOF\n"
+                },
+                ["python:3.12"],
+                id="onbuild-heredoc",
+            ),
+            pytest.param(
                 {"Dockerfile.j2": b"FROM {{ base_image }}\nRUN echo hi\n"},
                 [],
                 id="template",

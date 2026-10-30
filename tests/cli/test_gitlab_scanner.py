@@ -1505,6 +1505,96 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
     ):
         assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == images
 
+    @pytest.mark.parametrize(
+        "dockerfile",
+        [
+            pytest.param(
+                "FROM python:3.12\nONBUILD RUN <<EOF\npython -c 'import os'\n"
+                "from os import path\nEOF\n",
+                id="onbuild-run",
+            ),
+            pytest.param(
+                "FROM python:3.12\nonbuild copy <<EOF /app/main.py\n"
+                "from flask import Flask\nEOF\n",
+                id="lower-case-onbuild-copy",
+            ),
+        ],
+    )
+    def test_an_onbuild_heredoc_body_is_not_read_as_instructions(
+        self, tmp_path, dockerfile
+    ):
+        """#1415: `ONBUILD RUN <<EOF` starts with ONBUILD, so its body was read
+        as Dockerfile lines and `from os import path` named the image `os`,
+        which failed as an image target and made the scan exit 1."""
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {"python:3.12"}
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            pytest.param('RUN echo "usage: cat <<EOF here"', id="double-quoted"),
+            pytest.param("RUN echo 'a <<EOF b'", id="single-quoted"),
+            # The last two already passed: the regex wants whitespace before
+            # `<<`, and a quote is not whitespace. They guard the fix, which
+            # must not make a quote after the word read differently.
+            pytest.param('RUN echo "<<EOF"', id="guard-no-space-before-marker"),
+            pytest.param('RUN echo " <<EOF"', id="guard-quote-right-after-the-word"),
+        ],
+    )
+    def test_a_marker_inside_quotes_does_not_open_a_heredoc(self, tmp_path, line):
+        """#1416: `<<EOF` in a quoted string was taken as a heredoc, and the
+        body that never ended swallowed every later FROM, silently."""
+        dockerfile = f"FROM alpine:3.19\n{line}\nFROM nginx:1.27\n"
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {
+            "alpine:3.19",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        ("dockerfile", "images", "messages"),
+        [
+            pytest.param(
+                "FROM alpine:3.19\nRUN <<EOF\nfrom os import path\nFROM nginx:1.27\n"
+                "FROM busybox:1\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'EOF', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="body-runs-to-the-end-of-the-file",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nCOPY <<A <<B /dest/\nbody\nA\nbody\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'B', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="second-of-two-heredocs",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nRUN <<EOF\nFROM nginx:1.27\nEOF\nFROM busybox:1\n",
+                {"alpine:3.19", "busybox:1"},
+                [],
+                id="closed-heredoc-says-nothing",
+            ),
+        ],
+    )
+    def test_a_heredoc_left_open_at_the_end_of_the_file_is_named(
+        self, tmp_path, caplog, dockerfile, images, messages
+    ):
+        """#1416: BuildKit reads the rest of the file as the body, so what
+        follows is not read. That was silent: now one WARNING names the file,
+        the line and the marker."""
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            found = self._discover(tmp_path, {"build/Dockerfile": dockerfile})
+
+        assert found == images
+        assert caplog.messages == messages
+
     def test_a_compose_service_that_builds_its_image_names_none_to_pull(self, tmp_path):
         """With `build:`, `image:` is the tag compose gives its own build."""
         compose = (
