@@ -6,9 +6,10 @@
 signature-base replaces yara-python and the ReversingLabs rules, and is the one tool that
 reads vendored dependency trees; every adapter in the final matrix (14) has a non-empty
 golden fixture captured through `jmo scan`, guarded so that a missing or empty one fails;
-and the 25 open Phase 6 issues close: the 22 whose premises were re-measured on
+and the 26 open Phase 6 issues close: the 22 whose premises were re-measured on
 2026-10-29, #1502, which that measurement filed, #1506, filed from Phase 5's PR B, and
-the e2e helper's #1517, filed from PR A's own measurement on 2026-10-30.
+two filed from PR A on 2026-10-30: the e2e helper's #1517, from its measurement, and
+the raised scanner's stale timings, #1518, from building Task A2.
 
 **Architecture:** eight PRs in two groups. Four touch no file that Phase 5's Tasks B1–B8
 list (A, D, T, N). Four do (G, Y, E, F). **No Phase 6 implementation PR opened before Phase 5's
@@ -350,7 +351,7 @@ reports are in `~/.cache/jmo-p6/premise/`.
 
 | PR | Tasks | P5 file? | Closes |
 |---|---|---|---|
-| A — plan text; the report holds only what this scan produced, and the scan writes nothing it does not need | A1–A8 | no (A3 becomes P5 if it must edit `basic_reporter.py`; A7 edits `tests/conftest.py`, a P5 file: re-read it on `dev`) | #1007 #1309 #1371 #1408 #1432 #1506 #1517 |
+| A — plan text; the report holds only what this scan produced, and the scan writes nothing it does not need | A1–A8 | no (A3 becomes P5 if it must edit `basic_reporter.py`; A7 edits `tests/conftest.py`, a P5 file: re-read it on `dev`) | #1007 #1309 #1371 #1408 #1432 #1506 #1517 #1518 |
 | D — image discovery and validation | D1–D4 | no | #1405 #1415 #1416 |
 | T — tests that cannot fail; juice-shop's markers and the lockfile oracle | T1–T6 | no (CI wiring moves to F4) | #1173 #1353 |
 | N — the native pack's precision and answer key | N1–N3 | no | #1380 |
@@ -367,7 +368,8 @@ and Y precede F. E is independent of G and Y.
 ## Review Focus
 
 1. A scan into a results directory reused from an earlier scan reports nothing the new
-   scan did not produce, including a tool the new scan did not request (A2).
+   scan did not produce, including a tool the new scan did not request (A2) and a target
+   whose scanner raised before its tools ran (A2b).
 2. Two repositories in one scan each holding the same vulnerable lockfile report one
    finding per repository, each naming its repository (A3).
 3. A yara-x scan of a repository with a `node_modules` reports the canary there and still
@@ -416,6 +418,34 @@ make this task P5.
   when the tool is not listed, or its row is not `ran` and `kept_findings` is null.
 - [ ] **Step 3:** Commit `fix: a report holds only what this scan's tools produced`, body
   `Closes #1371` and `Closes #1432`.
+
+## Task A2b: A target whose scanner raised reports nothing old (#1518)
+
+**Files:** `scripts/cli/scan_orchestrator.py:1246-1420` (the futures list, `("repo",
+result_name, future)` and its siblings, and the except block at `:1405`), `tests/cli/`
+(beside A2's reused-directory tests). `scan_timings.py` stays unedited (P5): call the
+existing `write_scan_timings` (`:258`) as `gitlab_scanner._abandon` (`:239-268`) does.
+
+Measured from the code at `2dbb89c0` + A2: the except block knows `target_type` and the
+recorded `target_id`, not the target's output folder. For a repository the two agree
+(`result_name`); for an image the id is the reference and the folder is `image_folders`'
+sanitised name, and for IaC the id is `iac_target_name` and the folder is `iac_folders`'.
+Clearing the old `scan-timings.json` alone would make the leak worse: A2's rule reads every
+output in a directory that has no timings file.
+
+- [ ] **Step 1: Failing tests**, through `jmo report` on a results directory shaped as
+  `jmo scan` writes it (A2's ruling): a repository target and an image target, each holding
+  an earlier scan's `scan-timings.json` (one tool `ran`) and that tool's output; the
+  target's scanner patched to raise before `run_tools`; then `findings.json` holds none of
+  the earlier findings, and the target's `scan-timings.json` rows read `failed` with the
+  scanner-error reason. A resumed target (`_is_completed`) keeps its earlier timings and
+  outputs untouched.
+- [ ] **Step 2:** Carry each job's output folder with its future, and in the except block
+  write the `failed_rows` it already builds to that folder's `scan-timings.json`, with the
+  failed outcome and the error, creating the folder as `_abandon` does. A write failure
+  logs and never replaces the target's failure.
+- [ ] **Step 3:** Commit `fix: a target whose scanner raised reports none of an earlier
+  scan's findings`, body `Closes #1518`.
 
 ## Task A3: Every finding names its target (#1309)
 
@@ -1091,15 +1121,16 @@ cache), `tests/integration/test_benchproctor.py`
   JavaScript Youden's J recorded per framework (F7). Each fails on a regression from its
   recorded table.
 - No CI job reads green on all skips.
-- The 25 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
+- The 26 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
 
-## New defects found by the measurement (routing proposed; three filed)
+## New defects found by the measurement (routing proposed; four filed)
 
 | Defect | Evidence | Proposed routing |
 |---|---|---|
 | The e2e URL tests (U1, U5, M1, W1 in `tests/e2e/test_scan_workflows.py`) have never scanned juice-shop: `--repo` takes a path, the run is rc 1 "Every target was rejected", and the tests accept rc 1 and empty outputs; the steps are `continue-on-error: true` | `scheduled.yml:882,884,1003,1006`; `test_scan_workflows.py:59,119,138,183,213`; `tests/e2e/conftest.py:80-100` | **Filed as #1502** (2026-10-29), rostered in Phase 6 by PR #1503, widened to the e2e gate, which counts pytest's failures but not its errors (7 + 4 at `c05aef28` read as 0): the tests in T5, the gate in F4 (`scheduled.yml` is a P5 file). It is #1353's other half |
 | A `jmo scan` rewrites the real `~/.jmo/config.yml` (the Ko-fi counter), the cause of those 11 errors | `scripts/cli/jmo.py:2505`, `:3492`; `tests/conftest.py:489` on `dev` | **Filed as #1506** (2026-10-29) from Phase 5's PR B, which rostered it in Phase 6: Task A6 |
 | `jmo_runner`'s fake HOME hides `~/.jmo/bin` and moves every scanner's cache: with the scanners on PATH each scan test re-downloads grype's 3.2 GB and trivy's 1.6 GB database (24 GB per run of `test_linux_specific.py`, the ~21 GB seen 2026-10-30); without them the scan tests run no scanner and pass | `tests/conftest.py:106`; `tests/e2e/test_linux_specific.py`; measured 2026-10-30 at `8ac90d8c` | **Filed as #1517** (2026-10-30) from PR A's branch, rostered in Phase 6 by PR A: Task A7 |
+| A scanner that raises before `run_tools` writes no `scan-timings.json`, so in a reused results directory the previous scan's rows and outputs survive together and A2's filter admits them | `scripts/cli/scan_orchestrator.py:1405-1420` (the except block records `failed_rows` in memory only); the only `write_scan_timings` callers are `tool_loop.py` and `gitlab_scanner.py`; read, not run (found building A2, 2026-10-30) | **Filed as #1518** (2026-10-30), rostered in Phase 6 by PR #1519: Task A2b |
 | No known-vulnerable GitHub Actions check once grype leaves | github-actions-goat: 7 advisories; OSV `GitHub Actions/all.zip`, 56 advisories | after the tag: a `jmo-native` reader of `uses:` against that database, offline |
 | `install_config.py:75-95` gives two false reasons for ReversingLabs | GitHub repo size with history; DRL unrecognised | none: Task Y1 removes the comment |
 | signature-base reports two `WEBSHELL_PHP_Generic_Eval` findings on JMo's own yara tests | `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py` hold webshell-like strings | none: Y6 decides whether a self-scan excludes them; not a product defect |
