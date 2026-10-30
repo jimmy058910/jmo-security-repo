@@ -320,6 +320,57 @@ def test_a_resumed_target_is_not_touched(tmp_path, monkeypatch):
     assert len(gather_results(results)) == EARLIER_FINDINGS
 
 
+def _progress_display_fails(*args, **kwargs):
+    raise OSError("the display is gone")
+
+
+def _checkpoint_fails(*args, **kwargs):
+    raise OSError("the session file is gone")
+
+
+@pytest.mark.parametrize("fails", ["progress", "checkpoint"])
+def test_a_scan_that_succeeded_keeps_its_timings_when_what_follows_it_fails(
+    tmp_path, monkeypatch, fails
+):
+    """The `except` around `future.result()` also covers what runs after a good
+    scan: the checkpoint and the progress display. If either raises, the scan
+    did not: its own timings (`ran`, outcome `completed`) and output stand, and
+    the report still reads its findings. Only a scan that raised is recorded as
+    failed (ruling 1 of #1518: a `ran` row is never overwritten)."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    results = tmp_path / "results"
+    alpha = tmp_path / "alpha"
+    alpha.mkdir()
+    out = results / "individual-repos" / "alpha"
+
+    def scan_repository(repo, results_dir, *args, result_name, **kwargs):
+        # What a scan that worked leaves, as `run_tools` writes it.
+        earlier_scan(results_dir / result_name, ("repo", result_name), "trivy")
+        return result_name, {"trivy": ToolRun("trivy", State.RAN, exit_code=0)}
+
+    monkeypatch.setattr("scripts.cli.scan_jobs.scan_repository", scan_repository)
+    session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
+    session.register_target("repo", "alpha", ["trivy"])
+    callbacks = {}
+    if fails == "progress":
+        callbacks["progress_callback"] = _progress_display_fails
+    else:
+        monkeypatch.setattr(ScanSession, "mark_target_complete", _checkpoint_fails)
+
+    _orchestrator(results).scan_all(
+        ScanTargets(repos=[alpha]),
+        {},
+        session=session,
+        session_path=tmp_path / "session.json",
+        **callbacks,
+    )
+
+    timings = _timings(out)
+    assert (timings["outcome"], timings["error"]) == (OUTCOME_COMPLETED, None)
+    assert [(r["tool"], r["state"]) for r in timings["tools"]] == [("trivy", "ran")]
+    assert len(gather_results(results)) == EARLIER_FINDINGS
+
+
 def test_a_timings_write_that_fails_does_not_replace_the_targets_failure(
     tmp_path, monkeypatch, caplog
 ):

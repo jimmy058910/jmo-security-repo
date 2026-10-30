@@ -1480,9 +1480,15 @@ class ScanOrchestrator:
                         tools, target_type, Reason.SCANNER_ERROR, detail=error
                     )
                     all_results.append((target_type, target_id, failed_rows))
-                    _record_raised_scan(
-                        out_dir, target_id, target_type, failed_rows, error
-                    )
+                    # Only a scan that raised has no timings of its own to
+                    # keep. This `try` also covers what runs after a good scan
+                    # (`_record_found`, `_checkpoint`, the progress callback):
+                    # its `ran` timings and output are on disk, and the report
+                    # must keep reading them (#1518).
+                    if future.exception() is not None:
+                        _record_raised_scan(
+                            out_dir, target_id, target_type, failed_rows, error
+                        )
 
                     # The callback used to be skipped on this path, so a target
                     # whose scanner *raised* never reached the progress display
