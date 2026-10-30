@@ -42,6 +42,14 @@ import requests
 # `Requirements.txt` or `Package-Lock.json` is rejected too (measured, 2.6.0:
 # "could not determine extractor"), and `ecosystem_of` matches case-sensitively.
 #
+# `*.deps.json` is .NET's runtime dependency manifest. 2.6.0 and 2.7.0 both read
+# `API.deps.json`, `my.app.deps.json` and a file named just `.deps.json` (373
+# NuGet packages, the advisory found, 2026-10-30), and both reject a bare
+# `deps.json` and `x.DEPS.JSON`; the pattern's `.` and its case are what keep
+# the rejected names out. In `API.deps.json`, 277 of the 373 are
+# `referenceassembly` entries (and 3 are `project`s), which osv-scanner reports
+# as NuGet packages beside the 93 `package` ones.
+#
 # `conan.lock` is accepted by osv-scanner but not here: OSV publishes no
 # ConanCenter database (404, and absent from its ecosystems list), so its row
 # could only ever fail (docs/KNOWN_LIMITATIONS.md).
@@ -65,6 +73,7 @@ LOCKFILE_ECOSYSTEMS: dict[str, str] = {
     "pom.xml": "Maven",
     "packages.lock.json": "NuGet",
     "packages.config": "NuGet",
+    "*.deps.json": "NuGet",
     "pubspec.lock": "Pub",
     "mix.lock": "Hex",
     "renv.lock": "CRAN",
