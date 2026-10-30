@@ -1005,7 +1005,18 @@ def _find_sbom_match(
 ) -> dict[str, str] | None:
     """Find matching SBOM package for a Trivy finding.
 
-    The indexes are one target's (see `_enrich_trivy_with_syft`).
+    The indexes are one target's (see `_enrich_trivy_with_syft`). The rule:
+
+    - A finding that names its package (`raw.PkgName`) matches the package of
+      that name at its path (`location.path`, or `raw.PkgPath`), else the first
+      package of that name anywhere in the target. A path alone does not say
+      which package a finding is of: a lockfile lists every package of a project
+      at one path (#1408). Names compare without case, and trivy's Maven
+      `group:artifact` also matches syft's bare artifactId (syft keeps the group
+      in the package URL only). The by-name lookup is NOT widened that way: a
+      bare artifactId alone names no group.
+    - A finding with no package name matches by path only when exactly one
+      package is at that path. With several, any pick is a guess.
 
     Args:
         trivy_finding: Trivy finding dict
@@ -1023,11 +1034,15 @@ def _find_sbom_match(
     pkg_name = str(raw.get("PkgName") or "").strip().lower()
     pkg_path = str(raw.get("PkgPath") or "").strip()
 
-    # A lockfile lists every package of a project at one path, so a path alone
-    # does not say which package the finding is of: its name does (#1408).
-    at_path = by_path.get(loc_path, []) + by_path.get(pkg_path, [])
-    if pkg_name:
-        at_path = [p for p in at_path if p["name"].lower() == pkg_name]
+    # `dict.fromkeys`: a finding whose location is its PkgPath asks once.
+    at_path = [
+        p for path in dict.fromkeys((loc_path, pkg_path)) for p in by_path.get(path, [])
+    ]
+    if not pkg_name:
+        return at_path[0] if len(at_path) == 1 else None
+
+    names = {pkg_name, pkg_name.rsplit(":", 1)[-1]}
+    at_path = [p for p in at_path if p["name"].lower() in names]
     if at_path:
         return at_path[0]
 

@@ -676,17 +676,21 @@ def test_a_large_scan_still_clusters_within_each_target(
 # --- the SBOM enrichment (#1408) --------------------------------------------------
 
 
-def syft_doc(packages: list[tuple[str, str, str]], image: str | None = None) -> bytes:
-    """syft's document of `packages` ((name, version, path) each, npm packages
-    unless `image` is given, then apk). `image` is `name:version`, as syft's
-    `source` names the image it catalogued."""
+def syft_doc(
+    packages: list[tuple[str, str, str]],
+    image: str | None = None,
+    kind: str | None = None,
+) -> bytes:
+    """syft's document of `packages` ((name, version, path) each, of type `kind`:
+    npm, or apk when `image` is given, unless named). `image` is `name:version`,
+    as syft's `source` names the image it catalogued."""
     document: dict[str, Any] = {
         "artifacts": [
             {
                 "id": f"pkg-{n}",
                 "name": name,
                 "version": version,
-                "type": "apk" if image else "npm",
+                "type": kind or ("apk" if image else "npm"),
                 "locations": [{"path": path}],
             }
             for n, (name, version, path) in enumerate(packages)
@@ -957,6 +961,193 @@ def test_a_package_in_two_lockfiles_takes_the_one_at_the_findings_path():
     nr._enrich_trivy_with_syft([elsewhere, pair["syft"], pair["trivy"]])
 
     assert sbom_package(pair["trivy"]) == ("Lodash", "4.17.15")
+
+
+# --- Java: trivy's names are group:artifact, syft's the artifactId ---------------
+#
+# Measured (syft 1.51.1, trivy against a directory holding log4j-core 2.14.1 and
+# a pom.xml listing guava): syft names a Java package by its artifactId
+# (`log4j-core`, `guava`) and writes the group only in the package URL
+# (`pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1`). trivy's `PkgName` is
+# `org.apache.logging.log4j:log4j-core`. Both list a pom.xml's dependencies at
+# the pom.xml's path.
+
+LOG4J = ("org.apache.logging.log4j:log4j-core", "2.14.1")
+GUAVA = ("com.google.guava:guava", "31.0-jre")
+JAR = "/app/lib/log4j-core-2.14.1.jar"
+
+
+def trivy_maven_doc(target: str, *packages: tuple[str, str]) -> bytes:
+    """trivy's report of one vulnerability in each of `packages` (PkgName,
+    InstalledVersion), found in `target`."""
+    return json.dumps(
+        {
+            "SchemaVersion": 2,
+            "Results": [
+                {
+                    "Target": target,
+                    "Class": "lang-pkgs",
+                    "Type": "jar",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": f"CVE-2026-{n:04}",
+                            "PkgName": name,
+                            "InstalledVersion": version,
+                            "Severity": "HIGH",
+                            "Title": f"{name}: flaw",
+                        }
+                        for n, (name, version) in enumerate(packages, start=1)
+                    ],
+                }
+            ],
+        }
+    ).encode()
+
+
+def trivy_secret_doc(target: str) -> bytes:
+    """trivy's report of a secret in `target`: a finding with no package."""
+    return json.dumps(
+        {
+            "SchemaVersion": 2,
+            "Results": [
+                {
+                    "Target": target,
+                    "Class": "secret",
+                    "Secrets": [
+                        {
+                            "RuleID": "github-pat",
+                            "Category": "GitHub",
+                            "Severity": "CRITICAL",
+                            "Title": "GitHub Personal Access Token",
+                            "StartLine": 3,
+                            "EndLine": 3,
+                        }
+                    ],
+                }
+            ],
+        }
+    ).encode()
+
+
+def test_trivy_takes_a_jars_package_by_its_artifact_id(scan):
+    """The jar holds one package, and the path says so; the name check must not
+    refuse it because trivy spells the name with the group."""
+    scan.add(
+        "individual-images",
+        "app_1.0",
+        {
+            "syft.json": syft_doc(
+                [("log4j-core", "2.14.1", JAR)], image="app:1.0", kind="java-archive"
+            ),
+            "trivy.json": trivy_maven_doc("app/lib/log4j-core-2.14.1.jar", LOG4J),
+        },
+        target_type="image",
+    )
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert sbom_package(trivy) == ("log4j-core", "2.14.1")
+    assert package_tags(trivy) == ["pkg:log4j-core@2.14.1"]
+
+
+@pytest.mark.parametrize("order", [1, -1], ids=["log4j-first", "guava-first"])
+def test_each_package_of_a_pom_takes_its_own_entry(scan, order):
+    """A pom.xml lists its own project and its dependencies at one path, so the
+    name is what tells the packages apart, and the name is `group:artifact`."""
+    listed = [("log4j-core", "2.14.1"), ("guava", "31.0-jre")][::order]
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {
+            "syft.json": syft_doc(
+                [(n, v, "/pomdir/pom.xml") for n, v in listed], kind="java-archive"
+            ),
+            "trivy.json": trivy_maven_doc("pomdir/pom.xml", LOG4J, GUAVA),
+        },
+    )
+
+    found = {f["raw"]["PkgName"]: sbom_package(f) for f in of_tool(scan.run(), "trivy")}
+
+    assert found == {
+        LOG4J[0]: ("log4j-core", "2.14.1"),
+        GUAVA[0]: ("guava", "31.0-jre"),
+    }
+
+
+def test_a_bare_artifact_id_elsewhere_is_not_a_group_artifact(scan):
+    """The group:artifact allowance is for a package at the finding's path. The
+    by-name lookup keeps whole names: a `log4j-core` in another file of the
+    repository may belong to any group, so it is not this finding's package."""
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {
+            "syft.json": syft_doc(
+                [
+                    ("guava", "31.0-jre", "/pomdir/pom.xml"),
+                    ("log4j-core", "2.14.1", "/other/pom.xml"),
+                ],
+                kind="java-archive",
+            ),
+            "trivy.json": trivy_maven_doc("pomdir/pom.xml", LOG4J),
+        },
+    )
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert sbom_package(trivy) is None
+    assert package_tags(trivy) == []
+
+
+def test_a_finding_with_no_package_takes_none_from_a_lockfile_of_many(scan):
+    """A secret in package-lock.json is a finding of the file, not of the first
+    package syft lists there (it was tagged `pkg:axios@0.21.0`)."""
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {
+            "syft.json": syft_doc(
+                [(n, v, "/package-lock.json") for n, v in LOCKFILE_PACKAGES]
+            ),
+            "trivy.json": trivy_secret_doc("package-lock.json"),
+        },
+    )
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert trivy["tags"][0] == "secret"
+    assert sbom_package(trivy) is None
+    assert package_tags(trivy) == []
+
+
+def test_a_finding_with_no_package_takes_the_only_package_at_its_path(scan):
+    """The path names the package when it holds one: a secret in a jar."""
+    scan.add(
+        "individual-images",
+        "app_1.0",
+        {
+            "syft.json": syft_doc(
+                [("log4j-core", "2.14.1", JAR)], image="app:1.0", kind="java-archive"
+            ),
+            "trivy.json": trivy_secret_doc("app/lib/log4j-core-2.14.1.jar"),
+        },
+        target_type="image",
+    )
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert sbom_package(trivy) == ("log4j-core", "2.14.1")
+
+
+def test_a_finding_whose_location_is_its_pkg_path_still_asks_the_path_once():
+    """`location.path` and `raw.PkgPath` are one path; one package there is one
+    package, not two."""
+    pair = sbom_pair(None, None)
+    pair["trivy"]["raw"] = {"PkgPath": "package-lock.json"}
+
+    nr._enrich_trivy_with_syft([pair["syft"], pair["trivy"]])
+
+    assert sbom_package(pair["trivy"]) == LODASH
 
 
 def test_a_repositorys_ids_are_the_same_as_before_the_enrichment_was_scoped(scan):
