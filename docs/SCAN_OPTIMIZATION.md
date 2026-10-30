@@ -133,16 +133,23 @@ per_tool:
       - "*.min.js"
 ```
 
-**For incremental scans (git repos only), by hand with the bundle's files:**
+**For incremental scans (git repos only):**
 
-The bundle lives inside the installed JMo package, not in your repository. Ask the Python JMo is installed in where:
+Opengrep's `--baseline-commit` reports only what a commit introduced, and reads only the files changed since it. Pass it as an opengrep flag, so JMo still picks the rule files and finds the bundle itself, whichever way JMo was installed:
+
+```yaml
+# jmo.yml
+per_tool:
+  opengrep:
+    flags: [--baseline-commit, HEAD~1]
+```
 
 ```bash
-BUNDLE=$(python -c "from scripts.core.rule_bundle import BUNDLE_DIR; print(BUNDLE_DIR)")
-
-# Only report what the last commit introduced (requires git and a clean work tree)
-opengrep scan --config "$BUNDLE/python.yaml" --no-rewrite-rule-ids --baseline-commit HEAD~1 .
+# Only report what the last commit introduced
+jmo scan --repo . --tools opengrep --config jmo.yml
 ```
+
+The baseline has to exist: a clone without `HEAD~1` (a CI checkout of depth 1) fails the row as `failed:unaccepted exit code`, opengrep's exit code 2. Fetch at least two commits (`actions/checkout` with `fetch-depth: 2`).
 
 ### 5. Trivy Optimizations
 
@@ -322,17 +329,15 @@ per_tool:
 
 ### 11. Incremental/Differential Scanning
 
-For CI/CD, only scan changed files:
+For CI/CD, only report what the last commit introduced. Opengrep supports this natively, through the same `--baseline-commit` flag as in section 4 (the baseline commit has to exist, so fetch at least two):
 
 ```bash
-# Get changed files from git
-CHANGED_FILES=$(git diff --name-only HEAD~1)
-
-# Create a temporary directory with only changed files
-# (Tool-specific - opengrep supports this natively; $BUNDLE is the installed
-# rule bundle's directory, found as in section 4)
-BUNDLE=$(python -c "from scripts.core.rule_bundle import BUNDLE_DIR; print(BUNDLE_DIR)")
-opengrep scan --config "$BUNDLE/python.yaml" --no-rewrite-rule-ids --baseline-commit HEAD~1 .
+cat > jmo-incremental.yml <<'EOF'
+per_tool:
+  opengrep:
+    flags: [--baseline-commit, HEAD~1]
+EOF
+jmo scan --repo . --tools opengrep --config jmo-incremental.yml
 ```
 
 **CI/CD example (GitHub Actions):**

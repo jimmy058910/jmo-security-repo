@@ -283,13 +283,13 @@ def _warn_v1_semgrep_entry(path: Path, per_tool: dict) -> None:
     if isinstance(current, dict) and current:
         # Both are set: opengrep's applies, so say what the old entry adds.
         absent = [k for k in keys if k not in current]
-        advice = (
-            "Add "
-            + ", ".join(f"per_tool.opengrep.{k}" for k in absent)
-            + " if you still want them"
-            if absent
-            else "Delete per_tool.semgrep"
-        )
+        if absent:
+            names = ", ".join(f"per_tool.opengrep.{k}" for k in absent)
+            note = " (configs replace the bundled rules)" if "configs" in absent else ""
+            them = "it" if len(absent) == 1 else "them"
+            advice = f"Add {names}{note} if you still want {them}"
+        else:
+            advice = "Delete per_tool.semgrep"
         logger.warning(
             f"{path} has per_tool.semgrep{packs} and per_tool.opengrep: only "
             f"per_tool.opengrep applies, and per_tool.semgrep is ignored "

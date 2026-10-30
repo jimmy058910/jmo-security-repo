@@ -194,9 +194,37 @@ def test_a_v1_semgrep_entry_beside_an_opengrep_one_says_which_applies(tmp_path, 
 
     (warning,) = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
     assert "only per_tool.opengrep applies" in warning, warning
-    assert "per_tool.opengrep.timeout" in warning, "the key opengrep lacks"
+    assert warning.endswith("Add per_tool.opengrep.timeout if you still want it"), (
+        warning
+    )
     assert "per_tool.opengrep.configs" not in warning, "opengrep already has it"
     assert loaded.per_tool["opengrep"] == {"configs": ["rules/"]}, "left as written"
+
+
+def test_the_keys_opengrep_lacks_are_listed_with_the_configs_note(tmp_path, caplog):
+    """Several missing keys read "them", and a missing `configs` carries the
+    same note the single-entry warning gives: it replaces the bundled rules."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "per_tool": {
+                    "semgrep": {"configs": ["p/python"], "timeout": 900, "flags": []},
+                    "opengrep": {"flags": ["--exclude", "x"]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        jmo.load_config(str(cfg))
+
+    (warning,) = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    assert warning.endswith(
+        "Add per_tool.opengrep.configs, per_tool.opengrep.timeout "
+        "(configs replace the bundled rules) if you still want them"
+    ), warning
 
 
 def test_a_v1_semgrep_entry_that_opengrep_already_covers_is_to_be_deleted(
