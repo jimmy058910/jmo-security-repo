@@ -59,7 +59,7 @@ install_opengrep() {
   esac
 
   echo "📦 Installing Opengrep (SAST)..."
-  wget -q "https://github.com/opengrep/opengrep/releases/latest/download/opengrep_manylinux_${arch}" -O /tmp/opengrep
+  wget -q "https://github.com/opengrep/opengrep/releases/download/v1.32.0/opengrep_manylinux_${arch}" -O /tmp/opengrep
   sudo mv /tmp/opengrep /usr/local/bin/opengrep
   sudo chmod +x /usr/local/bin/opengrep
   echo "   ✅ Opengrep installed"

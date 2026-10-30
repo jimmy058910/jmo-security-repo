@@ -688,7 +688,7 @@ exclude:
 # Per-tool configuration
 
 per_tool:
-  semgrep:
+  opengrep:
     flags:
 
       - "--exclude"
@@ -701,7 +701,7 @@ per_tool:
 
 Some tools have their own config files:
 
-**Semgrep** (`.semgrepignore`):
+**Opengrep** (`.semgrepignore`, the name it still reads):
 ```text
 .venv/
 tests/e2e/fixtures/
@@ -747,7 +747,7 @@ cat results/summaries/SUPPRESSIONS.md
 
     - id: jmo-security-scan
 
-      entry: bash -c 'jmo ci --repos-dir . --tools trufflehog semgrep trivy && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
+      entry: bash -c 'jmo ci --repos-dir . --tools trufflehog opengrep trivy && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
       language: system
       pass_filenames: false
       always_run: true

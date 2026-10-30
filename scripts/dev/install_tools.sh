@@ -99,7 +99,7 @@ install_linux_binary() {
   local url="$1"
   shift
   local dest="$1"
-  curl -sSL "$url" -o "/tmp/.dl-$(basename "$dest")" && sudo install -m 0755 "/tmp/.dl-$(basename "$dest")" "$dest"
+  curl -fsSL "$url" -o "/tmp/.dl-$(basename "$dest")" && sudo install -m 0755 "/tmp/.dl-$(basename "$dest")" "$dest"
 }
 
 case "$OS" in

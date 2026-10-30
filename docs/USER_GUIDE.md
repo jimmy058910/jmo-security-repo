@@ -117,7 +117,7 @@ jmo scan --repo /path/to/repo --human-logs
 - Scan a directory of repos with a narrowed tool list
 
 ```bash
-jmo scan --repos-dir ~/repos --tools trufflehog semgrep trivy --human-logs
+jmo scan --repos-dir ~/repos --tools trufflehog opengrep trivy --human-logs
 ```
 
 - Report/aggregate from existing results only
@@ -175,7 +175,7 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 |------|-------------|
 | **TruffleHog** | Scans for leaked secrets (API keys, tokens), in the tree and in git history |
 | **Gitleaks** | A second secret scanner with its own rules, in the tree and in git history |
-| **Semgrep** | Static analysis for Python security issues (SQL injection, insecure deserialization, etc.) |
+| **Opengrep** | Static analysis for security issues in source code (command injection, insecure deserialization, etc.), by the rule bundle that ships with JMo |
 | **Syft** | Generates a Software Bill of Materials (SBOM) from `requirements.txt` / `pyproject.toml` |
 | **Trivy** | Checks Python dependencies for known CVEs |
 | **Grype** | Checks the same dependencies against a second vulnerability database |
@@ -242,7 +242,7 @@ jmo tools
 jmo tools check
 
 # Check specific tools
-jmo tools check trivy semgrep checkov
+jmo tools check trivy opengrep checkov
 
 # JSON output for automation
 jmo tools check --json
@@ -269,7 +269,7 @@ jmo tools install
 jmo tools install --yes
 
 # Install specific tools
-jmo tools install trivy semgrep checkov
+jmo tools install trivy opengrep checkov
 
 # Increase parallel workers (default: 4, max: 8)
 jmo tools install --jobs 8
@@ -292,7 +292,7 @@ jmo tools install --print-script > install-tools.sh
 | macOS | brew, pip, npm, install script, binary download |
 | Windows | pip, npm, binary download, manual |
 
-**Binary downloads:** Most tools are pinned release binaries downloaded from GitHub to `~/.jmo/bin/`. Semgrep and Checkov go into isolated virtual environments. [TOOLS.md](TOOLS.md#installation) lists the method and location for every tool.
+**Binary downloads:** Most tools are pinned release binaries downloaded from GitHub to `~/.jmo/bin/`. Checkov goes into an isolated virtual environment. [TOOLS.md](TOOLS.md#installation) lists the method and location for every tool.
 
 ### Updating Tools
 
@@ -356,7 +356,7 @@ jmo tools uninstall --yes
 **What gets removed with `--all`:**
 
 - `~/.jmo/` directory (config, cache, history.db, bin/)
-- pip-installed tools (semgrep, checkov, yara-python, etc.)
+- pip-installed tools (checkov, yara-python, etc.)
 - npm-installed tools (retire.js, etc.)
 - Binary tools in `~/.jmo/bin/`
 
@@ -367,7 +367,7 @@ jmo tools uninstall --yes
 
 ### Cleaning Isolated Venvs
 
-Some tools have pip dependencies that would conflict with JMo's own or with each other's. Semgrep and Checkov are therefore automatically installed in **isolated virtual environments** at `~/.jmo/tools/venvs/<tool>/`.
+Checkov has pip dependencies that would conflict with JMo's own, so it is automatically installed in an **isolated virtual environment** at `~/.jmo/tools/venvs/<tool>/`.
 
 ```bash
 # Show what isolated venvs exist (dry run)
@@ -386,7 +386,7 @@ jmo tools clean --force
 **After cleaning**, reinstall the tools:
 
 ```bash
-jmo tools install semgrep checkov
+jmo tools install checkov
 ```
 
 **Note:** Tools installed in isolated venvs are automatically discovered by `jmo tools check` and work transparently with all JMo commands.
@@ -552,7 +552,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Syft, Trivy, YARA, Grype, plus Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -659,7 +659,7 @@ jobs:
       - name: Multi-Target Security Scan
         run: |
           # Scan repository code
-          jmo scan --repo . --tools trufflehog semgrep trivy
+          jmo scan --repo . --tools trufflehog opengrep trivy
 
           # Scan container images in docker-compose
           jmo scan \
@@ -786,7 +786,7 @@ done
 
 ### Tool Compatibility Matrix
 
-| Target Type | Trivy | Syft | Checkov | ZAP | TruffleHog | Semgrep |
+| Target Type | Trivy | Syft | Checkov | ZAP | TruffleHog | Opengrep |
 |-------------|-------|------|---------|-----|------------|---------|
 | Repositories | ✓ | ✓ | ✓ | - | ✓ | ✓ |
 | Container Images | ✓ | ✓ | - | - | - | - |
@@ -1175,7 +1175,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
     those are is each tool's own (every one is listed in its row's `reserved_flags`, in
     `scripts/core/tool_descriptors.py`). They come in five kinds, for example:
     - Where it writes or in what format: trivy's and hadolint's `-f`, grype's and syft's `-o`
-      and `--file`, semgrep's `-o`, `--text` and `--sarif`, nuclei's `-jsonl`, Gitleaks'
+      and `--file`, opengrep's `-o`, `--text` and `--sarif`, nuclei's `-jsonl`, Gitleaks'
       `--report-format`, `--report-path`/`-r` and `--redact`
     - A flag JMo already passes to a tool that refuses one given twice, or whose second one
       would replace JMo's: zizmor's `--offline` (`-o`), TruffleHog's `--no-verification`
@@ -1189,7 +1189,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
     - Where JMo's own runners scan: yara's and jmo-native's `--target`
     - A download during the scan, which a scan never makes: OSV-Scanner's
       `--download-offline-databases` (`jmo tools update` fetches its databases)
-  - A flag another tool spells the same way is left alone: semgrep's `-f` is `--config`, and
+  - A flag another tool spells the same way is left alone: opengrep's `-f` is `--config`, and
     shellcheck's `-o` is `--enable`
   - Each is dropped in every spelling the tool's own parser reads: a value attached (`-ftable`),
     after other short flags (`-qftable` is trivy's `-q -f table`), one dash or two for nuclei and
@@ -1207,7 +1207,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 Example:
 
 ```yaml
-tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
+tools: [trufflehog, opengrep, syft, trivy, checkov, hadolint, zap, nuclei]
 outputs: [json, md, yaml, html, simple-html, sarif, csv, compliance, suppressions]
 fail_on: ""
 threads: 4
@@ -1217,8 +1217,8 @@ include: ["*"]
 exclude: ["big-monorepo*"]
 
 per_tool:
-  semgrep:
-    flags: ["--exclude", "node_modules", "--exclude", ".git"]
+  opengrep:
+    flags: ["--exclude", "generated"]
   trufflehog:
     verify: true  # off by default: ask each issuer whether a secret is live
     history_flags: ["--since-commit", "main"]  # the git-history run only
@@ -1594,7 +1594,7 @@ jmo setup
 
 Notes on exit codes:
 
-- Some tools intentionally return non‑zero to signal "findings." The CLI treats these as success codes internally (trufflehog/trivy/checkov: 0/1; semgrep: 0/1/2; zap: 0/1/2) to avoid false failures.
+- Some tools intentionally return non‑zero to signal "findings." The CLI treats these as success codes internally (trufflehog/trivy/checkov: 0/1; zap: 0/1/2; opengrep accepts only 0) to avoid false failures.
 - The overall exit code of report/ci can be gated by --fail-on or fail_on in config.
 
 Graceful cancel:
@@ -1652,7 +1652,7 @@ Default directory exclusions:
 Retries:
 
 - Set `retries: N` at the top level to automatically retry failing tool commands up to N times.
-- Human logs will show attempts when > 1, e.g. `attempts={'semgrep': 2}`.
+- Human logs will show attempts when > 1, e.g. `attempts={'opengrep': 2}`.
 
 Threading and performance:
 
@@ -1718,7 +1718,7 @@ Two behaviours are worth knowing before you write a pattern:
   **case-sensitive on every platform**, so a config behaves the same on your
   machine as in CI.
 - **Rule identifiers differ sharply between tools.** hadolint emits `DL3008`,
-  checkov `CKV_AWS_23`, and semgrep a long dotted path such as
+  checkov `CKV_AWS_23`, and opengrep a long dotted path such as
   `yaml.github-actions.security.run-shell-injection.run-shell-injection`. Use a
   glob (`*run-shell-injection*`) unless you copied an exact id out of a report.
 
@@ -1784,14 +1784,14 @@ Click any finding row to expand and view:
 
 #### 2. Suggested Fixes Display
 
-For tools that provide autofix suggestions (Semgrep):
+For tools that provide autofix suggestions (Opengrep):
 
 - **"Suggested Fix" column** with collapsible content
 - **One-click "Copy Fix" button** for instant remediation
 - **Fix diffs** shown in code block format with proper escaping
 - **Remediation steps** displayed as actionable checklist
 
-**Example:** Semgrep's `missing-user-entrypoint` rule shows exact code to add (`USER non-root`) with copy button.
+**Example:** Opengrep's `missing-user-entrypoint` rule shows exact code to add (`USER non-root`) with copy button.
 
 #### 3. Secrets Context Enhancement
 
@@ -1835,7 +1835,7 @@ For secrets detected by Gitleaks/TruffleHog:
 
 **Traditional filters still available:**
 
-- Tool dropdown (trufflehog, semgrep, trivy, zap, etc.)
+- Tool dropdown (trufflehog, opengrep, trivy, zap, etc.)
 - Severity single-select (backward compatible)
 - Search box (free text across all fields)
 
@@ -2280,8 +2280,8 @@ See [Tool Management](#tool-management) for complete documentation.
 
 **Alternative methods:**
 
-- macOS: `brew install semgrep trivy syft checkov hadolint && brew install --cask owasp-zap && brew install trufflesecurity/trufflehog/trufflehog`
-- Linux: use apt/yum/pacman for basics; use official install scripts for trivy/syft; use pipx for Python-based tools like checkov/semgrep
+- macOS: `brew install trivy syft checkov hadolint && brew install --cask owasp-zap && brew install trufflesecurity/trufflehog/trufflehog`; opengrep has no Homebrew formula, so use `jmo tools install opengrep`
+- Linux: use apt/yum/pacman for basics; use official install scripts for trivy/syft; use pipx for Python-based tools like checkov; opengrep is a static binary (`jmo tools install opengrep`)
 
 You can run with `--allow-missing-tools` to generate empty stubs for any tools you haven't installed yet.
 
@@ -2375,8 +2375,8 @@ Narrow the tool list with `--tools` so the check stays fast. Secrets, SAST and d
 threads: 4
 timeout: 600
 per_tool:
-  semgrep:
-    flags: ["--exclude", "test"]
+  opengrep:
+    flags: ["--exclude", "generated"]
   trivy:
     flags: ["--no-progress"]
 ```
@@ -2396,8 +2396,8 @@ jobs:
       - name: Run PR Security Scan
         run: |
           pip install jmo-security
-          jmo tools install trufflehog semgrep trivy --yes
-          jmo ci --repo . --tools trufflehog semgrep trivy --fail-on HIGH --human-logs
+          jmo tools install trufflehog opengrep trivy --yes
+          jmo ci --repo . --tools trufflehog opengrep trivy --fail-on HIGH --human-logs
 
       - name: Upload SARIF
         if: always()
@@ -2471,7 +2471,7 @@ To skip the install step, run the job in the Docker image instead (`container: g
   with:
     path: |
       ~/.local/bin
-      ~/.cache/semgrep
+      ~/.cache/opengrep
       ~/.cache/trivy
     key: security-tools-${{ runner.os }}-${{ hashFiles('.tool-versions') }}
 ```
@@ -2480,7 +2480,7 @@ To skip the install step, run the job in the Docker image instead (`container: g
 
 ```bash
 # Run only the tools a PR most needs; the nightly scan runs the rest
-jmo scan --repo . --tools trufflehog semgrep trivy
+jmo scan --repo . --tools trufflehog opengrep trivy
 ```
 
 **3. Parallel Execution:**
@@ -2491,7 +2491,7 @@ jobs:
   sast:
     runs-on: ubuntu-latest
     steps:
-      - run: jmo scan --repo . --tools semgrep
+      - run: jmo scan --repo . --tools opengrep
 
   secrets:
     runs-on: ubuntu-latest
@@ -2511,7 +2511,7 @@ jobs:
 | Stage | Tools | Trigger | Fail On |
 |-------|-------|---------|------------|
 | **Pre-commit** | TruffleHog, Semgrep IDE, Hadolint | Local commit | Any finding |
-| **PR checks** | `--tools trufflehog semgrep trivy` | Pull request | HIGH+ |
+| **PR checks** | `--tools trufflehog opengrep trivy` | Pull request | HIGH+ |
 | **Nightly** | The whole tool matrix | Schedule, manual | HIGH+ |
 
 **Key Principle:** Fail fast with a narrowed tool list on pull requests, and run the whole matrix nightly.

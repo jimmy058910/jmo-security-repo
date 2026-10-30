@@ -107,6 +107,121 @@ def test_a_v1_semgrep_config_written_as_one_bare_pack_is_named_whole(tmp_path, c
     assert "(p/python)" in warning, warning
 
 
+@pytest.mark.parametrize(
+    "per_tool",
+    [
+        {"semgrep": {"configs": 5}},
+        {"semgrep": {"configs": {"p/python": True}}},
+        {"semgrep": {"configs": [["nested"], None, 3]}},
+        {"semgrep": True},
+        {"semgrep": ["--exclude", "x"]},
+        {"semgrep": 7},
+        {"semgrep": {}},
+        {"semgrep": {1: "a", None: "b"}},
+    ],
+    ids=[
+        "int-configs",
+        "dict-configs",
+        "odd-list-configs",
+        "bool-entry",
+        "list-entry",
+        "int-entry",
+        "empty-entry",
+        "non-str-keys",
+    ],
+)
+def test_a_v1_semgrep_entry_of_any_shape_is_named_and_never_raises(
+    tmp_path, caplog, per_tool
+):
+    """The warning runs inside load_config, so a shape it did not expect must
+    not turn a mistake into a crash of every command that reads the file."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(yaml.safe_dump({"per_tool": per_tool}), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        loaded = jmo.load_config(str(cfg))
+
+    assert "semgrep" in loaded.per_tool
+    (warning,) = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    assert "per_tool.opengrep" in warning, warning
+
+
+def test_a_v1_semgrep_entry_names_every_key_it_carries(tmp_path, caplog):
+    """v1 docs also recommended `per_tool.semgrep.timeout`, which opengrep
+    reads under its own name."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "per_tool": {
+                    "semgrep": {
+                        "configs": ["p/python"],
+                        "flags": ["--exclude", "x"],
+                        "timeout": 900,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        jmo.load_config(str(cfg))
+
+    (warning,) = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    for key in ("configs", "flags", "timeout"):
+        assert f"per_tool.opengrep.{key}" in warning, warning
+
+
+def test_a_v1_semgrep_entry_beside_an_opengrep_one_says_which_applies(tmp_path, caplog):
+    """With both set, opengrep's applies and the old one is dead weight: the
+    warning says so, and offers only the keys opengrep does not have."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "per_tool": {
+                    "semgrep": {"configs": ["p/python"], "timeout": 900},
+                    "opengrep": {"configs": ["rules/"]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        loaded = jmo.load_config(str(cfg))
+
+    (warning,) = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    assert "only per_tool.opengrep applies" in warning, warning
+    assert "per_tool.opengrep.timeout" in warning, "the key opengrep lacks"
+    assert "per_tool.opengrep.configs" not in warning, "opengrep already has it"
+    assert loaded.per_tool["opengrep"] == {"configs": ["rules/"]}, "left as written"
+
+
+def test_a_v1_semgrep_entry_that_opengrep_already_covers_is_to_be_deleted(
+    tmp_path, caplog
+):
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "per_tool": {
+                    "semgrep": {"timeout": 900},
+                    "opengrep": {"timeout": 300},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        jmo.load_config(str(cfg))
+
+    (warning,) = [r.getMessage() for r in caplog.records if "semgrep" in r.getMessage()]
+    assert "Delete per_tool.semgrep" in warning, warning
+
+
 def test_a_v1_semgrep_config_is_named_once_however_often_it_is_loaded(tmp_path, caplog):
     """A scan loads jmo.yml about ten times (measured); the user reads one line."""
     cfg = tmp_path / "jmo.yml"

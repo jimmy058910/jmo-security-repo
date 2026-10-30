@@ -273,16 +273,14 @@ path opengrep is handed, so JMo runs it from inside the target and names the tar
 `.`: a repository checked out under a directory called `build/` or `tests/` is scanned
 all the same.
 
-It is kept because the ways around it change the tree or the command: an empty
-`.semgrepignore` written into the repository being scanned, and a scanner should not
-change the tree it reads, or `--x-ignore-semgrepignore-files` in
-`per_tool.opengrep.flags`.
+JMo leaves the list on: it does not pass the flag that turns it off.
 
-**What to do:** to have opengrep read test code, put an empty `.semgrepignore` at the
-root of the scanned repository, or add `--x-ignore-semgrepignore-files` to
-`per_tool.opengrep.flags` (measured on 1.32.0: with either, all eight files were
-scanned). JMo still keeps the vendored trees and its results directory out through its
-own flags.
+**What to do:** to have opengrep read the directories above, either put an empty
+`.semgrepignore` at the root of the scanned repository, or add
+`--x-ignore-semgrepignore-files` to `per_tool.opengrep.flags` in `jmo.yml`, which
+changes nothing in the repository. Measured on 1.32.0 with the fixture above: with
+either, all eight files were scanned. JMo still keeps the vendored trees and its
+results directory out through its own flags.
 
 ### zizmor runs offline, so its online audits never run
 

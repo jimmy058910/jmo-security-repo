@@ -135,9 +135,13 @@ per_tool:
 
 **For incremental scans (git repos only), by hand with the bundle's files:**
 
+The bundle lives inside the installed JMo package, not in your repository. Ask the Python JMo is installed in where:
+
 ```bash
+BUNDLE=$(python -c "from scripts.core.rule_bundle import BUNDLE_DIR; print(BUNDLE_DIR)")
+
 # Only report what the last commit introduced (requires git and a clean work tree)
-opengrep scan --config scripts/jmo_rules/python.yaml --no-rewrite-rule-ids --baseline-commit HEAD~1 .
+opengrep scan --config "$BUNDLE/python.yaml" --no-rewrite-rule-ids --baseline-commit HEAD~1 .
 ```
 
 ### 5. Trivy Optimizations
@@ -325,8 +329,10 @@ For CI/CD, only scan changed files:
 CHANGED_FILES=$(git diff --name-only HEAD~1)
 
 # Create a temporary directory with only changed files
-# (Tool-specific - opengrep supports this natively)
-opengrep scan --config scripts/jmo_rules/python.yaml --no-rewrite-rule-ids --baseline-commit HEAD~1 .
+# (Tool-specific - opengrep supports this natively; $BUNDLE is the installed
+# rule bundle's directory, found as in section 4)
+BUNDLE=$(python -c "from scripts.core.rule_bundle import BUNDLE_DIR; print(BUNDLE_DIR)")
+opengrep scan --config "$BUNDLE/python.yaml" --no-rewrite-rule-ids --baseline-commit HEAD~1 .
 ```
 
 **CI/CD example (GitHub Actions):**

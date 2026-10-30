@@ -667,7 +667,7 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
     Redaction Strategy:
         - trufflehog: Replace 'Raw', 'RawV2' fields with '[REDACTED]'
         - gitleaks: Replace SARIF's 'snippet' (the matched secret) the same way
-        - Other tools: No redaction (trivy, checkov, etc. don't contain secrets)
+        - Other tools: No redaction is applied; the raw finding is stored as written
 
     Example:
         >>> finding = {"tool": {"name": "trufflehog"}, "raw": {"Raw": "ghp_secret123"}}

@@ -261,21 +261,50 @@ def _warn_v1_semgrep_entry(path: Path, per_tool: dict) -> None:
     opengrep replaced semgrep, and its settings live under
     ``per_tool.opengrep``. The old entry is left as written and read by
     nothing, so a user's own packs (``configs``) and flags would stop applying
-    to the scan without a word. One warning per file, naming where they go.
+    to the scan without a word. One warning per file, naming each key the
+    entry carries and where it goes. It only warns: whatever shape the entry
+    has (a mapping of any keys, a bare ``true``, ``configs: 5``), it never
+    raises, since it runs inside ``load_config``.
     """
     entry = per_tool.get("semgrep")
     if entry is None or str(path) in _V1_SEMGREP_NAMED:
         return
     _V1_SEMGREP_NAMED.add(str(path))
+    keys = [str(k) for k in entry] if isinstance(entry, dict) else []
     configs = entry.get("configs") if isinstance(entry, dict) else None
     if isinstance(configs, str):  # one pack written bare, not its letters
         configs = [configs]
-    packs = f" ({', '.join(str(c) for c in configs)})" if configs else ""
+    packs = (
+        f" ({', '.join(str(c) for c in configs)})"
+        if isinstance(configs, (list, tuple)) and configs
+        else ""
+    )
+    current = per_tool.get("opengrep")
+    if isinstance(current, dict) and current:
+        # Both are set: opengrep's applies, so say what the old entry adds.
+        absent = [k for k in keys if k not in current]
+        advice = (
+            "Add "
+            + ", ".join(f"per_tool.opengrep.{k}" for k in absent)
+            + " if you still want them"
+            if absent
+            else "Delete per_tool.semgrep"
+        )
+        logger.warning(
+            f"{path} has per_tool.semgrep{packs} and per_tool.opengrep: only "
+            f"per_tool.opengrep applies, and per_tool.semgrep is ignored "
+            f"(opengrep replaced semgrep in v2.0.0). {advice}"
+        )
+        return
+    moves = (
+        ", ".join(f"per_tool.opengrep.{k}" for k in keys)
+        if keys
+        else "per_tool.opengrep"
+    )
+    note = " (configs replace the bundled rules)" if "configs" in keys else ""
     logger.warning(
         f"{path} has per_tool.semgrep{packs}, which is ignored: opengrep "
-        f"replaced semgrep in v2.0.0. Move `configs` to per_tool.opengrep.configs "
-        f"(they replace the bundled rules) and any `flags` to "
-        f"per_tool.opengrep.flags"
+        f"replaced semgrep in v2.0.0. Move its settings to {moves}{note}"
     )
 
 
