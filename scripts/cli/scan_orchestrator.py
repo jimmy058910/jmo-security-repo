@@ -25,7 +25,14 @@ from typing import Any
 
 from scripts.cli.path_sanitizers import _sanitize_path_component
 from scripts.core.config import RetryConfig
-from scripts.core.scan_timings import OFF_TARGET_REASONS, Reason, State, ToolRun
+from scripts.core.scan_timings import (
+    OFF_TARGET_REASONS,
+    OUTCOME_FAILED_BEFORE_TOOLS,
+    Reason,
+    State,
+    ToolRun,
+    write_scan_timings,
+)
 from scripts.core.tool_registry import TOOL_SCAN_TYPES
 from scripts.core.validation import validate_container_image, validate_url
 
@@ -447,6 +454,49 @@ def _run_timed(scan_job, *args: Any, **kwargs: Any) -> tuple[str, dict, float]:
     started = time.perf_counter()
     name, statuses = scan_job(*args, **kwargs)
     return name, statuses, time.perf_counter() - started
+
+
+def _record_raised_scan(
+    out_dir: Path,
+    target_id: str,
+    target_type: str,
+    rows: Mapping[str, ToolRun],
+    error: str,
+) -> None:
+    """Write the timings of a target whose scanner raised, to its own folder.
+
+    A scanner that raises before `run_tools` writes no `scan-timings.json`, so
+    a results directory reused from an earlier scan keeps that scan's timings
+    and outputs together, and the report takes them for this scan's (#1518).
+    The failed rows replace them: no tool `ran`, so none of the folder's
+    outputs is read.
+
+    `out_dir` is the folder the job writes, which is not `target_id` for an
+    image, IaC file, URL, GitLab project or cluster. Like `_abandon`, it makes
+    the folder, which a scanner that raised may not have. Never raises: this
+    runs inside an `except`, and a diagnostic must not replace the target's own
+    failure or end the scan.
+    """
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        write_scan_timings(
+            out_dir,
+            rows,
+            target=target_id,
+            target_type=target_type,
+            wall_seconds=0.0,
+            outcome=OUTCOME_FAILED_BEFORE_TOOLS,
+            error=error,
+        )
+    except Exception:
+        logger.warning(
+            "Could not record the failed scan of %s %s in %s: the report may "
+            "read an earlier scan's output there",
+            target_type,
+            target_id,
+            out_dir,
+            exc_info=True,
+        )
 
 
 class ScanOrchestrator:
@@ -1141,7 +1191,10 @@ class ScanOrchestrator:
             scan_repository,
             scan_url,
         )
-        from scripts.cli.scan_jobs.gitlab_scanner import DiscoveredImages
+        from scripts.cli.scan_jobs.gitlab_scanner import (
+            DiscoveredImages,
+            _gitlab_out_dir,
+        )
         from scripts.cli.scan_jobs.iac_scanner import iac_target_name
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
         from scripts.cli.scan_jobs.url_scanner import url_folder_name
@@ -1249,11 +1302,12 @@ class ScanOrchestrator:
                     skipped_count += 1
                     _resumed("repo", result_name)
                     continue
+                jobs_dir = self.config.results_dir / "individual-repos"
                 future = executor.submit(
                     _run_timed,
                     scan_repository,
                     repo,
-                    self.config.results_dir / "individual-repos",
+                    jobs_dir,
                     tools,
                     self.config.timeout,
                     self.config.retries,
@@ -1262,18 +1316,19 @@ class ScanOrchestrator:
                     progress_callback=tool_progress_callback,
                     result_name=result_name,
                 )
-                futures.append(("repo", result_name, future))
+                futures.append(("repo", result_name, jobs_dir / result_name, future))
 
             for image, folder in zip(targets.images, image_folders, strict=True):
                 if _is_completed(image):
                     skipped_count += 1
                     _resumed("image", image)
                     continue
+                jobs_dir = self.config.results_dir / "individual-images"
                 future = executor.submit(
                     _run_timed,
                     scan_image,
                     image,
-                    self.config.results_dir / "individual-images",
+                    jobs_dir,
                     tools,
                     self.config.timeout,
                     self.config.retries,
@@ -1281,7 +1336,7 @@ class ScanOrchestrator:
                     self.config.allow_missing_tools,
                     result_name=folder,
                 )
-                futures.append(("image", image, future))
+                futures.append(("image", image, jobs_dir / folder, future))
 
             for (iac_type, iac_path), folder in zip(
                 targets.iac_files, iac_folders, strict=True
@@ -1293,12 +1348,13 @@ class ScanOrchestrator:
                     skipped_count += 1
                     _resumed("iac", iac_id)
                     continue
+                jobs_dir = self.config.results_dir / "individual-iac"
                 future = executor.submit(
                     _run_timed,
                     scan_iac_file,
                     iac_type,
                     iac_path,
-                    self.config.results_dir / "individual-iac",
+                    jobs_dir,
                     tools,
                     self.config.timeout,
                     self.config.retries,
@@ -1306,18 +1362,19 @@ class ScanOrchestrator:
                     self.config.allow_missing_tools,
                     result_name=folder,
                 )
-                futures.append(("iac", iac_id, future))
+                futures.append(("iac", iac_id, jobs_dir / folder, future))
 
             for url, folder in zip(targets.urls, url_folders, strict=True):
                 if _is_completed(url):
                     skipped_count += 1
                     _resumed("url", url)
                     continue
+                jobs_dir = self.config.results_dir / "individual-web"
                 future = executor.submit(
                     _run_timed,
                     scan_url,
                     url,
-                    self.config.results_dir / "individual-web",
+                    jobs_dir,
                     tools,
                     self.config.timeout,
                     self.config.retries,
@@ -1326,7 +1383,7 @@ class ScanOrchestrator:
                     result_name=folder,
                     api_spec=targets.api_specs.get(url, ""),
                 )
-                futures.append(("url", url, future))
+                futures.append(("url", url, jobs_dir / folder, future))
 
             for gitlab_repo_info in targets.gitlab_repos:
                 gl_id = gitlab_repo_info.get("full_path", "unknown")
@@ -1334,11 +1391,12 @@ class ScanOrchestrator:
                     skipped_count += 1
                     _resumed("gitlab", gl_id)
                     continue
+                jobs_dir = self.config.results_dir / "individual-gitlab"
                 future = executor.submit(
                     _run_timed,
                     scan_gitlab_repo,
                     gitlab_repo_info,
-                    self.config.results_dir / "individual-gitlab",
+                    jobs_dir,
                     tools,
                     self.config.timeout,
                     self.config.retries,
@@ -1346,7 +1404,9 @@ class ScanOrchestrator:
                     self.config.allow_missing_tools,
                     images=discovered,
                 )
-                futures.append(("gitlab", gl_id, future))
+                futures.append(
+                    ("gitlab", gl_id, _gitlab_out_dir(jobs_dir, gl_id), future)
+                )
 
             for k8s_resource_info in targets.k8s_resources:
                 ctx = k8s_resource_info.get("context", "unknown")
@@ -1356,18 +1416,22 @@ class ScanOrchestrator:
                     skipped_count += 1
                     _resumed("k8s", k8s_id)
                     continue
+                jobs_dir = self.config.results_dir / "individual-k8s"
                 future = executor.submit(
                     _run_timed,
                     scan_k8s_resource,
                     k8s_resource_info,
-                    self.config.results_dir / "individual-k8s",
+                    jobs_dir,
                     tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
                 )
-                futures.append(("k8s", k8s_id, future))
+                # The folder `scan_k8s_resource` writes: it has no helper to
+                # share, so the same two replacements.
+                k8s_folder = f"{ctx}_{ns}".replace("/", "_").replace("*", "all")
+                futures.append(("k8s", k8s_id, jobs_dir / k8s_folder, future))
 
             if skipped_count > 0:
                 # WARNING, not INFO. `configure_scan_logging` sets the `scripts`
@@ -1388,7 +1452,7 @@ class ScanOrchestrator:
                 )
 
             # Collect results as they complete
-            for target_type, target_id, future in futures:
+            for target_type, target_id, out_dir, future in futures:
                 try:
                     name, rows, elapsed = future.result()
                     all_results.append((target_type, name, rows))
@@ -1411,13 +1475,14 @@ class ScanOrchestrator:
                     # tool, so this target is counted as having produced
                     # nothing (TARGET_FAILED) rather than vanishing, and
                     # reaches history with the reason.
+                    error = f"{type(e).__name__}: {e}"
                     failed_rows = rows_without_running(
-                        tools,
-                        target_type,
-                        Reason.SCANNER_ERROR,
-                        detail=f"{type(e).__name__}: {e}",
+                        tools, target_type, Reason.SCANNER_ERROR, detail=error
                     )
                     all_results.append((target_type, target_id, failed_rows))
+                    _record_raised_scan(
+                        out_dir, target_id, target_type, failed_rows, error
+                    )
 
                     # The callback used to be skipped on this path, so a target
                     # whose scanner *raised* never reached the progress display
