@@ -1070,23 +1070,15 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
 
 class TestAReferenceNoToolIsGivenIsAFailedImageRow:
     """A reference the validator refuses never reaches a tool's command line:
-    `--file=<path>` is a syft flag, and `registry.corp:5000/...` is a private
-    registry the validator has no port for. Either is still an image the
-    repository names, so it is a failed image target, not a silent skip."""
+    `--file=<path>` is a syft flag. Discovery keeps only what Docker's grammar
+    accepts and the validator accepts the same grammar, so no file can name
+    one today; the job's refusal is a guard, and these tests reach it through
+    a patched discovery. It is still an image the repository names, so it is a
+    failed image target, not a silent skip."""
 
-    @pytest.mark.parametrize(
-        ("image", "folder"),
-        [
-            (
-                "registry.corp:5000/team/app:1",
-                "group_app__registry.corp_5000_team_app_1",
-            ),
-            ("--file=/tmp/owned.json", "group_app__--file=_tmp_owned.json"),
-        ],
-    )
-    def test_it_is_failed_and_recorded_where_the_report_reads(
-        self, tmp_path, image, folder
-    ):
+    def test_it_is_failed_and_recorded_where_the_report_reads(self, tmp_path):
+        image = "--file=/tmp/owned.json"
+        folder = "group_app__--file=_tmp_owned.json"
         images = DiscoveredImages(tmp_path / "individual-images")
         with (
             patch(
@@ -1125,6 +1117,58 @@ class TestAReferenceNoToolIsGivenIsAFailedImageRow:
         )
         assert (doc["target_type"], doc["target"]) == ("image", image)
         assert doc["outcome"] == "failed-before-tools"
+
+
+class TestAnImageOnARegistryWithAPortIsScanned:
+    """#1405: `registry.corp:5000/team/app:1` is a normal Docker reference. The
+    validator refused it, so the job recorded a failed image target for an
+    image no pull was ever attempted for."""
+
+    @pytest.mark.parametrize(
+        "image",
+        [
+            "registry.corp:5000/team/app:1",
+            "localhost:5000/app",
+            "registry.corp:5000/team/app@sha256:" + "a" * 64,
+        ],
+    )
+    def test_it_reaches_scan_image_and_is_no_failed_row(self, tmp_path, image):
+        images = DiscoveredImages(tmp_path / "individual-images")
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                return_value=("group_app", _rows(trivy=True)),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images",
+                return_value={image},
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_image",
+                side_effect=lambda **kw: (kw["image"], _rows(trivy=True)),
+            ) as mock_scan_image,
+        ):
+            scan_gitlab_repo(
+                gitlab_info={"full_path": "group/app", "url": "", "token": "t"},
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trivy", "hadolint"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=images,
+            )
+
+        (call,) = mock_scan_image.call_args_list
+        assert call.kwargs["image"] == image
+        ((named, rows),) = images.found_in("group/app")
+        assert named == image
+        assert "failed:target not scanned" not in {row.label for row in rows.values()}
+        assert rows["trivy"].state is State.RAN
 
 
 class TestAbandonedGitlabTargetsStillGetTimings:
@@ -1394,12 +1438,29 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         ]
 
     def test_a_registry_with_a_port_is_an_image_reference(self, tmp_path):
-        """Docker pulls it, so discovery keeps it; the job decides whether
-        JMo passes it to a scanner."""
+        """Docker pulls it, so discovery keeps it, and the job scans it (#1405)."""
         images = self._discover(
             tmp_path, {"Dockerfile": "FROM registry.corp:5000/team/app:1\n"}
         )
         assert images == {"registry.corp:5000/team/app:1"}
+
+    @pytest.mark.parametrize("image", ["Org/app", "registry.corp/App:1"])
+    def test_an_upper_case_repository_is_no_image_reference(
+        self, tmp_path, caplog, image
+    ):
+        """A repository path is lower case, and a first component is a
+        registry only when it holds `.` or `:` or is `localhost` (#1405): so
+        `Org/app` is named and dropped, not a target that fails."""
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"Dockerfile": f"FROM {image}\n"})
+
+        assert images == set()
+        assert caplog.messages == [
+            f"Dockerfile:1 names {image!r}, which is not an image reference: "
+            "not scanned"
+        ]
 
     @pytest.mark.parametrize(
         ("dockerfile", "images"),

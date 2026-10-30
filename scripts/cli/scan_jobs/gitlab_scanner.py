@@ -46,6 +46,7 @@ from scripts.core.tool_descriptors import (
     is_dockerfile,
 )
 from scripts.core.validation import (
+    IMAGE_REFERENCE_PATTERN,
     gitlab_clone_base,
     image_reference_problem,
     sanitize_subprocess_output,
@@ -78,19 +79,6 @@ _HEREDOC = re.compile(r"(?:^|\s)\d*<<(-?)([\"']?)([^\s\"'<]+)\2(?=\s|$)")
 # TODO(issue-#1415): `ONBUILD RUN <<EOF` starts with ONBUILD, so its body is
 # read as instructions.
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
-
-# Docker's own grammar for an image reference (distribution's `reference`
-# package): what a `FROM` or an `image:` must be for Docker to pull it. A
-# registry with a port is one; `{{`, `\` and `debian:%%SUITE%%` are not.
-_PATH_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
-_DOMAIN_COMPONENT = r"(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])"
-_REFERENCE = re.compile(
-    rf"(?:{_DOMAIN_COMPONENT}(?:\.{_DOMAIN_COMPONENT})*(?::[0-9]+)?/)?"
-    rf"{_PATH_COMPONENT}(?:/{_PATH_COMPONENT})*"
-    r"(?::\w[\w.-]{0,127})?"
-    r"(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?",
-    re.ASCII,
-)
 
 
 def _instructions(text: str) -> Iterator[tuple[int, str]]:
@@ -287,7 +275,7 @@ def _scannable(image: str, where: str) -> bool:
             image,
         )
         return False
-    if not _REFERENCE.fullmatch(image):
+    if not IMAGE_REFERENCE_PATTERN.fullmatch(image):
         logger.warning(
             "%s names %r, which is not an image reference: not scanned", where, image
         )
@@ -329,8 +317,7 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     Returns:
         Set of discovered image references (e.g., 'nginx:latest',
         'python:3.11-slim'), as the repository spells them. Each is an image
-        reference in Docker's grammar; the job still refuses one JMo does not
-        pass to a scanner (a registry with a port) before any tool sees it.
+        reference in Docker's grammar (`IMAGE_REFERENCE_PATTERN`).
     """
     images: set[str] = set()
 
@@ -507,10 +494,9 @@ def _scan_named_images(
             # the validator would add an ERROR for an outcome that is not one.
             problem = image_reference_problem(image)
             if problem is not None:
-                # An image reference (discovery keeps no other) that never
-                # reaches a tool's command line, where it would be their first
-                # argument, and it is not dropped: a private registry with a
-                # port lands here.
+                # A guard: discovery and the validator share one grammar, so
+                # only a reference over 255 characters lands here. It never
+                # reaches a tool's command line, and it is not dropped.
                 logger.warning(
                     "%s names an image reference JMo does not pass to a "
                     "scanner (%s): recorded as a failed image target",
