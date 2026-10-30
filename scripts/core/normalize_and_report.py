@@ -958,7 +958,9 @@ def _build_syft_indexes(
     """Build indexes of Syft packages by file path and lowercase package name.
 
     Args:
-        findings: All findings from all tools
+        findings: All findings from all tools (of one target: the indexes have
+            no target in them, and `_enrich_trivy_with_syft` builds one set per
+            target)
 
     Returns:
         Tuple of (by_path, by_name) indexes where:
@@ -1003,6 +1005,8 @@ def _find_sbom_match(
 ) -> dict[str, str] | None:
     """Find matching SBOM package for a Trivy finding.
 
+    The indexes are one target's (see `_enrich_trivy_with_syft`).
+
     Args:
         trivy_finding: Trivy finding dict
         by_path: Index of packages by file path
@@ -1016,28 +1020,19 @@ def _find_sbom_match(
     raw = trivy_finding.get("raw") or {}
     if not isinstance(raw, dict):
         raw = {}
-    pkg_name = str(raw.get("PkgName") or "").strip()
+    pkg_name = str(raw.get("PkgName") or "").strip().lower()
     pkg_path = str(raw.get("PkgPath") or "").strip()
 
-    # Collect all candidates
-    candidates = []
-    if loc_path and loc_path in by_path:
-        candidates.extend(by_path.get(loc_path, []))
-    if pkg_path and pkg_path in by_path:
-        candidates.extend(by_path.get(pkg_path, []))
-    if pkg_name and pkg_name.lower() in by_name:
-        candidates.extend(by_name.get(pkg_name.lower(), []))
+    # A lockfile lists every package of a project at one path, so a path alone
+    # does not say which package the finding is of: its name does (#1408).
+    at_path = by_path.get(loc_path, []) + by_path.get(pkg_path, [])
+    if pkg_name:
+        at_path = [p for p in at_path if p["name"].lower() == pkg_name]
+    if at_path:
+        return at_path[0]
 
-    if not candidates:
-        return None
-
-    # Prefer exact path match, then first by name
-    if loc_path and loc_path in by_path:
-        return by_path[loc_path][0]
-    elif pkg_path and pkg_path in by_path:
-        return by_path[pkg_path][0]
-    else:
-        return candidates[0]
+    named = by_name.get(pkg_name, [])
+    return named[0] if named else None
 
 
 def _attach_sbom_context(finding: dict[str, Any], match: dict[str, str]) -> None:
@@ -1066,25 +1061,41 @@ def _enrich_trivy_with_syft(findings: list[dict[str, Any]]) -> None:
     """Best-effort enrichment: attach SBOM package context from Syft to Trivy findings.
 
     Strategy:
-    - Build indexes of Syft packages by file path and by lowercase package name.
+    - Group the findings by target: a package belongs to the image or repository
+      syft catalogued, and a Trivy finding takes a package from its own target's
+      SBOM only. Two images hold an openssl at one path in the apk database, and
+      nothing but the target says whose is whose (#1408). Findings that carry no
+      `target` are one group of their own.
+    - Within a target, build indexes of Syft packages by file path and by
+      lowercase package name.
     - For each Trivy finding, try to match by location.path and/or raw.PkgName/PkgPath.
     - When matched, attach context.sbom = {name, version, path} and add a tag 'pkg:name@version'.
     """
-    # Build indexes from Syft package entries
-    by_path, by_name = _build_syft_indexes(findings)
-
-    # Enrich Trivy findings
+    by_target: dict[tuple[Any, Any] | None, list[dict[str, Any]]] = {}
     for f in findings:
         if not isinstance(f, dict):
             continue
-        tool_info = f.get("tool") or {}
-        tool = tool_info.get("name") if isinstance(tool_info, dict) else None
-        if tool != "trivy":
-            continue
+        target = f.get("target")
+        key = (
+            (target.get("type"), target.get("name"))
+            if isinstance(target, dict)
+            else None
+        )
+        by_target.setdefault(key, []).append(f)
 
-        match = _find_sbom_match(f, by_path, by_name)
-        if match:
-            _attach_sbom_context(f, match)
+    for group in by_target.values():
+        by_path, by_name = _build_syft_indexes(group)
+
+        # Enrich Trivy findings
+        for f in group:
+            tool_info = f.get("tool") or {}
+            tool = tool_info.get("name") if isinstance(tool_info, dict) else None
+            if tool != "trivy":
+                continue
+
+            match = _find_sbom_match(f, by_path, by_name)
+            if match:
+                _attach_sbom_context(f, match)
 
 
 def _enrich_with_priority(findings: list[dict[str, Any]]) -> None:

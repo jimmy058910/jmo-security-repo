@@ -13,6 +13,10 @@ The report now reads the target from where `jmo scan` put the output (the
 `individual-*` folder gives the type, the subfolder the name), carries it on the
 finding as `target`, and derives every id from the adapter's id and the target.
 
+The SBOM enrichment (#1408) takes the same view: a trivy finding takes a package
+from its own target's syft document only, and from a lockfile of many packages
+the one it is a finding of.
+
 Each test builds a results directory in the shape `jmo scan` writes: one
 folder per target, the tool outputs in the shapes the adapters parse, the rows
 in `scan-timings.json` and the run record. No scanner is needed, so these run
@@ -666,4 +670,313 @@ def test_a_large_scan_still_clusters_within_each_target(
     }
     assert {c.representative["target"]["name"] for c in clusters} == {
         f"app-{n:03}" for n in range(targets)
+    }
+
+
+# --- the SBOM enrichment (#1408) --------------------------------------------------
+
+
+def syft_doc(packages: list[tuple[str, str, str]], image: str | None = None) -> bytes:
+    """syft's document of `packages` ((name, version, path) each, npm packages
+    unless `image` is given, then apk). `image` is `name:version`, as syft's
+    `source` names the image it catalogued."""
+    document: dict[str, Any] = {
+        "artifacts": [
+            {
+                "id": f"pkg-{n}",
+                "name": name,
+                "version": version,
+                "type": "apk" if image else "npm",
+                "locations": [{"path": path}],
+            }
+            for n, (name, version, path) in enumerate(packages)
+        ],
+        "artifactRelationships": [],
+    }
+    if image:
+        source, version = image.split(":")
+        document["source"] = {"type": "image", "name": source, "version": version}
+    return json.dumps(document).encode()
+
+
+APK_DB = "/lib/apk/db/installed"
+
+
+def trivy_openssl_doc() -> bytes:
+    """trivy's report of openssl 3.0.0 in an image's operating-system packages."""
+    return json.dumps(
+        {
+            "SchemaVersion": 2,
+            "Results": [
+                {
+                    "Target": "nginx:1.27 (alpine 3.20)",
+                    "Class": "os-pkgs",
+                    "Type": "alpine",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-2026-0001",
+                            "PkgName": "openssl",
+                            "InstalledVersion": "3.0.0",
+                            "Severity": "HIGH",
+                            "Title": "openssl: flaw",
+                        }
+                    ],
+                }
+            ],
+        }
+    ).encode()
+
+
+def of_tool(done: SimpleNamespace, tool: str) -> list[dict[str, Any]]:
+    return [f for f in done.findings if f["tool"]["name"] == tool]
+
+
+def sbom_package(finding: dict[str, Any]) -> tuple[str, str] | None:
+    """The (name, version) of the SBOM package the report attached, if any."""
+    sbom = (finding.get("context") or {}).get("sbom")
+    return (sbom["name"], sbom["version"]) if sbom else None
+
+
+def package_tags(finding: dict[str, Any]) -> list[str]:
+    return [t for t in finding.get("tags", []) if t.startswith("pkg:")]
+
+
+def test_one_package_in_two_images_is_two_findings(scan):
+    """#1408 as filed: two syft documents identical but for `source.name`. The
+    package's path is inside the image, so it is the same in both. A3's id is
+    scoped to the target, so each image has its own finding; this guards that
+    for images (it passed when written)."""
+    for folder, image in (("alpine_3.19", "alpine:3.19"), ("nginx_1.27", "nginx:1.27")):
+        scan.add(
+            "individual-images",
+            folder,
+            {"syft.json": syft_doc([("openssl", "3.1.0", APK_DB)], image=image)},
+            target_type="image",
+        )
+
+    done = scan.run()
+
+    assert sorted(named(f) for f in done.findings) == [
+        ("image", "alpine_3.19"),
+        ("image", "nginx_1.27"),
+    ]
+    assert len({f["id"] for f in done.findings}) == 2
+
+
+OPENSSL = ("openssl", "3.1.0", APK_DB)
+ZLIB = ("zlib", "1.3", APK_DB)
+
+
+@pytest.mark.parametrize(
+    ("outputs", "titles"),
+    [
+        (
+            {"syft.json": syft_doc([OPENSSL] * 2, image="nginx:1.27")},
+            ["openssl 3.1.0"],
+        ),
+        # The second file also lists zlib, so a second file that was never read
+        # would show: there would be no zlib finding.
+        (
+            {
+                "syft.json": syft_doc([OPENSSL], image="nginx:1.27"),
+                "syft.again.json": syft_doc([OPENSSL, ZLIB], image="nginx:1.27"),
+            },
+            ["openssl 3.1.0", "zlib 1.3"],
+        ),
+    ],
+    ids=["listed-twice", "read-twice"],
+)
+def test_one_package_in_one_image_is_one_finding_however_often_syft_says_it(
+    scan, outputs, titles
+):
+    """The other half of the id guard: the same package in the same image,
+    listed twice in one document or read from two, is one finding, not two."""
+    scan.add("individual-images", "nginx_1.27", outputs, target_type="image")
+
+    done = scan.run()
+
+    assert sorted(f["title"] for f in done.findings) == titles
+    assert {named(f) for f in done.findings} == {("image", "nginx_1.27")}
+
+
+@pytest.mark.parametrize("trivy_in", ["alpine_3.19", "nginx_1.27"])
+def test_trivy_takes_the_package_of_its_own_image(scan, trivy_in):
+    """Both images hold an openssl at the same path in the apk database, at
+    different versions. trivy's finding is in one of them and takes that image's
+    package; the SBOM index had no target, so it took the first image's (a
+    finding in nginx_1.27 was tagged with alpine_3.19's openssl 3.1.0)."""
+    versions = {"alpine_3.19": "3.1.0", "nginx_1.27": "3.0.0"}
+    for folder, version in versions.items():
+        image = folder.replace("_", ":")
+        outputs = {"syft.json": syft_doc([("openssl", version, APK_DB)], image=image)}
+        if folder == trivy_in:
+            outputs["trivy.json"] = trivy_openssl_doc()
+        scan.add("individual-images", folder, outputs, target_type="image")
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert named(trivy) == ("image", trivy_in)
+    assert sbom_package(trivy) == ("openssl", versions[trivy_in])
+    assert package_tags(trivy) == [f"pkg:openssl@{versions[trivy_in]}"]
+
+
+def test_trivy_takes_no_package_from_an_image_that_is_not_its_own(scan):
+    """trivy scanned nginx_1.27; syft catalogued only alpine_3.19, which holds an
+    openssl. The finding has no SBOM package of its own, so it gets none."""
+    scan.add(
+        "individual-images",
+        "alpine_3.19",
+        {"syft.json": syft_doc([("openssl", "3.1.0", APK_DB)], image="alpine:3.19")},
+        target_type="image",
+    )
+    scan.add(
+        "individual-images",
+        "nginx_1.27",
+        {"trivy.json": trivy_openssl_doc()},
+        target_type="image",
+    )
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert named(trivy) == ("image", "nginx_1.27")
+    assert sbom_package(trivy) is None
+    assert package_tags(trivy) == []
+
+
+LOCKFILE_PACKAGES = [("axios", "0.21.0"), ("lodash", "4.17.15")]
+
+
+@pytest.mark.parametrize("order", [1, -1], ids=["axios-first", "lodash-first"])
+def test_trivy_takes_its_own_package_from_a_lockfile_of_many(scan, order):
+    """syft lists every package of a lockfile at the lockfile's path. trivy's
+    finding is of lodash; matching by path alone gave it the first package
+    listed there, so with axios first the finding was tagged `pkg:axios@0.21.0`."""
+    packages = [(n, v, "/package-lock.json") for n, v in LOCKFILE_PACKAGES][::order]
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {"syft.json": syft_doc(packages), "trivy.json": trivy_doc()},
+    )
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert trivy["location"]["path"] == "package-lock.json"
+    assert sbom_package(trivy) == LODASH
+    assert package_tags(trivy) == ["pkg:lodash@4.17.15"]
+
+
+def test_a_package_the_lockfile_does_not_list_is_not_given_another(scan):
+    """trivy found lodash; syft's lockfile lists only axios. The path matches
+    and the name does not, so there is no SBOM package to attach."""
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {
+            "syft.json": syft_doc([("axios", "0.21.0", "/package-lock.json")]),
+            "trivy.json": trivy_doc(),
+        },
+    )
+
+    (trivy,) = of_tool(scan.run(), "trivy")
+
+    assert sbom_package(trivy) is None
+    assert package_tags(trivy) == []
+
+
+def sbom_pair(
+    syft_target: dict[str, str] | None, trivy_target: dict[str, str] | None
+) -> dict[str, Any]:
+    """A syft package and a trivy finding of it, each with the target given
+    (None: the finding carries no `target` key, as one built outside `jmo scan`)."""
+    syft = {
+        "id": "s1",
+        "tool": {"name": "syft"},
+        "tags": ["sbom", "package"],
+        "raw": {"name": "lodash", "version": "4.17.15"},
+        "location": {"path": "package-lock.json"},
+    }
+    trivy = {
+        "id": "t1",
+        "tool": {"name": "trivy"},
+        "tags": [],
+        "raw": {"PkgName": "lodash"},
+        "location": {"path": "package-lock.json"},
+    }
+    if syft_target:
+        syft["target"] = syft_target
+    if trivy_target:
+        trivy["target"] = trivy_target
+    return {"syft": syft, "trivy": trivy}
+
+
+def test_findings_with_no_target_still_match_each_other():
+    """A results directory `jmo scan` did not write, or a caller of the report's
+    public functions, has findings with no `target`. They are one group."""
+    pair = sbom_pair(None, None)
+
+    nr._enrich_trivy_with_syft([pair["syft"], pair["trivy"]])
+
+    assert sbom_package(pair["trivy"]) == LODASH
+    assert package_tags(pair["trivy"]) == ["pkg:lodash@4.17.15"]
+
+
+@pytest.mark.parametrize(
+    ("syft_target", "trivy_target"),
+    [
+        ({"type": "repo", "name": "app-one"}, None),
+        (None, {"type": "repo", "name": "app-one"}),
+    ],
+    ids=["syft-names-one", "trivy-names-one"],
+)
+def test_a_finding_with_no_target_does_not_match_a_named_target(
+    syft_target, trivy_target
+):
+    """No target is not every target: a finding without one takes nothing from
+    a package that names its target, and the reverse."""
+    pair = sbom_pair(syft_target, trivy_target)
+
+    nr._enrich_trivy_with_syft([pair["syft"], pair["trivy"]])
+
+    assert sbom_package(pair["trivy"]) is None
+
+
+def test_a_package_in_two_lockfiles_takes_the_one_at_the_findings_path():
+    """lodash is in two lockfiles of one repository, the one the finding is in
+    listed second, and spelled `Lodash` there. The path picks the package, and
+    comparing names at it is case-insensitive: a name that fails the comparison
+    falls back to the first package of that name, in the other lockfile."""
+    pair = sbom_pair(None, None)
+    pair["syft"]["raw"] = {"name": "Lodash", "version": "4.17.15"}
+    elsewhere = {
+        **pair["syft"],
+        "id": "s0",
+        "raw": {"name": "lodash", "version": "4.17.11"},
+        "location": {"path": "docs/package-lock.json"},
+    }
+
+    nr._enrich_trivy_with_syft([elsewhere, pair["syft"], pair["trivy"]])
+
+    assert sbom_package(pair["trivy"]) == ("Lodash", "4.17.15")
+
+
+def test_a_repositorys_ids_are_the_same_as_before_the_enrichment_was_scoped(scan):
+    """A5 changed which SBOM package a finding takes, and nothing about its id.
+    The ids of one repository's packages, measured before the change (the
+    adapter's fingerprint scoped to the target by A3), pinned so that scoping
+    the enrichment cannot move them."""
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {
+            "syft.json": syft_doc(
+                [(n, v, "/package-lock.json") for n, v in LOCKFILE_PACKAGES]
+            )
+        },
+    )
+
+    done = scan.run()
+
+    assert {f["title"]: f["id"] for f in done.findings} == {
+        "axios 0.21.0": "93817962fb756f90",
+        "lodash 4.17.15": "5f8a409eda8a6ea2",
     }
