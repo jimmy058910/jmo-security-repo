@@ -280,18 +280,19 @@ def _normalize_paths_and_ids(
 
         normalized = original
         if isinstance(location, dict) and isinstance(original, str) and original:
-            normalized = normalize_finding_path(original, roots)
+            # The root comes out of the path first. `normalize_finding_path`
+            # strips a leading `/`, and the pattern needs it to find a POSIX
+            # root, so a path equal to the root would come out as `home/u/app`;
+            # it also leaves alone a path equal to a Windows root, and a URL
+            # naming the root.
+            candidate = strip_scan_roots(original, pattern) if pattern else original
+            normalized = normalize_finding_path(candidate, roots)
             location["path"] = normalized
         if pattern:
             # The same objects, so `target_of`, which keys on `id(finding)`,
             # still finds this finding.
             finding.update(strip_scan_roots(finding, pattern, verbatim=_VERBATIM_KEYS))
             location = finding.get("location")
-            if isinstance(location, dict):
-                # What the finding carries now: the strip also takes the root
-                # out of a path `normalize_finding_path` leaves alone, the root
-                # itself or a URL naming it, and the id follows that too.
-                normalized = location.get("path")
         if normalized != original:
             paths_changed += 1
 

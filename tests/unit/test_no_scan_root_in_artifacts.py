@@ -37,6 +37,10 @@ from scripts.core.scan_timings import State, ToolRun, write_scan_timings
 
 #: The directory the golden was captured in; its output names it throughout.
 ROOT = "C:/Projects/_archive/2026-09-12-jmo-v2-evidence/coverage/NodeGoat"
+#: The same scan on a POSIX machine. Both are real roots for this product, and
+#: they differ where it matters: `normalize_finding_path` strips a leading `/`.
+POSIX_ROOT = "/home/u/NodeGoat"
+ROOTS = pytest.mark.parametrize("root", [ROOT, POSIX_ROOT], ids=["windows", "posix"])
 GOLDEN = (
     Path(__file__).resolve().parents[1]
     / "fixtures"
@@ -49,13 +53,6 @@ GOLDEN = (
 #: Where the case is allowed to keep the root: the tool's verbatim output.
 VERBATIM_KEY = "raw"
 VERBATIM_FILES = ("findings.json", "findings.yaml")
-
-#: The root as each artifact spells it: as given, with backslashes, and as a
-#: backslash path inside JSON text. The `file:///` form contains the first.
-FORMS = tuple(
-    form.casefold()
-    for form in (ROOT, ROOT.replace("/", "\\"), ROOT.replace("/", "\\\\"))
-)
 
 #: What the case's outputs promise to write, so a report that wrote nothing
 #: cannot pass for one that is clean.
@@ -70,9 +67,38 @@ EXPECTED_FILES = {
 }
 
 
-def _count(text: str) -> int:
+def _forms(root: str) -> tuple[str, ...]:
+    """The root as each artifact spells it: as given, with backslashes, and as a
+    backslash path inside JSON text. The `file:///` form contains the first."""
+    return tuple(
+        form.casefold()
+        for form in (root, root.replace("/", "\\"), root.replace("/", "\\\\"))
+    )
+
+
+def _count(text: str, root: str) -> int:
     folded = text.casefold()
-    return sum(folded.count(form) for form in FORMS)
+    return sum(folded.count(form) for form in _forms(root))
+
+
+def _golden_scanned_in(root: str) -> bytes:
+    """The golden as a scan of `root` would have written it.
+
+    Every spelling of the capture root in the file is replaced, in this copy
+    only: `file:///C:/...`, `C:/...`, and the backslash path the tool puts in its
+    ignore-rule advice (`C:\\...\\osv-scanner.toml`, JSON-escaped in the file).
+    """
+    text = GOLDEN.read_bytes().decode("utf-8")
+    if root != ROOT:
+        escaped = ROOT.replace("/", "\\\\")
+        for old, new in (
+            (f"file:///{ROOT}", f"file://{root}"),
+            (f"{escaped}\\\\", f"{root}/"),
+            (ROOT, root),
+        ):
+            text = text.replace(old, new)
+        assert "Projects" not in text, "a spelling of the capture root was missed"
+    return text.encode("utf-8")
 
 
 def _strings(node, skip: str | None = None) -> Iterator[str]:
@@ -106,19 +132,19 @@ def _load_yaml(text: str):
     return yaml.load(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
 
 
-def _run_report(tmp_path: Path, monkeypatch) -> Path:
+def _run_report(tmp_path: Path, monkeypatch, root: str) -> Path:
     """`jmo report` over the golden, every output format on; returns `summaries/`."""
     results = tmp_path / "results"
     target = results / "individual-repos" / "NodeGoat"
     target.mkdir(parents=True)
-    (target / "osv-scanner.json").write_bytes(GOLDEN.read_bytes())
+    (target / "osv-scanner.json").write_bytes(_golden_scanned_in(root))
     write_scan_timings(
         target,
         {"osv-scanner": ToolRun("osv-scanner", State.RAN)},
         target="NodeGoat",
         target_type="repo",
         wall_seconds=1.0,
-        root=ROOT,
+        root=root,
     )
     (tmp_path / "jmo.yml").write_bytes(
         b"outputs: [json, md, yaml, html, simple-html, sarif, csv, compliance]\n"
@@ -132,13 +158,14 @@ def _run_report(tmp_path: Path, monkeypatch) -> Path:
     return results / "summaries"
 
 
+@ROOTS
 @pytest.mark.parametrize("mode", ["inline", "external"])
-def test_no_scan_root_in_any_shipped_artifact(tmp_path, monkeypatch, mode):
+def test_no_scan_root_in_any_shipped_artifact(tmp_path, monkeypatch, mode, root):
     if mode == "external":
         # The dashboard writes its findings to `dashboard-data.json` above this
         # many; zero sends the golden's 291 down that path.
         monkeypatch.setattr(html_reporter, "INLINE_THRESHOLD", 0)
-    summaries = _run_report(tmp_path, monkeypatch)
+    summaries = _run_report(tmp_path, monkeypatch, root)
 
     files = sorted(p for p in summaries.rglob("*") if p.is_file())
     names = {p.name for p in files}
@@ -154,20 +181,20 @@ def test_no_scan_root_in_any_shipped_artifact(tmp_path, monkeypatch, mode):
             document = json.loads(text) if path.suffix == ".json" else _load_yaml(text)
             findings_seen += len(document["findings"])
             leaks[path.name] = sum(
-                _count(s) for s in _strings(document, skip=VERBATIM_KEY)
+                _count(s, root) for s in _strings(document, skip=VERBATIM_KEY)
             )
             kept_in_raw[path.name] = sum(
-                _count(s) for s in _strings(_raw_values(document))
+                _count(s, root) for s in _strings(_raw_values(document))
             )
         elif path.suffix in (".json", ".sarif"):
-            leaks[path.name] = sum(_count(s) for s in _strings(json.loads(text)))
+            leaks[path.name] = sum(_count(s, root) for s in _strings(json.loads(text)))
         else:
-            leaks[path.name] = _count(text)
+            leaks[path.name] = _count(text, root)
             if path.suffix == ".html" and path.name == "dashboard.html":
                 embedded = _embedded_findings(text)
                 assert (embedded is not None) == (mode == "inline")
                 leaks["dashboard.html (embedded findings)"] = sum(
-                    _count(s) for s in _strings(embedded)
+                    _count(s, root) for s in _strings(embedded)
                 )
 
     assert findings_seen > 0, "the report holds no findings, so nothing was checked"
@@ -230,10 +257,16 @@ def test_a_message_naming_the_root_gives_one_id_whichever_directory_was_scanned(
     assert here["raw"] == {"filename": "C:/work/one/app/src/app.py"}
 
 
-def test_a_finding_on_the_root_directory_itself_keeps_one_id():
-    """`normalize_finding_path` leaves a path equal to the root alone; the id
-    must follow the path the finding carries after the root is dropped."""
-    root = "C:/work/one/app"
+_LOCAL_ROOTS = pytest.mark.parametrize(
+    "root", ["C:/work/one/app", "/home/u/app"], ids=["windows", "posix"]
+)
+
+
+@_LOCAL_ROOTS
+def test_a_finding_on_the_root_directory_itself_keeps_one_id(root):
+    """`normalize_finding_path` does not take the root out of a path equal to it
+    (on POSIX it strips the leading `/` and leaves `home/u/app`), so the root is
+    dropped first, and the id follows the path the finding carries."""
     finding = {
         "id": fingerprint("bandit", "B105", root, None, "world-writable"),
         "tool": {"name": "bandit"},
@@ -246,6 +279,35 @@ def test_a_finding_on_the_root_directory_itself_keeps_one_id():
 
     assert finding["location"]["path"] == "."
     assert finding["id"] == fingerprint("bandit", "B105", ".", None, "world-writable")
+
+
+@_LOCAL_ROOTS
+def test_the_root_is_dropped_wherever_a_finding_names_it(root):
+    """Under the root, in the message, in remediation as text and as a dict."""
+    path = f"{root}/src/a.py"
+    finding = {
+        "id": fingerprint("osv-scanner", "CVE-1", path, None, f"vulnerable: {path}"),
+        "tool": {"name": "osv-scanner"},
+        "ruleId": "CVE-1",
+        "location": {"path": path},
+        "message": f"vulnerable: {path}",
+        "remediation": f"put the rule in `{root}/ignore.toml`; scanned {root}",
+    }
+    as_dict = {
+        "id": "not-hashed-from-the-path",
+        "location": {"path": "x"},
+        "remediation": {"steps": [f"cd {root}", f"edit {root}/ignore.toml"]},
+    }
+
+    nr._normalize_paths_and_ids([finding, as_dict], (root,))
+
+    assert finding["location"]["path"] == "src/a.py"
+    assert finding["message"] == "vulnerable: src/a.py"
+    assert finding["remediation"] == "put the rule in `ignore.toml`; scanned ."
+    assert finding["id"] == fingerprint(
+        "osv-scanner", "CVE-1", "src/a.py", None, "vulnerable: src/a.py"
+    )
+    assert as_dict["remediation"] == {"steps": ["cd .", "edit ignore.toml"]}
 
 
 def test_an_id_the_adapter_did_not_hash_from_the_message_is_left_alone():
