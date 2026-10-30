@@ -6,14 +6,14 @@
 signature-base replaces yara-python and the ReversingLabs rules, and is the one tool that
 reads vendored dependency trees; every adapter in the final matrix (14) has a non-empty
 golden fixture captured through `jmo scan`, guarded so that a missing or empty one fails;
-and the 23 open Phase 6 issues close: the 22 whose premises were re-measured on 2026-10-29,
-and #1502, which that measurement filed.
+and the 24 open Phase 6 issues close: the 22 whose premises were re-measured on
+2026-10-29, #1502, which that measurement filed, and #1506, filed from Phase 5's PR B.
 
-**Architecture:** eight PRs in two groups. Four touch no file that Phase 5's PR B rewrites
-(A, D, T, N). Four do (G, Y, E, F) and are built from `dev` after PR B merges. **No Phase 6
-implementation PR opens before Phase 5's PR B merges** (Jimmy, 2026-10-29); the grouping says
-which tasks can be built in a worktree while PR B is in review and which must start from it.
-F is last: it captures the final matrix's fixtures, after G removes grype and Y brings yara-x.
+**Architecture:** eight PRs in two groups. Four touch no file that Phase 5's Tasks B1–B8
+list (A, D, T, N). Four do (G, Y, E, F). **No Phase 6 implementation PR opened before Phase 5's
+PR B merged** (Jimmy, 2026-10-29); it merged as `8ac90d8c` on 2026-10-30, so every PR now
+starts from `dev`. F is last: it captures the final matrix's fixtures, after G removes grype
+and Y brings yara-x.
 
 **Tech Stack:** Python 3.12, pytest (+xdist), yara-x (the PyPI wheel, a runtime dependency:
 J2), Neo23x0/signature-base at a pinned commit (DRL 1.1), osv-scanner 2.7.0,
@@ -27,7 +27,7 @@ model is the Phase 5 task plan, `2026-10-23-phase-5-rule-bundle.md`.
 
 ## Global Constraints
 
-- **No implementation PR before Phase 5's PR B merges.** Tasks marked **P5** touch a file
+- **Phase 5's PR B has merged** (`8ac90d8c`, 2026-10-30). Tasks marked **P5** touch a file
   that Phase 5's Tasks B1–B8 list (`2026-10-23-phase-5-rule-bundle.md` is the authority),
   among them `tool_descriptors.py`, `install_config.py`, `tool_installer.py`,
   `versions.yaml`, `Dockerfile`, `ci.yml`, `scheduled.yml`, `common_finding.py`,
@@ -36,7 +36,7 @@ model is the Phase 5 task plan, `2026-10-23-phase-5-rule-bundle.md`.
   `scan_timings.py`, `generate_golden.py`, `jmo.yml`, `tests/conftest.py`,
   `test_adapter_golden.py`, `test_docker_workflows.py`, `test_tool_smoke.py`, the packaging
   files, `.gitignore`, `UPGRADE.md`, `CHANGELOG.md` and `docs/TOOLS.md`. Every line number this plan cites
-  is at `c05aef28`; re-read it on `dev` after PR B before editing.
+  is at `c05aef28`; in a P5 file, re-read it on `dev` before editing.
 - **Backward compatibility is NOT a constraint.** No users. The tool name is hashed into
   every finding id (`fingerprint()`, `scripts/core/common_finding.py:276`), so renaming
   `yara` to `yara-x` changes every yara finding id once, deliberately; `UPGRADE.md` says so.
@@ -50,8 +50,8 @@ model is the Phase 5 task plan, `2026-10-23-phase-5-rule-bundle.md`.
 - **Work in a worktree** under `~/.cache/jmo-wt/`. Scratch and `pytest --basetemp` (a CLI
   flag, never `PYTEST_ADDOPTS`) go under `~/.cache/`: `/tmp` is tmpfs.
 - **A `jmo scan` rewrites the real `~/.jmo/config.yml`** (`_show_kofi_reminder`,
-  `scripts/cli/jmo.py:2505`, has no non-interactive skip), and `_guard_real_jmo_config`
-  (`tests/conftest.py:463`) fails whichever test is open when it changes. While any other
+  `scripts/cli/jmo.py:2505`, has no non-interactive skip: #1506, fixed by Task A6), and
+  `_guard_real_jmo_config` (`tests/conftest.py:489` on `dev`) fails whichever test is open when it changes. While any other
   session may run the suite, scan with `HOME=<scratch home>` whose `.jmo/bin`, `.jmo/tools`
   and `.jmo/yara-rules` are symlinks to the real ones, and prove it first with
   `jmo tools check` under that HOME. Every spawned `jmo scan` gets `--history-db <tmp>` and
@@ -59,8 +59,9 @@ model is the Phase 5 task plan, `2026-10-23-phase-5-rule-bundle.md`.
 - **Gates are numbers through `jmo scan` / `jmo report`, never a bare binary**, except where
   a task measures the binary itself.
 - **Suite:** `.venv/bin/python -m pytest <part> -n 4 -q -rfEs --basetemp ~/.cache/pytest-p6 -m "not smoke and not requires_tools and not docker"`.
-  **Diff failing-test ID sets, never counts.** Read the `windows-2022` and `docker-smoke`
-  job logs, never their ticks. Windows is CI plus the laptop (`.218`).
+  **Diff failing-test ID sets, never counts.** Read the `windows-2022`, `windows-opengrep` and
+  `docker-smoke` job logs, never their ticks. Windows is CI plus a script Jimmy runs on
+  `.198` (the laptop, `.218`, is retired).
 - **Mutation-test every guard** from a byte backup; restore byte for byte.
 - **Never edit tool versions in `Dockerfile` by hand**: `versions.yaml`, then
   `python3 scripts/dev/update_versions.py --sync`.
@@ -219,15 +220,16 @@ The image installs yara twice: apt's `yara` CLI (`Dockerfile:170`, verified at `
 | gitleaks | v8.30.1, 69 | kept |
 | osv-scanner | v2.5.1, 303 (pinned 2.7.0) | kept |
 | zizmor | v1.30.1, 217 (pinned 1.31.1) | kept |
-| opengrep | — (semgrep v1.146.0 holds **0** findings, an empty run) | Phase 5 Task B4: 4 findings |
+| opengrep | v1.32.0, 10 (Phase 5's PR B; semgrep's empty v1.146.0 fixture went with it) | kept |
 | trivy | — | re-home `tests/fixtures/samples/trivy/{vuln,misconfig}-0.74.json` (3 and 47 findings) |
 | zap | — | re-home `tests/fixtures/samples/zap/report-2.17.0-xss.json` (10: High, Medium, Low; target `fixture_server.py`) |
 | trufflehog, checkov, hadolint, shellcheck, syft, jmo-native | — | `tests/fixtures/samples/` through `jmo scan` |
 | yara-x | — | the canary rule and file, generated |
 | nuclei | — | `fixture_server.py` with a JMo-written template (nuclei fetches its templates unpinned at run time) |
 
-`scripts/dev/generate_golden.py:89-170` hand-writes commands for six tools (trivy, semgrep,
-hadolint, checkov, trufflehog, shellcheck) rather than taking them from the descriptors, the
+`scripts/dev/generate_golden.py:88-154` (on `dev`) hand-writes commands for five tools (trivy,
+hadolint, checkov, trufflehog, shellcheck; semgrep's left with Phase 5's PR B) rather than
+taking them from the descriptors, the
 drift #1349's comment names. Golden metadata since Phase 0 records tool, version, binary
 sha256, download URL, target and command (`tests/fixtures/golden/gitleaks/v8.30.1/metadata.json`).
 
@@ -288,8 +290,9 @@ reports are in `~/.cache/jmo-p6/premise/`.
   non-DRL rules filtered (D6, J3).
 - Spec §3, the matrix table's "yara-x (vendored dependency trees)": made true by D4.
 - Program plan § Phase 6: "yara-python (whose pinned version never existed)" is stale:
-  4.5.4 is pinned, installs and reads OK. "coverage has been 0/12" → 3 of 15 non-empty plus
-  one empty semgrep fixture. "an EICAR-style fixture" → a JMo canary rule and file. The
+  4.5.4 is pinned, installs and reads OK. "coverage has been 0/12" → 4 of 15 non-empty
+  (gitleaks, opengrep, osv-scanner, zizmor) since Phase 5's PR B, which removed semgrep's
+  empty fixture. "an EICAR-style fixture" → a JMo canary rule and file. The
   #1472 paragraph's work landed in `aed1bab2`; #1426 closed, measured false (`64bbd770`
   audit). The roster line stays as it is (`derive` hashes it; Phase 4's keeps its closed
   issues too); the prose says 22 were open on 2026-10-29.
@@ -299,10 +302,9 @@ reports are in `~/.cache/jmo-p6/premise/`.
   Kubernetes; CredData and KICS Terraform and CloudFormation go after the tag (J7). The
   Phase 4 plan's Ground truth table puts SAST and the juice-shop markers in Phase 5, whose
   plan carries neither: this section supersedes that column.
-- Program plan § After the tag (`:931`, "changes this count to 25") → 29, from the 10-29
-  handoff. The handoff's other plan item, Phase 9's acceptance (`:886`, "no document states a
-  tool count other than 14"), **stays 14**: grype is dropped (J1), so the final matrix is
-  15 − 1.
+- Program plan § After the tag: its count already reads 34 (Phase 5's PR B updated it).
+  Phase 9's acceptance ("no document states a tool count other than 14") **stays 14**:
+  grype is dropped (J1), so the final matrix is 15 − 1.
 - Cite commits by sha in prose; a `#NNNN` the plan does not roster reddens `phase_audit`.
 
 ## Decided from measurement (veto any in review)
@@ -320,7 +322,7 @@ reports are in `~/.cache/jmo-p6/premise/`.
    npm supply-chain rules can match. Measured: one `node_modules` (24,942 files, 0 false
    positives, 5.1 s at `yr -p 4`, 29.6 s on the bindings' one thread) and one Linux `.venv`
    (5,870 files, 0, 3.6 s). Not measured: `vendor/` trees and a Windows `.venv`; Y6 measures
-   the latter on the laptop, and a false positive there takes `.venv`/`venv` back out of
+   the latter on `.198`, and a false positive there takes `.venv`/`venv` back out of
    yara-x's walk (decided in that PR, numbers in its body).
 5. **DRL's output clause is a requirement, not an option:** every yara-x finding carries
    its rule's `author` (and `reference` when present) in `context` and in the message the
@@ -337,8 +339,8 @@ reports are in `~/.cache/jmo-p6/premise/`.
    Phase 0's shape (tool, version, binary sha256, download URL, target, command,
    finding_count). A fixture's version need not equal the current pin: the weekly bump would
    redden it every Sunday; a bump that changes the output format re-captures.
-10. **"Golden = 14/14" is `TOOL_MATRIX` after Phase 5 and this phase**: 15 today, opengrep
-    for semgrep (15), grype out (14). The guard walks `TOOL_MATRIX`, so `--with` tools
+10. **"Golden = 14/14" is `TOOL_MATRIX` after this phase**: 15 on `dev` since PR B put
+    opengrep in semgrep's place, 14 once grype leaves. The guard walks `TOOL_MATRIX`, so `--with` tools
     (kube-linter) need no fixture until they join the matrix.
 11. **trufflehog's golden gets the `detect-private-key` exclusion** that
     `.pre-commit-config.yaml:28-36` gives gitleaks'.
@@ -347,7 +349,7 @@ reports are in `~/.cache/jmo-p6/premise/`.
 
 | PR | Tasks | P5 file? | Closes |
 |---|---|---|---|
-| A — plan text; the report holds only what this scan produced | A1–A6 | no (A3 becomes P5 if it must edit `basic_reporter.py`) | #1007 #1309 #1371 #1408 #1432 |
+| A — plan text; the report holds only what this scan produced, and the scan writes nothing it does not need | A1–A7 | no (A3 becomes P5 if it must edit `basic_reporter.py`) | #1007 #1309 #1371 #1408 #1432 #1506 |
 | D — image discovery and validation | D1–D4 | no | #1405 #1415 #1416 |
 | T — tests that cannot fail; juice-shop's markers and the lockfile oracle | T1–T6 | no (CI wiring moves to F4) | #1173 #1353 |
 | N — the native pack's precision and answer key | N1–N3 | no | #1380 |
@@ -356,9 +358,10 @@ reports are in `~/.cache/jmo-p6/premise/`.
 | E — rows and tables keyed by tool; KICS's line floor | E1–E7 | **P5** | #1354 #1370 #1410 #1430 #1431 |
 | F — golden for every adapter; BenchProctor | F1–F8 | **P5** | #1097 #1349 #1365 #1502 |
 
-A, D, T and N touch no PR B file and can be built in parallel worktrees while PR B is in
-review, then opened after it merges. A precedes G (both edit `dedup_enhanced.py`). G and Y
-precede F. E is independent of G and Y.
+A, D, T and N touch no file PR B's task list names (A6's `jmo.py` took 12 incidental lines
+from PR B; its cited lines are re-read on `dev`) and can be built in parallel worktrees. A precedes G (both
+edit `dedup_enhanced.py`) and F (A6 removes the cause of the errors F4's gate will count). G
+and Y precede F. E is independent of G and Y.
 
 ## Review Focus
 
@@ -377,7 +380,7 @@ precede F. E is independent of G and Y.
 ## Task A1: Plan text and corrections
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-09-12-v2.0.0-program.md` (§ Phase 6; § After the tag `:931`)
+- Modify: `docs/superpowers/plans/2026-09-12-v2.0.0-program.md` (§ Phase 6)
 - Modify: `docs/superpowers/specs/2026-09-12-v2.0.0-program-design.md` (§3 grype and yara rows, §4.2 R1, §6 row 6, §12)
 - Create: this file, as committed
 
@@ -473,12 +476,33 @@ reporters that print a location (SARIF, CSV, HTML), `docs/schemas/` if a field i
   are unchanged (assert one repository id is byte-identical before and after).
 - [ ] **Step 3:** Commit `fix: an image's SBOM packages name the image they came from`, body `Closes #1408`.
 
-## Task A6: Gates, then PR A
+## Task A6: A non-interactive scan leaves `~/.jmo/config.yml` alone (#1506)
+
+**Files:** `scripts/cli/jmo.py:2505` (`_show_kofi_reminder`), `:3492` (its one call, in
+`cmd_scan`), tests in `tests/cli/`; `tests/conftest.py:489` (`_guard_real_jmo_config`) is
+read, not changed.
+
+Placed in PR A, not beside F4's gate fix, so the cause of the e2e errors leaves `dev` before
+any gate counts them, and every later PR's `jmo scan` gates stop writing the real config.
+
+- [ ] **Step 1: Measure first:** which entry points reach the call (`jmo scan`, `jmo ci`,
+  `--yes`, a piped stdout, `CI` set), and what each writes; the issue's fix direction is
+  unmeasured.
+- [ ] **Step 2: Failing tests** under a `tmp_path` HOME holding a `~/.jmo/config.yml`:
+  a scan with stdout not a TTY, and one with `CI` set, leave the file byte-identical and
+  print no reminder; an interactive scan (patched `isatty`) still counts, as today.
+- [ ] **Step 3:** Implement: `_show_kofi_reminder` returns before it reads or writes the
+  config when the scan is not interactive, by Step 1's definition.
+- [ ] **Step 4:** Commit `fix: a non-interactive scan leaves ~/.jmo/config.yml alone`, body
+  `Closes #1506`.
+
+## Task A7: Gates, then PR A
 
 - [ ] **Step 1:** Suite in three parts; diff failing ID sets against `origin/dev`'s.
 - [ ] **Step 2: Through `jmo scan`** (isolated HOME): the two-repository fixture of A3;
   a reused results directory (A2); the osv-scanner golden fed through `gather_results` and
-  every reporter, with the scan root counted in each artifact (A4).
+  every reporter, with the scan root counted in each artifact (A4); a scan piped to a file
+  with the config's sha256 taken before and after (A6).
 - [ ] **Step 3:** Push, open PR A; the body carries those numbers and the Windows run's
   ID-set diff.
 
@@ -556,8 +580,8 @@ below; `_abandon` at `:507` loses its live trigger), `tests/cli/test_scan_target
   counts per tool. Y changes juice-shop's count (signature-base: 2 measured), so F4
   re-derives it once more, after G and Y.
 - [ ] **Step 3:** Commit `test: the baseline test scans one pinned juice-shop commit`, body `Closes #1353`.
-  The e2e half of #1353's body is false (it scans nothing); that is a separate defect,
-  listed unfiled at the end.
+  The e2e half of #1353's body is false (it scans nothing); that is #1502, whose tests T5
+  fixes.
 
 ## Task T3: juice-shop's own markers are the answer key (J7)
 
@@ -801,10 +825,10 @@ image-owned path.
 - [ ] **Step 2: Through `jmo scan`:** app B with its `node_modules` (`npm ci
   --ignore-scripts` into a scratch copy) → 0 yara-x findings; juice-shop → the two
   measured (`EXPL_SUSP_JS_POC_Dec25`, `VULN_KeePass_DB_Brute_Forcible`); time and peak recorded.
-- [ ] **Step 3: Windows (`.218`):** `jmo tools install` / first scan; Defender leaves the
+- [ ] **Step 3: Windows (`.198`, a script Jimmy runs):** `jmo tools install` / first scan; Defender leaves the
   rules directory intact after 5 minutes (file count and sha256s equal the manifest:
   signature-base's webshell rules hold webshell text); the canary test passes; yara-x over
-  the laptop's `.venv` (which holds a real `python.exe`) → record the count; a false
+  a `.venv` on `.198` (which holds a real `python.exe`) → record the count; a false
   positive takes `.venv`/`venv` out of the walk (D4).
 - [ ] **Step 4:** Push, open PR Y; body: the numbers, and what CI cannot provide (Steps 2-3).
 
@@ -949,8 +973,8 @@ expected line hit or missed, and by which tool)
   (one name mapping: the directory is `osv_scanner`, the matrix name `osv-scanner`); every
   registry entry has a directory with at least one version, so a registered tool with no
   fixture fails instead of generating no test (today 6 do); every fixture's
-  `expected-findings.json` holds > 0 findings and equals `metadata.finding_count` (today
-  `0 == 0` passes the empty semgrep fixture); every version directory has a raw output
+  `expected-findings.json` holds > 0 findings and equals `metadata.finding_count` (`0 == 0`
+  passed semgrep's empty fixture until PR B removed it; nothing stops the next one); every version directory has a raw output
   besides `expected-findings.json` and `metadata.json` (`get_golden_test_cases`,
   `test_adapter_golden.py:121`, counts `metadata.json` as the second JSON today).
 - [ ] **Step 2:** Mutation-test each: delete one fixture directory, empty one expected
@@ -974,9 +998,9 @@ The job is deleted, not rebuilt (J6).
 - [ ] **Step 3: The e2e gate counts errors (#1502):** "Fail the run if any e2e test failed"
   (`scheduled.yml:1436-1484`) sums `summary.error` with `summary.failed` (`:1360-1380`).
   At `c05aef28` that is 7 + 4 errors the gate read as 0, all `_guard_real_jmo_config`
-  teardowns from e2e scans writing the runner's `~/.jmo/config.yml`: their cause is fixed
-  or routed first, or this step turns the nightly red on landing (decide in the PR, with
-  the run's error list). Mutation-test: a report with one error and no failures → red.
+  teardowns from e2e scans writing the runner's `~/.jmo/config.yml`. Their cause, #1506, is
+  fixed by Task A6 in PR A, so the gate should land green: confirm it on the last nightly's
+  error list, and route any error that remains before this step lands. Mutation-test: a report with one error and no failures → red.
 - [ ] **Step 4:** Commit `test: the smoke job that skipped everything gives way to golden re-capture`, body `Closes #1349` and `Closes #1502`.
 
 ## Task F5: docker-smoke's weak test (#1365) (P5)
@@ -1025,8 +1049,8 @@ cache), `tests/integration/test_benchproctor.py`
 
 - grype gone: `jmo scan --tools grype` exits 2, "removed in v2.0.0"; `TOOL_MATRIX` = 14;
   app A and app B report the same dependency findings without it (25, 61).
-- yara-x: the canary under `node_modules` reported through `jmo scan` on Linux and on the
-  laptop; 0 signature-base findings on app B with its `node_modules`; a single rule file
+- yara-x: the canary under `node_modules` reported through `jmo scan` on Linux and on
+  `.198`; 0 signature-base findings on app B with its `node_modules`; a single rule file
   works; the image's yara-x `execution_ready`, with and without an empty `~/.jmo` bind mount,
   `KNOWN_NOT_READY` empty; every finding names its rule's author.
 - Golden = 14 / 14, every `finding_count` > 0, each meta-guard mutation-tested.
@@ -1037,13 +1061,14 @@ cache), `tests/integration/test_benchproctor.py`
   JavaScript Youden's J recorded per framework (F7). Each fails on a regression from its
   recorded table.
 - No CI job reads green on all skips.
-- The 23 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
+- The 24 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
 
-## New defects found by the measurement (routing proposed; one filed)
+## New defects found by the measurement (routing proposed; two filed)
 
 | Defect | Evidence | Proposed routing |
 |---|---|---|
 | The e2e URL tests (U1, U5, M1, W1 in `tests/e2e/test_scan_workflows.py`) have never scanned juice-shop: `--repo` takes a path, the run is rc 1 "Every target was rejected", and the tests accept rc 1 and empty outputs; the steps are `continue-on-error: true` | `scheduled.yml:882,884,1003,1006`; `test_scan_workflows.py:59,119,138,183,213`; `tests/e2e/conftest.py:80-100` | **Filed as #1502** (2026-10-29), rostered in Phase 6 by PR #1503, widened to the e2e gate, which counts pytest's failures but not its errors (7 + 4 at `c05aef28` read as 0): the tests in T5, the gate in F4 (`scheduled.yml` is a P5 file). It is #1353's other half |
+| A `jmo scan` rewrites the real `~/.jmo/config.yml` (the Ko-fi counter), the cause of those 11 errors | `scripts/cli/jmo.py:2505`, `:3492`; `tests/conftest.py:489` on `dev` | **Filed as #1506** (2026-10-29) from Phase 5's PR B, which rostered it in Phase 6: Task A6 |
 | No known-vulnerable GitHub Actions check once grype leaves | github-actions-goat: 7 advisories; OSV `GitHub Actions/all.zip`, 56 advisories | after the tag: a `jmo-native` reader of `uses:` against that database, offline |
 | `install_config.py:75-95` gives two false reasons for ReversingLabs | GitHub repo size with history; DRL unrecognised | none: Task Y1 removes the comment |
 | signature-base reports two `WEBSHELL_PHP_Generic_Eval` findings on JMo's own yara tests | `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py` hold webshell-like strings | none: Y6 decides whether a self-scan excludes them; not a product defect |
@@ -1074,6 +1099,9 @@ WebGoat unpinned (T2).
    rostered in Phase 6 by PR #1503. Still unfiled, each needing your word and a roster in
    the PR that files it (an unrostered issue reddens `phase_audit` on every open PR,
    Phase 5's included): after the tag, the offline known-vulnerable-Actions check, CredData,
-   and KICS Terraform and CloudFormation. Also unfiled and newly measured: e2e scans write
-   the runner's real `~/.jmo/config.yml` (the Ko-fi counter, `scripts/cli/jmo.py:2505`), the
-   cause of the 11 errors F4's gate fix will surface.
+   and KICS Terraform and CloudFormation. The e2e scans' write to the runner's real
+   `~/.jmo/config.yml`, the cause of the 11 errors F4's gate fix surfaces, was filed from
+   Phase 5's PR B as #1506.
+2. **#1506's placement** (2026-10-30, after PR B merged): Task A6 in PR A, so it leaves `dev`
+   before F4's gate counts errors. The alternative is beside T5, which makes the e2e tests
+   scan for real. Veto in review.
