@@ -205,8 +205,8 @@ SOURCES: dict[str, Source] = {
             skip_modes={"join": _JOIN_REASON},
             skip_ids={
                 "0xdea.c.use-after-free.raptor-use-after-free": (
-                    "fails opengrep 1.31.0 and 1.32.0 on its own test file: a timeout by default, "
-                    "a stack overflow once the timeout and the stack limit are lifted"
+                    "fails opengrep 1.31.0 and 1.32.0 on its own test file with a timeout by default; "
+                    "a stack overflow once the timeout and the stack limit are lifted, measured on 1.32.0 only"
                 ),
             },
         ),
