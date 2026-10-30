@@ -283,6 +283,32 @@ def _guard_real_jmo_install():
         )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _keep_opengrep_log_out_of_the_home(tmp_path_factory):
+    """Point opengrep's debug log at a scratch file for every test.
+
+    Every run of the binary truncates and rewrites `$HOME/.opengrep/semgrep.log`
+    (`opengrep --version` included: it empties the file; measured on 1.32.0),
+    and the log holds the text of every match. A test that runs the binary
+    without a `SEMGREP_LOG_FILE` of its own therefore writes into the
+    developer's real home, and under xdist it does so while another worker's
+    test is comparing that file before and after a scan:
+    `test_a_scan_leaves_no_log_in_the_home_directory` failed on 3 of 3 runs at
+    `-n 8`. The scan loop sets the variable for its own runs (`env` of the
+    opengrep row), so only a test that spawns the binary itself, or probes its
+    version through `ToolManager`, depends on this. Set once for the session,
+    it covers a test written tomorrow too; the guard test removes it for its
+    own body, since it checks that the row alone moves the log.
+    """
+    patch = pytest.MonkeyPatch()
+    patch.setenv(
+        "SEMGREP_LOG_FILE",
+        str(tmp_path_factory.mktemp("opengrep-log") / "semgrep.log"),
+    )
+    yield
+    patch.undo()
+
+
 # TODO(issue-#1425): fires on subprocess e2e U4 with zap and no ZAP home
 @pytest.fixture(autouse=True)
 def _guard_real_zap_home(request):

@@ -1263,12 +1263,37 @@ def _stat_of(path: Path) -> tuple[int, int] | None:
 
 
 @pytest.mark.requires_tools
-def test_a_scan_leaves_no_log_in_the_home_directory(tmp_path) -> None:
+def test_a_bare_run_of_the_binary_in_a_test_leaves_the_real_log_alone() -> None:
+    """The suite's own promise (conftest): a test that spawns opengrep without
+    thinking about its log, here a version probe, which empties the log of the
+    home it runs in (measured, 1.32.0), does not touch the developer's."""
+    import os
+
+    home_log = Path.home() / ".opengrep" / "semgrep.log"
+    before = _stat_of(home_log)
+
+    done = subprocess.run(
+        [_opengrep(), "--version"], capture_output=True, text=True, timeout=120
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert _stat_of(home_log) == before, f"{home_log} was written by a test"
+    # It went where the fixture sent it.
+    assert Path(os.environ["SEMGREP_LOG_FILE"]).is_file()
+
+
+@pytest.mark.requires_tools
+def test_a_scan_leaves_no_log_in_the_home_directory(tmp_path, monkeypatch) -> None:
     """opengrep's debug log holds the source text of every match, and its
     default home is the user's `~/.opengrep` (measured, v1.32.0): the log of a
     scan of a repository holding a key sat there after the scan, outside the
     scan, outliving it. It is the scan's scratch now, under the results
-    directory. The cache that holds its 255 MB extraction stays in the home."""
+    directory. The cache that holds its 255 MB extraction stays in the home.
+
+    The suite sets `SEMGREP_LOG_FILE` for every test (conftest), which would
+    move the log whether or not the row did: it is removed here, so the row
+    alone has to."""
+    monkeypatch.delenv("SEMGREP_LOG_FILE", raising=False)
     repo = tmp_path / "app"
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "a.py").write_bytes(TWO_FINDINGS)
