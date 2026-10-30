@@ -262,13 +262,19 @@ pin in `scripts/dev/build_rule_bundle.py` and rebuild
 
 Opengrep brings its own ignore list, as Semgrep did. When the scanned directory
 has no `.semgrepignore` (opengrep still reads that name), it skips `tests/` and
-`test/` at any depth, `build/`, `dist/` and `node_modules/`. JMo's own exclusions are
-passed on top of it, so a flaw that lives only in test code is not reported by
-opengrep.
+`test/` at any depth, `build/`, `dist/` and `node_modules/`, and two kinds of file by
+name: Go test files (`*_test.go`) and minified JavaScript (`*.min.js`). JMo's own
+exclusions are passed on top of it, so a flaw that lives only in test code is not
+reported by opengrep.
 
 Measured with opengrep 1.32.0 on a fixture with one Python file in each of `tests/`,
 `test/`, `deep/tests/`, `build/`, `dist/` and `node_modules/` and two others (`src/`,
-`docs/`): it scanned the two others and none of these. The list is matched against the
+`docs/`): it scanned the two others and none of these. Given `main.go`,
+`main_test.go`, `app.js`, `app.min.js`, `x_test.py` and `test_x.py`, it skipped
+`main_test.go` and `app.min.js` and read the rest, so the Go convention is the only
+test file name on the list. A repository whose only files are of the skipped kinds
+(Go test files and nothing else) examines 0 files, and its row reads
+`failed:examined 0 files`. The list is matched against the
 path opengrep is handed, so JMo runs it from inside the target and names the target
 `.`: a repository checked out under a directory called `build/` or `tests/` is scanned
 all the same.

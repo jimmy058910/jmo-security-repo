@@ -67,7 +67,7 @@ per_tool:
 opengrep, a fork of Semgrep's engine, is the code scanner. It is a single static binary, and it runs a rule bundle that ships with JMo (`scripts/jmo_rules/`, 1,456 security rules; [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md)). A scan fetches no rule: it runs offline and gives the same rules on every machine, where `semgrep --config auto` asked semgrep.dev which rules applied.
 
 - **The tool's name changed.** `--tools semgrep`, `--skip-tools semgrep` and a `semgrep` entry in `tools:` fail with exit code 2, saying semgrep was removed in v2.0.0 and that opengrep replaced it. Use `opengrep`. The raw output is `opengrep.json`, where it was `semgrep.json`.
-- **`per_tool.semgrep` becomes `per_tool.opengrep`.** A `jmo.yml` that still carries `per_tool.semgrep` loads, logs one warning naming `per_tool.opengrep.configs`, and ignores the entry: your own packs stop applying until you move them.
+- **`per_tool.semgrep` becomes `per_tool.opengrep`.** A `jmo.yml` that still carries `per_tool.semgrep` loads, logs one warning that names each key the entry carries under `per_tool.opengrep` (`per_tool.opengrep.configs` for packs, `per_tool.opengrep.flags` for flags), and ignores the entry: your own packs and flags stop applying until you move them.
 
   ```yaml
   # v1.x

@@ -188,9 +188,10 @@ All notable changes to JMo Security will be documented in this file.
   on every run, and two runs of one JMo version could differ). `--tools semgrep`,
   `--skip-tools semgrep` and a `semgrep` entry in `tools:` are a usage error (exit 2) that
   says semgrep was removed in v2.0.0 and that opengrep replaced it. `per_tool.semgrep` is
-  ignored with one warning that names `per_tool.opengrep.configs`, where your own packs
-  now go. The tool's name is hashed into every finding id, so **every SAST finding id
-  changes once**. A repository with no file in a language the bundle reads is
+  ignored with one warning that names each key the entry carries under `per_tool.opengrep`
+  (`configs` for your own packs, `flags` for flags), where they now go. The tool's name
+  is hashed into every finding id, so **every SAST finding id changes once**. A
+  repository with no file in a language the bundle reads is
   `skipped:no files in a language the rule bundle reads`, where Semgrep always ran.
   opengrep runs from inside the target, so a repository cloned under a directory named
   `build/` or `tests/` is scanned, and its debug log, which holds matched source text,
