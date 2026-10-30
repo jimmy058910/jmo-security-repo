@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable, Iterator, Sequence
+import re
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -399,6 +400,89 @@ def normalize_finding_path(path: str, roots: Sequence[str] = ()) -> str:
     # its comparison, so this brings the stored path into line with the form the
     # suppression engine has been compensating for.
     return unified.lstrip("/")
+
+
+# One separator as a regex: `/`, `\`, or `\\` -- the last is how a backslash
+# path reads inside JSON text, where a tool has embedded a document in a string.
+_ROOT_SEPARATOR = r"(?:/|\\\\|\\)"
+
+
+def scan_root_pattern(roots: Sequence[str]) -> re.Pattern[str] | None:
+    r"""A pattern for the scan ``roots`` as they appear inside text (#1007).
+
+    :func:`normalize_finding_path` cleans ``location.path``, but a tool also
+    names the directory it scanned in prose: osv-scanner's remediation says
+    ``lockfile:C:/Users/.../NodeGoat/package-lock.json`` and tells the reader
+    to put an ignore rule in ``C:\Users\...\NodeGoat\osv-scanner.toml``. That
+    prose reached ``findings.sarif`` 1,896 times and ``dashboard.html`` 1,249.
+
+    Each match is the root in either separator, in any case (as above, tools
+    disagree about both), with the separator after it when there is one, so
+    replacing a match with ``""`` leaves the path relative to the root. A root
+    with nothing after it is the root itself, which :func:`strip_scan_roots`
+    writes as ``.``.
+
+    A match must begin at a word boundary and end at a name boundary. Without
+    that, the root ``/app`` would also find ``/application`` and the ``/app``
+    in ``github.com/app/x``, and the report would rewrite text that is not a
+    path under the scan.
+
+    Returns ``None`` when no root is a usable one: a relative root (``.``)
+    names no place, and ``/`` names every place.
+    """
+    spellings: list[str] = []
+    for root in roots:
+        unified = root.replace("\\", "/").rstrip("/")
+        if not (unified.startswith("/") or (len(unified) > 1 and unified[1] == ":")):
+            continue
+        if unified not in spellings:
+            spellings.append(unified)
+    if not spellings:
+        return None
+    # Longest first, so a root nested in another is the one that matches.
+    spellings.sort(key=len, reverse=True)
+    alternatives = "|".join(
+        _ROOT_SEPARATOR.join(re.escape(part) for part in spelling.split("/"))
+        for spelling in spellings
+    )
+    return re.compile(
+        rf"(?<!\w)(?:{alternatives})"
+        rf"(?:(?P<separator>{_ROOT_SEPARATOR})|(?![\w-]|\.\w))",
+        re.IGNORECASE,
+    )
+
+
+def _drop_root(match: re.Match[str]) -> str:
+    return "" if match.group("separator") else "."
+
+
+def strip_scan_roots(
+    value: Any, pattern: re.Pattern[str], *, verbatim: Collection[str] = ()
+) -> Any:
+    """``value`` with the scan root removed from every string in it (#1007).
+
+    Walks dicts and lists and returns a **copy**: the caller's findings are not
+    changed, so a reporter can redact what it embeds and leave what the other
+    reporters write alone. A value under a key in ``verbatim`` is kept as it is
+    (the same object), at any depth: ``raw`` is each tool's own output.
+
+    Args:
+        value: A string, or a dict or list holding strings.
+        pattern: From :func:`scan_root_pattern`.
+        verbatim: Keys whose values are not touched.
+    """
+    if isinstance(value, str):
+        return pattern.sub(_drop_root, value)
+    if isinstance(value, dict):
+        return {
+            key: item
+            if key in verbatim
+            else strip_scan_roots(item, pattern, verbatim=verbatim)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [strip_scan_roots(item, pattern, verbatim=verbatim) for item in value]
+    return value
 
 
 def dependency_record(

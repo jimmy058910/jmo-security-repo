@@ -28,7 +28,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from scripts.core.adapters.common import normalize_finding_path
+from scripts.core.adapters.common import (
+    normalize_finding_path,
+    scan_root_pattern,
+    strip_scan_roots,
+)
 from scripts.core.common_finding import fingerprint, package_of, target_id
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.cwe_extraction import backfill_risk_cwe
@@ -59,6 +63,11 @@ PROFILE_TIMINGS: dict[str, Any] = {
     "jobs": [],  # list of {"tool": str, "path": str, "seconds": float, "count": int}
     "meta": {},  # miscellaneous metadata like max_workers
 }
+
+#: Keys whose values are a tool's own output, kept as it wrote them: a finding's
+#: `raw` may name the scanning machine's directories (J5, #1007). The dashboard
+#: redacts it on its way out; `findings.json` and `findings.yaml` keep it.
+_VERBATIM_KEYS = frozenset({"raw"})
 
 
 def deduplicate_findings_memory_efficient(
@@ -223,9 +232,17 @@ def scan_roots(results_dir: Path) -> tuple[str, ...]:
 def _normalize_paths_and_ids(
     findings: list[dict[str, Any]], roots: tuple[str, ...]
 ) -> tuple[int, int]:
-    """Normalize ``location.path`` in place and re-key path-derived ids (#861).
+    """Normalize ``location.path`` in place, drop the scan root from every other
+    string, and re-key the ids derived from either (#861, #1007).
 
     Returns ``(paths_changed, ids_rekeyed)``.
+
+    The root is dropped from **every string in a finding except** ``raw``, which
+    is the tool's own output and stays as the tool wrote it (J5; the dashboard
+    redacts it on its way out). A field list would be the next field's leak:
+    osv-scanner's ``remediation`` told the reader where to put an ignore rule,
+    ``C:\\Users\\...\\osv-scanner.toml``, and that reached ``findings.sarif``
+    1,896 times, as ``properties.remediation`` and as every rule's ``help``.
 
     **The id is only recomputed when the existing one can be shown to have come
     from the old path.** That check is not defensive padding -- it is load
@@ -244,31 +261,53 @@ def _normalize_paths_and_ids(
     exact failure class this campaign keeps finding. Deriving the answer from
     the data rather than from a hard-coded allowlist also means a new adapter
     with a custom key is safe on the day it lands, with nothing to remember.
+
+    The same holds for the other inputs of that formula, ``message`` and
+    ``ruleId``: an id is recognised from what the adapter hashed, and re-keyed
+    from what the finding says now, so it does not depend on which directory
+    was scanned. (No golden adapter's message names the root today; a tool's
+    would have made the id differ between two checkouts of one repository.)
     """
     paths_changed = 0
     ids_rekeyed = 0
+    pattern = scan_root_pattern(roots)
 
     for finding in findings:
         location = finding.get("location")
-        if not isinstance(location, dict):
-            continue
-        original = location.get("path")
-        if not isinstance(original, str) or not original:
-            continue
+        original = location.get("path") if isinstance(location, dict) else None
+        rule_id = finding.get("ruleId", "") or ""
+        message = finding.get("message", "") or ""
 
-        normalized = normalize_finding_path(original, roots)
-        if normalized == original:
-            continue
+        normalized = original
+        if isinstance(location, dict) and isinstance(original, str) and original:
+            normalized = normalize_finding_path(original, roots)
+            location["path"] = normalized
+        if pattern:
+            # The same objects, so `target_of`, which keys on `id(finding)`,
+            # still finds this finding.
+            finding.update(strip_scan_roots(finding, pattern, verbatim=_VERBATIM_KEYS))
+            location = finding.get("location")
+            if isinstance(location, dict):
+                # What the finding carries now: the strip also takes the root
+                # out of a path `normalize_finding_path` leaves alone, the root
+                # itself or a URL naming it, and the id follows that too.
+                normalized = location.get("path")
+        if normalized != original:
+            paths_changed += 1
 
-        location["path"] = normalized
-        paths_changed += 1
+        if not isinstance(location, dict) or not isinstance(original, str):
+            continue
+        if not original:
+            continue
+        new_rule_id = finding.get("ruleId", "") or ""
+        new_message = finding.get("message", "") or ""
+        if (normalized, new_rule_id, new_message) == (original, rule_id, message):
+            continue
 
         current = finding.get("id")
         if not isinstance(current, str) or not current:
             continue
         tool = (finding.get("tool") or {}).get("name", "")
-        rule_id = finding.get("ruleId", "") or ""
-        message = finding.get("message", "") or ""
         start_line = location.get("startLine")
 
         # Two shapes of the one formula: five components, or six when the
@@ -302,10 +341,10 @@ def _normalize_paths_and_ids(
             ):
                 finding["id"] = fingerprint(
                     tool,
-                    rule_id,
+                    new_rule_id,
                     normalized,
                     start_line,
-                    message,
+                    new_message,
                     start_column=col,
                     commit=c,
                     package=p,

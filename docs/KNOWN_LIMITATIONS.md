@@ -617,6 +617,22 @@ v1.1.0 it printed *"Make sure dashboard-data.json is in the same directory as
 this HTML file"* — advice that was both useless and false, since the file was
 already there ([#1129](https://github.com/jimmy058910/jmo-security-repo/issues/1129)).
 
+### `raw` in `findings.json` and `findings.yaml` can hold the scanning machine's paths
+
+`raw` in `findings.json` and `findings.yaml` is each tool's verbatim output and
+can hold the scanning machine's paths; the dashboard redacts them. osv-scanner,
+for one, names the directory it scanned, which is under the home directory of
+whoever ran the scan. JMo keeps `raw` as written in those two files, so the
+tool's own words are still there to compare. The directory that was scanned is
+removed from every other field of a finding, so `findings.sarif`, `findings.csv`
+and the rest carry none, and from the whole of `dashboard.html` and
+`dashboard-data.json`, `raw` too
+([#1007](https://github.com/jimmy058910/jmo-security-repo/issues/1007)).
+
+**What to do:** read `findings.json` and `findings.yaml` as the scan's own
+output, and do not publish them from a personal machine without looking at
+`raw`. The dashboard and the SARIF file are the ones made for sharing.
+
 ---
 
 ## Defects shipping in v1.1.1
@@ -642,10 +658,6 @@ gh issue list --repo jimmy058910/jmo-security-repo --state open --label user-rea
   database flag is `--history-db` on `scan` and `ci` but `--db` on `diff` and
   `history list`; bulk tool warnings arrive as one long JSON line.
   [#1082](https://github.com/jimmy058910/jmo-security-repo/issues/1082)
-- **`dashboard.html` embeds the scanning user's home directory** inside each
-  finding's `raw` field, which is the tool's verbatim output. Review a
-  dashboard produced on a personal machine before publishing it.
-  [#1007](https://github.com/jimmy058910/jmo-security-repo/issues/1007)
 
 ---
 
