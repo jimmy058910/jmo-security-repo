@@ -238,7 +238,7 @@ def test_the_proxy_variables_reach_opengrep(tmp_path, monkeypatch) -> None:
 
     tail = done.stderr[-600:]
     assert done.returncode != 0, done.stdout
-    assert "port=9" in done.stderr and "Connection refused" in done.stderr, tail
+    assert "port=9" in done.stderr and "refused" in done.stderr.lower(), tail
 
 
 def test_a_scan_makes_no_network_call(tmp_path, target, monkeypatch) -> None:

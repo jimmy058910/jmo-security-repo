@@ -1963,13 +1963,15 @@ jobs:
           }
           if (-not $installed) { throw "jmo tools install opengrep did not put $exe in place" }
 
-          # The binary unpacks its runtime on first use, which Defender may slow.
-          # Run it once here, timed, so `jmo tools check` probes it warm within
-          # its 10 s budget, and the log records what a first run costs.
+          # The installer's own post-install check has already run the binary
+          # once, so this is the first run after install, not the first ever.
+          # Time it: `jmo tools check` probes with a 10 s budget, and so does a
+          # user's, so a figure over 10 here is a product signal. The log keeps
+          # it either way.
           $first = [System.Diagnostics.Stopwatch]::StartNew()
           $version = & $exe --version
           if ($LASTEXITCODE -ne 0) { throw "$exe --version exited $LASTEXITCODE" }
-          Write-Host "opengrep --version: $version (first run: $([int]$first.Elapsed.TotalSeconds) s)"
+          Write-Host "opengrep --version: $version (first run after install: $([int]$first.Elapsed.TotalSeconds) s)"
 
           $raw = jmo tools check --json opengrep
           if ($LASTEXITCODE -ne 0) { throw "jmo tools check opengrep exited $LASTEXITCODE" }
@@ -2026,10 +2028,11 @@ jobs:
           Get-ChildItem -Recurse -File tests\fixtures\rule_bundle\juice-shop | Get-FileHash -Algorithm SHA256 |
             ForEach-Object { Write-Host "$($_.Hash.ToLowerInvariant())  $($_.Path)" }
 
-      # The next two steps run whether or not the other failed: on a platform
-      # nobody has run this on, one run should show every failure, and the job
-      # is red if either is. They need the install and the fixture, hence the
-      # outcome of the fixture step (which itself needs the install).
+      # The next two steps run whether or not the other failed, so one run shows
+      # both results, and the job is red if either is. They do not run after a
+      # failed install, version, digest or fixture step: the fixture step above
+      # has the implicit success(), so any earlier failure skips it and its
+      # outcome is not 'success'.
       - name: Run the opengrep tests that need the real binary
         if: ${{ !cancelled() && steps.fixture.outcome == 'success' }}
         timeout-minutes: 20
@@ -2044,7 +2047,7 @@ jobs:
             tests/integration/test_rule_bundle_fixture.py `
             tests/unit/test_opengrep_wiring.py `
             tests/unit/test_jmo_rules_bundle.py `
-            -v -m "requires_tools" --tb=short --timeout=300 `
+            -v -rs -m "requires_tools" --tb=short --timeout=300 `
             -p no:xdist -p no:rerunfailures --junitxml=$junit
           if ($LASTEXITCODE -ne 0) { throw "pytest exited $LASTEXITCODE" }
 
@@ -2157,8 +2160,12 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          $lines = [System.Collections.Generic.List[string]]::new()
-          $lines.Add('### Microsoft Defender on this runner (report only)')
+          # Each line goes to the log and the job summary as it is known, so a
+          # scan that hangs until the step timeout does not lose the status.
+          function Report($text) {
+            Write-Host $text
+            $text | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          }
           function Test-Bundle {
             $dir = Join-Path $env:GITHUB_WORKSPACE 'scripts/jmo_rules'
             $manifest = Get-Content -Raw -LiteralPath (Join-Path $dir 'SOURCES.json') | ConvertFrom-Json
@@ -2172,36 +2179,35 @@ jobs:
             $listed = @($manifest.files.PSObject.Properties).Count
             "$listed files listed in SOURCES.json: $($bad.Count) missing or different $($bad -join '; ')"
           }
+          Report '### Microsoft Defender on this runner (report only)'
           try {
             $status = Get-MpComputerStatus -ErrorAction Stop
-            $lines.Add('')
-            $lines.Add('| AMServiceEnabled | RealTimeProtectionEnabled | AntivirusSignatureLastUpdated |')
-            $lines.Add('| --- | --- | --- |')
-            $lines.Add("| $($status.AMServiceEnabled) | $($status.RealTimeProtectionEnabled) | $($status.AntivirusSignatureLastUpdated) |")
-            $lines.Add('')
+            Report ''
+            Report '| AMServiceEnabled | RealTimeProtectionEnabled | AntivirusSignatureLastUpdated |'
+            Report '| --- | --- | --- |'
+            Report "| $($status.AMServiceEnabled) | $($status.RealTimeProtectionEnabled) | $($status.AntivirusSignatureLastUpdated) |"
+            Report ''
             if ($status.AMServiceEnabled) {
-              $lines.Add("Rule bundle before the scan: $(Test-Bundle)")
+              Report "Rule bundle before the scan: $(Test-Bundle)"
               Start-MpScan -ScanType CustomScan -ScanPath (Join-Path $env:GITHUB_WORKSPACE 'scripts/jmo_rules') -ErrorAction Stop
-              $lines.Add("Custom scan of scripts/jmo_rules finished; rule bundle after it: $(Test-Bundle)")
+              Report "Custom scan of scripts/jmo_rules finished; rule bundle after it: $(Test-Bundle)"
               # Every detection on the runner, not only this scan's: one made at
               # checkout, or of opengrep.exe itself, explains a red step above.
               $detected = @(Get-MpThreatDetection -ErrorAction Stop)
               if ($detected.Count -eq 0) {
-                $lines.Add('Detections recorded on this runner: none.')
+                Report 'Detections recorded on this runner: none.'
               } else {
-                $lines.Add("Detections recorded on this runner: $($detected.Count).")
+                Report "Detections recorded on this runner: $($detected.Count)."
                 foreach ($d in $detected | Select-Object -First 20) {
-                  $lines.Add("- ThreatID $($d.ThreatID) at $($d.InitialDetectionTime): $($d.Resources -join ', ')")
+                  Report "- ThreatID $($d.ThreatID) at $($d.InitialDetectionTime): $($d.Resources -join ', ')"
                 }
               }
             } else {
-              $lines.Add('The Defender service is not enabled here, so no scan was run.')
+              Report 'The Defender service is not enabled here, so no scan was run.'
             }
           } catch {
-            $lines.Add("The probe failed: $($_.Exception.Message)")
+            Report "The probe failed: $($_.Exception.Message)"
           }
-          $lines | ForEach-Object { Write-Host $_ }
-          $lines | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
           exit 0
 
       - name: Windows post-test cleanup
