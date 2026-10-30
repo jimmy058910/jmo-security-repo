@@ -6,8 +6,9 @@
 signature-base replaces yara-python and the ReversingLabs rules, and is the one tool that
 reads vendored dependency trees; every adapter in the final matrix (14) has a non-empty
 golden fixture captured through `jmo scan`, guarded so that a missing or empty one fails;
-and the 24 open Phase 6 issues close: the 22 whose premises were re-measured on
-2026-10-29, #1502, which that measurement filed, and #1506, filed from Phase 5's PR B.
+and the 25 open Phase 6 issues close: the 22 whose premises were re-measured on
+2026-10-29, #1502, which that measurement filed, #1506, filed from Phase 5's PR B, and
+the e2e helper's #1517, filed from PR A's own measurement on 2026-10-30.
 
 **Architecture:** eight PRs in two groups. Four touch no file that Phase 5's Tasks B1–B8
 list (A, D, T, N). Four do (G, Y, E, F). **No Phase 6 implementation PR opened before Phase 5's
@@ -349,7 +350,7 @@ reports are in `~/.cache/jmo-p6/premise/`.
 
 | PR | Tasks | P5 file? | Closes |
 |---|---|---|---|
-| A — plan text; the report holds only what this scan produced, and the scan writes nothing it does not need | A1–A7 | no (A3 becomes P5 if it must edit `basic_reporter.py`) | #1007 #1309 #1371 #1408 #1432 #1506 |
+| A — plan text; the report holds only what this scan produced, and the scan writes nothing it does not need | A1–A8 | no (A3 becomes P5 if it must edit `basic_reporter.py`; A7 edits `tests/conftest.py`, a P5 file: re-read it on `dev`) | #1007 #1309 #1371 #1408 #1432 #1506 #1517 |
 | D — image discovery and validation | D1–D4 | no | #1405 #1415 #1416 |
 | T — tests that cannot fail; juice-shop's markers and the lockfile oracle | T1–T6 | no (CI wiring moves to F4) | #1173 #1353 |
 | N — the native pack's precision and answer key | N1–N3 | no | #1380 |
@@ -496,13 +497,42 @@ any gate counts them, and every later PR's `jmo scan` gates stop writing the rea
 - [ ] **Step 4:** Commit `fix: a non-interactive scan leaves ~/.jmo/config.yml alone`, body
   `Closes #1506`.
 
-## Task A7: Gates, then PR A
+## Task A7: The e2e helper's HOME hides the scanners and moves their caches (#1517)
+
+**Files:** `tests/conftest.py:106` (`jmo_runner`), `tests/e2e/test_linux_specific.py` (its
+five scan tests), and every other test file that scans through `jmo_runner` (Step 1 lists
+them).
+
+Placed right after A6: the fake HOME exists to keep the Ko-fi write (#1506) off the real
+config, and A6 removes that write for a non-interactive scan (`jmo_runner` captures output,
+so it is not a TTY). The override may then go entirely.
+
+- [ ] **Step 1: Measure first**, with A6 in: what a `jmo scan` run through `jmo_runner`
+  still writes under `~/.jmo` (history is cwd-relative, and `jmo_runner` keeps
+  `cwd=tmp_path`); which test files scan through `jmo_runner`, and which of their scans run
+  a scanner on `.199` and in `ci.yml`'s shards.
+- [ ] **Step 2: Failing tests:** `jmo_runner` itself: a scan leaves the real
+  `~/.jmo/config.yml` untouched (A6's guarantee, checked by `_guard_real_jmo_config`) and
+  hands the subprocess no fresh per-test scanner cache; each scan test that means to scan
+  asserts at least one scanner row `ran`, or becomes a CLI-plumbing test whose `--tools`
+  names a tool it can run.
+- [ ] **Step 3:** Implement Step 1's answer: drop the HOME override if A6 leaves nothing
+  else under `~/.jmo`; otherwise keep it and point the scanners at one session-scoped cache
+  (`XDG_CACHE_HOME`, or `TRIVY_CACHE_DIR` and `GRYPE_DB_CACHE_DIR`).
+- [ ] **Step 4:** Repeat the 2026-10-30 measurement: `test_linux_specific.py` with
+  `~/.jmo/bin` on PATH and one unique `--basetemp` under `~/.cache` (deleted after reading)
+  → record the size and time (24 GB and 6 min 57 s before; 5.0 MB and 11 s without the
+  scanners on PATH).
+- [ ] **Step 5:** Commit `test: e2e scans find the installed scanners and share one cache`,
+  body `Closes #1517`.
+
+## Task A8: Gates, then PR A
 
 - [ ] **Step 1:** Suite in three parts; diff failing ID sets against `origin/dev`'s.
 - [ ] **Step 2: Through `jmo scan`** (isolated HOME): the two-repository fixture of A3;
   a reused results directory (A2); the osv-scanner golden fed through `gather_results` and
   every reporter, with the scan root counted in each artifact (A4); a scan piped to a file
-  with the config's sha256 taken before and after (A6).
+  with the config's sha256 taken before and after (A6); A7's Step 4 numbers.
 - [ ] **Step 3:** Push, open PR A; the body carries those numbers and the Windows run's
   ID-set diff.
 
@@ -1061,14 +1091,15 @@ cache), `tests/integration/test_benchproctor.py`
   JavaScript Youden's J recorded per framework (F7). Each fails on a regression from its
   recorded table.
 - No CI job reads green on all skips.
-- The 24 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
+- The 25 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
 
-## New defects found by the measurement (routing proposed; two filed)
+## New defects found by the measurement (routing proposed; three filed)
 
 | Defect | Evidence | Proposed routing |
 |---|---|---|
 | The e2e URL tests (U1, U5, M1, W1 in `tests/e2e/test_scan_workflows.py`) have never scanned juice-shop: `--repo` takes a path, the run is rc 1 "Every target was rejected", and the tests accept rc 1 and empty outputs; the steps are `continue-on-error: true` | `scheduled.yml:882,884,1003,1006`; `test_scan_workflows.py:59,119,138,183,213`; `tests/e2e/conftest.py:80-100` | **Filed as #1502** (2026-10-29), rostered in Phase 6 by PR #1503, widened to the e2e gate, which counts pytest's failures but not its errors (7 + 4 at `c05aef28` read as 0): the tests in T5, the gate in F4 (`scheduled.yml` is a P5 file). It is #1353's other half |
 | A `jmo scan` rewrites the real `~/.jmo/config.yml` (the Ko-fi counter), the cause of those 11 errors | `scripts/cli/jmo.py:2505`, `:3492`; `tests/conftest.py:489` on `dev` | **Filed as #1506** (2026-10-29) from Phase 5's PR B, which rostered it in Phase 6: Task A6 |
+| `jmo_runner`'s fake HOME hides `~/.jmo/bin` and moves every scanner's cache: with the scanners on PATH each scan test re-downloads grype's 3.2 GB and trivy's 1.6 GB database (24 GB per run of `test_linux_specific.py`, the ~21 GB seen 2026-10-30); without them the scan tests run no scanner and pass | `tests/conftest.py:106`; `tests/e2e/test_linux_specific.py`; measured 2026-10-30 at `8ac90d8c` | **Filed as #1517** (2026-10-30) from PR A's branch, rostered in Phase 6 by PR A: Task A7 |
 | No known-vulnerable GitHub Actions check once grype leaves | github-actions-goat: 7 advisories; OSV `GitHub Actions/all.zip`, 56 advisories | after the tag: a `jmo-native` reader of `uses:` against that database, offline |
 | `install_config.py:75-95` gives two false reasons for ReversingLabs | GitHub repo size with history; DRL unrecognised | none: Task Y1 removes the comment |
 | signature-base reports two `WEBSHELL_PHP_Generic_Eval` findings on JMo's own yara tests | `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py` hold webshell-like strings | none: Y6 decides whether a self-scan excludes them; not a product defect |
