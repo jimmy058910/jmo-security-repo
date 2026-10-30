@@ -19,6 +19,7 @@ from scripts.cli.tool_manager import (
     print_tool_status_table,
 )
 from scripts.core.paths import clean_isolated_venvs
+from scripts.core.tool_descriptors import REMOVED_TOOLS, removed_tools_message
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
     POLICY_ENGINE,
@@ -141,6 +142,18 @@ def _osv_missing_ecosystems(statuses: dict[str, ToolStatus]) -> list[str] | None
     return sorted(set(ECOSYSTEMS) - present_ecosystems())
 
 
+def _refuse_removed_tools(tools: list[str]) -> int | None:
+    """Exit code 2, after saying so, when any named tool is one v2.0.0 removed:
+    a usage error, as `--tools semgrep` is. Without it `check` read the name as
+    a tool that is merely missing and `install --dry-run` offered to install
+    it. None when every name is still a name."""
+    removed = [t for t in tools if t in REMOVED_TOOLS]
+    if not removed:
+        return None
+    print(f"error: {removed_tools_message(removed)}", file=sys.stderr)
+    return 2
+
+
 def cmd_tools_check(args: argparse.Namespace) -> int:
     """
     Check tool installation status.
@@ -156,8 +169,11 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
     Returns:
         0 when every checked tool is installed and able to run, 1 otherwise
     """
-    manager = ToolManager()
     tools = getattr(args, "tools", None) or []
+    refused = _refuse_removed_tools(tools)
+    if refused is not None:
+        return refused
+    manager = ToolManager()
     output_json = getattr(args, "json", False)
 
     policy_engine: ToolStatus | None = None
@@ -460,8 +476,11 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 1 on failure
     """
-    manager = ToolManager()
     tools_arg = getattr(args, "tools", None) or []
+    refused = _refuse_removed_tools(tools_arg)
+    if refused is not None:
+        return refused
+    manager = ToolManager()
     dry_run = getattr(args, "dry_run", False)
     print_script = getattr(args, "print_script", False)
     yes = getattr(args, "yes", False)
