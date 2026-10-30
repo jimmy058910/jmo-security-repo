@@ -35,7 +35,12 @@ import pytest
 from scripts.cli import jmo
 from scripts.core import normalize_and_report as nr
 from scripts.core.common_finding import FINGERPRINT_LENGTH, target_id
-from scripts.core.dedup_enhanced import cluster_dependency_findings, dependency_key
+from scripts.core.dedup_enhanced import (
+    FindingClusterer,
+    SimilarityCalculator,
+    cluster_dependency_findings,
+    dependency_key,
+)
 from scripts.core.plugin_loader import get_plugin_registry
 from scripts.core.scan_timings import State, ToolRun, write_scan_timings
 
@@ -512,3 +517,94 @@ def test_dependency_findings_cluster_within_their_target_only():
         frozenset({"t-1", "o-2"}),
         frozenset({"t-2", "o-1"}),
     }
+
+
+# --- the similarity clusterer ---------------------------------------------------
+
+
+def misconfig(
+    fid: str, tool: str, target: str | None, path: str = "Dockerfile"
+) -> dict[str, Any]:
+    """One tool's finding of the rule at line 1. Two tools' findings of it in
+    one place are one consensus finding, as they have always been."""
+    finding: dict[str, Any] = {
+        "id": fid,
+        "ruleId": "DS002",
+        "severity": "HIGH",
+        "tool": {"name": tool, "version": "1"},
+        "location": {"path": path, "startLine": 1},
+        "message": "Image user should not be root",
+    }
+    if target is not None:
+        finding["target"] = {"type": "repo", "name": target}
+    return finding
+
+
+ALGORITHMS = pytest.mark.parametrize("algorithm", ["greedy", "lsh"])
+
+
+@ALGORITHMS
+def test_two_tools_findings_in_two_targets_are_two_clusters(algorithm):
+    """The #1309 flaw in the similarity clusterer: trivy's finding in app-one
+    and checkov's at the same rule, path and line in app-two were ONE cluster,
+    naming one repository. The location term is the path as relative to its
+    target, so it cannot tell the targets apart."""
+    findings = [
+        misconfig("a1", "trivy", "app-one"),
+        misconfig("b1", "checkov", "app-two"),
+    ]
+
+    clusters = FindingClusterer(algorithm=algorithm).cluster(findings)
+
+    assert sorted(
+        (c.representative["target"]["name"], [f["id"] for f in c.findings])
+        for c in clusters
+    ) == [("app-one", ["a1"]), ("app-two", ["b1"])]
+
+
+@ALGORITHMS
+def test_each_target_clusters_its_own_tools_findings(algorithm):
+    """Both tools in both targets: each target's pair is its own cluster, and
+    never a cross-target pairing (app-two's checkov sorts ahead of app-one's)."""
+    findings = [
+        misconfig("t-1", "trivy", "app-one"),
+        misconfig("c-2", "checkov", "app-one"),
+        misconfig("t-2", "trivy", "app-two"),
+        misconfig("c-1", "checkov", "app-two"),
+    ]
+
+    clusters = FindingClusterer(algorithm=algorithm).cluster(findings)
+
+    assert membership(clusters) == {
+        frozenset({"t-1", "c-2"}),
+        frozenset({"t-2", "c-1"}),
+    }
+
+
+@ALGORITHMS
+@pytest.mark.parametrize("target", ["app-one", None], ids=["one-target", "no-target"])
+def test_two_tools_findings_in_one_place_still_cluster(algorithm, target):
+    """The control: the same pair in one target is one cluster, as before the
+    guard. So is a pair built without the report phase, which carries no target
+    (the clusterer is a public API)."""
+    findings = [
+        misconfig("a1", "trivy", target),
+        misconfig("b1", "checkov", target),
+    ]
+
+    clusters = FindingClusterer(algorithm=algorithm).cluster(findings)
+
+    assert membership(clusters) == {frozenset({"a1", "b1"})}
+
+
+def test_findings_of_two_targets_have_no_similarity():
+    calculator = SimilarityCalculator()
+    same = calculator.calculate_similarity(
+        misconfig("a1", "trivy", "app-one"), misconfig("b1", "checkov", "app-one")
+    )
+    apart = calculator.calculate_similarity(
+        misconfig("a1", "trivy", "app-one"), misconfig("b1", "checkov", "app-two")
+    )
+
+    assert same >= calculator.threshold
+    assert apart == 0.0

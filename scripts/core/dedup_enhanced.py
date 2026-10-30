@@ -514,10 +514,22 @@ class SimilarityCalculator:
     def calculate_similarity(self, finding1: dict, finding2: dict) -> float:
         """Calculate multi-dimensional similarity between two findings.
 
+        Findings of two different targets have no similarity (#1309). Their
+        locations are paths relative to their own target, so the location term
+        (half the score) cannot tell ``Dockerfile:1`` in one repository from
+        ``Dockerfile:1`` in another, and two tools' findings of one rule would
+        cluster across the two. Both algorithms cluster only pairs this scores
+        at the threshold, so none can join findings of two targets. A finding
+        built outside the report carries no ``target``; two such findings are
+        compared as before.
+
         Returns:
             Float 0.0-1.0 where 1.0 = identical, 0.0 = completely different
 
         """
+        if finding1.get("target") != finding2.get("target"):
+            return 0.0
+
         # Component similarities
         loc_sim = self.location_similarity(
             finding1.get("location", {}), finding2.get("location", {})
