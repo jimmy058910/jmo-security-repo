@@ -224,6 +224,21 @@ RECOGNISED_CONFIG_KEYS: frozenset[str] = frozenset(
 )
 
 
+# Warnings already given, by kind and config file. A scan loads ``jmo.yml`` many
+# times (measured: 10 in one ``jmo scan``), and a warning about the file is for
+# the user, who needs it once, not for each load.
+_WARNED: set[tuple[str, str]] = set()
+
+
+def _first_warning(kind: str, path: Path) -> bool:
+    """True the first time ``kind`` is raised for ``path`` in this process."""
+    key = (kind, str(path))
+    if key in _WARNED:
+        return False
+    _WARNED.add(key)
+    return True
+
+
 def _warn_unrecognised_config_keys(path: Path, data: dict) -> None:
     """Warn about top-level ``jmo.yml`` keys that configure nothing.
 
@@ -239,7 +254,7 @@ def _warn_unrecognised_config_keys(path: Path, data: dict) -> None:
     reach this mapping.
     """
     unknown = sorted(set(data) - RECOGNISED_CONFIG_KEYS)
-    if not unknown:
+    if not unknown or not _first_warning("unrecognised-keys", path):
         return
     named = ", ".join(repr(k) for k in unknown)
     logger.warning(
@@ -247,12 +262,6 @@ def _warn_unrecognised_config_keys(path: Path, data: dict) -> None:
         f"nothing and are ignored. Recognised keys: "
         f"{', '.join(sorted(RECOGNISED_CONFIG_KEYS))}"
     )
-
-
-# Config files whose v1 ``per_tool.semgrep`` entry has been named already. A
-# scan loads ``jmo.yml`` many times (measured: 10 in one ``jmo scan``), and the
-# warning is for the user, not for each load.
-_V1_SEMGREP_NAMED: set[str] = set()
 
 
 def _warn_v1_semgrep_entry(path: Path, per_tool: dict) -> None:
@@ -267,9 +276,8 @@ def _warn_v1_semgrep_entry(path: Path, per_tool: dict) -> None:
     raises, since it runs inside ``load_config``.
     """
     entry = per_tool.get("semgrep")
-    if entry is None or str(path) in _V1_SEMGREP_NAMED:
+    if entry is None or not _first_warning("v1-semgrep", path):
         return
-    _V1_SEMGREP_NAMED.add(str(path))
     keys = [str(k) for k in entry] if isinstance(entry, dict) else []
     configs = entry.get("configs") if isinstance(entry, dict) else None
     if isinstance(configs, str):  # one pack written bare, not its letters
