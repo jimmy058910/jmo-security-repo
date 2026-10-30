@@ -50,8 +50,8 @@ def temp_results_dir(tmp_path):
 
     (repo_dir / "trivy.json").write_text(json.dumps(trivy_findings))
 
-    # Create mock semgrep output with different CVE
-    semgrep_findings = {
+    # Create mock opengrep output with different CVE
+    opengrep_findings = {
         "results": [
             {
                 "check_id": "CVE-2024-5678",
@@ -69,7 +69,7 @@ def temp_results_dir(tmp_path):
         ]
     }
 
-    (repo_dir / "semgrep.json").write_text(json.dumps(semgrep_findings))
+    (repo_dir / "opengrep.json").write_text(json.dumps(opengrep_findings))
 
     return results_dir
 
@@ -129,7 +129,7 @@ class TestPrioritizationWorkflow:
         # Gather and enrich findings
         findings = gather_results(temp_results_dir)
 
-        assert len(findings) >= 2  # At least trivy + semgrep findings
+        assert len(findings) >= 2  # At least trivy + opengrep findings
 
         # Verify priority enrichment
         priority_findings = [f for f in findings if f.get("priority")]
@@ -261,7 +261,7 @@ class TestPrioritizationWorkflow:
                 "severity": "HIGH",
                 "message": "High EPSS vulnerability",
                 "location": {"path": "app/api.py", "startLine": 42},
-                "tool": {"name": "semgrep", "version": "1.45.0"},
+                "tool": {"name": "opengrep", "version": "1.45.0"},
                 "priority": {
                     "priority": 65.0,
                     "epss": 0.75,
@@ -419,7 +419,7 @@ class TestPrioritizationWorkflow:
                 "severity": sev,
                 "message": f"{sev} issue",
                 "location": {"path": "app/main.py", "startLine": 10},
-                "tool": {"name": "semgrep", "version": "1.45.0"},
+                "tool": {"name": "opengrep", "version": "1.45.0"},
             }
             for i, sev in enumerate(severities)
         ]

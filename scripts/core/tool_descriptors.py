@@ -36,7 +36,7 @@ from urllib.parse import quote, unquote, urlsplit
 
 import yaml
 
-from scripts.core import osv_database
+from scripts.core import osv_database, rule_bundle
 from scripts.core.scan_timings import Reason
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,12 @@ logger = logging.getLogger(__name__)
 #
 # Deliberately absent: `dist`, `build`, `target`, and any tool's output
 # directory. Those hold the repository's own build output, and a user who
-# points JMo at a release tree means it. (semgrep skips `build/` and `dist/`
-# anyway, by a built-in list JMo cannot turn off without writing a file into
-# the user's tree: docs/KNOWN_LIMITATIONS.md.)
+# points JMo at a release tree means it. (opengrep skips `build/`, `dist/`,
+# `test/` and `tests/` inside the target anyway, by a built-in list: measured
+# on 1.32.0, a tree holding each beside `src/` and `docs/` scanned only those
+# two. Its `--x-ignore-semgrepignore-files` turns the list off. The list is
+# matched against the path opengrep is handed, so its row runs from inside the
+# target, which it names `.`: an ancestor of the target is then in no path.)
 VENDORED_DIRS: tuple[str, ...] = (
     ".git",
     "node_modules",
@@ -159,7 +162,7 @@ class FlagGrammar(StrEnum):
 
     PFLAG = "pflag"  # cobra's: trivy, grype, syft, gitleaks
     KINGPIN = "kingpin"  # trufflehog
-    CMDLINER = "cmdliner"  # semgrep
+    CMDLINER = "cmdliner"  # opengrep
     GETOPT = "getopt"  # Haskell's GetOpt: shellcheck
     OPTPARSE_APPLICATIVE = "optparse-applicative"  # hadolint
     ARGPARSE = "argparse"  # checkov (configargparse), JMo's own runners
@@ -179,7 +182,7 @@ class FlagGrammar(StrEnum):
     def abbreviates(self) -> bool:
         """A long option's unique prefix is that option: checkov reads
         `--output-f=x` as `--output-file-path`, shellcheck `--fo=tty` as
-        `--format=tty`. semgrep, hadolint and zizmor reject `--outp` and
+        `--format=tty`. opengrep, hadolint and zizmor reject `--outp` and
         `--form` themselves."""
         return self in (FlagGrammar.GETOPT, FlagGrammar.ARGPARSE)
 
@@ -200,7 +203,7 @@ class FlagGrammar(StrEnum):
         """A flag given twice is an error, so every flag JMo passes is the
         row's: trufflehog "flag 'exclude-paths' cannot be repeated", zizmor
         "the argument '--offline' cannot be used multiple times" (rc 2),
-        semgrep "option '--json' cannot be repeated". A list option (semgrep's
+        opengrep "option '--json' cannot be repeated". A list option (opengrep's
         `--config`, `--exclude`) is the exception. The others take a repeat:
         zap ran `-cmd -cmd`, hadolint printed a second `-f json` report."""
         return self in (FlagGrammar.KINGPIN, FlagGrammar.CLAP, FlagGrammar.CMDLINER)
@@ -358,6 +361,21 @@ class Invocation:
     # The files it was handed, `/`-separated and relative to `cwd`, for a row
     # to name the ones the tool could not read (`ToolDescriptor.unread_inputs`).
     inputs: tuple[str, ...] = ()
+    # What the row is when this run examined 0 files, if the command line is
+    # what limits it to a set that can be empty (opengrep's `--baseline-commit`).
+    # Not set: 0 files is a failure, `EXAMINED_ZERO`.
+    skip_if_empty: SkipIfEmpty | None = None
+
+
+@dataclass(frozen=True)
+class SkipIfEmpty:
+    """The row a run that examined 0 files gets, when its command line asks for
+    a set of files that may be empty: `skipped:<reason>`, `detail` saying which
+    ask it was. Without it, a tool that read nothing is `failed:examined 0 files`
+    (G2, #1231): the target was there and went unscanned."""
+
+    reason: Reason
+    detail: str
 
 
 @dataclass(frozen=True)
@@ -437,7 +455,7 @@ class ToolDescriptor:
     # this tool's own spellings of what decides where and how it writes, of
     # its exit code, and of what JMo passes when its parser refuses a repeat
     # (#1325, #1335). Per tool, since one tool's reserved flag is another's
-    # option (semgrep's `-f` is `--config`, and gitleaks' `-r` is nuclei's
+    # option (opengrep's `-f` is `--config`, and gitleaks' `-r` is nuclei's
     # `-resolvers`).
     reserved_flags: Mapping[str, Reserved] = field(default_factory=dict)
     # Its short flags that take no value. A clustering parser chains them, so
@@ -621,6 +639,56 @@ def _native_trigger(ctx: ScanContext) -> Reason | None:
     return None if ctx.any_file(reads) else Reason.NO_WEB_APP_FILES
 
 
+def _opengrep_files(ctx: ScanContext) -> Iterable[Path | str]:
+    """Every file of the scan's pruned walk (vendored trees and JMo's own
+    results directory left out), or `ctx.files` for a context built without one,
+    each relative to the target. Not `ctx.files` in a scan, which the loop caps
+    at 300 sorted paths for the tools it hands files to: a language whose only
+    file sorts after 300 of another's would lose its rules without a word.
+    Relative, since generic.yaml's patterns read directory names: a repository
+    cloned into `~/nginx/` is not an nginx repository."""
+    root = Path(ctx.target)
+    files = ctx.iter_files() if ctx.iter_files is not None else ctx.files
+    for f in files:
+        try:
+            yield Path(f).relative_to(root)
+        except ValueError:
+            yield Path(f)
+
+
+def _opengrep_trigger(ctx: ScanContext) -> Reason | None:
+    """Skip a repository with no file the rule bundle has a rule for.
+
+    A file is read when its name is one of a language the bundle covers, or
+    when generic.yaml's rules read it (`rule_bundle.has_rules_for`: an nginx
+    config, Bicep, Handlebars, Visualforce, `build.gradle`). `select_configs`
+    always names `generic.yaml`, so that file is no evidence of its own.
+    `generic.yaml` also holds two catch-all rules (a reverse shell, a
+    bidirectional character) that read any file. A tree that no language and no
+    generic pattern covers is skipped before opengrep starts, so those two are
+    not run on it: a repository of only a README or a Makefile gets no scan
+    from them (decided, R50).
+
+    A `trigger` and not `file_patterns`: the scan loop's glob for `file_patterns`
+    walks the whole tree once per pattern, vendored trees included (61 of
+    them: 1.78 s on a tree holding 30,000 `node_modules` files, against 0.00 s
+    for the pruned walk), and warns that every file past 300 was "NOT
+    scanned", which is false for a tool handed the directory (measured on
+    juice-shop: "911 matching files in juice-shop, scanning the first 300 -
+    611 file(s) NOT scanned"). The user's own `configs` replace the bundle,
+    and with it the languages: they may read what the bundle does not.
+    """
+    # A malformed value is let through, for the precheck to name: skipped here
+    # it would read as a repository with no language (`configs: 0`).
+    if ctx.tool_config.get("configs") or _configs_problem(ctx.tool_config):
+        return None
+    return (
+        None
+        if rule_bundle.has_rules_for(_opengrep_files(ctx))
+        else Reason.NO_RULE_LANGUAGES
+    )
+
+
 # --- examined-files readers (G2, #1231) -----------------------------------------
 
 
@@ -631,9 +699,16 @@ def _load(path: Path) -> Any:
         return None
 
 
-def _semgrep_scanned(path: Path) -> int | None:
-    """`paths.scanned`: 0 when semgrep's git-based walk resolved to an
-    enclosing repository with no tracked files (#1231, measured 0 vs 4)."""
+def _opengrep_scanned(path: Path) -> int | None:
+    """`paths.scanned`: 0 when its walk found nothing to read, which it reports
+    as a run that worked (rc 0, no results). Measured on 1.32.0 for a target
+    whose path was handed with a `tests/` component (its built-in ignore list;
+    the row now hands it `.`), and on semgrep for a git-based walk that
+    resolved to an enclosing repository with no tracked files (#1231, 0 vs 4).
+    The same `[]` is what `--baseline-commit` writes when no changed file is one
+    it scans: the output cannot tell the two apart, so the invocation says
+    which it was (`Invocation.skip_if_empty`).
+    The row's own run names its files relative to the target."""
     data = _load(path)
     if not isinstance(data, dict):
         return None
@@ -767,28 +842,154 @@ def _gitleaks_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
-def _semgrep_repo(ctx: ScanContext) -> list[Invocation]:
-    # Default ["auto"]: the Semgrep Registry picks rules per language. A
-    # `configs:` list in per_tool.semgrep allows offline packs.
-    configs = ctx.tool_config.get("configs", ["auto"])
-    config_args = [arg for cfg in configs for arg in ("--config", str(cfg))]
+def _configs_problem(tool_config: Mapping[str, Any]) -> str | None:
+    """What is wrong with `per_tool.opengrep.configs`, or None. It is unset
+    (absent or null), a string, or a list or tuple of strings; anything else was
+    iterated by the command builder, and `configs: 5` raised out of it and
+    failed every tool on the target with "'int' object is not iterable"."""
+    own = tool_config.get("configs")
+    if own is None or isinstance(own, str):
+        return None
+    if isinstance(own, (list, tuple)):
+        wrong = [c for c in own if not isinstance(c, str)]
+        if not wrong:
+            return None
+        got = f"a {type(own).__name__} holding {type(wrong[0]).__name__}"
+    else:
+        got = type(own).__name__
+    return (
+        "per_tool.opengrep.configs must be a rule file name or a list of them, "
+        f"not {got}"
+    )
+
+
+def _opengrep_precheck(ctx: ScanContext) -> Shortfall | None:
+    """Fail the row, and only it, for a `configs` it cannot read."""
+    problem = _configs_problem(ctx.tool_config)
+    return Shortfall(Reason.COULD_NOT_RUN, problem, ()) if problem else None
+
+
+def _opengrep_configs(ctx: ScanContext) -> list[str]:
+    """The rule files this run loads: `per_tool.opengrep.configs` when the user
+    set it (their own packs, offline; a bare string is one file, not its
+    letters), else the bundle's files for the languages present."""
+    own = ctx.tool_config.get("configs")
+    if own:
+        return [
+            _absolute_if_a_file(c) for c in ([own] if isinstance(own, str) else own)
+        ]
+    return [str(p) for p in rule_bundle.select_configs(_opengrep_files(ctx))]
+
+
+def _absolute_if_a_file(config: Any) -> str:
+    """A config that names a file or directory here, made absolute: it is
+    relative to where JMo runs, and opengrep starts in the target. Anything
+    else (a registry pack, a URL, a typo) is the user's to spell."""
+    text = str(config)
+    try:
+        return str(Path(text).resolve()) if Path(text).exists() else text
+    except OSError:
+        return text
+
+
+def _baseline_commit(flags: Sequence[str]) -> str | None:
+    """The commit named by `--baseline-commit` in these flags, spelled
+    `--baseline-commit X` or `--baseline-commit=X`; None when it is not there.
+    The last spelling wins, as it would for a parser that took the last value
+    (opengrep reports a repeat itself)."""
+    found: str | None = None
+    for i, flag in enumerate(flags):
+        if flag == "--baseline-commit" and i + 1 < len(flags):
+            found = flags[i + 1]
+        elif flag.startswith("--baseline-commit="):
+            found = flag.split("=", 1)[1]
+    return found
+
+
+def _opengrep_skip_if_empty(flags: Sequence[str]) -> SkipIfEmpty | None:
+    """`--baseline-commit` scans only the files changed since the commit, so a
+    commit that only deletes files, or changes only paths opengrep's default
+    ignore list skips (`tests/`, `*_test.go`, `*.min.js`, `build/`), leaves it
+    nothing to read: `paths.scanned` is `[]`, rc 0 (measured, 1.32.0). That is
+    what the flag asks for, and not a scan that did not work. The commit is in
+    the detail, since the label is a closed set."""
+    commit = _baseline_commit(flags)
+    if commit is None:
+        return None
+    return SkipIfEmpty(
+        Reason.NO_CHANGED_FILES,
+        f"--baseline-commit {commit}: no file changed since it is one opengrep "
+        "scans (deleted files, and paths its default ignore list skips, are not)",
+    )
+
+
+# opengrep's debug log, in the scan's scratch beside the outputs: dot-prefixed,
+# as `.zap-plan.yaml` is, so the report reads no `<tool>.json` out of it.
+OPENGREP_LOG = ".opengrep/semgrep.log"
+
+
+def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
+    config_args = [arg for cfg in _opengrep_configs(ctx) for arg in ("--config", cfg)]
+    # Run from inside the target and name it `.` (R35). opengrep matches its
+    # default ignore list (`tests/`, `test/`, `build/`, `dist/`, ...) against the
+    # path it is handed, so a target with such an ancestor scanned 0 files
+    # (measured on 1.32.0), as did one under `vendor/`, `node_modules/` or
+    # `venv/` through JMo's own `--exclude`: a repository cloned under
+    # `~/build/` read `failed:examined 0 files`. Handed `.`, nothing above the
+    # target is in any path it matches, and its output names files relative to
+    # the target, whatever directory JMo was started in (a relative target used
+    # to put its own spelling in every path, and so in every finding id). Every
+    # other path JMo builds is absolute, since the directory moves; a relative
+    # path the user writes in `per_tool.opengrep.flags` is theirs, and is now
+    # relative to the target (a relative `configs` entry is made absolute).
+    root = Path(scan_root(ctx.target))
     return [
         Invocation(
             command=(
                 ctx.binary,
+                "scan",
                 *config_args,
+                # The id is exactly the YAML's whatever the working directory;
+                # without it opengrep prefixes the path it was run from (B7).
+                "--no-rewrite-rule-ids",
                 "--json",
                 "--output",
-                str(ctx.output),
+                str(ctx.output.resolve()),
+                # No call home to check for a newer release.
+                "--disable-version-check",
+                # Fixed (the program plan's decision): the parity target needs
+                # 467 MB at 4 and only 1 fits 800 MB. Phase 7 owns tuning it.
+                *("-j", "4"),
                 # JMo's exclusions before the user's flags, so an explicit
                 # per_tool entry still wins; repeatable forms accumulate.
                 *ctx.exclusion_args,
                 *ctx.flags,
-                str(ctx.target),
+                ".",
             ),
             output_file=ctx.output,
             capture_stdout=False,
-            ok_return_codes=(0, 1, 2),  # 2 = errors, with output written
+            cwd=root,
+            # Its debug log holds the source text of every match, and defaults
+            # to `~/.opengrep/semgrep.log`, outside the scan and outliving it
+            # (measured on 1.32.0, 2026-10-29: a scan of a key left the key in
+            # the home). `SEMGREP_LOG_FILE` is the one variable that moves it;
+            # `OPENGREP_LOG_FILE` and the two `*_USER_DATA_FOLDER` do nothing.
+            # opengrep creates the missing directories, and opens a relative
+            # path from the working directory, which is the target: so it is
+            # absolute, as `--output` is. The 255 MB extraction cache
+            # (`~/.cache/opengrep`) stays where it is: moving it into every
+            # scan would cost that much per scan.
+            env={"SEMGREP_LOG_FILE": str((ctx.out_dir / OPENGREP_LOG).resolve())},
+            skip_if_empty=_opengrep_skip_if_empty(ctx.flags),
+            # Measured on 1.32.0 (2026-10-29): a run whose files carry errors
+            # (a syntax error, a Timeout, a Stack overflow) is rc 0, with every
+            # other file's results in the output and the errors in `errors`. An
+            # invalid config is rc 7 with an output holding no results and the
+            # cause in `errors`, and a usage error (a second `-j`) rc 2 and no
+            # output. rc 1 is `--error` and rc 3 `--strict`, both reserved. So
+            # only 0 is a run that worked; semgrep's (0, 1, 2) would have read a
+            # bad config as `examined 0 files`.
+            ok_return_codes=(0,),
         )
     ]
 
@@ -1663,6 +1864,7 @@ def _zap_url(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+# TODO(issue-#1351): nuclei cannot import an OpenAPI spec without attacking the spec's servers
 def _nuclei_url(ctx: ScanContext) -> list[Invocation]:
     return [
         Invocation(
@@ -1750,17 +1952,26 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             reads_history=True,
         ),
         ToolDescriptor(
-            name="semgrep",
-            invocations={"repo": _semgrep_repo},
+            name="opengrep",
+            invocations={"repo": _opengrep_repo},
+            # `opengrep --version` prints the bare version (measured, 1.32.0).
             version_probe=VersionProbe(re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE)),
             exclusion_style=ExclusionStyle.INLINE,
             exclusion_flag="--exclude",
             flag_grammar=FlagGrammar.CMDLINER,
-            # A second output or format is rc 2 with no output file ("options
-            # '--output' and '-o' cannot be present at the same time", "option
-            # '--json' cannot be repeated", and "Mutually exclusive options"
-            # for `--sarif`), measured 1.175.0. Its `-f` is `--config`, which
-            # adds rules, as a repeated `--exclude` adds exclusions.
+            # A second output or format is rc 2 with no output file ("option
+            # '--json' cannot be repeated", "options '--output' and '-o'
+            # cannot be present at the same time", and "Mutually exclusive
+            # options" for `--sarif`), and `--text` writes text into the file
+            # JMo reads as JSON, rc 0 (measured, 1.32.0). The same for `-j`
+            # ("option '-j' cannot be repeated"; `--jobs` and `-j` together,
+            # and `--rewrite-rule-ids` against JMo's `--no-` form, are rc 2
+            # too), which JMo sets to 4. `--enable-version-check` would undo
+            # JMo's `--disable-version-check`. It reads no abbreviation
+            # (`--outp` is "unknown option"), and chains `-qj2` as `-q -j 2`.
+            # Its `-f` is `--config`, which adds rules, as a repeated
+            # `--exclude` adds exclusions. `--error` is rc 1 for any finding
+            # and `--strict` rc 3 for any error.
             reserved_flags=_reserve(
                 OUTPUT=(
                     "-o",
@@ -1774,14 +1985,27 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                     "--gitlab-sast",
                     "--gitlab-secrets",
                 ),
+                PASSED=(
+                    "-j",
+                    "--jobs",
+                    "--rewrite-rule-ids",
+                    "--no-rewrite-rule-ids",
+                    "--enable-version-check",
+                    "--disable-version-check",
+                ),
                 EXIT_CODE=("--error", "--strict"),
             ),
             short_switches=frozenset({"-a", "-d", "-q", "-v"}),
+            # Skips a tree with no file the bundle has a rule for: a language it
+            # covers, or a name generic.yaml's rules read (an nginx config).
+            trigger=_opengrep_trigger,
+            precheck=_opengrep_precheck,
             # Its cost is its rule count, not the tree: 409.8 s and 583 s for
-            # identical work on one machine (#1204). A floor caps wasted time.
+            # identical work on one machine (#1204, semgrep). A floor caps
+            # wasted time.
             timeout_floor=900,
             stub={"results": []},
-            scanned_count=_semgrep_scanned,
+            scanned_count=_opengrep_scanned,
         ),
         ToolDescriptor(
             name="syft",
@@ -2108,10 +2332,12 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
 }
 
 
-# The seventeen tools v2.0.0 removed (docs/TOOLS.md), and falco's companion.
+# The seventeen tools v2.0.0 removed (docs/TOOLS.md), falco's companion, and
+# semgrep, which opengrep replaced.
 REMOVED_TOOLS: frozenset[str] = frozenset(
     {
         "kubescape",
+        "semgrep",
         "semgrep-secrets",
         "bandit",
         "trivy-rbac",
@@ -2132,7 +2358,22 @@ REMOVED_TOOLS: frozenset[str] = frozenset(
     }
 )
 
+#: A removed tool that has a successor says so: `--tools semgrep` is told to
+#: type `opengrep`, not left to read the removed-tools page for it.
+REPLACED_BY: dict[str, str] = {"semgrep": "opengrep"}
+
 _NAME_SEPARATORS = re.compile(r"[,\s]+")
+
+
+def removed_tools_message(names: Iterable[str]) -> str:
+    """What to tell a user who named tools v2.0.0 removed, the same wherever
+    they name one (`--tools`, `jmo tools check`, `jmo tools install`): that it
+    is gone, and what replaced it where something did."""
+    removed = list(names)
+    see = "docs/TOOLS.md" + "".join(
+        f"; {REPLACED_BY[n]} replaced {n}" for n in removed if n in REPLACED_BY
+    )
+    return f"{', '.join(removed)}: removed in v2.0.0 (see {see})"
 
 
 class UnknownToolError(ValueError):
@@ -2157,7 +2398,7 @@ def parse_tool_names(values: Iterable[str]) -> list[str]:
         unknown = [n for n in bad if n not in REMOVED_TOOLS]
         parts = []
         if removed:
-            parts.append(f"{', '.join(removed)}: removed in v2.0.0 (see docs/TOOLS.md)")
+            parts.append(removed_tools_message(removed))
         if unknown:
             parts.append(f"unknown tool {', '.join(repr(n) for n in unknown)}")
         raise UnknownToolError(

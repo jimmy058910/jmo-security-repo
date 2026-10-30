@@ -247,9 +247,7 @@ TOOL_RULE_TO_OWASP_TOP10_2021 = {
         # All secrets findings map to A02:2021
         "*": ["A02:2021"],
     },
-    "semgrep": {
-        "generic.secrets.gitleaks.*": ["A02:2021"],
-        "generic.secrets.*": ["A02:2021"],
+    "opengrep": {
         "generic.html-templates.*": ["A03:2021"],
         "javascript.express.security.*": ["A05:2021"],
         "python.django.security.*": ["A05:2021"],
@@ -894,7 +892,7 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
     """Determine tool category for framework mapping.
 
     Args:
-        tool_name: Name of the security tool (e.g., "trufflehog", "semgrep")
+        tool_name: Name of the security tool (e.g., "trufflehog", "opengrep")
         tags: List of tags from the finding
 
     Returns:
@@ -907,7 +905,7 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
         return "secrets"
 
     # SAST tools
-    if tool == "semgrep" or "sast" in tags:
+    if tool == "opengrep" or "sast" in tags:
         return "sast"
 
     # SCA/vulnerability tools

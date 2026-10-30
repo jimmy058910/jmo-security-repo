@@ -364,7 +364,34 @@ def test_scan_roots_survives_a_results_dir_jmo_did_not_write(tmp_path: Path, met
     assert nr.scan_roots(tmp_path) == ()
 
 
-def test_gather_results_strips_the_scan_root_from_a_real_semgrep_output(
+def test_scan_roots_reads_the_roots_each_tree_recorded(tmp_path: Path, caplog):
+    """Beside `repo_paths`: the `root` of every `scan-timings.json` (#1332), and
+    a file that is there but cannot be read is named, not dropped silently. The
+    other trees' roots are still returned. One of them is not UTF-8, which raised
+    `UnicodeDecodeError` out of the report."""
+    trees = {
+        "a": b'{"root": "/srv/a"}',
+        "b": b'{"root": "\xe9"}',
+        "c": b'{"root": "/srv/c"}',
+    }
+    for name, document in trees.items():
+        tree = tmp_path / "individual-repos" / name
+        tree.mkdir(parents=True)
+        (tree / "scan-timings.json").write_bytes(document)
+    (tmp_path / "individual-images" / "img").mkdir(parents=True)
+    (tmp_path / "individual-images" / "img" / "scan-timings.json").write_bytes(
+        b'{"root": null}'
+    )
+
+    with caplog.at_level("WARNING"):
+        roots = nr.scan_roots(tmp_path)
+
+    assert roots == ("/srv/a", "/srv/c")
+    bad = tmp_path / "individual-repos" / "b" / "scan-timings.json"
+    assert [str(bad) in r.getMessage() for r in caplog.records] == [True]
+
+
+def test_gather_results_strips_the_scan_root_from_a_real_opengrep_output(
     tmp_path: Path,
 ):
     """The user-visible half of #861, through `gather_results`.
@@ -381,7 +408,7 @@ def test_gather_results_strips_the_scan_root_from_a_real_semgrep_output(
     (results / ".scan_metadata.json").write_text(
         json.dumps({"repo_paths": [str(root)]}), encoding="utf-8"
     )
-    (results / "individual-repos" / "repo" / "semgrep.json").write_text(
+    (results / "individual-repos" / "repo" / "opengrep.json").write_text(
         json.dumps(
             {
                 "errors": [],
@@ -405,7 +432,7 @@ def test_gather_results_strips_the_scan_root_from_a_real_semgrep_output(
 
     findings = nr.gather_results(results)
 
-    assert findings, "the semgrep adapter produced nothing to assert on"
+    assert findings, "the opengrep adapter produced nothing to assert on"
     paths = [(f.get("location") or {}).get("path") for f in findings]
     assert paths == ["python/vulnerable_app.py"]
     # The property, not the spelling: no stored path may contain the scan root.

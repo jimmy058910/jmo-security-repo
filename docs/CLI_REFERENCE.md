@@ -151,7 +151,7 @@ flag. Two with the same folder name (`alice/app` and `bob/app`, a common case wi
 |------|-------------|
 | `--results-dir DIR` | Base results directory (default: `results`) |
 | `--config FILE` | Config file (default: `jmo.yml`) |
-| `--tools TOOL [TOOL ...]` | Override tools list from config (default: the [tool matrix](TOOLS.md#the-tool-matrix)). `--tools trivy semgrep` and `--tools trivy,semgrep` are the same. A name that is not in the matrix is a usage error (exit 2) naming it, and a tool removed in v2.0.0 says so |
+| `--tools TOOL [TOOL ...]` | Override tools list from config (default: the [tool matrix](TOOLS.md#the-tool-matrix)). `--tools trivy opengrep` and `--tools trivy,opengrep` are the same. A name that is not in the matrix is a usage error (exit 2) naming it, and a tool removed in v2.0.0 says so |
 | `--skip-tools TOOL [TOOL ...]` | Remove tools from the list (same splitting and checking) |
 | `--timeout SECS` | Per-tool timeout in seconds (default: 600) |
 | `--threads N` | Concurrent repos to scan (default: auto) |
@@ -269,7 +269,7 @@ Compare two scans to identify new, resolved, and modified findings.
 | `--output FILE` | Output file path (default: stdout for md/json) |
 | `--no-modifications` | Disable modification detection (faster) |
 | `--severity SEV` | Filter by severity (comma-separated: `CRITICAL,HIGH`) |
-| `--tool TOOL` | Filter by tool (comma-separated: `semgrep,trivy`) |
+| `--tool TOOL` | Filter by tool (comma-separated: `opengrep,trivy`) |
 | `--only TYPE` | Show only: `new`, `resolved`, `modified` |
 | `--db PATH` | Path to SQLite database (default: `~/.jmo/scans.db`) |
 
@@ -286,7 +286,7 @@ Generate SLSA provenance attestation for scan results.
 | `--sign` | Sign attestation with Sigstore keyless signing. In CI (GitHub Actions, GitLab CI), uses automatic OIDC. Locally, opens a browser for OAuth. |
 | `--rekor` | Upload to Rekor transparency log. **Requires `--sign`** — signing is what uploads; alone it is a usage error (exit 2) |
 | `--scan-args FILE` | JSON file with original scan arguments |
-| `--tools TOOL [...]` | Tools used in scan (e.g., `trivy semgrep`) |
+| `--tools TOOL [...]` | Tools used in scan (e.g., `trivy opengrep`) |
 | `--human-logs` | Human-friendly logs |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
 
@@ -963,7 +963,7 @@ jmo validate --fail-fast
 jmo scan --repo ./myapp
 
 # Quick scan with a narrowed tool list
-jmo scan --repo ./myapp --tools trufflehog semgrep trivy
+jmo scan --repo ./myapp --tools trufflehog opengrep trivy
 
 # Scan multiple repositories
 jmo scan --repos-dir ~/repos --human-logs

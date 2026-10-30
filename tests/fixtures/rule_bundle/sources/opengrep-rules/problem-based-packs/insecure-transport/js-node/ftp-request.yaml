@@ -1,0 +1,8 @@
+rules:
+  - id: ftp-request
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: javascript first, so it is filed in javascript.yaml, which a TypeScript scan reads too
+    metadata:
+      category: security
+    pattern: jsftp($X)

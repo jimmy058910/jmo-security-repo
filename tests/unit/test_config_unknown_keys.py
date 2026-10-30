@@ -74,6 +74,54 @@ def test_warning_lists_the_recognised_keys(tmp_path, caplog):
     assert "exclude" in messages and "per_tool" in messages
 
 
+def test_an_unrecognised_key_is_named_once_however_often_the_file_is_loaded(
+    tmp_path, caplog
+):
+    """A scan loads jmo.yml about ten times (measured), and the warning is for the
+    user, who reads one line, not ten."""
+    path = _write(tmp_path, "exclude_paths:\n  - vendor/\n")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        for _ in range(3):
+            load_config(path)
+
+    named = [
+        r.getMessage() for r in caplog.records if "exclude_paths" in r.getMessage()
+    ]
+    assert len(named) == 1, named
+
+
+def test_each_config_file_is_named_once_on_its_own(tmp_path, caplog):
+    """The dedupe is per file: a second file with the same typo is still news."""
+    first = tmp_path / "a"
+    second = tmp_path / "b"
+    first.mkdir()
+    second.mkdir()
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        for _ in range(2):
+            load_config(_write(first, "exclude_paths: []\n"))
+            load_config(_write(second, "exclude_paths: []\n"))
+
+    named = [
+        r.getMessage() for r in caplog.records if "exclude_paths" in r.getMessage()
+    ]
+    assert len(named) == 2, named
+    assert any(str(first) in m for m in named) and any(str(second) in m for m in named)
+
+
+def test_every_test_starts_with_no_config_warning_remembered(request):
+    """tests/conftest.py clears the once-per-file memory around every test.
+    Without it the first test to load a config file consumes its warning, and a
+    later guard that asserts on the log can no longer fail:
+    test_the_shipped_jmo_yml_has_no_unrecognised_keys passed with an unrecognised
+    key planted in jmo.yml, because four tests before it had loaded the file."""
+    from scripts.core import config
+
+    assert "_forget_config_warnings" in request.fixturenames
+    assert not config._WARNED
+
+
 def test_every_recognised_key_is_accepted_without_warning(tmp_path, caplog):
     """The negative control.
 

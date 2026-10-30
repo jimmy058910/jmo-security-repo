@@ -10754,3 +10754,409 @@ rules:
   - pattern: '$CMD = ["...",...]
 
       '
+- id: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+  message: Checks for setting the environment variable NODE_TLS_REJECT_UNAUTHORIZED
+    to 0, which disables TLS verification. This should only be used for debugging
+    purposes. Setting the option rejectUnauthorized to false bypasses verification
+    against the list of trusted CAs, which also leads to insecure transport. These
+    options lead to vulnerability to MTM attacks, and should not be used.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://nodejs.org/api/https.html#https_https_request_options_callback
+    - https://stackoverflow.com/questions/20433287/node-js-request-cert-has-expired#answer-29397100
+    subcategory:
+    - vuln
+    technology:
+    - node.js
+    vulnerability: Insecure Transport
+  languages:
+  - javascript
+  - typescript
+  pattern-either:
+  - pattern: 'process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
+
+      '
+  - pattern: '{rejectUnauthorized:false}
+
+      '
+- id: problem-based-packs.insecure-transport.js-node.disallow-old-tls-versions1.disallow-old-tls-versions1
+  message: Detects direct creations of $HTTPS servers that don't disallow SSL v2,
+    SSL v3, and TLS v1. These protocols are deprecated due to POODLE, man in the middle
+    attacks, and other vulnerabilities.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://us-cert.cisa.gov/ncas/alerts/TA14-290A
+    - https://stackoverflow.com/questions/40434934/how-to-disable-the-ssl-3-0-and-tls-1-0-in-nodejs
+    - https://nodejs.org/api/https.html#https_https_createserver_options_requestlistener
+    subcategory:
+    - vuln
+    technology:
+    - node.js
+    vulnerability: Insecure Transport
+  languages:
+  - javascript
+  - typescript
+  patterns:
+  - pattern-either:
+    - pattern-inside: '$CONST = require(''crypto'');
+
+        ...
+
+        '
+    - pattern-inside: '$CONST = require(''constants'');
+
+        ...
+
+        '
+  - pattern-inside: '$HTTPS = require(''https'');
+
+      ...
+
+      '
+  - pattern: '$HTTPS.createServer(...).$FUNC(...);
+
+      '
+  - pattern-not: '$HTTPS.createServer({secureOptions: $CONST.SSL_OP_NO_TLSv1 | $CONST.SSL_OP_NO_SSLv3
+      | $CONST.SSL_OP_NO_SSLv2 }, ...).$FUNC(...);
+
+      '
+  - pattern-not: '$HTTPS.createServer({secureOptions: $CONST.SSL_OP_NO_TLSv1 | $CONST.SSL_OP_NO_SSLv2
+      |$CONST.SSL_OP_NO_SSLv3 }, ...).$FUNC(...);
+
+      '
+  - pattern-not: '$HTTPS.createServer({secureOptions: $CONST.SSL_OP_NO_SSLv2 |$CONST.SSL_OP_NO_SSLv3
+      |$CONST.SSL_OP_NO_TLSv1 }, ...).$FUNC(...);
+
+      '
+  - pattern-not: '$HTTPS.createServer({secureOptions: $CONST.SSL_OP_NO_SSLv2 |$CONST.SSL_OP_NO_TLSv1
+      | $CONST.SSL_OP_NO_SSLv3}, ...).$FUNC(...);
+
+      '
+  - pattern-not: '$HTTPS.createServer({secureOptions:$CONST.SSL_OP_NO_SSLv3 | $CONST.SSL_OP_NO_SSLv2
+      |$CONST.SSL_OP_NO_TLSv1}, ...).$FUNC(...);
+
+      '
+  - pattern-not: '$HTTPS.createServer({secureOptions:$CONST.SSL_OP_NO_SSLv3 | $CONST.SSL_OP_NO_TLSv1|
+      $CONST.SSL_OP_NO_SSLv2}, ...).$FUNC(...);
+
+      '
+- id: problem-based-packs.insecure-transport.js-node.disallow-old-tls-versions2.disallow-old-tls-versions2
+  message: Detects creations of $HTTPS servers from option objects that don't disallow
+    SSL v2, SSL v3, and TLS v1. These protocols are deprecated due to POODLE, man
+    in the middle attacks, and other vulnerabilities.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://us-cert.cisa.gov/ncas/alerts/TA14-290A
+    - https://stackoverflow.com/questions/40434934/how-to-disable-the-ssl-3-0-and-tls-1-0-in-nodejs
+    - https://nodejs.org/api/https.html#https_https_createserver_options_requestlistener
+    subcategory:
+    - vuln
+    technology:
+    - node.js
+    vulnerability: Insecure Transport
+  languages:
+  - javascript
+  - typescript
+  patterns:
+  - pattern-either:
+    - pattern-inside: '$CONST = require(''crypto'');
+
+        ...
+
+        '
+    - pattern-inside: '$CONST = require(''constants'');
+
+        ...
+
+        '
+  - pattern-inside: '$HTTPS = require(''https'');
+
+      ...
+
+      '
+  - pattern: '$OPTIONS = {};
+
+      ...
+
+      $HTTPS.createServer($OPTIONS, ...);
+
+      '
+  - pattern-not: '$OPTIONS = {secureOptions: $CONST.SSL_OP_NO_TLSv1 | $CONST.SSL_OP_NO_SSLv3
+      | $CONST.SSL_OP_NO_SSLv2};
+
+      ...
+
+      $HTTPS.createServer($OPTIONS, ...);
+
+      '
+  - pattern-not: '$OPTIONS = {secureOptions: $CONST.SSL_OP_NO_TLSv1 | $CONST.SSL_OP_NO_SSLv2
+      | $CONST.SSL_OP_NO_SSLv3};
+
+      ...
+
+      $HTTPS.createServer($OPTIONS, ...);
+
+      '
+  - pattern-not: '$OPTIONS = {secureOptions: $CONST.SSL_OP_NO_SSLv2  | $CONST.SSL_OP_NO_TLSv1
+      | $CONST.SSL_OP_NO_SSLv3};
+
+      ...
+
+      $HTTPS.createServer($OPTIONS, ...);
+
+      '
+  - pattern-not: '$OPTIONS = {secureOptions: $CONST.SSL_OP_NO_SSLv2 | $CONST.SSL_OP_NO_SSLv3
+      | $CONST.SSL_OP_NO_TLSv1};
+
+      ...
+
+      $HTTPS.createServer($OPTIONS, ...);
+
+      '
+  - pattern-not: '$OPTIONS = {secureOptions: $CONST.SSL_OP_NO_SSLv3 | $CONST.SSL_OP_NO_SSLv2
+      | $CONST.SSL_OP_NO_TLSv1};
+
+      ...
+
+      $HTTPS.createServer($OPTIONS, ...);
+
+      '
+  - pattern-not: '$OPTIONS = {secureOptions: $CONST.SSL_OP_NO_SSLv3 | $CONST.SSL_OP_NO_TLSv1
+      | $CONST.SSL_OP_NO_SSLv2};
+
+      ...
+
+      $HTTPS.createServer($OPTIONS, ...);
+
+      '
+- id: problem-based-packs.insecure-transport.js-node.ftp-request.ftp-request
+  message: 'Checks for lack of usage of the "secure: true" option when sending ftp
+    requests through the nodejs ftp module. This leads to unencrypted traffic being
+    sent to the ftp server. There are other options such as "implicit" that still
+    does not encrypt all traffic. ftp is the most utilized npm ftp module.'
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://www.npmjs.com/package/ftp
+    - https://openbase.io/js/ftp
+    subcategory:
+    - vuln
+    technology:
+    - node.js
+    vulnerability: Insecure Transport
+  languages:
+  - javascript
+  - typescript
+  patterns:
+  - pattern-inside: '$X = require(''ftp'');
+
+      ...
+
+      $C = new $X();
+
+      ...
+
+      '
+  - pattern-not-inside: '$OPTIONS = {secure: true};
+
+      ...
+
+      '
+  - pattern: '$C.connect($OPTIONS,...);
+
+      '
+  - pattern-not: '$C.connect({...,secure: true});
+
+      '
+- id: problem-based-packs.insecure-transport.js-node.http-request.http-request
+  message: Checks for requests sent to http:// URLs. This is dangerous as the server
+    is attempting to connect to a website that does not encrypt traffic with TLS.
+    Instead, only send requests to https:// URLs.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://nodejs.org/api/http.html#http_http_request_options_callback
+    subcategory:
+    - vuln
+    technology:
+    - node.js
+    vulnerability: Insecure Transport
+  languages:
+  - javascript
+  patterns:
+  - pattern-inside: '$HTTP = require(''http'');
+
+      ...
+
+      '
+  - pattern-either:
+    - pattern: '$HTTP.request("=~/http://.*/",...);
+
+        '
+    - pattern: '$HTTP.get("=~/http://.*/", ...)
+
+        '
+    - pattern: '$VAR = new URL("=~/http://.*/");
+
+        ...
+
+        $HTTP.request($VAR, ...);
+
+        '
+    - pattern: '$VAR = {...,hostname: "..."};
+
+        ...
+
+        $HTTP.request(..., $VAR, ...);
+
+        '
+    - pattern: '$HTTP.request(..., {...,hostname: "..."}, ...);
+
+        '
+  - pattern-not: '$VAR = {...,protocol: "https"};
+
+      ...
+
+      $HTTP.request(..., $VAR, ...);
+
+      '
+  - pattern-not: '$HTTP.request(..., {...,protocol: "https"}, ...);
+
+      '
+- id: problem-based-packs.insecure-transport.js-node.rest-http-client-support.rest-http-client-support
+  message: Checks for requests to http (unencrypted) sites using some of node js's
+    most popular REST/HTTP libraries, including node-rest-client, axios, and got.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://www.npmjs.com/package/axios
+    - https://www.npmjs.com/package/got
+    - https://www.npmjs.com/package/node-rest-client
+    subcategory:
+    - vuln
+    technology:
+    - node.js
+    vulnerability: Insecure Transport
+  languages:
+  - javascript
+  patterns:
+  - pattern-either:
+    - pattern-inside: '$CLIENT = require(''node-rest-client'').Client;
+
+        ...
+
+        $C = new $CLIENT();
+
+        ...
+
+        '
+    - pattern-inside: '$C = require(''axios'');
+
+        ...
+
+        '
+    - pattern-inside: '$C = require(''got'');
+
+        ...
+
+        '
+  - pattern-either:
+    - pattern: '$C.$REQ("=~/http://.*/", ...)
+
+        '
+    - pattern: '$C("=~/http://.*/", ...)
+
+        '
+    - pattern: '$C({...,url: "=~/http://.*/"})
+
+        '
+    - pattern: '$C.$REQ({...,url: "=~/http://.*/"})
+
+        '
+- id: problem-based-packs.insecure-transport.js-node.telnet-request.telnet-request
+  message: Checks for creation of telnet servers or attempts to connect through telnet.
+    This is insecure as the telnet protocol supports no encryption, and data passes
+    through unencrypted.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://www.npmjs.com/package/telnet
+    - https://www.npmjs.com/package/telnet-client
+    subcategory:
+    - vuln
+    technology:
+    - node.js
+    vulnerability: Insecure Transport
+  languages:
+  - javascript
+  patterns:
+  - pattern-either:
+    - pattern-inside: '$TEL = require(''telnet-client'');
+
+        ...
+
+        $SERVER = new $TEL();
+
+        ...
+
+        '
+    - pattern-inside: '$SERVER = require(''telnet'');
+
+        ...
+
+        '
+  - pattern-either:
+    - pattern: '$SERVER.on(...)
+
+        '
+    - pattern: '$SERVER.connect(...)
+
+        '
+    - pattern: '$SERVER.createServer(...)
+
+        '

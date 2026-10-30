@@ -4,7 +4,7 @@ End-to-end tests with real security tools.
 
 Tests real tool integration with actual vulnerabilities:
 - Trivy: Real CVE detection in vulnerable images
-- Semgrep: Real code vulnerabilities
+- Opengrep: Real code vulnerabilities
 - TruffleHog: Verified secret detection
 - Checkov: IaC misconfigurations
 
@@ -61,9 +61,9 @@ requires_trivy = pytest.mark.skipif(
     not _tool_works("trivy"),
     reason="trivy not installed or not functional",
 )
-requires_semgrep = pytest.mark.skipif(
-    not _tool_works("semgrep"),
-    reason="semgrep not installed or not functional",
+requires_opengrep = pytest.mark.skipif(
+    not _tool_works("opengrep"),
+    reason="opengrep not installed or not functional",
 )
 requires_trufflehog = pytest.mark.skipif(
     not _tool_works("trufflehog"),
@@ -175,17 +175,17 @@ class TestRealToolScans:
 
         assert found_high_cve, "Should detect at least one HIGH/CRITICAL CVE"
 
-    @requires_semgrep
-    def test_semgrep_scan_real_code_issue(self, tmp_path, monkeypatch):
+    @requires_opengrep
+    def test_opengrep_scan_real_code_issue(self, tmp_path, monkeypatch):
         """
-        Test Semgrep detects real security vulnerability (eval injection).
+        Test opengrep detects real security vulnerability (eval injection).
 
         Creates test repo with vulnerable Python code and verifies:
         - Dangerous eval() detection
         - CWE mapping present in metadata
-        - Semgrep community rules reliably flag eval() with user input
+        - The bundled rules reliably flag eval() with user input
 
-        Note: Previously tested f-string SQLi which semgrep community rules
+        Note: Previously tested f-string SQLi which the rules
         don't reliably detect. eval() is universally detected by the
         python.lang.security.audit.eval-detected rule.
         """
@@ -193,7 +193,7 @@ class TestRealToolScans:
         repo = tmp_path / "vulnerable-app"
         repo.mkdir()
 
-        # eval() with user input — reliably detected by semgrep community rules
+        # eval() with user input — reliably detected by the bundled rules
         vulnerable_code = '''#!/usr/bin/env python3
 """Vulnerable web application for testing."""
 import os
@@ -221,7 +221,7 @@ def safe_process(user_input):
 '''
 
         (repo / "app.py").write_text(vulnerable_code)
-        # Real git init required — semgrep uses `git ls-files` to enumerate targets
+        # Real git init, as a user's repository has — opengrep reads a git work tree's tracked files
         subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, check=True)
         subprocess.run(
             ["git", "add", "app.py"], cwd=str(repo), capture_output=True, check=True
@@ -236,7 +236,7 @@ def safe_process(user_input):
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["semgrep"]
+                self.tools = ["opengrep"]
                 self.timeout = 300
                 self.threads = 1
                 self.allow_missing_tools = True
@@ -264,21 +264,21 @@ def safe_process(user_input):
         # it so this in-process call can't write the real ~/.jmo/config.yml.
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         rc = cmd_scan(ScanArgs())
-        assert rc == 0, "Semgrep scan should succeed"
+        assert rc == 0, "Opengrep scan should succeed"
 
         # Verify repo results directory exists
         repo_results = results_dir / "individual-repos" / "vulnerable-app"
         assert repo_results.exists(), "Repo results directory should exist"
 
-        # Verify semgrep.json exists
-        semgrep_output = repo_results / "semgrep.json"
-        assert semgrep_output.exists(), "Semgrep output should exist"
+        # Verify opengrep.json exists
+        opengrep_output = repo_results / "opengrep.json"
+        assert opengrep_output.exists(), "Opengrep output should exist"
 
-        with open(semgrep_output, encoding="utf-8") as f:
-            semgrep_data = json.load(f)
+        with open(opengrep_output, encoding="utf-8") as f:
+            opengrep_data = json.load(f)
 
-        # Semgrep format: {"results": [...], "errors": [...]}
-        results = semgrep_data.get("results", [])
+        # Opengrep format (semgrep's): {"results": [...], "errors": [...]}
+        results = opengrep_data.get("results", [])
 
         # Should detect eval injection or OS command injection
         found_vuln = False

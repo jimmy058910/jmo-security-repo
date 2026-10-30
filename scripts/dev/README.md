@@ -89,7 +89,7 @@ Run this analyzer before submitting PRs to ensure your changes are properly docu
 
 **File:** `install_tools.sh`
 
-Installs external security scanning tools (semgrep, trivy, checkov, etc.) based on platform detection (Linux/macOS/WSL).
+Installs external security scanning tools (opengrep, trivy, checkov, etc.) based on platform detection (Linux/macOS/WSL).
 
 **Usage:**
 

@@ -1,0 +1,867 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fd15b57a08763b34",
+    "ruleId": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "lib/insecurity.ts",
+      "startLine": 44
+    },
+    "message": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+    "title": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+    "description": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-798: Use of Hard-coded Credentials"
+      ],
+      "owasp": [
+        "A07:2021 - Identification and Authentication Failures"
+      ],
+      "confidence": "LOW",
+      "likelihood": "LOW",
+      "impact": "LOW"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+      "path": "lib/insecurity.ts",
+      "start": {
+        "line": 44,
+        "col": 39,
+        "offset": 2342
+      },
+      "end": {
+        "line": 44,
+        "col": 94,
+        "offset": 2397
+      },
+      "extra": {
+        "message": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+        "metadata": {
+          "interfile": true,
+          "category": "security",
+          "technology": [
+            "crypto",
+            "hmac"
+          ],
+          "references": [
+            "https://rules.sonarsource.com/javascript/RSPEC-2068",
+            "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#key-management"
+          ],
+          "owasp": [
+            "A07:2021 - Identification and Authentication Failures"
+          ],
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "audit"
+          ],
+          "likelihood": "LOW",
+          "impact": "LOW",
+          "confidence": "LOW"
+        },
+        "severity": "WARNING",
+        "fingerprint": "569e806f7e4276ac73f185c72e97867ad00c7577b6de01cb8ddf4d0baac7e4e87d2a1332921d7904bc42be66144ec687c33426d62ca235adbef07da7962cfc84_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "09b45214570c50ec",
+    "ruleId": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "lib/insecurity.ts",
+      "startLine": 56
+    },
+    "message": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+    "title": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+    "description": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-798: Use of Hard-coded Credentials"
+      ],
+      "owasp": [
+        "A07:2021 - Identification and Authentication Failures"
+      ],
+      "confidence": "HIGH",
+      "likelihood": "HIGH",
+      "impact": "MEDIUM"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+      "path": "lib/insecurity.ts",
+      "start": {
+        "line": 56,
+        "col": 56,
+        "offset": 2827
+      },
+      "end": {
+        "line": 56,
+        "col": 66,
+        "offset": 2837
+      },
+      "extra": {
+        "message": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "references": [
+            "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+          ],
+          "owasp": [
+            "A07:2021 - Identification and Authentication Failures"
+          ],
+          "asvs": {
+            "control_id": "3.5.2 Static API keys or secret",
+            "control_url": "https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md#v35-token-based-session-management",
+            "section": "V3: Session Management Verification Requirements",
+            "version": "4"
+          },
+          "category": "security",
+          "technology": [
+            "jwt",
+            "javascript",
+            "secrets"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "vuln"
+          ],
+          "likelihood": "HIGH",
+          "impact": "MEDIUM",
+          "confidence": "HIGH"
+        },
+        "severity": "WARNING",
+        "fingerprint": "a49b6df23d44cd84c24a0a46333b4f84c29344ebd6fc6983dc550cf5fbd28961e8d6e2ef41c00fc6ba2402f3d6970d98309fdad1dfcaa451c3046661ba13881a_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "4e377eb2bd4d96d8",
+    "ruleId": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "lib/insecurity.ts",
+      "startLine": 152
+    },
+    "message": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+    "title": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+    "description": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-798: Use of Hard-coded Credentials"
+      ],
+      "owasp": [
+        "A07:2021 - Identification and Authentication Failures"
+      ],
+      "confidence": "LOW",
+      "likelihood": "LOW",
+      "impact": "LOW"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+      "path": "lib/insecurity.ts",
+      "start": {
+        "line": 152,
+        "col": 16,
+        "offset": 6281
+      },
+      "end": {
+        "line": 152,
+        "col": 55,
+        "offset": 6320
+      },
+      "extra": {
+        "message": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+        "metadata": {
+          "interfile": true,
+          "category": "security",
+          "technology": [
+            "crypto",
+            "hmac"
+          ],
+          "references": [
+            "https://rules.sonarsource.com/javascript/RSPEC-2068",
+            "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#key-management"
+          ],
+          "owasp": [
+            "A07:2021 - Identification and Authentication Failures"
+          ],
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "audit"
+          ],
+          "likelihood": "LOW",
+          "impact": "LOW",
+          "confidence": "LOW"
+        },
+        "severity": "WARNING",
+        "fingerprint": "569e806f7e4276ac73f185c72e97867ad00c7577b6de01cb8ddf4d0baac7e4e87d2a1332921d7904bc42be66144ec687c33426d62ca235adbef07da7962cfc84_1",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "1df61b8e005fc4dc",
+    "ruleId": "javascript.sequelize.security.audit.sequelize-raw-query.sequelize-raw-query",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "routes/login.ts",
+      "startLine": 34
+    },
+    "message": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. Data replacement or data binding should be used. See https://sequelize.org/master/manual/raw-queries.html",
+    "title": "javascript.sequelize.security.audit.sequelize-raw-query.sequelize-raw-query",
+    "description": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. Data replacement or data binding should be used. See https://sequelize.org/master/manual/raw-queries.html",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "owasp": [
+        "A01:2017 - Injection",
+        "A03:2021 - Injection"
+      ],
+      "confidence": "LOW",
+      "likelihood": "LOW",
+      "impact": "HIGH"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.sequelize.security.audit.sequelize-raw-query.sequelize-raw-query",
+      "path": "routes/login.ts",
+      "start": {
+        "line": 34,
+        "col": 5,
+        "offset": 1436
+      },
+      "end": {
+        "line": 34,
+        "col": 206,
+        "offset": 1637
+      },
+      "extra": {
+        "message": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. Data replacement or data binding should be used. See https://sequelize.org/master/manual/raw-queries.html",
+        "metadata": {
+          "category": "security",
+          "technology": [
+            "sequelize"
+          ],
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "owasp": [
+            "A01:2017 - Injection",
+            "A03:2021 - Injection"
+          ],
+          "references": [
+            "https://sequelize.org/master/manual/raw-queries.html"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "audit"
+          ],
+          "likelihood": "LOW",
+          "impact": "HIGH",
+          "confidence": "LOW"
+        },
+        "severity": "WARNING",
+        "fingerprint": "15f87ee8884a73a17c4217e88a66f0bb675ff0622f181714cb108b14b7ebe418a1867ab63fcea3df357b200d512b16e4f3fe7672152580e07faeef3ab502bef4_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "596b37896ec5b4e0",
+    "ruleId": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+    "severity": "HIGH",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "routes/login.ts",
+      "startLine": 34
+    },
+    "message": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+    "title": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+    "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "owasp": [
+        "A01:2017 - Injection",
+        "A03:2021 - Injection"
+      ],
+      "confidence": "HIGH",
+      "likelihood": "HIGH",
+      "impact": "HIGH"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "path": "routes/login.ts",
+      "start": {
+        "line": 34,
+        "col": 28,
+        "offset": 1459
+      },
+      "end": {
+        "line": 34,
+        "col": 170,
+        "offset": 1601
+      },
+      "extra": {
+        "message": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+        "metadata": {
+          "interfile": true,
+          "references": [
+            "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+          ],
+          "category": "security",
+          "technology": [
+            "express"
+          ],
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "owasp": [
+            "A01:2017 - Injection",
+            "A03:2021 - Injection"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "vuln"
+          ],
+          "likelihood": "HIGH",
+          "impact": "HIGH",
+          "confidence": "HIGH",
+          "license": "Commons Clause License Condition v1.0[LGPL-2.1-only]"
+        },
+        "severity": "ERROR",
+        "fingerprint": "41ef59cd77ce491aa40483db1d2b8427c5452ec95e660a63b9c28af8be6d1883147a0c1cefa8659e802815ebbc6546b119ae4b19264f0f59403bca7350a3cb35_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "e933273813ca30a4",
+    "ruleId": "javascript.express.security.injection.tainted-sql-string.tainted-sql-string",
+    "severity": "HIGH",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "routes/login.ts",
+      "startLine": 34
+    },
+    "message": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as Sequelize which will protect your queries.",
+    "title": "javascript.express.security.injection.tainted-sql-string.tainted-sql-string",
+    "description": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as Sequelize which will protect your queries.",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "owasp": [
+        "A01:2017 - Injection",
+        "A03:2021 - Injection"
+      ],
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "MEDIUM"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.express.security.injection.tainted-sql-string.tainted-sql-string",
+      "path": "routes/login.ts",
+      "start": {
+        "line": 34,
+        "col": 64,
+        "offset": 1495
+      },
+      "end": {
+        "line": 34,
+        "col": 87,
+        "offset": 1518
+      },
+      "extra": {
+        "message": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as Sequelize which will protect your queries.",
+        "metadata": {
+          "owasp": [
+            "A01:2017 - Injection",
+            "A03:2021 - Injection"
+          ],
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "references": [
+            "https://owasp.org/www-community/attacks/SQL_Injection"
+          ],
+          "category": "security",
+          "technology": [
+            "express"
+          ],
+          "license": "Commons Clause License Condition v1.0[LGPL-2.1-only]",
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "vuln"
+          ],
+          "likelihood": "HIGH",
+          "impact": "MEDIUM",
+          "confidence": "MEDIUM"
+        },
+        "severity": "ERROR",
+        "fingerprint": "3eda57581faf9a82db83460d918f4e5b67df9dacf49f0ca0e65f80645bdc2fdb5967744cb68fe61de21afeed495c581b341c5a96425a35897bfca8518b790e10_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "d6cabbd30a3afd90",
+    "ruleId": "javascript.sequelize.security.audit.sequelize-raw-query.sequelize-raw-query",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "routes/search.ts",
+      "startLine": 23
+    },
+    "message": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. Data replacement or data binding should be used. See https://sequelize.org/master/manual/raw-queries.html",
+    "title": "javascript.sequelize.security.audit.sequelize-raw-query.sequelize-raw-query",
+    "description": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. Data replacement or data binding should be used. See https://sequelize.org/master/manual/raw-queries.html",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "owasp": [
+        "A01:2017 - Injection",
+        "A03:2021 - Injection"
+      ],
+      "confidence": "LOW",
+      "likelihood": "LOW",
+      "impact": "HIGH"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.sequelize.security.audit.sequelize-raw-query.sequelize-raw-query",
+      "path": "routes/search.ts",
+      "start": {
+        "line": 23,
+        "col": 5,
+        "offset": 824
+      },
+      "end": {
+        "line": 23,
+        "col": 161,
+        "offset": 980
+      },
+      "extra": {
+        "message": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. Data replacement or data binding should be used. See https://sequelize.org/master/manual/raw-queries.html",
+        "metadata": {
+          "category": "security",
+          "technology": [
+            "sequelize"
+          ],
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "owasp": [
+            "A01:2017 - Injection",
+            "A03:2021 - Injection"
+          ],
+          "references": [
+            "https://sequelize.org/master/manual/raw-queries.html"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "audit"
+          ],
+          "likelihood": "LOW",
+          "impact": "HIGH",
+          "confidence": "LOW"
+        },
+        "severity": "WARNING",
+        "fingerprint": "0dd718216063d09e0c0203e14f895c462f96d386d3a343fb766d5ee2c6adf1dd27a49d261a0bb94f960845ebe9757c112058e26330fabea6563d72603e513261_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "a54a71062c0b2ceb",
+    "ruleId": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+    "severity": "HIGH",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "routes/search.ts",
+      "startLine": 23
+    },
+    "message": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+    "title": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+    "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "owasp": [
+        "A01:2017 - Injection",
+        "A03:2021 - Injection"
+      ],
+      "confidence": "HIGH",
+      "likelihood": "HIGH",
+      "impact": "HIGH"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "path": "routes/search.ts",
+      "start": {
+        "line": 23,
+        "col": 28,
+        "offset": 847
+      },
+      "end": {
+        "line": 23,
+        "col": 160,
+        "offset": 979
+      },
+      "extra": {
+        "message": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+        "metadata": {
+          "interfile": true,
+          "references": [
+            "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+          ],
+          "category": "security",
+          "technology": [
+            "express"
+          ],
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "owasp": [
+            "A01:2017 - Injection",
+            "A03:2021 - Injection"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "vuln"
+          ],
+          "likelihood": "HIGH",
+          "impact": "HIGH",
+          "confidence": "HIGH",
+          "license": "Commons Clause License Condition v1.0[LGPL-2.1-only]"
+        },
+        "severity": "ERROR",
+        "fingerprint": "24b23cc20abc4616337b735d57cfcfe4c931f4f3073a488f47ea0b3eb42ba3cc769dcb64f95459197e6a960ced82dc769b5126e85bc9e0df8cd68dfe01fbf624_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "9759f7a085dbd06f",
+    "ruleId": "javascript.express.security.injection.tainted-sql-string.tainted-sql-string",
+    "severity": "HIGH",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "routes/search.ts",
+      "startLine": 23
+    },
+    "message": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as Sequelize which will protect your queries.",
+    "title": "javascript.express.security.injection.tainted-sql-string.tainted-sql-string",
+    "description": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as Sequelize which will protect your queries.",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "owasp": [
+        "A01:2017 - Injection",
+        "A03:2021 - Injection"
+      ],
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "MEDIUM"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.express.security.injection.tainted-sql-string.tainted-sql-string",
+      "path": "routes/search.ts",
+      "start": {
+        "line": 23,
+        "col": 74,
+        "offset": 893
+      },
+      "end": {
+        "line": 23,
+        "col": 82,
+        "offset": 901
+      },
+      "extra": {
+        "message": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as Sequelize which will protect your queries.",
+        "metadata": {
+          "owasp": [
+            "A01:2017 - Injection",
+            "A03:2021 - Injection"
+          ],
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "references": [
+            "https://owasp.org/www-community/attacks/SQL_Injection"
+          ],
+          "category": "security",
+          "technology": [
+            "express"
+          ],
+          "license": "Commons Clause License Condition v1.0[LGPL-2.1-only]",
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "vuln"
+          ],
+          "likelihood": "HIGH",
+          "impact": "MEDIUM",
+          "confidence": "MEDIUM"
+        },
+        "severity": "ERROR",
+        "fingerprint": "4b4e1c021f8ce2bd60bed2d5f57f5b48a0e0df974477f72ff837a6b840d86e5e4ade1992276bf4f46dadf6a55de413bca878412a8882bdec471cfeb0cca1d33a_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "dad051a465e17d49",
+    "ruleId": "javascript.express.security.audit.xss.pug.explicit-unescape.template-explicit-unescape",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "opengrep",
+      "version": "1.32.0"
+    },
+    "location": {
+      "path": "views/promotionVideo.pug",
+      "startLine": 79
+    },
+    "message": "Detected an explicit unescape in a Pug template, using either '!=' or '!{...}'. If external data can reach these locations, your application is exposed to a cross-site scripting (XSS) vulnerability. If you must do this, ensure no external data can reach this location.",
+    "title": "javascript.express.security.audit.xss.pug.explicit-unescape.template-explicit-unescape",
+    "description": "Detected an explicit unescape in a Pug template, using either '!=' or '!{...}'. If external data can reach these locations, your application is exposed to a cross-site scripting (XSS) vulnerability. If you must do this, ensure no external data can reach this location.",
+    "remediation": "Review and remediate per rule guidance.",
+    "references": [],
+    "tags": [
+      "sast"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      ],
+      "owasp": [
+        "A07:2017 - Cross-Site Scripting (XSS)",
+        "A03:2021 - Injection"
+      ],
+      "confidence": "LOW",
+      "likelihood": "LOW",
+      "impact": "MEDIUM"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "check_id": "javascript.express.security.audit.xss.pug.explicit-unescape.template-explicit-unescape",
+      "path": "views/promotionVideo.pug",
+      "start": {
+        "line": 79,
+        "col": 13,
+        "offset": 3942
+      },
+      "end": {
+        "line": 79,
+        "col": 40,
+        "offset": 3969
+      },
+      "extra": {
+        "message": "Detected an explicit unescape in a Pug template, using either '!=' or '!{...}'. If external data can reach these locations, your application is exposed to a cross-site scripting (XSS) vulnerability. If you must do this, ensure no external data can reach this location.",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "owasp": [
+            "A07:2017 - Cross-Site Scripting (XSS)",
+            "A03:2021 - Injection"
+          ],
+          "references": [
+            "https://pugjs.org/language/code.html#unescaped-buffered-code",
+            "https://pugjs.org/language/attributes.html#unescaped-attributes"
+          ],
+          "category": "security",
+          "technology": [
+            "express"
+          ],
+          "cwe2022-top25": true,
+          "cwe2021-top25": true,
+          "subcategory": [
+            "audit"
+          ],
+          "likelihood": "LOW",
+          "impact": "MEDIUM",
+          "confidence": "LOW"
+        },
+        "severity": "WARNING",
+        "fingerprint": "a15f585b68d6d123be356ae999949a88694dcee167c404b60d277df0ecb69aceaa54652bb72451e4c0cd5b1e6152730adc6dc1c6487ae2b3dc443410f1188dc4_0",
+        "is_ignored": false,
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  }
+]

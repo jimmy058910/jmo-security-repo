@@ -79,7 +79,7 @@ class JmoSecurity < Formula
         jmo wizard                   # Interactive guided scanning
         jmo wizard --yes             # Non-interactive with defaults
         jmo scan --repo .            # Scan a repository with the default tool matrix
-        jmo scan --repo . --tools trivy semgrep  # Narrow the tool list
+        jmo scan --repo . --tools trivy opengrep  # Narrow the tool list
 
       🐳 Zero-Installation Option (Recommended):
         Use Docker mode for instant scanning with every security tool preinstalled:
@@ -93,7 +93,7 @@ class JmoSecurity < Formula
 
         # OR install individually:
         brew install trufflesecurity/trufflehog/trufflehog  # Secrets
-        brew install semgrep                                # SAST
+        jmo tools install opengrep                          # SAST (a static binary, no Homebrew formula)
         brew install aquasecurity/trivy/trivy               # Vulnerabilities
         brew install syft                                   # SBOM
         brew install checkov                                # IaC security

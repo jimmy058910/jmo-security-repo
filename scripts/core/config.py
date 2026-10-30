@@ -224,6 +224,21 @@ RECOGNISED_CONFIG_KEYS: frozenset[str] = frozenset(
 )
 
 
+# Warnings already given, by kind and config file. A scan loads ``jmo.yml`` many
+# times (measured: 10 in one ``jmo scan``), and a warning about the file is for
+# the user, who needs it once, not for each load.
+_WARNED: set[tuple[str, str]] = set()
+
+
+def _first_warning(kind: str, path: Path) -> bool:
+    """True the first time ``kind`` is raised for ``path`` in this process."""
+    key = (kind, str(path))
+    if key in _WARNED:
+        return False
+    _WARNED.add(key)
+    return True
+
+
 def _warn_unrecognised_config_keys(path: Path, data: dict) -> None:
     """Warn about top-level ``jmo.yml`` keys that configure nothing.
 
@@ -239,13 +254,65 @@ def _warn_unrecognised_config_keys(path: Path, data: dict) -> None:
     reach this mapping.
     """
     unknown = sorted(set(data) - RECOGNISED_CONFIG_KEYS)
-    if not unknown:
+    if not unknown or not _first_warning("unrecognised-keys", path):
         return
     named = ", ".join(repr(k) for k in unknown)
     logger.warning(
         f"{path} has unrecognised top-level key(s) {named}; they configure "
         f"nothing and are ignored. Recognised keys: "
         f"{', '.join(sorted(RECOGNISED_CONFIG_KEYS))}"
+    )
+
+
+def _warn_v1_semgrep_entry(path: Path, per_tool: dict) -> None:
+    """Name a v1 ``per_tool.semgrep`` entry, which v2.0.0 reads nowhere.
+
+    opengrep replaced semgrep, and its settings live under
+    ``per_tool.opengrep``. The old entry is left as written and read by
+    nothing, so a user's own packs (``configs``) and flags would stop applying
+    to the scan without a word. One warning per file, naming each key the
+    entry carries and where it goes. It only warns: whatever shape the entry
+    has (a mapping of any keys, a bare ``true``, ``configs: 5``), it never
+    raises, since it runs inside ``load_config``.
+    """
+    entry = per_tool.get("semgrep")
+    if entry is None or not _first_warning("v1-semgrep", path):
+        return
+    keys = [str(k) for k in entry] if isinstance(entry, dict) else []
+    configs = entry.get("configs") if isinstance(entry, dict) else None
+    if isinstance(configs, str):  # one pack written bare, not its letters
+        configs = [configs]
+    packs = (
+        f" ({', '.join(str(c) for c in configs)})"
+        if isinstance(configs, (list, tuple)) and configs
+        else ""
+    )
+    current = per_tool.get("opengrep")
+    if isinstance(current, dict) and current:
+        # Both are set: opengrep's applies, so say what the old entry adds.
+        absent = [k for k in keys if k not in current]
+        if absent:
+            names = ", ".join(f"per_tool.opengrep.{k}" for k in absent)
+            note = " (configs replace the bundled rules)" if "configs" in absent else ""
+            them = "it" if len(absent) == 1 else "them"
+            advice = f"Add {names}{note} if you still want {them}"
+        else:
+            advice = "Delete per_tool.semgrep"
+        logger.warning(
+            f"{path} has per_tool.semgrep{packs} and per_tool.opengrep: only "
+            f"per_tool.opengrep applies, and per_tool.semgrep is ignored "
+            f"(opengrep replaced semgrep in v2.0.0). {advice}"
+        )
+        return
+    moves = (
+        ", ".join(f"per_tool.opengrep.{k}" for k in keys)
+        if keys
+        else "per_tool.opengrep"
+    )
+    note = " (configs replace the bundled rules)" if "configs" in keys else ""
+    logger.warning(
+        f"{path} has per_tool.semgrep{packs}, which is ignored: opengrep "
+        f"replaced semgrep in v2.0.0. Move its settings to {moves}{note}"
     )
 
 
@@ -343,6 +410,7 @@ def load_config(path: str | None) -> Config:
     # per_tool overrides
     if isinstance(data.get("per_tool"), dict):
         cfg.per_tool = data["per_tool"]
+        _warn_v1_semgrep_entry(p, cfg.per_tool)
     # retries (int for backward compat, or dict for typed config)
     rv = data.get("retries")
     if isinstance(rv, int) and rv >= 0:

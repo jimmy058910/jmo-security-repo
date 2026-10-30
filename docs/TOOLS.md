@@ -4,7 +4,7 @@
 
 To narrow the list:
 
-- `--tools trivy semgrep` (or `--tools trivy,semgrep`) replaces the list for one run
+- `--tools trivy opengrep` (or `--tools trivy,opengrep`) replaces the list for one run
 - `--skip-tools zap` drops names from it
 - a top-level `tools:` list in `jmo.yml` replaces it for every run that reads that file
 
@@ -16,7 +16,7 @@ To narrow the list:
 |------|---------------|---------|---------------------------|---------|
 | TruffleHog | Secrets: API keys, tokens, credentials, in the working tree and git history | Repository, GitLab | Always | Release binary |
 | Gitleaks | Secrets, by a second rule set, in the working tree and git history | Repository, GitLab | Always | Release binary |
-| Semgrep | Code-level flaws (SAST), many languages | Repository, GitLab | Always | Isolated Python venv |
+| Opengrep | Code-level flaws (SAST), many languages, by a rule bundle that ships with JMo and needs no network ([details](#opengrep)) | Repository, GitLab | A file in a language the bundle covers, or one `generic.yaml`'s rules read, is present | Release binary |
 | Syft | Software bill of materials (SBOM) | Repository, image, GitLab | Always | Release binary or install script |
 | Trivy | Vulnerable dependencies (dev dependencies included, offline) and misconfigurations on a repository; adds secrets on a container image | Repository, image, IaC, Kubernetes, GitLab | Always | Release binary or install script |
 | Checkov | IaC misconfigurations: Terraform, CloudFormation (Kubernetes too, on a `--k8s-manifest` target) | Repository, IaC, GitLab | IaC is present | Isolated Python venv |
@@ -38,6 +38,7 @@ Being in the matrix makes a tool eligible. Two things then decide whether it run
 
 | Tool | Content it needs | Files it looks for |
 |------|------------------|--------------------|
+| Opengrep | Source in a language the rule bundle reads | `*.py`, `*.js`, `*.jsx`, `*.mjs`, `*.ts`, `*.tsx`, `*.java`, `*.go`, `*.rb`, `*.php`, `*.cs`, `*.c`, `*.cpp`, `Dockerfile` and the other names that `LANGUAGE_PATTERNS` in `scripts/core/rule_bundle.py` lists, one set per language, and the files only `generic.yaml`'s rules read (`*.conf`, `*.bicep`, `*.hbs`, `*.mustache`, `*.page`, `*.component`, `*build.gradle`, and anything under a `sites-enabled/` or a directory named for nginx or a vhost). A tree with none of them is `skipped:no files in a language the rule bundle reads` |
 | Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile`, spelled with that case, but not a `Dockerfile.<suffix>` that is no Dockerfile: a document about one (`.md`, `.txt`, `.rst`, `.adoc`, `.html`), Docker's own `Dockerfile.dockerignore`, a template that renders one (`.j2`, `.jinja`, `.jinja2`, `.tmpl`, `.tpl`, `.template`, `.in`) or code (`.py`). GitLab targets find the images they name in the same files |
 | ShellCheck | Shell scripts | `*.sh`, `*.bash`, `*.ksh` |
 | zizmor | GitHub Actions | `.github/workflows/*.yml` and `*.yaml` (the repository's own, not a subdirectory's), `action.yml` or `action.yaml` anywhere, `.github/dependabot.yml` or `.yaml` |
@@ -66,10 +67,10 @@ Every requested tool leaves one row per target, in `scan-timings.json`, in `.sca
 | Row | Meaning |
 |-----|---------|
 | `ran` | It ran and its output is beside the row. |
-| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no workflow zizmor could read`, `no lockfile`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
+| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no workflow zizmor could read`, `no files in a language the rule bundle reads`, `no changed file opengrep reads since the baseline commit`, `no lockfile`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
 | `failed:<reason>` | It applied and failed: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
 
-`failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep reports that count, and it is how a run that scanned nothing stops passing for a clean one.
+`failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Opengrep reports that count (`paths.scanned`), and it is how a run that scanned nothing stops passing for a clean one. The exception is a run limited by `--baseline-commit`, which has nothing to read when the commit changed no file opengrep scans: that is `skipped:no changed file opengrep reads since the baseline commit`.
 
 A failed row can still have contributed findings: OSV-Scanner beside a lockfile it could not read, or whose ecosystem has no database, and TruffleHog or Gitleaks whose git-history run failed while the working tree's worked. The row's `kept_findings` counts what its runs that worked reported, and those findings are in the report; the count is taken before de-duplication, so the report can hold fewer. It is null when no run of the row worked, and 0 when one worked and found nothing. A run worked when it succeeded and did not report 0 files examined. The target is then partial, whatever that run found, like one where another tool ran: its line names what failed and what was kept, the scan is stored in history with the row failed, and the target alone does not make the scan exit 1. Only a target where no run of any tool worked does.
 
@@ -88,7 +89,7 @@ so zap stops and reports before JMo's timeout. It runs with a ZAP home of JMo's 
 `~/.jmo/zap-home`, which starts each run without the settings the last one stored, so a
 scan neither reads nor changes your `~/ZAP`.
 
-The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
+The remaining repository tools (TruffleHog, Gitleaks, Syft, Trivy, YARA, Grype) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
 
 Trivy's repository scan reads vulnerabilities (dev dependencies included, and offline: it never calls out to a package registry) and misconfigurations; its secret pass runs only on an image scan. A repository's secrets come from TruffleHog and Gitleaks, not Trivy.
 
@@ -116,11 +117,20 @@ How it reads them:
 
 Each check is a pattern over source or config, not a proof, so its findings carry confidence MEDIUM.
 
+## Opengrep
+
+Opengrep is JMo's code scanner. It replaced Semgrep in v2.0.0 ([upgrading](../UPGRADE.md#semgrep-is-replaced-by-opengrep)). It reads the rule bundle in `scripts/jmo_rules/` and nothing else, so a scan makes no network call to fetch a rule and gives the same answer offline. What the bundle holds, where each rule came from and how to rebuild or replace it: [RULE_BUNDLE.md](RULE_BUNDLE.md).
+
+- **Which rule files.** One per language the repository has, plus `generic.yaml`, which is always loaded. TypeScript selects the JavaScript rules as well, because opengrep runs them on `.ts`. A repository with no file in a language the bundle reads, and none that only `generic.yaml`'s rules read (an nginx config, Bicep, Handlebars, Visualforce), is `skipped:no files in a language the rule bundle reads`, not `ran` with 0 findings. `generic.yaml` also holds two catch-all rules (a shell reverse shell and a bidirectional control character) that apply to every file. They are not run on a tree that is skipped, since opengrep does not start on it: a repository of only a README, a Makefile or plain text gets no scan from them.
+- **Your own rules.** `per_tool.opengrep.configs` in `jmo.yml` replaces the bundle: each entry is a rule file or a directory, and a relative path is read from where `jmo` runs. `per_tool.opengrep.flags` adds flags. A registry config (`auto`, or a `p/...` pack) is passed through and fetches its rules over the network, which the bundle never does (measured on opengrep 1.32.0: `--config p/python` loaded 151 rules online).
+- **What it skips.** Opengrep has an ignore list of its own, and it applies on top of JMo's exclusions ([Known limitations](KNOWN_LIMITATIONS.md#opengrep-also-skips-tests-build-output-and-vendored-code)).
+- **Finding ids.** The tool's name is part of every finding id, so every SAST finding id changed once, when opengrep took over.
+
 ## Target types
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Syft, Trivy, YARA, Grype; Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
@@ -140,9 +150,9 @@ jmo tools check     # what is installed, at which version, and what is missing
 
 | Tool | How `jmo tools install` installs it | Where it goes |
 |------|-------------------------------------|---------------|
-| TruffleHog, Gitleaks, Hadolint, ShellCheck, zizmor, OSV-Scanner, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
+| TruffleHog, Gitleaks, Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
 | Syft, Trivy, Grype | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
-| Semgrep, Checkov | Pinned PyPI package in a virtual environment of its own, so their dependencies cannot conflict with JMo's or each other's | `~/.jmo/tools/venvs/<tool>/` |
+| Checkov | Pinned PyPI package in a virtual environment of its own, so its dependencies cannot conflict with JMo's | `~/.jmo/tools/venvs/<tool>/` |
 | YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |
 | ZAP | Pinned cross-platform release archive, extracted | `~/.jmo/bin/zap/` |
 | jmo-native | Nothing to install: it is part of JMo and runs on JMo's own Python. `jmo tools check` lists it at JMo's version; `jmo tools install jmo-native` and `jmo tools update jmo-native` say it is built in | inside JMo |
@@ -151,6 +161,8 @@ jmo tools check     # what is installed, at which version, and what is missing
 Platform differences:
 
 - **Linux:** ShellCheck is installed with `sudo apt-get install shellcheck` when passwordless sudo is available, which gives the distribution's version. Otherwise it is the pinned binary.
+- **Opengrep has no Windows arm64 build.** On Windows, `jmo tools install` fetches the x86_64 one whatever the architecture.
+- **Opengrep unpacks about 255 MB on its first run**, outside `~/.jmo` (measured on Linux, 1.32.0: into `$XDG_CACHE_HOME/opengrep`, which is `~/.cache/opengrep` by default).
 - **zizmor has no Windows arm64 build.** On Windows, `jmo tools install` fetches the x86_64 one whatever the architecture, as it does for Hadolint and ShellCheck.
 - **ZAP needs Java 17 or newer** at runtime, which `jmo tools install` does not provide. Install it yourself (`winget install Microsoft.OpenJDK.17`, `sudo apt-get install default-jre-headless`, or `brew install openjdk@17`); `jmo wizard` offers to do it for you.
 - **YARA without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara.rules_path` in `jmo.yml`.
@@ -176,10 +188,11 @@ These tools are no longer installed, run or parsed. A `per_tool` block for one o
 | Tool | What it did | Why it was removed |
 |------|-------------|--------------------|
 | kubescape | Kubernetes hardening checks | Trivy's config scan covers the same ground, and kubescape fetched its rules at scan time |
-| semgrep-secrets | Semgrep with secret-detection rules | It scanned 0 files; SAST moves to a vendored rule bundle in a later release |
-| bandit (as a scanner) | Python SAST | Its results were dominated by `.venv` noise; SAST moves to a vendored rule bundle in a later release |
+| semgrep | Code-level SAST, rules fetched from the Semgrep registry at scan time | Replaced by [Opengrep](#opengrep), which runs a rule bundle that ships with JMo instead of fetching rules at scan time. Its findings have new ids |
+| semgrep-secrets | Semgrep with secret-detection rules | It scanned 0 files; TruffleHog and Gitleaks read secrets |
+| bandit (as a scanner) | Python SAST | Its results were dominated by `.venv` noise; Opengrep's Python rules cover the ground |
 | trivy-rbac | Kubernetes RBAC checks | Its output was identical to Trivy's config scan |
-| gosec | Go SAST | It examined 0 files on every run: it loads packages through the `go` command, and neither the image nor `jmo tools install` provides Go. Providing it meant ~58-72 MB of Go in the image and module and toolchain downloads during a scan. Semgrep covers Go until the vendored rule bundle arrives |
+| gosec | Go SAST | It examined 0 files on every run: it loads packages through the `go` command, and neither the image nor `jmo tools install` provides Go. Providing it meant ~58-72 MB of Go in the image and module and toolchain downloads during a scan. Opengrep's Go rules cover Go |
 | checkov-cicd | Checkov on CI/CD pipelines | Folded into Checkov, which never actually read `.github/workflows` under JMo (its `.git` exclusion also matched `.github`, #1313); Checkov's repository run was then narrowed to Terraform and CloudFormation only ([above](#when-each-tool-runs)), dropping its other CI/CD and secrets frameworks there. zizmor now audits workflows |
 
 Each tool below was never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream:

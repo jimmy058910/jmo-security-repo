@@ -192,6 +192,7 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 | `ci.yml` test-sharded — Windows (`:352`) | `-m "not smoke and not requires_tools and not docker and not slow"` | Adds `not slow` for runtime; also `-p no:xdist -p no:rerunfailures`, `--timeout=60`. **No coverage.** |
 | `ci.yml` windows-native-encoding collection floor (`:448`) | `-m "not smoke and not requires_tools and not docker and not slow"` | `--collect-only` count guard, fails under 7800 collected. Not a test run; no coverage. |
 | `ci.yml` tool-contract-tests | `-m "requires_tools"` | Tools installed via the `Install tools` step earlier in the job. |
+| `ci.yml` windows-opengrep | `-m "requires_tools"` | The one Windows job that runs `requires_tools`: opengrep installed by `jmo tools install`, three test files, `-p no:xdist -p no:rerunfailures`, no `PYTHONUTF8`. The step fails on any skip (read from the junit file) and under a floor of 29 tests. |
 | `scheduled.yml` Nightly Extended | `-m "not requires_tools and not smoke"` | Includes slow tests intentionally (omit `not slow`) since nightly has the time budget. Excludes real-tool + smoke tests because runner doesn't install tools or install released package. |
 | `scheduled.yml` Tool Smoke Tests | `-m "smoke"` | Runs only `@pytest.mark.smoke` tests against released `jmo-security` PyPI package. |
 | `scheduled.yml` Integration matrix | `-m "integration and not slow"` | Per-component integration tests; `not slow` keeps matrix runtime bounded. |

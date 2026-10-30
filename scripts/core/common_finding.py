@@ -125,7 +125,7 @@ TOOL_SEVERITY_MAPPINGS: dict[str, dict[str, str]] = {
         "high": "HIGH",
         "critical": "CRITICAL",
     },
-    "semgrep": {
+    "opengrep": {
         "error": "HIGH",
         "warning": "MEDIUM",
         "info": "LOW",
@@ -154,7 +154,7 @@ def map_tool_severity(tool_name: str, severity: str) -> str:
     eliminating duplicated mapping logic across adapters.
 
     Args:
-        tool_name: Name of the security tool (e.g., "zap", "semgrep", "nuclei")
+        tool_name: Name of the security tool (e.g., "zap", "opengrep", "nuclei")
         severity: Tool-specific severity string
 
     Returns:
@@ -163,7 +163,7 @@ def map_tool_severity(tool_name: str, severity: str) -> str:
     Examples:
         >>> map_tool_severity("zap", "informational")
         'INFO'
-        >>> map_tool_severity("semgrep", "ERROR")
+        >>> map_tool_severity("opengrep", "ERROR")
         'HIGH'
         >>> map_tool_severity("nuclei", "critical")
         'CRITICAL'
@@ -308,7 +308,7 @@ def fingerprint(
     collapsed to 38.
 
     Args:
-        tool: Tool name (e.g., "trufflehog", "semgrep")
+        tool: Tool name (e.g., "trufflehog", "opengrep")
         rule_id: Rule or vulnerability ID
         path: File path where finding occurred
         start_line: Line number (0 if not applicable)

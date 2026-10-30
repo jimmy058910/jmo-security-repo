@@ -667,7 +667,7 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
     Redaction Strategy:
         - trufflehog: Replace 'Raw', 'RawV2' fields with '[REDACTED]'
         - gitleaks: Replace SARIF's 'snippet' (the matched secret) the same way
-        - Other tools: No redaction (trivy, semgrep, etc. don't contain secrets)
+        - Other tools: No redaction is applied; the raw finding is stored as written
 
     Example:
         >>> finding = {"tool": {"name": "trufflehog"}, "raw": {"Raw": "ghp_secret123"}}
@@ -2540,8 +2540,8 @@ def get_dashboard_summary(
                 {"rule_id": str, "count": int, "severity": str},
                 ...
             ],
-            "tools_used": ["trivy", "semgrep", ...],
-            "findings_by_tool": {"trivy": 45, "semgrep": 32, ...},
+            "tools_used": ["trivy", "opengrep", ...],
+            "findings_by_tool": {"trivy": 45, "opengrep": 32, ...},
             "compliance_coverage": {
                 "total_findings": 100,
                 "findings_with_compliance": 85,

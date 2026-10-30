@@ -49,10 +49,13 @@ def _found(tool_name):
 
 
 def _repo(tmp_path, name="repo", files=None):
-    """A repository holding `files` ({relative path: text}), or one README."""
+    """A repository holding `files` ({relative path: text}), or a README and one
+    Python file (opengrep is skipped on a tree with no file in a language its
+    rules read)."""
     repo = tmp_path / name
     repo.mkdir(parents=True, exist_ok=True)
-    for rel, text in (files or {"README.md": "# repo\n"}).items():
+    default = {"README.md": "# repo\n", "app.py": "import os\n"}
+    for rel, text in (files or default).items():
         path = repo / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(text.encode("utf-8"))
@@ -101,11 +104,11 @@ class TestRepositoryScanner:
     def test_scan_repository_basic(self, tmp_path):
         repo = _repo(tmp_path, "test-repo")
 
-        name, rows, _ = _scan(repo, tmp_path / "out", ["trufflehog", "semgrep"])
+        name, rows, _ = _scan(repo, tmp_path / "out", ["trufflehog", "opengrep"])
 
         assert name == "test-repo"
         assert rows["trufflehog"].state is State.RAN
-        assert rows["semgrep"].state is State.RAN
+        assert rows["opengrep"].state is State.RAN
 
     def test_scan_repository_with_timeout_override(self, tmp_path):
         repo = _repo(tmp_path, "my-app")
@@ -125,7 +128,7 @@ class TestRepositoryScanner:
 
     def test_scan_repository_multiple_tools(self, tmp_path):
         repo = _repo(tmp_path, "multi-tool-repo")
-        tools = ["trufflehog", "semgrep", "trivy", "syft"]
+        tools = ["trufflehog", "opengrep", "trivy", "syft"]
 
         _, rows, _ = _scan(repo, tmp_path / "out", tools)
 
@@ -138,13 +141,13 @@ class TestRepositoryScanner:
         _, rows, _ = _scan(
             repo,
             tmp_path / "out",
-            ["semgrep"],
-            results=[ToolResult(tool="semgrep", status="success", attempts=3)],
+            ["opengrep"],
+            results=[ToolResult(tool="opengrep", status="success", attempts=3)],
             retries=2,
         )
 
-        assert rows["semgrep"].state is State.RAN
-        assert rows["semgrep"].attempts == 3
+        assert rows["opengrep"].state is State.RAN
+        assert rows["opengrep"].attempts == 3
 
     def test_scan_repository_creates_output_directory(self, tmp_path):
         repo = _repo(tmp_path, "output-test")
@@ -201,14 +204,14 @@ class TestRepositoryScanner:
         _, rows, _ = _scan(
             repo,
             tmp_path / "out",
-            ["trufflehog", "semgrep", "trivy"],
+            ["trufflehog", "opengrep", "trivy"],
             find=lambda t: None,
             allow_missing_tools=True,
             write_stub_func=mock_write_stub,
         )
 
-        assert sorted(t for t, _ in stub_calls) == ["semgrep", "trivy", "trufflehog"]
-        for tool in ("trufflehog", "semgrep", "trivy"):
+        assert sorted(t for t, _ in stub_calls) == ["opengrep", "trivy", "trufflehog"]
+        for tool in ("trufflehog", "opengrep", "trivy"):
             assert rows[tool].label == "skipped:not installed", tool
 
     def test_allow_missing_tools_all_scanners(self, tmp_path):
@@ -241,11 +244,15 @@ class TestRepositoryScanner:
         repo = _repo(tmp_path)
 
         with caplog.at_level(logging.ERROR):
-            _, rows, _ = _scan(repo, tmp_path / "out", ["semgrep"], find=lambda t: None)
+            _, rows, _ = _scan(
+                repo, tmp_path / "out", ["opengrep"], find=lambda t: None
+            )
 
-        assert rows["semgrep"].state is State.FAILED
-        assert rows["semgrep"].reason is Reason.NOT_INSTALLED
-        assert "semgrep: requested but its executable could not be found" in caplog.text
+        assert rows["opengrep"].state is State.FAILED
+        assert rows["opengrep"].reason is Reason.NOT_INSTALLED
+        assert (
+            "opengrep: requested but its executable could not be found" in caplog.text
+        )
 
     def test_per_tool_flags_applied(self, tmp_path):
         repo = _repo(tmp_path, "flags-test-repo")
@@ -253,14 +260,14 @@ class TestRepositoryScanner:
         _, _, defs = _scan(
             repo,
             tmp_path / "out",
-            ["semgrep", "trivy"],
+            ["opengrep", "trivy"],
             per_tool_config={
-                "semgrep": {"flags": ["--exclude", "node_modules"]},
+                "opengrep": {"flags": ["--exclude", "node_modules"]},
                 "trivy": {"flags": ["--severity", "HIGH,CRITICAL"]},
             },
         )
 
-        assert "node_modules" in defs["semgrep"].command
+        assert "node_modules" in defs["opengrep"].command
         assert "HIGH,CRITICAL" in defs["trivy"].command
 
     def test_per_tool_timeout_overrides(self, tmp_path):
@@ -269,16 +276,16 @@ class TestRepositoryScanner:
         _, _, defs = _scan(
             repo,
             tmp_path / "out",
-            ["trufflehog", "semgrep", "trivy"],
+            ["trufflehog", "opengrep", "trivy"],
             per_tool_config={
                 "trufflehog": {"timeout": 300},
-                "semgrep": {"timeout": 900},
+                "opengrep": {"timeout": 900},
                 "trivy": {"timeout": 1200},
             },
         )
 
         assert defs["trufflehog"].timeout == 300
-        assert defs["semgrep"].timeout == 900
+        assert defs["opengrep"].timeout == 900
         assert defs["trivy"].timeout == 1200
 
     def test_mixed_available_and_missing_tools(self, tmp_path):
@@ -290,7 +297,7 @@ class TestRepositoryScanner:
         _, rows, _ = _scan(
             repo,
             tmp_path / "out",
-            ["trufflehog", "semgrep", "trivy", "checkov"],
+            ["trufflehog", "opengrep", "trivy", "checkov"],
             find=lambda t: f"/usr/bin/{t}" if t in ("trufflehog", "trivy") else None,
             allow_missing_tools=True,
             write_stub_func=lambda tool, path: stub_calls.append(tool),
@@ -298,9 +305,9 @@ class TestRepositoryScanner:
 
         assert rows["trufflehog"].state is State.RAN
         assert rows["trivy"].state is State.RAN
-        assert rows["semgrep"].label == "skipped:not installed"
+        assert rows["opengrep"].label == "skipped:not installed"
         assert rows["checkov"].label == "skipped:not installed"
-        assert sorted(stub_calls) == ["checkov", "semgrep"]
+        assert sorted(stub_calls) == ["checkov", "opengrep"]
 
     def test_timeout_writes_stub_file(self, tmp_path):
         repo = _repo(tmp_path, "timeout-repo")
@@ -313,9 +320,9 @@ class TestRepositoryScanner:
         _, rows, _ = _scan(
             repo,
             tmp_path / "out",
-            ["semgrep", "trivy"],
+            ["opengrep", "trivy"],
             results=[
-                ToolResult(tool="semgrep", status="success", attempts=1),
+                ToolResult(tool="opengrep", status="success", attempts=1),
                 ToolResult(
                     tool="trivy",
                     status="error",
@@ -330,7 +337,7 @@ class TestRepositoryScanner:
             write_stub_func=mock_write_stub,
         )
 
-        assert rows["semgrep"].state is State.RAN
+        assert rows["opengrep"].state is State.RAN
         assert rows["trivy"].label == "failed:timed out"
         assert rows["trivy"].attempts == 2
         assert stub_calls == ["trivy"]
@@ -342,7 +349,7 @@ class TestRepositoryScanner:
         _scan(
             repo,
             tmp_path / "out",
-            ["trivy", "semgrep"],
+            ["trivy", "opengrep"],
             find=lambda t: None,
             allow_missing_tools=True,
             write_stub_func=lambda tool, path: stub_calls.append((tool, path)),
@@ -350,7 +357,7 @@ class TestRepositoryScanner:
 
         assert len(stub_calls) == 2
         assert any("trivy" in str(p) for _, p in stub_calls)
-        assert any("semgrep" in str(p) for _, p in stub_calls)
+        assert any("opengrep" in str(p) for _, p in stub_calls)
 
     def test_the_timings_document_carries_every_row(self, tmp_path):
         """#722: every requested tool has a row in scan-timings.json, including
@@ -509,10 +516,10 @@ class TestNothingExaminedIsFailed:
         (repo / "node_modules" / "pkg").mkdir(parents=True)
         (repo / "node_modules" / "pkg" / "index.js").write_bytes(b"1\n")
 
-        _, rows, defs = _scan(repo, tmp_path / "out", ["trivy", "semgrep", "zap"])
+        _, rows, defs = _scan(repo, tmp_path / "out", ["trivy", "opengrep", "zap"])
 
         assert rows["trivy"].label == "failed:no files to scan"
-        assert rows["semgrep"].label == "failed:no files to scan"
+        assert rows["opengrep"].label == "failed:no files to scan"
         assert rows["zap"].label == "skipped:needs --url"
         assert defs == {}, "no tool may run against an empty tree"
         doc = json.loads(
@@ -523,13 +530,13 @@ class TestNothingExaminedIsFailed:
     @pytest.mark.parametrize(
         ("scanned", "label"), [(0, "failed:examined 0 files"), (4, "ran")]
     )
-    def test_semgrep_reporting_zero_paths_scanned_is_failed(
+    def test_opengrep_reporting_zero_paths_scanned_is_failed(
         self, tmp_path, scanned, label
     ):
         """#1231's case: semgrep ran 2930 rules on 0 files, exited 0, and was
         recorded as success. Its own `paths.scanned` says so."""
         repo = _repo(tmp_path)
-        out = tmp_path / "out" / "repo" / "semgrep.json"
+        out = tmp_path / "out" / "repo" / "opengrep.json"
 
         def runner_writes(tools, **_kwargs):
             out.parent.mkdir(parents=True, exist_ok=True)
@@ -540,7 +547,7 @@ class TestNothingExaminedIsFailed:
             runner = MagicMock()
             runner.run_all_parallel.return_value = [
                 ToolResult(
-                    tool="semgrep", status="success", returncode=0, output_file=out
+                    tool="opengrep", status="success", returncode=0, output_file=out
                 )
             ]
             return runner
@@ -552,7 +559,7 @@ class TestNothingExaminedIsFailed:
             _, rows = scan_repository(
                 repo,
                 tmp_path / "out",
-                ["semgrep"],
+                ["opengrep"],
                 600,
                 0,
                 {},
@@ -560,7 +567,7 @@ class TestNothingExaminedIsFailed:
                 find_tool_func=_found,
             )
 
-        assert rows["semgrep"].label == label
+        assert rows["opengrep"].label == label
         # Its run succeeded, but one that examined nothing is no run that
         # worked: the target contributed nothing, and is not partial.
         from scripts.cli.scan_orchestrator import (
@@ -569,7 +576,7 @@ class TestNothingExaminedIsFailed:
             classify_target_outcome,
         )
 
-        assert rows["semgrep"].kept_findings is None
+        assert rows["opengrep"].kept_findings is None
         assert classify_target_outcome(rows) == (
             TARGET_FAILED if not scanned else TARGET_OK
         )
@@ -579,9 +586,9 @@ class TestNothingExaminedIsFailed:
         decided by the run alone."""
         repo = _repo(tmp_path)
 
-        _, rows, _ = _scan(repo, tmp_path / "out", ["semgrep"])
+        _, rows, _ = _scan(repo, tmp_path / "out", ["opengrep"])
 
-        assert rows["semgrep"].state is State.RAN
+        assert rows["opengrep"].state is State.RAN
 
 
 class TestFailedToolsAreReported:
@@ -605,19 +612,19 @@ class TestFailedToolsAreReported:
                 tmp_path,
                 [
                     ToolResult(
-                        tool="semgrep",
+                        tool="opengrep",
                         status="error",
                         returncode=3,
                         error_message="Return code 3 not in (0, 1, 2)",
                         failure="crash",
                     )
                 ],
-                ["semgrep"],
+                ["opengrep"],
             )
 
-        assert rows["semgrep"].label == "failed:unaccepted exit code"
-        assert rows["semgrep"].exit_code == 3
-        assert "semgrep" in caplog.text
+        assert rows["opengrep"].label == "failed:unaccepted exit code"
+        assert rows["opengrep"].exit_code == 3
+        assert "opengrep" in caplog.text
         assert "Return code 3" in caplog.text
 
     def test_timeout_reports_tool_and_reason(self, tmp_path, caplog):
@@ -706,10 +713,10 @@ class TestExclusions:
     in its own spelling. The spellings are pinned in tests/unit/test_scan_utils.py;
     these assert they reach the argv."""
 
-    def test_semgrep_is_told_to_skip_vendored_trees(self, tmp_path):
-        _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["semgrep"])
+    def test_opengrep_is_told_to_skip_vendored_trees(self, tmp_path):
+        _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["opengrep"])
 
-        assert "--exclude=node_modules" in defs["semgrep"].command
+        assert "--exclude=node_modules" in defs["opengrep"].command
 
     def test_trivy_is_told_to_skip_them_at_any_depth(self, tmp_path):
         _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["trivy"])

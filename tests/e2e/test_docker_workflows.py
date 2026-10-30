@@ -829,7 +829,7 @@ class TestDockerToolVerification:
             # Exercises `tools debug` for a tool neither registered nor installed;
             # it makes no claim that gitleaks is present.
             pytest.param("gitleaks", id="unregistered-gitleaks"),
-            "semgrep",
+            "opengrep",
             "checkov",
             "nuclei",
         ],
@@ -990,9 +990,10 @@ class TestDockerNonRootExecution:
 
         # Set HOME=/tmp explicitly: with arbitrary --user UID:GID, no
         # /etc/passwd entry exists for that UID, so HOME resolves to "/"
-        # and semgrep tries to write its cache to "/.semgrep" which fails
-        # with PermissionError. Pointing HOME at the world-writable /tmp
-        # gives semgrep (and any other tool with a cache) a writable home.
+        # and a tool that writes under HOME (opengrep's debug log and extraction
+        # cache) tries "/.opengrep" and fails with PermissionError. Pointing
+        # HOME at the world-writable /tmp gives it (and any other tool with a
+        # cache) a writable home.
         result = subprocess.run(
             [
                 "docker",
@@ -1635,8 +1636,8 @@ def _run_matrix_probe(tmp_path: Path, registry: str) -> subprocess.CompletedProc
             "PROFILE_TOOLS = {'deep': ['trivy', 'opa']}\n", None, id="v1-layout"
         ),
         pytest.param(
-            "TOOL_MATRIX = ('trivy', 'semgrep')\nPOLICY_ENGINE = 'opa'\n",
-            [["trivy", "semgrep"], "opa"],
+            "TOOL_MATRIX = ('trivy', 'opengrep')\nPOLICY_ENGINE = 'opa'\n",
+            [["trivy", "opengrep"], "opa"],
             id="v2-layout",
         ),
     ],

@@ -23,7 +23,7 @@ import pytest
 # timings pipeline over that set, so they name it instead.
 FORMER_FAST_TOOLS = [
     "trufflehog",
-    "semgrep",
+    "opengrep",
     "syft",
     "trivy",
     "checkov",
@@ -326,7 +326,7 @@ def test_timings_json_is_valid_json(tmp_path):
         str(test_repo),
         "--tools",
         "trufflehog",
-        "semgrep",
+        "opengrep",
         "--results-dir",
         str(tmp_path / "results"),
         # Never the repository's own .jmo/history.db: `jmo ci` stores by default.
@@ -373,7 +373,7 @@ def _fabricate_results(tmp_path):
     # Adapters tolerate an empty result set; the job is still timed, which is
     # what the contract is about.
     (target / "trivy.json").write_text(json.dumps({"Results": []}), encoding="utf-8")
-    (target / "semgrep.json").write_text(json.dumps({"results": []}), encoding="utf-8")
+    (target / "opengrep.json").write_text(json.dumps({"results": []}), encoding="utf-8")
     return tmp_path / "results"
 
 
@@ -473,7 +473,7 @@ def test_timings_jobs_is_a_flat_list_of_per_file_entries(tmp_path):
         assert isinstance(job["seconds"], (int, float)) and job["seconds"] >= 0
         assert isinstance(job["count"], int) and job["count"] >= 0
 
-    assert {j["tool"] for j in timings["jobs"]} == {"trivy", "semgrep"}
+    assert {j["tool"] for j in timings["jobs"]} == {"trivy", "opengrep"}
 
 
 def test_timings_json_absent_without_the_profile_flag(tmp_path):

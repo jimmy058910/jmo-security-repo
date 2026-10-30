@@ -262,7 +262,7 @@ def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
                 or "terraform" in rule
             ):
                 categories["🐳 IaC/Container"] += 1
-            elif tool in ["semgrep", "eslint"]:
+            elif tool in ["opengrep", "eslint"]:
                 categories["🔧 Code Quality"] += 1
             else:
                 categories["📦 Other"] += 1

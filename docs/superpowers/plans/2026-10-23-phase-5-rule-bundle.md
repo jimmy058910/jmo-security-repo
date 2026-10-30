@@ -647,7 +647,7 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
   their `languages:` key if they are precise. PR A's counts do not change.
 - [ ] **Step 3: No network, proven:** `unshare -rn` around the same `jmo scan` gives the
   same finding set as the networked run.
-- [ ] **Step 4: Windows (`.218`):** `jmo tools install opengrep` fetches
+- [ ] **Step 4: Windows (the `windows-opengrep` CI job; the laptop `.218` was retired 2026-10-29):** `jmo tools install opengrep` fetches
   `opengrep_windows_x86.exe`; the fixture scan gives the four triples; `--config` with a
   drive-letter path works. Read the `windows-2022` job log.
 - [ ] **Step 5:** Push, open PR B; body carries the numbers and what CI cannot provide
@@ -658,7 +658,7 @@ PR A ships no code a scan runs, so it can merge before PR B and be reviewed on i
 - `scripts/jmo_rules/`: 25 files (or the builder's recorded number, explained), every
   rule `category: security`, 0 gitleaks / 0 trufflehog / 0 private-key lines, 25/25
   validate, `--check` reproduces it.
-- The four fixture triples in `tool-contract-tests`, on Linux and on the laptop.
+- The four fixture triples in `tool-contract-tests` on Linux and in `windows-opengrep` on Windows.
 - the parity target through `jmo scan`: opengrep peak ≤ 600 MB at `-j 4`; no network
   call (`unshare -rn` equality).
 - No match text written under the user's home by a scan.

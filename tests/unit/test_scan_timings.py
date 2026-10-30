@@ -32,6 +32,7 @@ from scripts.core.scan_timings import (
     Reason,
     State,
     ToolRun,
+    read_scan_root,
     write_scan_timings,
 )
 from scripts.core.tool_descriptors import DESCRIPTORS
@@ -255,3 +256,73 @@ def test_the_file_is_written_with_lf_endings(tmp_path: Path) -> None:
     )
 
     assert b"\r\n" not in path.read_bytes()
+
+
+# --- the root a scan recorded (#1332), read by the report and the adapters ----------
+
+
+def test_the_recorded_root_round_trips(tmp_path: Path) -> None:
+    root = str(tmp_path / "repo")
+    _write(tmp_path, [], root=root)
+
+    assert read_scan_root(tmp_path / SCAN_TIMINGS_FILENAME) == root
+
+
+@pytest.mark.parametrize("document", [None, b'{"root": null}', b'{"target": "x"}'])
+def test_a_scan_that_recorded_no_root_is_not_a_damaged_file(
+    tmp_path: Path, caplog, document
+) -> None:
+    """An image, a URL, an IaC file and a cluster have no tree, so `root` is
+    null; a missing file is a results directory from elsewhere. Neither is
+    worth a warning on every report."""
+    path = tmp_path / SCAN_TIMINGS_FILENAME
+    if document is not None:
+        path.write_bytes(document)
+
+    with caplog.at_level(logging.WARNING):
+        assert read_scan_root(path) is None
+
+    assert caplog.records == []
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        b"not json",
+        b"",
+        b"[]",
+        b'"/a/root"',
+        b'{"root": 7}',
+        b'{"root": ""}',
+        b'{"root": ["/a"]}',
+        b"\xff\xfe\x00",
+        b'{"root": "\xe9"}',
+    ],
+)
+def test_a_damaged_file_is_no_root_and_is_named_in_a_warning(
+    tmp_path: Path, caplog, document: bytes
+) -> None:
+    """Dropped silently, a file that is there and cannot be read is a missing
+    root nobody can explain: paths that keep the host's directory and findings
+    with no code context. The last two are not UTF-8, which `json.loads` raises
+    on as a `UnicodeDecodeError`: a `ValueError`, not a `JSONDecodeError`."""
+    path = tmp_path / SCAN_TIMINGS_FILENAME
+    path.write_bytes(document)
+
+    with caplog.at_level(logging.WARNING):
+        assert read_scan_root(path) is None
+
+    assert [str(path) in r.getMessage() for r in caplog.records] == [True]
+    assert caplog.records[0].levelno == logging.WARNING
+
+
+def test_a_timings_file_that_is_a_directory_is_named_too(
+    tmp_path: Path, caplog
+) -> None:
+    path = tmp_path / SCAN_TIMINGS_FILENAME
+    path.mkdir()
+
+    with caplog.at_level(logging.WARNING):
+        assert read_scan_root(path) is None
+
+    assert [str(path) in r.getMessage() for r in caplog.records] == [True]

@@ -47,9 +47,9 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.trivy_adapter",
         "class": "TrivyAdapter",
     },
-    "semgrep": {
-        "module": "scripts.core.adapters.semgrep_adapter",
-        "class": "SemgrepAdapter",
+    "opengrep": {
+        "module": "scripts.core.adapters.opengrep_adapter",
+        "class": "OpengrepAdapter",
     },
     "hadolint": {
         "module": "scripts.core.adapters.hadolint_adapter",

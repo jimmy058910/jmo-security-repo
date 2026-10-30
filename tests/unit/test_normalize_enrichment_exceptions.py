@@ -75,10 +75,10 @@ class TestComplianceEnrichmentExceptions:
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
-        _write(repo / "semgrep.json", [finding])
+        _write(repo / "opengrep.json", [finding])
 
         # Mock _safe_load_plugin
         def mock_load(_plugin_class, _path, _profiling=False):
@@ -108,10 +108,10 @@ class TestComplianceEnrichmentExceptions:
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
-        _write(repo / "semgrep.json", [finding])
+        _write(repo / "opengrep.json", [finding])
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return [finding]
@@ -136,10 +136,10 @@ class TestComplianceEnrichmentExceptions:
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
-        _write(repo / "semgrep.json", [finding])
+        _write(repo / "opengrep.json", [finding])
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return [finding]
@@ -168,10 +168,10 @@ class TestPriorityEnrichmentExceptions:
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
-        _write(repo / "semgrep.json", [finding])
+        _write(repo / "opengrep.json", [finding])
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return [finding]
@@ -196,10 +196,10 @@ class TestPriorityEnrichmentExceptions:
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
-        _write(repo / "semgrep.json", [finding])
+        _write(repo / "opengrep.json", [finding])
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return [finding]
@@ -224,10 +224,10 @@ class TestPriorityEnrichmentExceptions:
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
-        _write(repo / "semgrep.json", [finding])
+        _write(repo / "opengrep.json", [finding])
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return [finding]
@@ -257,12 +257,12 @@ class TestDedupThresholdValidation:
                 "ruleId": "R1",
                 "message": "msg",
                 "severity": "LOW",
-                "tool": {"name": "semgrep", "version": "1"},
+                "tool": {"name": "opengrep", "version": "1"},
                 "location": {"path": "a.py", "startLine": i},
             }
             for i in range(3)
         ]
-        _write(repo / "semgrep.json", findings)
+        _write(repo / "opengrep.json", findings)
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return findings
@@ -284,12 +284,12 @@ class TestDedupThresholdValidation:
                 "ruleId": "R1",
                 "message": "msg",
                 "severity": "LOW",
-                "tool": {"name": "semgrep", "version": "1"},
+                "tool": {"name": "opengrep", "version": "1"},
                 "location": {"path": "a.py", "startLine": i},
             }
             for i in range(3)
         ]
-        _write(repo / "semgrep.json", findings)
+        _write(repo / "opengrep.json", findings)
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return findings
@@ -311,12 +311,12 @@ class TestDedupThresholdValidation:
                 "ruleId": "R1",
                 "message": "msg",
                 "severity": "LOW",
-                "tool": {"name": "semgrep", "version": "1"},
+                "tool": {"name": "opengrep", "version": "1"},
                 "location": {"path": "a.py", "startLine": i},
             }
             for i in range(3)
         ]
-        _write(repo / "semgrep.json", findings)
+        _write(repo / "opengrep.json", findings)
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return findings
@@ -338,12 +338,12 @@ class TestDedupThresholdValidation:
                 "ruleId": "R1",
                 "message": "msg",
                 "severity": "LOW",
-                "tool": {"name": "semgrep", "version": "1"},
+                "tool": {"name": "opengrep", "version": "1"},
                 "location": {"path": "a.py", "startLine": i},
             }
             for i in range(3)
         ]
-        _write(repo / "semgrep.json", findings)
+        _write(repo / "opengrep.json", findings)
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return findings
@@ -671,12 +671,12 @@ class TestDedupThresholdValidRange:
                 "ruleId": "R1",
                 "message": "msg",
                 "severity": "LOW",
-                "tool": {"name": "semgrep", "version": "1"},
+                "tool": {"name": "opengrep", "version": "1"},
                 "location": {"path": "a.py", "startLine": i},
             }
             for i in range(3)
         ]
-        _write(repo / "semgrep.json", findings)
+        _write(repo / "opengrep.json", findings)
 
         def mock_load(_plugin_class, _path, _profiling=False):
             return findings
@@ -770,10 +770,10 @@ class TestEnrichmentFailuresAreReported:
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
-        _write(repo / "semgrep.json", [finding])
+        _write(repo / "opengrep.json", [finding])
         return root, finding
 
     @staticmethod

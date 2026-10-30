@@ -46,7 +46,7 @@ import pytest
 from scripts.cli import jmo
 from scripts.cli.policy_commands import cmd_policy_test
 from scripts.core.adapters.nuclei_adapter import NucleiAdapter
-from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
+from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.reporters.policy_reporter import (
@@ -71,7 +71,7 @@ POLICIES = [
 # binary is the point -- and the marker is what declares that. The skipif alone
 # left the dependency undeclared: the tests ran here and skipped on CI, which is
 # machine-dependent behaviour with nothing saying so. Invisible until the spawn
-# recorder stopped watching only semgrep (#994). The marker also means the
+# recorder stopped watching only opengrep (#994). The marker also means the
 # tool-contract job, which installs the tools, now runs them instead of
 # skipping them.
 pytestmark = [
@@ -96,14 +96,14 @@ def _adapter_findings(records: dict[str, Any]) -> list[dict[str, Any]]:
                 )
             )
             out += [f.to_dict() for f in TruffleHogAdapter().parse(p)]
-        if "semgrep" in records:
-            p = tmp / "semgrep.json"
+        if "opengrep" in records:
+            p = tmp / "opengrep.json"
             p.write_bytes(
-                json.dumps({"results": records["semgrep"], "errors": []}).encode(
+                json.dumps({"results": records["opengrep"], "errors": []}).encode(
                     "utf-8"
                 )
             )
-            out += [f.to_dict() for f in SemgrepAdapter().parse(p)]
+            out += [f.to_dict() for f in OpengrepAdapter().parse(p)]
         if "nuclei" in records:
             p = tmp / "nuclei.json"
             p.write_bytes(
@@ -138,7 +138,7 @@ def violating_findings() -> list[dict[str, Any]]:
                     "StartLine": 3,
                 }
             ],
-            "semgrep": [
+            "opengrep": [
                 {
                     "check_id": "javascript.browser.security.insecure-document-method",
                     "path": "web/app.js",
@@ -168,7 +168,7 @@ def violating_findings() -> list[dict[str, Any]]:
     assert "verified" in th["tags"], th["tags"]
     assert th["raw"]["Verified"] is True
     assert th["severity"] == "HIGH"
-    sg = next(f for f in findings if f["tool"]["name"] == "semgrep")
+    sg = next(f for f in findings if f["tool"]["name"] == "opengrep")
     assert "CWE-79" in str(sg["risk"]["cwe"])
     assert "A03:2021" in sg["compliance"]["owaspTop10_2021"]
     assert any(r["requirement"] == "6.2.4" for r in sg["compliance"]["pciDss4_0"]), sg[
@@ -187,7 +187,7 @@ def clean_findings() -> list[dict[str, Any]]:
     """
     findings = _adapter_findings(
         {
-            "semgrep": [
+            "opengrep": [
                 {
                     "check_id": "python.lang.best-practice.unused-import",
                     "path": "app.py",
@@ -406,7 +406,7 @@ def test_hipaa_detects_a_cwe_carrying_its_description(violating_findings):
     the canonicalisation changed no test result. Measured by mutation:
     ``id := canonical_cwe(raw)`` -> ``id := raw`` survived the whole suite.
     """
-    descriptive = [f for f in violating_findings if f["tool"]["name"] == "semgrep"]
+    descriptive = [f for f in violating_findings if f["tool"]["name"] == "opengrep"]
     assert len(descriptive) == 1
     cwe = descriptive[0]["risk"]["cwe"]
     assert cwe == [
@@ -484,11 +484,16 @@ def test_zero_secrets_says_what_it_does_not_block(tmp_path, monkeypatch, capsys)
 #
 # Cross-tool clustering merges one secret's reports into one consensus finding
 # whose `tool` is its lead's. On a severity tie the lead is the first tool by
-# name, so gitleaks leads a gitleaks + TruffleHog pair and semgrep a semgrep +
-# TruffleHog one -- and neither is a tool these policies select secrets by. A
-# policy reading `tool.name` alone passed a verified TruffleHog secret whenever
-# another scanner also reported it. juice-shop `1618a611`'s
-# `terraform/networking.tf:171` shape; no key material.
+# name, so gitleaks leads a gitleaks + TruffleHog pair -- and gitleaks is not a
+# tool these policies select secrets by. A policy reading `tool.name` alone
+# passed a verified TruffleHog secret whenever another scanner also reported it.
+# juice-shop `1618a611`'s `terraform/networking.tf:171` shape; no key material.
+#
+# opengrep is not a member: semgrep's `generic.secrets.*` rules once reported
+# this key and clustered with TruffleHog's, but opengrep's bundle excludes
+# `generic/secrets/` (secrets are gitleaks' and TruffleHog's class) and
+# `rule_equivalence.py` pairs no opengrep rule with a private key, so an
+# opengrep finding here would be a separate finding, not a consensus member.
 
 _KEY_PATH, _KEY_LINE = "terraform/networking.tf", 171
 
@@ -536,28 +541,6 @@ def _one_key_from(tools: tuple[str, ...], verified: bool) -> list[dict[str, Any]
                             ],
                         }
                     ],
-                }
-            ),
-        ),
-        "semgrep": (
-            SemgrepAdapter,
-            "semgrep.json",
-            json.dumps(
-                {
-                    "results": [
-                        {
-                            "check_id": "generic.secrets.security.detected-private-key",
-                            "path": _KEY_PATH,
-                            "start": {"line": _KEY_LINE},
-                            "end": {"line": _KEY_LINE},
-                            "extra": {
-                                "message": "Private Key detected.",
-                                "severity": "ERROR",
-                                "metadata": {"cwe": ["CWE-798"]},
-                            },
-                        }
-                    ],
-                    "errors": [],
                 }
             ),
         ),
@@ -710,15 +693,14 @@ def test_a_hadolint_dockerfile_issue_trivy_leads_keeps_its_category(hadolint_fir
 def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
     """The general guard for the secret rules, over every load order.
 
-    Members: gitleaks, semgrep and TruffleHog reporting one key, in four
-    TruffleHog shapes -- verified (both signals), the tag alone, `raw.Verified`
-    alone (the degenerate inputs `test_each_verification_signal_blocks_on_its_own`
-    requires the policy to handle) and unverified. Every subset holding the
-    TruffleHog record, in every order, through the real report phase; each
-    output finding must be flagged if any member it stands for is flagged when
-    evaluated alone.
+    Members: gitleaks and TruffleHog reporting one key, in four TruffleHog
+    shapes -- verified (both signals), the tag alone, `raw.Verified` alone (the
+    degenerate inputs `test_each_verification_signal_blocks_on_its_own` requires
+    the policy to handle) and unverified. Every subset holding the TruffleHog
+    record, in every order, through the real report phase; each output finding
+    must be flagged if any member it stands for is flagged when evaluated alone.
     """
-    base = {f["tool"]["name"]: f for f in _one_key_from(("gitleaks", "semgrep"), True)}
+    base = {f["tool"]["name"]: f for f in _one_key_from(("gitleaks",), True)}
     verified = _one_key_from(("trufflehog",), verified=True)[0]
     shapes = {
         "verified": verified,
@@ -735,7 +717,7 @@ def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
     alone = {policy: _flagged(policy, members) for policy in _SECRET_RULES}
     # Meta-guard: what each rule flags alone, so the property is not vacuous:
     # zero-secrets every verified shape, production-hardening every TruffleHog
-    # secret; neither gitleaks nor semgrep, which is the point.
+    # secret; not gitleaks, which is the point.
     ids = {shape: f["id"] for shape, f in shapes.items()}
     assert alone["zero-secrets"] == {
         ids["verified"],
@@ -747,7 +729,7 @@ def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
     outputs: list[dict[str, Any]] = []
     covers: dict[str, list[str]] = {}
     for shape, trufflehog in shapes.items():
-        for others in ((), ("gitleaks",), ("semgrep",), ("gitleaks", "semgrep")):
+        for others in ((), ("gitleaks",)):
             group = [trufflehog, *(base[t] for t in others)]
             for n, order in enumerate(itertools.permutations(group)):
                 for f in _report_phase(list(order)):
@@ -770,14 +752,17 @@ def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
         assert not missed, f"{policy}: {len(missed)} finding(s) missed, {missed[:3]}"
         # Meta-guard: the case that regressed -- another tool leads a
         # consensus holding a flagged TruffleHog member -- is exercised: every
-        # order of every group with a second tool (10 per shape).
+        # order of every group with a second tool. One such group remains,
+        # (gitleaks, trufflehog), in 2! = 2 orders, and gitleaks leads each, so
+        # 2 outputs per shape. (With opengrep the groups were gitleaks 2! +
+        # opengrep 2! + both 3! = 10.) A shape counts if `alone` flags it.
         led_by_another = [
             f["id"]
             for f in outputs
             if f["tool"]["name"] != "trufflehog"
             and any(m in alone[policy] for m in covers[f["id"]])
         ]
-        assert len(led_by_another) == 10 * len(alone[policy]), (
+        assert len(led_by_another) == 2 * len(alone[policy]), (
             policy,
             len(led_by_another),
         )

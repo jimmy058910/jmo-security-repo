@@ -196,9 +196,9 @@ CHECK_CMDS["pipx"]="pipx --version"
 INSTALL_CMDS_APT["pipx"]="sudo apt-get update && sudo apt-get install -y pipx && pipx ensurepath"
 
 # Security scanning tools
-TOOLS["semgrep"]="Semgrep (SAST Scanner)"
-CHECK_CMDS["semgrep"]="semgrep --version"
-INSTALL_CMDS_PIPX["semgrep"]="pipx install semgrep"
+TOOLS["opengrep"]="Opengrep (SAST Scanner)"
+CHECK_CMDS["opengrep"]="opengrep --version"
+INSTALL_CMDS_MANUAL["opengrep"]="jmo tools install opengrep"
 
 TOOLS["trufflehog"]="TruffleHog (Secret Scanner)"
 CHECK_CMDS["trufflehog"]="trufflehog --version"
@@ -208,7 +208,7 @@ INSTALL_CMDS_MANUAL["trufflehog"]="curl -sSfL https://raw.githubusercontent.com/
 echo -e "${BLUE}Checking tool installation status...${NC}"
 echo "=================================================="
 
-for tool in bash git jq cloc python3 pipx semgrep trufflehog; do
+for tool in bash git jq cloc python3 pipx opengrep trufflehog; do
   tool_name="${TOOLS[$tool]}"
   check_cmd="${CHECK_CMDS[$tool]}"
 
@@ -373,7 +373,7 @@ if [ "$MODE" = "auto-install" ]; then
 
   # Re-check all tools
   final_check=true
-  for tool in bash git jq cloc python3 pipx semgrep trufflehog; do
+  for tool in bash git jq cloc python3 pipx opengrep trufflehog; do
     tool_name="${TOOLS[$tool]}"
     check_cmd="${CHECK_CMDS[$tool]}"
 

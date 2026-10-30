@@ -40,6 +40,7 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
+from ...core import rule_bundle
 from ...core.config import RetryConfig
 from ...core.scan_timings import (
     OUTCOME_FAILED_BEFORE_TOOLS,
@@ -58,6 +59,7 @@ from ...core.tool_descriptors import (
     Invocation,
     ScanContext,
     Shortfall,
+    SkipIfEmpty,
     ToolDescriptor,
     read_history,
     scan_root,
@@ -88,15 +90,9 @@ MAX_FILE_ARGS = 300
 
 _SKIPPED_DIR_NAMES: frozenset[str] = frozenset(VENDORED_DIRS)
 
-# The walk's glob matches with the platform's own case rule, pathlib's default,
-# passed explicitly. Given none, Python 3.13 matches a pattern's wildcard-free
-# part (the `Dockerfile` of `**/Dockerfile`) with a stat, which follows the
-# filesystem, and returns it spelled as the PATTERN spells it: where the
-# filesystem ignores case (Windows, macOS), a file named `sub/dockerfile` came
-# back as `sub/Dockerfile`, and every exact-name test accepted it (#1421).
-# Given a rule, 3.13 lists each directory, as 3.12 always did, so a path it
-# returns is spelled as it is on disk.
-_GLOB_CASE_SENSITIVE = os.path.normcase("Aa") == "Aa"
+# The case rule every glob below is given is `rule_bundle.GLOB_CASE_SENSITIVE`,
+# where #1421 explains why it is passed at all. It lives there so the rule files a
+# scan selects by file name follow the rule that found the files.
 
 
 def _same_tree(candidate: Path, target: Path) -> bool:
@@ -155,7 +151,7 @@ def collect_files(
     """
     seen: set[Path] = set()
     for pattern in patterns:
-        for path in repo.glob(pattern, case_sensitive=_GLOB_CASE_SENSITIVE):
+        for path in repo.glob(pattern, case_sensitive=rule_bundle.GLOB_CASE_SENSITIVE):
             # Relative to the repository: a repository that itself lives under
             # `vendor/` or `node_modules/` still has content of its own.
             if set(path.relative_to(repo).parts) & _SKIPPED_DIR_NAMES:
@@ -411,6 +407,7 @@ def _row_from_results(
     stub: Callable[[str, Path], None],
     labels: Mapping[Path, str] | None = None,
     handed: Sequence[str] = (),
+    skip_if_empty: Mapping[Path, SkipIfEmpty] | None = None,
 ) -> ToolRun:
     tool = d.name
     if not results:
@@ -495,7 +492,24 @@ def _row_from_results(
     )
     exit_code = primary.returncode
     if d.scanned_count is not None:
-        examined = d.scanned_count(primary.output_file or out_dir / f"{tool}.json")
+        output = primary.output_file or out_dir / f"{tool}.json"
+        examined = d.scanned_count(output)
+        asked = (skip_if_empty or {}).get(output) if examined == 0 else None
+        if asked is not None:
+            # The command line asked for a set of files that came up empty
+            # (`--baseline-commit`): a worked run with nothing to read. Its
+            # output, an empty result, stays for the report.
+            logger.info("%s: %s", tool, asked.detail)
+            return ToolRun(
+                tool,
+                State.SKIPPED,
+                asked.reason,
+                seconds=seconds,
+                exit_code=exit_code,
+                attempts=attempts,
+                invocations=invocations,
+                detail=asked.detail,
+            )
         if examined == 0:
             # "Scanned 4 files, found nothing" and "scanned 0 files" were
             # indistinguishable in every artifact (#1231).
@@ -903,6 +917,11 @@ def run_tools(
             stub,
             labels,
             tuple(f for inv in invocations for f in inv.inputs),
+            {
+                inv.output_file: inv.skip_if_empty
+                for inv in invocations
+                if inv.skip_if_empty is not None
+            },
         )
         if tool in fallen:
             # What the replaced run cost is part of what the row cost.

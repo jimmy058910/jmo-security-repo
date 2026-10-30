@@ -88,7 +88,7 @@ class FindingsLoader:
         Args:
             findings: List of findings to filter
             severity: Filter by severity levels (e.g., ["HIGH", "CRITICAL"])
-            tool: Filter by tool name (e.g., "semgrep")
+            tool: Filter by tool name (e.g., "opengrep")
             rule_id: Filter by rule ID (e.g., "CWE-79")
             path: Filter by file path (substring match)
             limit: Maximum number of results (default: 100)

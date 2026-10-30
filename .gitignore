@@ -196,8 +196,8 @@ scripts/api/.vercel/
 # Secret/credential files: broad net by design. A committed secret is permanent
 # in git history (false negative = catastrophic); a wrongly-ignored SOURCE file
 # is visible and recoverable (false positive = cheap). Re-include source-code
-# extensions so adapters/tests/policies (semgrep_secrets_adapter.py,
-# zero-secrets.rego, test_secrets_management.py) aren't silently dropped, while
+# extensions so tests/policies (test_secret_scanner_runs.py, zero-secrets.rego,
+# test_secrets_management.py) aren't silently dropped, while
 # real secret DATA files (.json/.yaml/.env/.txt) stay ignored.
 *secret*
 *credentials*
@@ -233,3 +233,8 @@ e2e-screenshots/
 # Conductor orchestration files (local development artifacts)
 /conductor/
 tests/integration/juice_shop_fixture/
+
+# juice-shop files the rule-bundle guard scans, fetched by
+# scripts/dev/fetch_rule_fixture.py. Never commit them: lib/insecurity.ts holds
+# an RSA private key and routes/login.ts trips gitleaks' generic-api-key.
+tests/fixtures/rule_bundle/juice-shop/

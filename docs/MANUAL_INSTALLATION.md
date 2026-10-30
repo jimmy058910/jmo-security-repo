@@ -86,7 +86,7 @@ jmo tools check
 jmo tools install
 
 # Or install specific tools
-jmo tools install trivy semgrep
+jmo tools install trivy opengrep
 ```
 
 **Installation methods by platform:**
@@ -97,7 +97,7 @@ jmo tools install trivy semgrep
 | macOS | brew, pip, npm, install script, binary download |
 | Windows | pip, npm, binary download, manual |
 
-Semgrep and Checkov always go into isolated virtual environments, and ZAP is always an extracted archive, whatever the platform. [TOOLS.md](TOOLS.md#installation) lists where each tool ends up.
+Checkov always goes into an isolated virtual environment, opengrep is a release binary in `~/.jmo/bin/`, and ZAP is always an extracted archive, whatever the platform. [TOOLS.md](TOOLS.md#installation) lists where each tool ends up.
 
 **Windows (PowerShell):**
 
@@ -121,14 +121,17 @@ scoop install trufflehog
 
 #### SAST (Static Analysis)
 
-**Semgrep** (Multi-language SAST):
+**Opengrep** (Multi-language SAST; it replaced Semgrep in v2.0.0):
 
 ```bash
-# macOS/Linux
-brew install semgrep
+# Any platform: JMo downloads the pinned release binary into ~/.jmo/bin/
+jmo tools install opengrep
 
-# Python (all platforms)
-pip install semgrep
+# By hand: take the asset for your platform from
+# https://github.com/opengrep/opengrep/releases/tag/v1.32.0
+# (opengrep_manylinux_x86, opengrep_manylinux_aarch64, opengrep_osx_x86,
+# opengrep_osx_arm64 or opengrep_windows_x86.exe), name it `opengrep`
+# (`opengrep.exe` on Windows), make it executable and put it on your PATH
 ```
 
 #### Vulnerabilities + SBOM
@@ -275,7 +278,7 @@ java -version
 | Tool | macOS | Linux | Windows | Docker |
 |------|-------|-------|---------|--------|
 | TruffleHog | ✅ | ✅ | ✅ | ✅ |
-| Semgrep | ✅ | ✅ | ⚠️ | ✅ |
+| Opengrep | ✅ | ✅ | ⚠️ | ✅ |
 | Trivy | ✅ | ✅ | ✅ | ✅ |
 | Syft | ✅ | ✅ | ✅ | ✅ |
 | Checkov | ✅ | ✅ | ✅ | ✅ |
@@ -322,8 +325,8 @@ Some tools require Rosetta 2:
 softwareupdate --install-rosetta --agree-to-license
 ```
 
-Tools with native ARM64 support: Trivy (v0.47.0+), Checkov, TruffleHog
-Use Docker for: Semgrep, OWASP ZAP on M1/M2
+Tools with native ARM64 support: Trivy (v0.47.0+), Checkov, TruffleHog, Opengrep
+Use Docker for: OWASP ZAP on M1/M2
 
 **PATH Configuration:**
 
@@ -558,7 +561,7 @@ docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan -
 | Feature | macOS | Windows | WSL | Linux | Docker |
 |---------|-------|---------|-----|-------|--------|
 | **Setup Time** | 5 min | 10 min | 15 min | 5 min | 2 min |
-| **Tool Support** | All | All (Semgrep limited) | All | All | All |
+| **Tool Support** | All | All (Opengrep has no arm64 build) | All | All | All |
 | **Performance** | Fast | Fast | Fast | Fast | Fast |
 | **CI/CD Ready** | Yes | Limited | Yes | Yes | Yes |
 | **Recommended** | Local dev | Docker | Full tooling | Servers | All |

@@ -36,10 +36,10 @@ def test_effective_scan_settings_merge(tmp_path: Path, monkeypatch):
 
     # And each CLI flag outranks the value it shadows.
     args = types.SimpleNamespace(
-        config=str(cfg), tools=["semgrep"], threads=1, timeout=5
+        config=str(cfg), tools=["opengrep"], threads=1, timeout=5
     )
     eff = jmo._effective_scan_settings(args)
-    assert eff["tools"] == ["semgrep"]
+    assert eff["tools"] == ["opengrep"]
     assert eff["threads"] == 1
     assert eff["timeout"] == 5
 
@@ -64,10 +64,10 @@ def _skip_tools_args(tmp_path: Path, **overrides):
     cfg.write_text("tools: [trufflehog]\n", encoding="utf-8")
     base = {
         "config": str(cfg),
-        "tools": ["trufflehog", "semgrep"],
+        "tools": ["trufflehog", "opengrep"],
         "threads": None,
         "timeout": None,
-        "skip_tools": ["semgrep"],
+        "skip_tools": ["opengrep"],
     }
     base.update(overrides)
     return types.SimpleNamespace(**base)
@@ -90,7 +90,7 @@ def test_skip_tools_notice_is_visible_at_the_DEFAULT_log_level(tmp_path, capsys)
 
     assert eff["tools"] == ["trufflehog"], "the skipped tool must actually be dropped"
     err = capsys.readouterr().err
-    assert "semgrep" in err, (
+    assert "opengrep" in err, (
         f"nothing named the skipped tool at the default level: {err!r}"
     )
     assert "--skip-tools" in err
@@ -105,7 +105,7 @@ def test_skip_tools_notice_is_emitted_exactly_once(tmp_path, capsys):
     is kept at DEBUG as a breadcrumb.
     """
     jmo._effective_scan_settings(_skip_tools_args(tmp_path))
-    lines = [ln for ln in capsys.readouterr().err.splitlines() if "semgrep" in ln]
+    lines = [ln for ln in capsys.readouterr().err.splitlines() if "opengrep" in ln]
     assert len(lines) == 1, f"expected one record, got {len(lines)}: {lines}"
 
 
@@ -130,7 +130,7 @@ def test_skip_tools_that_matches_nothing_is_silent(tmp_path, capsys):
     """
     # A real tool that is not in the list. An unknown name is a usage error
     # now (#1279), tested below.
-    args = _skip_tools_args(tmp_path, tools=["trufflehog"], skip_tools=["semgrep"])
+    args = _skip_tools_args(tmp_path, tools=["trufflehog"], skip_tools=["opengrep"])
     eff = jmo._effective_scan_settings(args)
 
     assert eff["tools"] == ["trufflehog"], "nothing should have been dropped"
@@ -155,11 +155,11 @@ def test_skip_tools_notice_names_every_dropped_tool(tmp_path, capsys):
     """A count without the names is the silence it replaced, one step removed."""
     args = _skip_tools_args(
         tmp_path,
-        tools=["trufflehog", "semgrep", "trivy"],
-        skip_tools=["semgrep", "trivy"],
+        tools=["trufflehog", "opengrep", "trivy"],
+        skip_tools=["opengrep", "trivy"],
     )
     eff = jmo._effective_scan_settings(args)
     assert eff["tools"] == ["trufflehog"]
     err = capsys.readouterr().err
     assert "2 tool(s)" in err
-    assert "semgrep" in err and "trivy" in err
+    assert "opengrep" in err and "trivy" in err

@@ -159,7 +159,7 @@ class AdapterPlugin(ABC):
         Delegates to :func:`scripts.core.common_finding.fingerprint`, the one
         formula (#1010). This method used to carry a second copy that rendered
         a missing line as ``""`` where the canonical one uses ``0`` and did not
-        strip the message; trivy, trufflehog and semgrep ids built from a
+        strip the message; trivy and trufflehog ids built from a
         finding with no line or a padded message differ from before.
         A finding with a `dependency` is keyed on its package too (#1346).
         Override for tool-specific fingerprinting logic.

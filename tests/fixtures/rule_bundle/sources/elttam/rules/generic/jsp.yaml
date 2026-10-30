@@ -2,7 +2,7 @@ rules:
   - id: jsp-join
     mode: join
     severity: ERROR
-    message: opengrep does not load join rules
+    message: opengrep scan --validate rejects join rules
     metadata:
       category: security
     join:

@@ -1,0 +1,20 @@
+# yamllint disable
+# License: Commons Clause License Condition v1.0 [LGPL-2.1-only]
+# yamllint enable
+---
+rules:
+  - id: gl-spaced
+    languages: [python]
+    severity: WARNING
+    message: the source's own license with a space GitLab put in one file, so not another license
+    metadata:
+      category: security
+    pattern: spaced($X)
+  - id: gl-meta
+    languages: [python]
+    severity: WARNING
+    message: the source's own license, spelled in metadata
+    metadata:
+      category: security
+      license: Commons Clause License Condition v1.0[LGPL-2.1-only]
+    pattern: declared($X)

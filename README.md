@@ -86,7 +86,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | Category | Tools |
 |----------|-------|
 | **Secrets** | TruffleHog, Gitleaks (working tree and git history) |
-| **SAST** | Semgrep |
+| **SAST** | Opengrep |
 | **SBOM** | Syft |
 | **SCA** | Trivy, Grype, OSV-Scanner |
 | **IaC** | Checkov, Trivy |
@@ -353,7 +353,7 @@ Dual licensed under [MIT](LICENSE-MIT) OR [Apache 2.0](LICENSE-APACHE).
 - [Gitleaks](https://github.com/gitleaks/gitleaks) - Secrets scanning
 - [zizmor](https://github.com/zizmorcore/zizmor) - GitHub Actions auditing
 - [OSV-Scanner](https://github.com/google/osv-scanner) - Dependency vulnerabilities from lockfiles
-- [Semgrep](https://semgrep.dev) - Multi-language SAST
+- [Opengrep](https://github.com/opengrep/opengrep) - Multi-language SAST
 - [Trivy](https://aquasecurity.github.io/trivy/) - Vulnerability scanning
 - [OWASP ZAP](https://www.zaproxy.org/) - DAST scanning
 

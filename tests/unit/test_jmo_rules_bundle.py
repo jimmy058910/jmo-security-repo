@@ -11,7 +11,7 @@ Nothing here parametrizes over the bundle's contents. A bundle that is missing
 would make that zero tests, which pytest reports as a skip, and the guard would
 read green exactly when it matters. Each test loads the bundle in its body.
 
-The counts (25 files, 1,420 rules) are the builder's output for today's pins.
+The counts (25 files, 1,456 rules) are the builder's output for today's pins.
 They appear in no assertion: a source bump changes both, and `--check` is the
 guard that the numbers are the sources'. The manifest is the reference here.
 """
@@ -170,6 +170,55 @@ def test_no_rule_declares_a_proprietary_license() -> None:
     )
 
 
+_PACK = "problem-based-packs.insecure-transport."
+
+
+def test_the_insecure_transport_rules_are_filed_by_their_languages_key() -> None:
+    """R26: opengrep-rules' `problem-based-packs/` is laid out by problem, so
+    the builder files each rule by its own `languages:` key. A scan finds a
+    language's rules by file name, so a rule filed anywhere else, or in a
+    `problem-based-packs.yaml` that no scan selects, would be shipped and never
+    run. `[javascript, typescript]` goes to javascript.yaml, which a TypeScript
+    scan reads too (opengrep runs a JavaScript rule on `.ts`)."""
+    manifest = _manifest()
+    assert not [
+        e
+        for e in manifest["exclusions"]
+        if e["kind"] == "directory" and e["path"] == "problem-based-packs"
+    ], "the manifest still excludes the problem-based-packs directory"
+
+    homes: dict[str, set[str]] = {}
+    for p in _bundle_files():
+        for rule in _rules(p.name):
+            if rule["id"].startswith(_PACK):
+                homes.setdefault(p.name, set()).add(rule["id"])
+                assert p.name == f"{rule['languages'][0]}.yaml", (
+                    f"{rule['id']} (languages {rule['languages']}) is in {p.name}"
+                )
+    assert set(homes) == {"go.yaml", "java.yaml", "javascript.yaml", "ruby.yaml"}, (
+        f"insecure-transport rules are in {sorted(homes)}"
+    )
+
+
+def test_using_http_server_is_the_one_insecure_transport_rule_left_out() -> None:
+    """R26: it matches any call on Node's http module, so it flags every plaintext
+    server behind a TLS-terminating proxy and reports the line `http-request`
+    reports. It is a single-id exclusion, recorded with that reason."""
+    excluded = f"{_PACK}js-node.using-http-server.using-http-server"
+    records = [
+        e
+        for e in _manifest()["exclusions"]
+        if e["kind"] == "id" and e["id"] == excluded
+    ]
+    assert len(records) == 1 and "TLS-terminating proxy" in records[0]["reason"], (
+        f"the manifest does not record {excluded} as excluded, with its reason"
+    )
+    ids = {rule["id"] for p in _bundle_files() for rule in _rules(p.name)}
+    assert excluded not in ids
+    # and its siblings from the same directory are in
+    assert f"{_PACK}js-node.http-request.http-request" in ids
+
+
 def test_the_wheel_carries_the_bundle() -> None:
     """The wheel collects Python packages and their declared package data only,
     and `scripts/jmo_rules/` has no `__init__.py`. Without the pyproject entry a
@@ -227,6 +276,27 @@ def _header(name: str) -> list[str]:
     return lines
 
 
+def _notice_licenses(notices: str, prefixes: dict[str, str]) -> dict[str, str]:
+    """source name -> the license THIRD_PARTY_LICENSES.md's table gives it.
+
+    A row is `| [name](#anchor) | pin | license | rules | prefix |`; a license cell may
+    go on with a `;` and a remark (GitLab's does), which is not part of the name.
+    """
+    by_prefix = {}
+    for line in notices.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if line.startswith("| [") and len(cells) == 5:
+            prefix = cells[4].strip("`").rstrip(".")
+            by_prefix["" if prefix == "none" else prefix] = (
+                cells[2].split(";")[0].strip()
+            )
+    assert set(by_prefix) == set(prefixes.values()), (
+        f"THIRD_PARTY_LICENSES.md's source table has prefixes {sorted(by_prefix)}, "
+        f"the manifest's sources have {sorted(prefixes.values())}"
+    )
+    return {name: by_prefix[prefix] for name, prefix in prefixes.items()}
+
+
 def test_every_file_opens_with_the_license_header() -> None:
     """LGPL-2.1 asks that notices referring to the license stay with the files
     (section 1) and that a modified file say that it was changed, and when
@@ -235,12 +305,15 @@ def test_every_file_opens_with_the_license_header() -> None:
 
     The sources a header names must be the ones the file's rule ids come from
     (the manifest's prefixes say which), each with the pin the manifest records
-    and a license `THIRD_PARTY_LICENSES.md` itself names."""
+    and, in that source's own line, exactly the license `THIRD_PARTY_LICENSES.md`'s
+    table names for it (not a license that merely appears somewhere in that file:
+    "MIT" is in every license text)."""
     manifest = _manifest()
     prefixes = {name: s["prefix"] for name, s in manifest["sources"].items()}
     bare = [name for name, prefix in prefixes.items() if not prefix]
     assert len(bare) == 1, f"exactly one source has no id prefix: {prefixes}"
     notices = (REPO_ROOT / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    licenses = _notice_licenses(notices, prefixes)
 
     wrong = []
     for p in _bundle_files():
@@ -280,11 +353,57 @@ def test_every_file_opens_with_the_license_header() -> None:
                 wrong.append(
                     f"{p.name}: {name} pinned at {pin}, manifest says {manifest['sources'][name]['pin']}"
                 )
-            if license_name not in notices:
+            if name in licenses and license_name != licenses[name]:
                 wrong.append(
-                    f"{p.name}: license {license_name!r} is not named in THIRD_PARTY_LICENSES.md"
+                    f"{p.name}: {name} is under {license_name!r}, THIRD_PARTY_LICENSES.md "
+                    f"names {licenses[name]!r}"
                 )
     assert not wrong, "\n".join(wrong)
+
+
+_OTHER_LICENSE_NOTE = re.compile(
+    r"^# (\S+) rules in this file that name another license in their own source file: (\d+) \("
+)
+
+
+def test_a_file_with_rules_under_another_license_says_so() -> None:
+    """A header names each source's license, but THIRD_PARTY_LICENSES.md lists the
+    rules whose own files name another one (MIT, plain LGPL-2.1: three GitLab rules,
+    all in python.yaml). The file that holds them says so, with the right count and
+    a pointer to that list, and no other file does. The test reads the list from
+    the notices, so a rule added to or removed from it must be followed by a
+    rebuild, and a note with no rule behind it fails too."""
+    notices = (REPO_ROOT / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    listed = set(re.findall(r"`(lgpl-cc\.[^`]+\.[^`]+)`", notices))
+    assert listed, (
+        "THIRD_PARTY_LICENSES.md lists no lgpl-cc rule that names another license"
+    )
+
+    expected: dict[str, dict[str, int]] = {}
+    found = set()
+    for p in _bundle_files():
+        here = listed & {rule["id"] for rule in _rules(p.name)}
+        found |= here
+        if here:
+            expected[p.name] = {"lgpl-cc": len(here)}
+    assert found == listed, (
+        f"listed in the notices but not in the bundle: {sorted(listed - found)}"
+    )
+
+    noted = {}
+    for p in _bundle_files():
+        header = _header(p.name)
+        notes = {
+            m.group(1): int(m.group(2))
+            for line in header
+            if (m := _OTHER_LICENSE_NOTE.match(line))
+        }
+        if notes:
+            noted[p.name] = notes
+            assert "THIRD_PARTY_LICENSES.md" in "\n".join(header), p.name
+    assert noted == expected, (
+        f"files with the note: {noted}; files that hold a listed rule: {expected}"
+    )
 
 
 def test_the_bundle_keeps_its_line_endings_on_checkout() -> None:

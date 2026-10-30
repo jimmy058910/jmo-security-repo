@@ -1,11 +1,5 @@
 schema_version: '1.0'
 python_tools:
-  semgrep:
-    version: 1.182.1
-    pypi_package: semgrep
-    description: Multi-language SAST scanner
-    update_check: pip index versions semgrep
-    critical: true
   checkov:
     version: 3.3.30
     pypi_package: checkov
@@ -130,6 +124,17 @@ binary_tools:
     update_check: gh api repos/google/osv-scanner/releases/latest
     critical: false
     notes: v2.0.0 - reads lockfiles against offline databases; a scan never downloads
+  opengrep:
+    version: 1.32.0
+    github_repo: opengrep/opengrep
+    description: Multi-language SAST scanner (runs JMo's offline rule bundle)
+    # A static binary, no archive and no version in the name; the architecture
+    # is x86 for Intel, aarch64 on Linux and arm64 on macOS. No checksum file:
+    # each asset has a cosign .sig and .cert beside it.
+    release_pattern: opengrep_manylinux_{arch_x86}
+    update_check: gh api repos/opengrep/opengrep/releases/latest
+    critical: true
+    notes: 'no Windows arm64 build upstream: jmo tools install fetches the x86 one there'
 special_tools:
   zap:
     version: 2.17.0
@@ -199,7 +204,7 @@ update_policies:
     tools:
     - trivy
     - trufflehog
-    - semgrep
+    - opengrep
     - checkov
     - zap
     - syft

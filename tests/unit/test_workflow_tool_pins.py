@@ -170,9 +170,9 @@ MUTATIONS = [
     ),
     pytest.param(
         "ci.yml",
-        'pip install "semgrep==${SEMGREP_VERSION}"',
-        'pip install "semgrep==1.182.1"',
-        "semgrep==1.182.1",
+        'pip install "checkov==${CHECKOV_VERSION}"',
+        'pip install "checkov==3.3.30"',
+        "checkov==3.3.30",
         id="pip-pin",
     ),
     pytest.param(
@@ -295,8 +295,8 @@ def test_an_unpinned_install_put_back_is_caught():
         "checkov"
     ]
     # `uv pip install` is the same install, and a pinned line is not a hit.
-    assert _unpinned_installs("uv pip install semgrep pyyaml\n") == ["semgrep"]
-    assert _unpinned_installs('pip install "semgrep==1.182.1"\n') == []
+    assert _unpinned_installs("uv pip install checkov pyyaml\n") == ["checkov"]
+    assert _unpinned_installs('pip install "checkov==3.3.30"\n') == []
 
 
 # --- every pin a step reads is one tool_pins.py writes --------------------------

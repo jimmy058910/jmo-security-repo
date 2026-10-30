@@ -61,7 +61,7 @@ def _adapter_names() -> set[str]:
     # list, which tests/core/test_scan_validator.py pins to the same directory,
     # rather than a floor that a cut to the matrix drops below.
     assert names == {a.replace("_", "-") for a in EXPECTED_ADAPTERS}, sorted(names)
-    assert {"trivy", "checkov", "semgrep"} <= names, sorted(names)
+    assert {"trivy", "checkov", "opengrep"} <= names, sorted(names)
     return names
 
 

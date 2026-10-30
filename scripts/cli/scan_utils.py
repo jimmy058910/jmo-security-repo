@@ -222,7 +222,7 @@ def check_version_drift_before_scan(
         return True
 
 
-# A tool's stderr is unbounded (semgrep is chatty). Keep the tail,
+# A tool's stderr is unbounded (some scanners are chatty). Keep the tail,
 # where the fatal message is, rather than the head, where the banner is.
 STDERR_TAIL_CHARS = 500
 

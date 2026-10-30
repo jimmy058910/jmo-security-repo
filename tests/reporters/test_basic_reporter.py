@@ -70,7 +70,7 @@ def test_markdown_summary_with_emoji_badges():
         {
             "severity": "HIGH",
             "ruleId": "high-issue",
-            "tool": {"name": "semgrep", "version": "1.0"},
+            "tool": {"name": "opengrep", "version": "1.0"},
             "location": {"path": "app.py"},
             "tags": ["sast"],
         },
@@ -93,7 +93,7 @@ def test_markdown_summary_top_risks_by_file():
         {
             "severity": "MEDIUM",
             "ruleId": "misc-issue",
-            "tool": {"name": "semgrep", "version": "1.0"},
+            "tool": {"name": "opengrep", "version": "1.0"},
             "location": {"path": "app.py"},
             "tags": ["sast"],
         },
@@ -125,7 +125,7 @@ def test_markdown_summary_tool_breakdown():
         {
             "severity": "MEDIUM",
             "ruleId": "code-1",
-            "tool": {"name": "semgrep", "version": "1.0"},
+            "tool": {"name": "opengrep", "version": "1.0"},
             "location": {"path": "b.py"},
             "tags": ["sast"],
         },
@@ -140,7 +140,7 @@ def test_markdown_summary_tool_breakdown():
     md = to_markdown_summary(sample)
     assert "## By Tool" in md
     assert "**gitleaks**" in md
-    assert "**semgrep**" in md
+    assert "**opengrep**" in md
     # Should show severity breakdown per tool
     assert "2 findings" in md or "2 finding" in md
 
@@ -189,7 +189,7 @@ def test_markdown_summary_category_grouping():
         {
             "severity": "LOW",
             "ruleId": "code-1",
-            "tool": {"name": "semgrep", "version": "1.0"},
+            "tool": {"name": "opengrep", "version": "1.0"},
             "location": {"path": "app.py"},
             "tags": ["sast"],
         },
@@ -346,7 +346,7 @@ def test_get_category_summary_with_tags():
         },
         {
             "tags": ["sast"],
-            "tool": {"name": "semgrep"},
+            "tool": {"name": "opengrep"},
             "ruleId": "sql",
             "location": {"path": "app.py"},
         },
@@ -451,7 +451,7 @@ def test_markdown_summary_top_rules_simplification():
         {
             "severity": "HIGH",
             "ruleId": "yaml.docker-compose.security.no-new-privileges.no-new-privileges",
-            "tool": {"name": "semgrep", "version": "1.0"},
+            "tool": {"name": "opengrep", "version": "1.0"},
             "location": {"path": "docker-compose.yml"},
             "tags": ["docker"],
         }
@@ -497,7 +497,7 @@ def test_get_category_summary_with_eslint():
             "location": {"path": "test.js"},
         },
         {
-            "tool": {"name": "semgrep"},
+            "tool": {"name": "opengrep"},
             "ruleId": "python.lang.correctness.useless-eqeq.python-useless-eq-check",
             "severity": "HIGH",
             "location": {"path": "app.py"},
@@ -508,22 +508,22 @@ def test_get_category_summary_with_eslint():
 
     # ESLint should be categorized as Code Quality
     assert categories.get("🔧 Code Quality", 0) >= 1
-    # Semgrep should also be categorized appropriately
+    # Opengrep should also be categorized appropriately
     assert (
         categories.get("🛡️ Security", 0) >= 1
         or categories.get("🔧 Code Quality", 0) >= 1
     )
 
 
-def test_get_category_summary_with_semgrep():
-    """A tagless semgrep finding falls back to Code Quality by tool name.
+def test_get_category_summary_with_opengrep():
+    """A tagless opengrep finding falls back to Code Quality by tool name.
 
     The ruleId avoids every word the fallback also matches on, so the tool
     name is the only thing that can produce the category.
     """
     findings = [
         {
-            "tool": {"name": "semgrep"},
+            "tool": {"name": "opengrep"},
             "ruleId": "python.lang.correctness.useless-eqeq",
             "severity": "LOW",
             "location": {"path": "test.py"},
@@ -672,11 +672,11 @@ def test_markdown_summary_cross_tool_consensus():
         {
             "severity": "HIGH",
             "ruleId": "sql-injection",
-            "tool": {"name": "semgrep", "version": "1.0"},
+            "tool": {"name": "opengrep", "version": "1.0"},
             "location": {"path": "app.py", "startLine": 100},
             "tags": ["sast"],
             "detected_by": [
-                {"name": "semgrep", "version": "1.50.0"},
+                {"name": "opengrep", "version": "1.50.0"},
                 {"name": "bandit", "version": "1.7.5"},
                 {"name": "snyk", "version": "1.0.0"},
             ],
@@ -708,7 +708,7 @@ def test_markdown_summary_detected_by_in_tool_breakdown():
         {
             "severity": "MEDIUM",
             "ruleId": "misc-issue",
-            "tool": {"name": "semgrep", "version": "1.0"},
+            "tool": {"name": "opengrep", "version": "1.0"},
             "location": {"path": "app.py"},
             "tags": ["sast"],
             # No detected_by - single tool finding
@@ -719,7 +719,7 @@ def test_markdown_summary_detected_by_in_tool_breakdown():
     # Both gitleaks and trufflehog should be listed since detected_by has both
     assert "gitleaks" in md
     assert "trufflehog" in md
-    assert "semgrep" in md
+    assert "opengrep" in md
 
 
 def test_write_markdown(tmp_path):
@@ -754,7 +754,7 @@ def test_write_json_with_custom_metadata(tmp_path):
         "schema_version": "1.2.0",
         "timestamp": "2024-01-15T12:00:00Z",
         "scan_id": "test-scan-123",
-        "tools": ["trivy", "semgrep"],
+        "tools": ["trivy", "opengrep"],
         "target_count": 5,
         "finding_count": 1,
         "platform": "Linux",
@@ -766,7 +766,7 @@ def test_write_json_with_custom_metadata(tmp_path):
 
     data = json.loads(out.read_text())
     assert data["meta"]["scan_id"] == "test-scan-123"
-    assert data["meta"]["tools"] == ["trivy", "semgrep"]
+    assert data["meta"]["tools"] == ["trivy", "opengrep"]
 
 
 def test_get_remediation_priorities_iac():
@@ -799,7 +799,7 @@ def test_get_remediation_priorities_sast():
             "severity": "HIGH",
             "ruleId": "sql-injection",
             "tags": ["sast", "security"],
-            "tool": {"name": "semgrep"},
+            "tool": {"name": "opengrep"},
             "location": {"path": "app.py"},
         },
         {

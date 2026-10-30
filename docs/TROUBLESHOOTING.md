@@ -26,7 +26,7 @@ Docker users don't hit this — all scanners are pre-installed in the image.
 
 **Symptom:** Installing a pip-based tool fails because its dependencies conflict with another installed Python package.
 
-**Cause:** Some tools (e.g., `semgrep` and `checkov`) pin versions of packages you may have installed elsewhere. JMo isolates these in dedicated venvs, but a previous install may have leaked.
+**Cause:** Some tools (e.g., `checkov`) pin versions of packages you may have installed elsewhere. JMo isolates these in dedicated venvs, but a previous install may have leaked.
 
 **Fix:**
 

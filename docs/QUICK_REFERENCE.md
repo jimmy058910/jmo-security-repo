@@ -11,7 +11,7 @@ Quick command reference for common operations.
 jmo scan --repo .
 
 # Quick scan with a narrowed tool list
-jmo scan --repo . --tools trufflehog semgrep trivy
+jmo scan --repo . --tools trufflehog opengrep trivy
 
 # Skip specific tools
 jmo scan --repo . --skip-tools zap nuclei
@@ -79,7 +79,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 # Quick scan with a narrowed tool list
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results --tools trufflehog semgrep trivy
+  scan --repo /scan --results-dir /scan/results --tools trufflehog opengrep trivy
 
 # With history persistence
 docker run --rm \

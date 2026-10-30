@@ -72,12 +72,12 @@ def test_adapter_parse_exception_in_gather(tmp_path: Path, monkeypatch):
     """
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r1"
-    _write(repo / "semgrep.json", [])
+    _write(repo / "opengrep.json", [])
 
     # Monkeypatch _safe_load_plugin to raise AdapterParseException
     def raise_adapter_error(_plugin_class, path, _profiling=False):
         raise AdapterParseException(
-            tool="semgrep", path=str(path), reason="malformed JSON"
+            tool="opengrep", path=str(path), reason="malformed JSON"
         )
 
     monkeypatch.setattr(nr, "_safe_load_plugin", raise_adapter_error)
@@ -164,21 +164,21 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r1"
 
-    semgrep_findings = [
+    opengrep_findings = [
         {
             "schemaVersion": "1.0.0",
             "id": "f1",
             "ruleId": "R1",
             "message": "m",
             "severity": "LOW",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
         }
     ]
 
     # Mock _safe_load_plugin to return findings (v0.9.0 plugin architecture)
     def mock_load_plugin(_plugin_class, _path, _profiling=False):
-        return semgrep_findings
+        return opengrep_findings
 
     monkeypatch.setattr(nr, "_safe_load_plugin", mock_load_plugin)
 
@@ -193,7 +193,7 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
     )
 
     # Need to create the file for gather_results to iterate
-    _write(repo / "semgrep.json", semgrep_findings)
+    _write(repo / "opengrep.json", opengrep_findings)
 
     out = nr.gather_results(root)
     # Should handle enrichment failure gracefully
@@ -219,16 +219,16 @@ class _Meta:
 class _ExplodingAdapter:
     """An adapter whose parse() fails the way a real one does on bad output."""
 
-    metadata = _Meta("semgrep")
+    metadata = _Meta("opengrep")
 
     def parse(self, path):
         raise AdapterParseException(
-            tool="semgrep", path=Path(path), reason="Invalid JSON: line 1 column 2"
+            tool="opengrep", path=Path(path), reason="Invalid JSON: line 1 column 2"
         )
 
 
 class _WorkingAdapter:
-    metadata = _Meta("semgrep")
+    metadata = _Meta("opengrep")
 
     def parse(self, path):
         return []
@@ -248,7 +248,7 @@ def test_unparseable_tool_output_is_reported_at_default_verbosity(tmp_path, capl
     property that matters is *visible at the default level*, not the specific
     level chosen.
     """
-    out_path = tmp_path / "semgrep.json"
+    out_path = tmp_path / "opengrep.json"
     out_path.write_text("{ not json", encoding="utf-8")
 
     with caplog.at_level(logging.WARNING, logger="scripts.core.normalize_and_report"):
@@ -260,14 +260,14 @@ def test_unparseable_tool_output_is_reported_at_default_verbosity(tmp_path, capl
     # ...but the reader is told which tool lost them, and why.
     visible = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
     assert visible, "the parse failure was invisible at the default log level"
-    assert any("semgrep" in m for m in visible), visible
+    assert any("opengrep" in m for m in visible), visible
     assert any("MISSING" in m for m in visible), visible
     assert any("Invalid JSON" in m for m in visible), visible
 
 
 def test_successful_parse_stays_quiet(tmp_path, caplog):
     """The control. Without it, any always-warn bug would pass the test above."""
-    out_path = tmp_path / "semgrep.json"
+    out_path = tmp_path / "opengrep.json"
     out_path.write_text("[]", encoding="utf-8")
 
     with caplog.at_level(logging.WARNING, logger="scripts.core.normalize_and_report"):

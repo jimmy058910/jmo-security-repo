@@ -50,6 +50,22 @@ install_from_github() {
   echo ""
 }
 
+# Function to install opengrep (SAST), a static binary named by architecture
+install_opengrep() {
+  local arch
+  case "$(uname -m)" in
+  aarch64 | arm64) arch="aarch64" ;;
+  *) arch="x86" ;;
+  esac
+
+  echo "📦 Installing Opengrep (SAST)..."
+  wget -q "https://github.com/opengrep/opengrep/releases/download/v1.32.0/opengrep_manylinux_${arch}" -O /tmp/opengrep
+  sudo mv /tmp/opengrep /usr/local/bin/opengrep
+  sudo chmod +x /usr/local/bin/opengrep
+  echo "   ✅ Opengrep installed"
+  echo ""
+}
+
 # Install based on distribution
 case "$DISTRO" in
 ubuntu | debian)
@@ -85,9 +101,11 @@ ubuntu | debian)
 
   # Install Python-based tools
   echo "📦 Installing Python-based tools..."
-  sudo pip3 install checkov semgrep --quiet
-  echo "   ✅ Checkov, Semgrep installed"
+  sudo pip3 install checkov --quiet
+  echo "   ✅ Checkov installed"
   echo ""
+
+  install_opengrep
 
   # Install TruffleHog (Go binary)
   install_from_github "trufflehog" "trufflesecurity/trufflehog" "linux_amd64.tar.gz" "/usr/local/bin"
@@ -120,7 +138,8 @@ fedora | rhel | centos)
   sudo dnf install -y python3 python3-pip curl wget
 
   # Install Python-based tools
-  sudo pip3 install checkov semgrep --quiet
+  sudo pip3 install checkov --quiet
+  install_opengrep
 
   # Install Go tools (similar to Ubuntu)
   # ... (same as Ubuntu section for GitHub installs)
@@ -141,7 +160,8 @@ arch | manjaro)
   fi
 
   # Install Python-based tools
-  sudo pip3 install checkov semgrep --quiet
+  sudo pip3 install checkov --quiet
+  install_opengrep
 
   ;;
 

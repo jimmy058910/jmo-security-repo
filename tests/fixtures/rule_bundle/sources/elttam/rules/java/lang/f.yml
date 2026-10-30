@@ -1,0 +1,9 @@
+rules:
+  - id: f-lic
+    languages: [java]
+    severity: WARNING
+    message: a pack rule that names another license in its metadata
+    metadata:
+      category: security
+      license: Apache-2.0
+    pattern: apache($X)

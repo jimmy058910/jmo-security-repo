@@ -131,6 +131,8 @@ YARA_RULES_BUNDLE: dict[str, str] = {
 #   {arch_aarch} - "x86_64", "aarch64" (for shellcheck)
 #   {trivy_arch} - "64bit", "ARM64" (trivy's unique format)
 #   {arch_x64}   - "x64", "arm64" (gitleaks)
+#   {arch_x86}   - "x86", then the machine name as the platform reports it:
+#                  "aarch64" on Linux, "arm64" on macOS (opengrep)
 
 BINARY_URLS: dict[str, str | dict[str, str]] = {
     # trivy: Windows uses lowercase "windows-64bit.zip", Linux uses "Linux-64bit.tar.gz"
@@ -181,6 +183,15 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "macos": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-apple-darwin.tar.gz",
         "default": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-unknown-linux-gnu.tar.gz",
     },
+    # opengrep: a static binary, no archive, no version in the name (v1.32.0's
+    # assets, listed 2026-10-29). ARM is "aarch64" on Linux but "arm64" on
+    # macOS, so {arch_x86} reads the platform's own name. No Windows arm64
+    # build, so Windows is the x86 one on every architecture, as for zizmor.
+    "opengrep": {
+        "windows": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_windows_x86.exe",
+        "macos": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_osx_{arch_x86}",
+        "default": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_manylinux_{arch_x86}",
+    },
     # osv-scanner: raw binaries, no archive, no version in the name (v2.6.0's
     # assets, listed 2026-09-28); Windows has an arm64 build.
     "osv-scanner": {
@@ -218,18 +229,14 @@ INSTALL_SCRIPTS: dict[str, str] = {
 #
 # Isolation began as a pydantic conflict: prowler pinned pydantic<2 while
 # semgrep and checkov need pydantic>=2, so no single environment could hold all
-# three. prowler left in v2.0.0 and took its venv with it. The two that remain
-# still pin heavily enough that sharing JMo's environment would let either one
-# downgrade a package JMo itself depends on (semgrep pins mcp, see
-# tool_installer), so each keeps its own.
+# three. prowler left in v2.0.0 and took its venv with it, and semgrep followed
+# when opengrep's static binary replaced it. checkov still pins heavily enough
+# that sharing JMo's environment would let it downgrade a package JMo itself
+# depends on, so it keeps its own.
 #
 # Format: {tool_name: {package, reason}}
 
 ISOLATED_TOOLS: dict[str, dict[str, str | list[str]]] = {
-    "semgrep": {
-        "package": "semgrep",
-        "reason": "Pins its own dependency set (including mcp) that must not reach JMo's environment",
-    },
     "checkov": {
         "package": "checkov",
         "reason": "Pins its own dependency set (pydantic>=2 among it) that must not reach JMo's environment",

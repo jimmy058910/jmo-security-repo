@@ -4,7 +4,7 @@
 # - Core: python3, pip, jq, curl, git
 # - Linters: shellcheck, shfmt, ruff, bandit
 # - Secrets: trufflehog (verified)
-# - SAST: semgrep
+# - SAST: opengrep
 # - SBOM/Vuln/Misconfig: syft, trivy
 # - IaC: checkov
 # - Dockerfile: hadolint
@@ -99,7 +99,7 @@ install_linux_binary() {
   local url="$1"
   shift
   local dest="$1"
-  curl -sSL "$url" -o "/tmp/.dl-$(basename "$dest")" && sudo install -m 0755 "/tmp/.dl-$(basename "$dest")" "$dest"
+  curl -fsSL "$url" -o "/tmp/.dl-$(basename "$dest")" && sudo install -m 0755 "/tmp/.dl-$(basename "$dest")" "$dest"
 }
 
 case "$OS" in
@@ -140,7 +140,17 @@ Darwin)
   brew_install git || true
   # Single bulk brew install is usually faster (v0.5.0 tool suite)
   brew tap trufflesecurity/tap >/dev/null 2>&1 || true
-  brew install shellcheck shfmt ruff bandit semgrep syft trivy hadolint checkov trufflesecurity/tap/trufflehog || true
+  brew install shellcheck shfmt ruff bandit syft trivy hadolint checkov trufflesecurity/tap/trufflehog || true
+  # opengrep (SAST): a static binary, named by OS and architecture
+  if ! command -v opengrep >/dev/null 2>&1; then
+    case "$(uname -m)" in
+    arm64 | aarch64) OPENGREP_ASSET=opengrep_osx_arm64 ;;
+    *) OPENGREP_ASSET=opengrep_osx_x86 ;;
+    esac
+    sudo curl -fsSL "https://github.com/opengrep/opengrep/releases/latest/download/${OPENGREP_ASSET}" -o /usr/local/bin/opengrep &&
+      sudo chmod +x /usr/local/bin/opengrep ||
+      warn "opengrep installation failed; run: jmo tools install opengrep"
+  else ok "opengrep installed"; fi
   # OWASP ZAP (DAST)
   if ! command -v zap.sh >/dev/null 2>&1 && ! command -v zap >/dev/null 2>&1; then
     brew install --cask owasp-zap || warn "ZAP installation failed; install manually from https://www.zaproxy.org/download/"
@@ -177,10 +187,14 @@ Linux)
     # Run python tool installs in parallel
     bg pipx_or_pip_install ruff
     bg pipx_or_pip_install bandit
-    # Semgrep
-    if ! command -v semgrep >/dev/null 2>&1; then
-      bg pipx_or_pip_install semgrep
-    else ok "semgrep installed"; fi
+    # opengrep (SAST): a static binary, named by architecture
+    if ! command -v opengrep >/dev/null 2>&1; then
+      case "$(uname -m)" in
+      aarch64 | arm64) OPENGREP_ARCH=aarch64 ;;
+      *) OPENGREP_ARCH=x86 ;;
+      esac
+      bg install_linux_binary "https://github.com/opengrep/opengrep/releases/latest/download/opengrep_manylinux_${OPENGREP_ARCH}" /usr/local/bin/opengrep
+    else ok "opengrep installed"; fi
     # TruffleHog (primary secrets scanner)
     if ! command -v trufflehog >/dev/null 2>&1; then
       bg bash -c 'curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin'
@@ -243,7 +257,7 @@ Linux)
     # Wait for background installers to finish
     bg_wait
   else
-    warn "Unsupported Linux distribution: please install dependencies manually (python3, pip, jq, curl, semgrep, trufflehog, shellcheck, shfmt)"
+    warn "Unsupported Linux distribution: please install dependencies manually (python3, pip, jq, curl, opengrep, trufflehog, shellcheck, shfmt)"
   fi
   ;;
 *)

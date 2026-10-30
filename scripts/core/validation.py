@@ -73,7 +73,7 @@ def validate_version(version: str, tool_name: str = "unknown") -> bool:
     Examples:
         >>> validate_version("1.0.0", "trivy")
         True
-        >>> validate_version("v1.2.3-rc1", "semgrep")
+        >>> validate_version("v1.2.3-rc1", "opengrep")
         True
         >>> validate_version("../etc/passwd", "malicious")
         False

@@ -22,12 +22,9 @@ fail_on: ''
 threads: 4
 timeout: 600
 per_tool:
-  semgrep:
-    flags:
-    - --exclude
-    - node_modules
-    - --exclude
-    - .git
+  # opengrep (SAST) needs no entry: it reads the rule bundle shipped in
+  # scripts/jmo_rules/ and JMo hands it the exclusions. `configs:` here
+  # replaces that bundle with your own rule files or directories.
   trivy:
     flags:
     - --no-progress

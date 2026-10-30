@@ -120,11 +120,11 @@ security-audit-ci:
 
 .PHONY: security-audit-fast
 security-audit-fast:
-\tjmo ci --repos-dir . --tools trufflehog semgrep --fail-on HIGH
+\tjmo ci --repos-dir . --tools trufflehog opengrep --fail-on HIGH
 
 .PHONY: security-check-pipelines
 security-check-pipelines:
-\tjmo scan --repo .github/workflows --tools trufflehog semgrep
+\tjmo scan --repo .github/workflows --tools trufflehog opengrep
 
 .PHONY: security-check-images
 security-check-images:

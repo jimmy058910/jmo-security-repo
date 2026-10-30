@@ -54,12 +54,13 @@ jobs:
   #     matrix comment in test-sharded. It still runs on every `dev`/`main`
   #     push, so every merge is covered -- but a PR's checks list will not
   #     contain it, which is expected and not a missing report.
-  #   dashboard-smoke, tool-contract-tests, policy-gate, rule-bundle-reproducible
+  #   dashboard-smoke, tool-contract-tests, policy-gate, rule-bundle-reproducible,
+  #   windows-opengrep
   #     -- deliberately not in the maintainer's chosen set. policy-gate (and
-  #     rule-bundle-reproducible, for the same reason) is also too new: a required
-  #     check that does not yet exist on main leaves every PR waiting on a
-  #     report that never arrives, so it can only be added after it has run
-  #     on main at least once.
+  #     rule-bundle-reproducible and windows-opengrep, for the same reason) is
+  #     also too new: a required check that does not yet exist on main leaves
+  #     every PR waiting on a report that never arrives, so it can only be
+  #     added after it has run on main at least once.
   #   phase-audit -- ADVISORY, and new for the same reason as policy-gate: it
   #     does not exist on main yet. It reports red when an open issue is in no
   #     phase of the v1.1.0 fix-program plan, or when the phase:N labels have
@@ -390,7 +391,7 @@ jobs:
         # WINDOWS-style path: Git Bash resolves POSIX entries like
         # /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine, but the
         # Python process inherits the raw PATH string and shutil.which() on Windows
-        # cannot interpret a POSIX path -- so every external tool lookup (semgrep,
+        # cannot interpret a POSIX path -- so every external tool lookup (opengrep,
         # checkov, trivy...) silently returns None and tool-discovery tests fail
         # while everything else passes. cygpath -w fixes it; the POSIX branch only
         # ever runs on Linux/macOS.
@@ -1019,15 +1020,17 @@ jobs:
   # (CI was pinned to Node 20). Tracked in #461.
   #
   # Same pattern as tool-contract-tests: always runs (stable required-check
-  # name for future branch protection), but only does real work when
-  # scripts/dashboard/** actually changed. The build path uses `tsc && vite
-  # build` per scripts/dashboard/package.json:"build", which is the same path
-  # the release pipeline bundles, so build success here implies release
+  # name for future branch protection). The wheel checks (1 and 2 below) run on
+  # every push; the Node steps (3) do real work only when scripts/dashboard/**
+  # or the files in its filter actually changed. The build path uses `tsc &&
+  # vite build` per scripts/dashboard/package.json:"build", which is the same
+  # path the release pipeline bundles, so build success here implies release
   # bundleability.
-  # Owns the two halves of the dashboard contract that the test shards cannot.
+  # Owns three checks of what the package ships that the test shards cannot:
+  # two halves of the dashboard contract, and the opengrep rule bundle's.
   #
-  #   1. The wheel actually carries the bundle. Before #862 it did not: a wheel
-  #      built from a clean checkout held 196 entries and 0 under
+  #   1. The wheel actually carries the dashboard bundle. Before #862 it did
+  #      not: a wheel built from a clean checkout held 196 entries and 0 under
   #      scripts/dashboard/, because `dist/` was covered by a blanket
   #      `.gitignore` rule and `packages.find` collects Python packages only.
   #      A pip-installed `jmo report` produced a 2,468-byte static page every
@@ -1035,11 +1038,19 @@ jobs:
   #      the bundle is present in the TREE; only building a wheel proves it is
   #      in the DISTRIBUTION, so that check is here and is unconditional.
   #
-  #   2. The tracked bundle still matches its sources. That needs Node, so it
-  #      cannot live in the shards. It replaces the mtime check that used to be
-  #      in html_reporter: with `dist/` tracked, git checkout order made every
-  #      build input newer than the bundle, so that check reported "stale" on
-  #      every fresh clone (measured: 17.3 ms of spread, all 7 inputs newer).
+  #   2. The wheel carries the rule bundle, in the same step and for the same
+  #      reason: scripts/jmo_rules/ is generated, committed and shipped as
+  #      package data, and a pip-installed `jmo` without it has no rule to scan
+  #      with. Every file in the tree must be a member of the wheel with the
+  #      same bytes, and the wheel holds nothing else under that directory.
+  #      Unconditional too.
+  #
+  #   3. The tracked dashboard bundle still matches its sources. That needs
+  #      Node, so it cannot live in the shards. It replaces the mtime check
+  #      that used to be in html_reporter: with `dist/` tracked, git checkout
+  #      order made every build input newer than the bundle, so that check
+  #      reported "stale" on every fresh clone (measured: 17.3 ms of spread,
+  #      all 7 inputs newer).
   #
   # The paths filter is deliberately wider than `scripts/dashboard/**`.
   # `html_reporter.py` depends on the build contract (it string-replaces a
@@ -1519,6 +1530,10 @@ jobs:
           # and how the two secret scanners' output is read (#1326). The
           # pairing and the row accounting have unit tests on every shard.
           # tool_pins.py is how the install step reads versions.yaml.
+          # opengrep's are the rule bundle itself (scripts/jmo_rules/ is what
+          # the fixture guard keeps firing, so an edit to it must run the
+          # guard), the code that picks its rule files and reads its output,
+          # and the script that fetches the guard's fixture.
           filters: |
             versions:
               - 'versions.yaml'
@@ -1526,15 +1541,22 @@ jobs:
               - 'Dockerfile'
               - 'tests/integration/test_tool_contracts.py'
               - 'tests/integration/test_git_history_secrets.py'
+              - 'tests/integration/test_rule_bundle_fixture.py'
               - 'tests/unit/test_gitleaks_wiring.py'
               - 'tests/unit/test_zizmor_wiring.py'
               - 'tests/unit/test_osv_scanner_wiring.py'
+              - 'tests/unit/test_opengrep_wiring.py'
+              - 'tests/unit/test_jmo_rules_bundle.py'
               - 'tests/unit/test_own_config_announcement.py'
               - 'scripts/core/osv_database.py'
               - 'scripts/core/tool_descriptors.py'
+              - 'scripts/core/rule_bundle.py'
               - 'scripts/cli/scan_utils.py'
               - 'scripts/core/adapters/trufflehog_adapter.py'
               - 'scripts/core/adapters/gitleaks_adapter.py'
+              - 'scripts/core/adapters/opengrep_adapter.py'
+              - 'scripts/dev/fetch_rule_fixture.py'
+              - 'scripts/jmo_rules/**'
 
       - name: Set up uv
         if: steps.changes.outputs.versions == 'true'
@@ -1577,7 +1599,7 @@ jobs:
           GITLEAKS_VERSION: ${{ steps.pins.outputs.GITLEAKS_VERSION }}
           ZIZMOR_VERSION: ${{ steps.pins.outputs.ZIZMOR_VERSION }}
           OSV_SCANNER_VERSION: ${{ steps.pins.outputs.OSV_SCANNER_VERSION }}
-          SEMGREP_VERSION: ${{ steps.pins.outputs.SEMGREP_VERSION }}
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
           CHECKOV_VERSION: ${{ steps.pins.outputs.CHECKOV_VERSION }}
         run: |
           # Same install block as scheduled.yml:tool-contract-tests. Both read
@@ -1592,7 +1614,7 @@ jobs:
             -o /tmp/trivy.tar.gz
           gzip -t /tmp/trivy.tar.gz
           tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
-          pip install "semgrep==${SEMGREP_VERSION}" "checkov==${CHECKOV_VERSION}"
+          pip install "checkov==${CHECKOV_VERSION}"
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
             -o /usr/local/bin/hadolint
@@ -1620,6 +1642,12 @@ jobs:
           gzip -t /tmp/zizmor.tar.gz
           tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor
           chmod +x /usr/local/bin/zizmor
+          # opengrep: a static binary, no archive; assets are named by flavour
+          # and arch.
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            -o /usr/local/bin/opengrep
+          chmod +x /usr/local/bin/opengrep
           # osv-scanner: a raw binary, checked in /tmp against the release's
           # SHA256SUMS before it is installed, as the Dockerfile does. No
           # offline database is fetched: its tests read the frozen one in
@@ -1648,7 +1676,7 @@ jobs:
 
           echo "Installed tools:"
           trivy --version || echo "trivy not available"
-          semgrep --version || echo "semgrep not available"
+          opengrep --version || echo "opengrep not available"
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
           gitleaks version || echo "gitleaks not available"
@@ -1659,6 +1687,17 @@ jobs:
           grype version || echo "grype not available"
           syft version || echo "syft not available"
 
+      - name: Fetch the rule-bundle fixture
+        if: steps.changes.outputs.versions == 'true'
+        # Four files of juice-shop, by commit and sha256, into a gitignored
+        # directory: lib/insecurity.ts holds a private key, so they are never
+        # committed. Without them test_rule_bundle_fixture.py skips, and a skip
+        # is not a pass, so this step fails the job when a file cannot be
+        # fetched or does not match its pin. The tests copy them into pytest's
+        # tmp_path, which must stay outside the checkout (opengrep honours its
+        # .gitignore), so no pytest step here passes --basetemp.
+        run: python3 scripts/dev/fetch_rule_fixture.py
+
       - name: Run tool contract tests
         if: steps.changes.outputs.versions == 'true'
         env:
@@ -1667,11 +1706,17 @@ jobs:
           # The git-history tests (G1) run trufflehog and gitleaks for real,
           # so they are requires_tools and ran in no job until this one
           # installed gitleaks (#1326). They skip without either binary.
+          # The same holds for opengrep's: its wiring tests and the rule
+          # bundle's test_every_file_validates ran in no job until this one
+          # installed it, and the fixture guard keeps four findings firing.
           pytest tests/integration/test_tool_contracts.py \
             tests/integration/test_git_history_secrets.py \
+            tests/integration/test_rule_bundle_fixture.py \
             tests/unit/test_gitleaks_wiring.py \
             tests/unit/test_zizmor_wiring.py \
             tests/unit/test_osv_scanner_wiring.py \
+            tests/unit/test_opengrep_wiring.py \
+            tests/unit/test_jmo_rules_bundle.py \
             tests/unit/test_own_config_announcement.py \
             -v \
             -m "requires_tools" \
@@ -1683,6 +1728,7 @@ jobs:
         run: |
           echo "No version-affecting files changed — contract tests not required."
           echo "Paths watched: versions.yaml and its reader, Dockerfile, the contract and G1 tests, and the code G1 exercises"
+          echo "Also opengrep's rule bundle, its wiring and the fixture guard"
 
   # ==========================================================================
   # rule-bundle-reproducible -- is the committed opengrep bundle still a rebuild?
@@ -1772,6 +1818,457 @@ jobs:
         run: |
           echo "No rule bundle changes -- reproducibility check not required."
           echo "Paths watched: scripts/jmo_rules/, its builder, the builder's test, and uv.lock"
+
+  # ==========================================================================
+  # windows-opengrep -- does opengrep work on Windows, installed and driven by JMo?
+  # ==========================================================================
+  # Replaces a check that was run by hand on a laptop (Phase 5 PR B, B8 step 4)
+  # that is being retired. No other job runs opengrep on Windows: the
+  # windows-2022 test shard excludes `requires_tools` and installs no tools, and
+  # tool-contract-tests runs the Linux binary. What this job proves, each step
+  # printing what it checked so the log is the evidence:
+  #   1. `jmo tools install opengrep` (the product's installer, not a curl)
+  #      puts the versions.yaml pin in ~/.jmo/bin, `jmo tools check` agrees, and
+  #      the file's sha256 is the one GitHub lists for the pin's
+  #      opengrep_windows_x86.exe.
+  #   2. The real-binary opengrep tests pass: the juice-shop fixture guard (the
+  #      four findings, cwd independence, no network, the proxy control), the
+  #      requires_tools tests of test_opengrep_wiring.py (among them
+  #      test_a_scan_leaves_no_log_in_the_home_directory: no match text under
+  #      the user's profile) and `scan --validate` on every bundle file.
+  #   3. `jmo scan` with per_tool.opengrep.configs holding a drive-letter path
+  #      (C:\...\javascript.yaml) reads `ran`, finds the fixture's four
+  #      findings, and opengrep's own log shows it loaded that path. The four
+  #      are checked twice: in opengrep's own document, whose paths carry
+  #      backslashes here, and in the report phase's summaries/findings.json,
+  #      where they must be forward-slash: that file is what a Windows user
+  #      reads, uploads and diffs.
+  #   4. That scan's debug log is in its scratch, and no semgrep.log under the
+  #      profile gained content.
+  #   5. REPORT ONLY: whether Microsoft Defender is on, and whether it flags the
+  #      rule files. It never fails the job; it is the first thing to read when
+  #      a step above fails for a missing file.
+  #
+  # Not continue-on-error, and no step can report green over a failure. That is
+  # properties 1 and 2 of the header. Property 3, a ruleset naming it, is the
+  # maintainer's to add once it has run on main (see rule-bundle-reproducible).
+  #
+  # Always runs and filters in-job, as tool-contract-tests does, so the check
+  # name is stable. The filter is that job's opengrep paths, plus the two files
+  # that decide how a Windows asset is fetched and named, plus the two the
+  # checks in step 3 and the pytest step depend on: normalize_finding_path
+  # (adapters/common.py) and the report phase that applies it to every tool's
+  # location.path (normalize_and_report.py).
+  #
+  # PYTHONUTF8 is deliberately absent, as in windows-native-encoding. The other
+  # Windows shard sets it, which hides code that only works under Python's
+  # UTF-8 mode, and a user's console has no such mode. If this job goes red on a
+  # codec, that is a defect in the product, not a reason to add the variable.
+  #
+  # Native Windows paths throughout, so there is no cygpath: a Git Bash `$PWD`
+  # on PATH is what that trap in release.rules.md is about. The tests find the
+  # binary with shutil.which("opengrep") (the guard's _scan, the wiring tests'
+  # _opengrep and _real_scan), so ~/.jmo/bin goes on PATH; `jmo scan` itself
+  # also looks there.
+  windows-opengrep:
+    name: windows-opengrep
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Detect opengrep-affecting changes
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          # tool-contract-tests' opengrep paths, and the installer: it names the
+          # Windows download and renames it to opengrep.exe. common.py and
+          # normalize_and_report.py are the path normalizer and the report phase:
+          # the tests and the scan step compare opengrep's backslash paths
+          # through them.
+          filters: |
+            opengrep:
+              - 'versions.yaml'
+              - 'scripts/dev/tool_pins.py'
+              - 'scripts/cli/tool_installer.py'
+              - 'scripts/core/install_config.py'
+              - 'scripts/core/tool_descriptors.py'
+              - 'scripts/core/rule_bundle.py'
+              - 'scripts/cli/scan_utils.py'
+              - 'scripts/core/adapters/opengrep_adapter.py'
+              - 'scripts/core/adapters/common.py'
+              - 'scripts/core/normalize_and_report.py'
+              - 'scripts/dev/fetch_rule_fixture.py'
+              - 'scripts/jmo_rules/**'
+              - 'tests/integration/test_rule_bundle_fixture.py'
+              - 'tests/unit/test_opengrep_wiring.py'
+              - 'tests/unit/test_jmo_rules_bundle.py'
+
+      - name: Set up uv
+        if: steps.changes.outputs.opengrep == 'true'
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        if: steps.changes.outputs.opengrep == 'true'
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv and the JMo tool directory on PATH
+        if: steps.changes.outputs.opengrep == 'true'
+        run: |
+          "$env:GITHUB_WORKSPACE\.venv\Scripts" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          "$env:USERPROFILE\.jmo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Configure Windows temp directory for faster I/O
+        if: steps.changes.outputs.opengrep == 'true'
+        # pytest's tmp_path lands under D:\Temp\pytest-of-runneradmin: outside the
+        # checkout (opengrep honours the .gitignore of a git work tree that
+        # contains its target, and the fixture's files are ignored), and short
+        # (the 260-character trap in testing.cross-platform.rules.md).
+        run: |
+          New-Item -ItemType Directory -Force -Path "D:\Temp" | Out-Null
+          "TEMP=D:\Temp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "TMP=D:\Temp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Read tool pins from versions.yaml
+        if: steps.changes.outputs.opengrep == 'true'
+        # A copy of a pin in this file is one the weekly tool-update PR cannot
+        # move, so the version is read here (#1470). Git Bash, not pwsh, because
+        # test_workflow_tool_pins.py looks for the reader written as
+        # `>> "$GITHUB_OUTPUT"`, as every other one is; `python`, since a
+        # Windows runner has no `python3`.
+        id: pins
+        shell: bash
+        run: python scripts/dev/tool_pins.py >> "$GITHUB_OUTPUT"
+
+      - name: Install opengrep with jmo, and check what it reports
+        if: steps.changes.outputs.opengrep == 'true'
+        id: install
+        env:
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:USERPROFILE '.jmo\bin\opengrep.exe'
+          Write-Host "versions.yaml pins opengrep $env:OPENGREP_VERSION"
+
+          # The download is a 50 MB file from github.com and the installer does
+          # not retry; a deterministic failure (a 404) fails all three tries.
+          $installed = $false
+          foreach ($attempt in 1..3) {
+            jmo tools install opengrep --yes
+            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $exe)) { $installed = $true; break }
+            Write-Host "install attempt $attempt failed (exit $LASTEXITCODE)"
+            Start-Sleep -Seconds 10
+          }
+          if (-not $installed) { throw "jmo tools install opengrep did not put $exe in place" }
+
+          # The installer's own post-install check has already run the binary
+          # once, so this is the first run after install, not the first ever.
+          # Time it: `jmo tools check` probes with a 10 s budget, and so does a
+          # user's, so a figure over 10 here is a product signal. The log keeps
+          # it either way.
+          $first = [System.Diagnostics.Stopwatch]::StartNew()
+          $version = & $exe --version
+          if ($LASTEXITCODE -ne 0) { throw "$exe --version exited $LASTEXITCODE" }
+          Write-Host "opengrep --version: $version (first run after install: $([int]$first.Elapsed.TotalSeconds) s)"
+
+          $raw = jmo tools check --json opengrep
+          if ($LASTEXITCODE -ne 0) { throw "jmo tools check opengrep exited $LASTEXITCODE" }
+          $tool = ($raw -join "`n" | ConvertFrom-Json).tools.opengrep
+          $tool | Format-List | Out-String | Write-Host
+          if (-not $tool.installed) { throw 'jmo tools check: opengrep is not installed' }
+          if ($tool.installed_version -ne $env:OPENGREP_VERSION) {
+            throw "installed $($tool.installed_version), versions.yaml pins $env:OPENGREP_VERSION"
+          }
+          if ($tool.expected_version -ne $env:OPENGREP_VERSION) {
+            throw "jmo expects $($tool.expected_version), tool_pins.py reads $env:OPENGREP_VERSION"
+          }
+          if (-not $tool.execution_ready) { throw 'jmo tools check: opengrep is not execution ready' }
+          if ([IO.Path]::GetFullPath($tool.binary_path) -ine [IO.Path]::GetFullPath($exe)) {
+            throw "jmo resolves $($tool.binary_path), not $exe"
+          }
+
+      - name: Check the installed file is the pinned release's Windows asset
+        if: steps.changes.outputs.opengrep == 'true'
+        # The version above is what the binary says. This is what was
+        # downloaded: the sha256 GitHub lists for the pin's asset, read now, so
+        # a bump of the pin needs no edit here. Its own step because it is the
+        # only one that holds the token.
+        env:
+          OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $asset = 'opengrep_windows_x86.exe'
+          $exe = Join-Path $env:USERPROFILE '.jmo\bin\opengrep.exe'
+          $uri = "https://api.github.com/repos/opengrep/opengrep/releases/tags/v$env:OPENGREP_VERSION"
+          $headers = @{ Accept = 'application/vnd.github+json' }
+          if ($env:GH_TOKEN) { $headers.Authorization = "Bearer $env:GH_TOKEN" }
+          $release = Invoke-RestMethod -Uri $uri -Headers $headers -MaximumRetryCount 3 -RetryIntervalSec 5
+          $listed = @($release.assets | Where-Object { $_.name -eq $asset })
+          if ($listed.Count -ne 1) { throw "release v$env:OPENGREP_VERSION lists $($listed.Count) assets named $asset" }
+          if (-not $listed[0].digest) { throw "release v$env:OPENGREP_VERSION lists no digest for $asset" }
+          $want = $listed[0].digest -replace '^sha256:', ''
+          $got = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLowerInvariant()
+          Write-Host "release v$env:OPENGREP_VERSION $asset ($($listed[0].size) bytes) sha256 $want"
+          Write-Host "installed $exe ($((Get-Item -LiteralPath $exe).Length) bytes) sha256 $got"
+          if ($got -ne $want) { throw "the installed file is not $asset of v$env:OPENGREP_VERSION" }
+
+      - name: Fetch the rule-bundle fixture
+        if: steps.changes.outputs.opengrep == 'true'
+        id: fixture
+        # Four files of juice-shop by commit and sha256, into a gitignored
+        # directory (lib/insecurity.ts holds a private key, so they are never
+        # committed). Without them the guard skips, and the pytest step below
+        # fails on any skip.
+        run: |
+          python scripts/dev/fetch_rule_fixture.py
+          if ($LASTEXITCODE -ne 0) { throw "fetch_rule_fixture.py exited $LASTEXITCODE" }
+          Get-ChildItem -Recurse -File tests\fixtures\rule_bundle\juice-shop | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { Write-Host "$($_.Hash.ToLowerInvariant())  $($_.Path)" }
+
+      # The next two steps run whether or not the other failed, so one run shows
+      # both results, and the job is red if either is. They do not run after a
+      # failed install, version, digest or fixture step: the fixture step above
+      # has the implicit success(), so any earlier failure skips it and its
+      # outcome is not 'success'.
+      - name: Run the opengrep tests that need the real binary
+        if: ${{ !cancelled() && steps.fixture.outcome == 'success' }}
+        timeout-minutes: 20
+        env:
+          CI: "true"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "opengrep on PATH: $((Get-Command opengrep).Source)"
+          Write-Host "tmp_path root: $env:TEMP"
+          $junit = Join-Path $env:RUNNER_TEMP 'opengrep-junit.xml'
+          python -m pytest `
+            tests/integration/test_rule_bundle_fixture.py `
+            tests/unit/test_opengrep_wiring.py `
+            tests/unit/test_jmo_rules_bundle.py `
+            -v -rs -m "requires_tools" --tb=short --timeout=300 `
+            -p no:xdist -p no:rerunfailures --junitxml=$junit
+          if ($LASTEXITCODE -ne 0) { throw "pytest exited $LASTEXITCODE" }
+
+          # A skip is not a pass: the guard skips when opengrep is not on PATH or
+          # the fixture is missing, and pytest exits 0 for a run of skips. The
+          # floor is the count measured on Linux (29: 5 + 23 + 1); lower it in
+          # the PR that removes a test, and say why.
+          [xml]$report = Get-Content -Raw -LiteralPath $junit
+          $suite = @($report.SelectNodes('//testsuite'))[0]
+          $tests = [int]$suite.tests
+          $skipped = [int]$suite.skipped
+          Write-Host "pytest: $tests tests, $skipped skipped, $([int]$suite.failures) failed, $([int]$suite.errors) errors (floor 29)"
+          if ($skipped -ne 0) { throw "$skipped test(s) skipped: a skipped test proves nothing here" }
+          if ($tests -lt 29) { throw "only $tests tests ran, expected at least 29" }
+
+      - name: Scan with a drive-letter config through jmo
+        if: ${{ !cancelled() && steps.fixture.outcome == 'success' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $work = Join-Path $env:RUNNER_TEMP 'jmo-opengrep-config'
+          if (Test-Path -LiteralPath $work) { Remove-Item -Recurse -Force -LiteralPath $work }
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          # A copy outside the checkout: opengrep reads the .gitignore of a git
+          # work tree that holds its target, and the fixture is ignored there.
+          $target = Join-Path $work 'v1.2.target'
+          Copy-Item -Recurse -Path (Join-Path $env:GITHUB_WORKSPACE 'tests/fixtures/rule_bundle/juice-shop') -Destination $target
+
+          $rules = (Resolve-Path (Join-Path $env:GITHUB_WORKSPACE 'scripts/jmo_rules/javascript.yaml')).Path
+          if ($rules -notmatch '^[A-Za-z]:\\') { throw "not a drive-letter path: $rules" }
+          # Single quotes: YAML reads a backslash in them literally.
+          $config = Join-Path $work 'jmo.yml'
+          @('per_tool:', '  opengrep:', '    configs:', "      - '$rules'") |
+            Set-Content -LiteralPath $config -Encoding utf8
+          Write-Host "jmo.yml handed to jmo scan:"
+          Get-Content -LiteralPath $config | ForEach-Object { Write-Host "  | $_" }
+
+          # Every semgrep.log opengrep could write under the profile, with its size.
+          function Get-DebugLogSizes {
+            $sizes = @{}
+            foreach ($root in @($env:USERPROFILE, $env:LOCALAPPDATA, $env:APPDATA) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }) {
+              Get-ChildItem -LiteralPath $root -Recurse -Depth 2 -Force -File -Filter semgrep.log -ErrorAction SilentlyContinue |
+                ForEach-Object { $sizes[$_.FullName] = $_.Length }
+            }
+            $sizes
+          }
+          $before = Get-DebugLogSizes
+
+          $results = Join-Path $work 'results'
+          jmo scan --repo $target --config $config --results-dir $results --no-store-history --tools opengrep
+          if ($LASTEXITCODE -ne 0) { throw "jmo scan exited $LASTEXITCODE" }
+
+          $scanned = @(Get-ChildItem -LiteralPath (Join-Path $results 'individual-repos') -Directory)
+          if ($scanned.Count -ne 1) { throw "expected one scanned target, found $($scanned.Count)" }
+          $out = $scanned[0].FullName
+
+          # The row.
+          $timings = Get-Content -Raw -LiteralPath (Join-Path $out 'scan-timings.json') | ConvertFrom-Json
+          $row = @($timings.tools | Where-Object { $_.tool -eq 'opengrep' })
+          if ($row.Count -ne 1) { throw "scan-timings.json has $($row.Count) opengrep rows" }
+          Write-Host "opengrep row: state=$($row[0].state) reason=$($row[0].reason) exit_code=$($row[0].exit_code) detail=$($row[0].detail)"
+          if ($row[0].state -ne 'ran') { throw "the opengrep row is $($row[0].state): $($row[0].reason) $($row[0].detail)" }
+
+          # The findings: the guard's four, by (rule, path, line).
+          #
+          # opengrep names a file with the separator of the OS it runs on, so its
+          # own document says `routes\login.ts` here (measured, the first run of
+          # this job). The report phase puts every tool's location.path through
+          # normalize_finding_path (scripts/core/adapters/common.py), which turns
+          # a backslash into a slash; -replace '\\', '/' is that step for a path
+          # relative to the target, as these are, and the pytest step above
+          # compares through the function itself.
+          $document = Get-Content -Raw -LiteralPath (Join-Path $out 'opengrep.json') | ConvertFrom-Json
+          $spelled = { param($path) $path -replace '\\', '/' }
+          $found = @($document.results | ForEach-Object {
+            '{0} {1}:{2}' -f ($_.check_id -split '\.')[-1], (& $spelled $_.path), $_.start.line
+          })
+          $read = @($document.paths.scanned | ForEach-Object { & $spelled $_ })
+          Write-Host "files read, as opengrep writes them: $($document.paths.scanned -join ', ')"
+          Write-Host "files read, as the report phase spells them: $($read -join ', ')"
+          Write-Host "findings ($($found.Count)):"
+          $found | Sort-Object | ForEach-Object { Write-Host "  $_" }
+          $expected = @(
+            'tainted-sql-string routes/login.ts:34'
+            'tainted-sql-string routes/search.ts:23'
+            'hardcoded-jwt-secret lib/insecurity.ts:56'
+            'template-explicit-unescape views/promotionVideo.pug:79'
+          )
+          $missing = @($expected | Where-Object { $found -notcontains $_ })
+          if ($missing.Count -ne 0) { throw "findings missing: $($missing -join '; ')" }
+
+          # What the report phase wrote for the user: summaries/findings.json
+          # holds the same four, and every path in it is repo-relative with
+          # forward slashes, neither a backslash nor a drive letter. This, not
+          # the document above, is what proves a Windows user's report is right.
+          $report = Get-Content -Raw -LiteralPath (Join-Path $results 'summaries/findings.json') | ConvertFrom-Json
+          $reported = @($report.findings | Where-Object { $_.tool.name -eq 'opengrep' })
+          $reportedKeys = @($reported | ForEach-Object {
+            '{0} {1}:{2}' -f ($_.ruleId -split '\.')[-1], $_.location.path, $_.location.startLine
+          })
+          Write-Host "findings.json: $(@($report.findings).Count) findings, $($reported.Count) from opengrep"
+          $reportedKeys | Sort-Object | ForEach-Object { Write-Host "  $_" }
+          $missing = @($expected | Where-Object { $reportedKeys -notcontains $_ })
+          if ($missing.Count -ne 0) { throw "summaries/findings.json is missing: $($missing -join '; ')" }
+          $unclean = @($report.findings | ForEach-Object { $_.location.path } | Where-Object { $_ -match '\\|^[A-Za-z]:' })
+          if ($unclean.Count -ne 0) {
+            throw "summaries/findings.json holds paths that are not repo-relative with forward slashes: $($unclean -join '; ')"
+          }
+
+          # The debug log is in the scan's scratch, and opengrep loaded that
+          # drive-letter path and no other rule file.
+          $log = Join-Path $out '.opengrep/semgrep.log'
+          if (-not (Test-Path -LiteralPath $log)) { throw "no debug log at $log" }
+          $logText = Get-Content -Raw -LiteralPath $log
+          Write-Host "debug log: $log ($((Get-Item -LiteralPath $log).Length) bytes)"
+          Select-String -LiteralPath $log -Pattern 'Loading local config from', 'rules from \d+ config' |
+            ForEach-Object { Write-Host "  | $($_.Line)" }
+          $slashes = { param($text) $text.Replace('\', '/').ToLowerInvariant() }
+          $loaded = & $slashes $logText
+          if (-not $loaded.Contains((& $slashes $rules))) { throw "the debug log never names $rules" }
+          $named = @([regex]::Matches($loaded, 'jmo_rules/[a-z_]+\.yaml') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+          Write-Host "bundle files the log names: $($named -join ', ')"
+          if ($named.Count -ne 1) { throw 'the log names a rule file other than the one configured' }
+
+          # No debug log under the profile gained content. A version probe may
+          # create one or empty it (so absent and empty both count as nothing).
+          $after = Get-DebugLogSizes
+          $grew = @()
+          foreach ($path in $after.Keys) {
+            $was = if ($before.ContainsKey($path)) { $before[$path] } else { 0 }
+            Write-Host "semgrep.log under the profile: $path was $was bytes, is $($after[$path])"
+            if ($after[$path] -gt $was) { $grew += $path }
+          }
+          if ($grew.Count -ne 0) { throw "a scan wrote into: $($grew -join ', ')" }
+          Write-Host "semgrep.log files under the profile: $($after.Count); none gained content"
+
+      - name: Report Microsoft Defender (never fails the job)
+        if: always() && steps.changes.outputs.opengrep == 'true'
+        # The one step that may not fail: it reports, per the job's header. A
+        # step above that failed for a missing rule file is read together with
+        # this one.
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          # Each line goes to the log and the job summary as it is known, so a
+          # scan that hangs until the step timeout does not lose the status.
+          function Report($text) {
+            Write-Host $text
+            $text | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          }
+          function Test-Bundle {
+            $dir = Join-Path $env:GITHUB_WORKSPACE 'scripts/jmo_rules'
+            $manifest = Get-Content -Raw -LiteralPath (Join-Path $dir 'SOURCES.json') | ConvertFrom-Json
+            $bad = @()
+            foreach ($entry in $manifest.files.PSObject.Properties) {
+              $file = Join-Path $dir $entry.Name
+              if (-not (Test-Path -LiteralPath $file)) { $bad += "$($entry.Name) is missing"; continue }
+              $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant()
+              if ($hash -ne $entry.Value.sha256) { $bad += "$($entry.Name) differs from SOURCES.json" }
+            }
+            $listed = @($manifest.files.PSObject.Properties).Count
+            "$listed files listed in SOURCES.json: $($bad.Count) missing or different $($bad -join '; ')"
+          }
+          Report '### Microsoft Defender on this runner (report only)'
+          try {
+            $status = Get-MpComputerStatus -ErrorAction Stop
+            Report ''
+            Report '| AMServiceEnabled | RealTimeProtectionEnabled | AntivirusSignatureLastUpdated |'
+            Report '| --- | --- | --- |'
+            Report "| $($status.AMServiceEnabled) | $($status.RealTimeProtectionEnabled) | $($status.AntivirusSignatureLastUpdated) |"
+            Report ''
+            if ($status.AMServiceEnabled) {
+              Report "Rule bundle before the scan: $(Test-Bundle)"
+              Start-MpScan -ScanType CustomScan -ScanPath (Join-Path $env:GITHUB_WORKSPACE 'scripts/jmo_rules') -ErrorAction Stop
+              Report "Custom scan of scripts/jmo_rules finished; rule bundle after it: $(Test-Bundle)"
+              # Every detection on the runner, not only this scan's: one made at
+              # checkout, or of opengrep.exe itself, explains a red step above.
+              $detected = @(Get-MpThreatDetection -ErrorAction Stop)
+              if ($detected.Count -eq 0) {
+                Report 'Detections recorded on this runner: none.'
+              } else {
+                Report "Detections recorded on this runner: $($detected.Count)."
+                foreach ($d in $detected | Select-Object -First 20) {
+                  Report "- ThreatID $($d.ThreatID) at $($d.InitialDetectionTime): $($d.Resources -join ', ')"
+                }
+              }
+            } else {
+              Report 'The Defender service is not enabled here, so no scan was run.'
+            }
+          } catch {
+            Report "The probe failed: $($_.Exception.Message)"
+          }
+          exit 0
+
+      - name: Windows post-test cleanup
+        if: always() && steps.changes.outputs.opengrep == 'true'
+        run: |
+          $procs = Get-Process -Name python,cmd,node,java,opengrep -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -ne $PID }
+          if ($procs) {
+            Write-Host "Killing $($procs.Count) orphan processes"
+            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Summarize skip
+        if: steps.changes.outputs.opengrep != 'true'
+        run: |
+          Write-Host "No opengrep-affecting changes -- the Windows check is not required."
+          Write-Host "Paths watched: versions.yaml and its reader, the installer and its URLs, opengrep's row, adapter and rule bundle,"
+          Write-Host "the fixture script, the fixture guard and the wiring and bundle tests"
 
   # ==========================================================================
   # phase-audit -- is every open issue scheduled, and do the labels agree?

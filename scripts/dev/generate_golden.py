@@ -28,8 +28,8 @@ Directory Structure Created:
     │       ├── raw-output.json       # Raw tool output
     │       ├── expected-findings.json # Parsed adapter output
     │       └── metadata.json          # Tool version, timestamp, sample used
-    ├── semgrep/
-    │   └── v1.175.0/
+    ├── hadolint/
+    │   └── v{version}/
     │       └── ...
     └── ...
 
@@ -100,21 +100,6 @@ TOOL_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "adapter_module": "scripts.core.adapters.trivy_adapter",
         "adapter_class": "TrivyAdapter",
-    },
-    "semgrep": {
-        "sample_dir": "python-vulnerable",
-        "output_file": "semgrep.json",
-        "command": [
-            "semgrep",
-            "--config",
-            "auto",
-            "--json",
-            "--output",
-            "{output}",
-            "{sample}",
-        ],
-        "adapter_module": "scripts.core.adapters.semgrep_adapter",
-        "adapter_class": "SemgrepAdapter",
     },
     "hadolint": {
         "sample_dir": "dockerfile-issues",
@@ -197,7 +182,6 @@ def get_installed_version(tool_name: str) -> str | None:
     """Get the installed version of a tool by running it."""
     version_commands = {
         "trivy": ["trivy", "--version"],
-        "semgrep": ["semgrep", "--version"],
         "hadolint": ["hadolint", "--version"],
         "checkov": ["checkov", "--version"],
         "trufflehog": ["trufflehog", "--version"],

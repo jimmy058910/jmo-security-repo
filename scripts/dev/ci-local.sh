@@ -68,11 +68,11 @@ else
 fi
 
 # 5) Minimal security scans on repo (fast and local)
-if command -v semgrep >/dev/null 2>&1; then
-  log "semgrep scan (p/ci)"
-  semgrep ci --no-git-ignore --config p/ci || true
+if command -v opengrep >/dev/null 2>&1; then
+  log "opengrep scan (the bundled rules)"
+  opengrep scan --config scripts/jmo_rules --no-rewrite-rule-ids --disable-version-check . || true
 else
-  log "semgrep not installed; skipping"
+  log "opengrep not installed; skipping"
 fi
 if command -v trufflehog >/dev/null 2>&1; then
   log "trufflehog filesystem --results=verified"

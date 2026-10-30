@@ -25,16 +25,16 @@ def _venv_exe(tmp_path: Path, tool: str) -> Path:
 
 
 def test_isolated_venv_wins_over_a_path_copy(tmp_path, monkeypatch):
-    venv_exe = _venv_exe(tmp_path, "semgrep")
-    stale = str(tmp_path / "stale" / "semgrep.EXE")
+    venv_exe = _venv_exe(tmp_path, "checkov")
+    stale = str(tmp_path / "stale" / "checkov.EXE")
     monkeypatch.setattr(tool_utils.shutil, "which", lambda _name: stale)
     monkeypatch.setattr(
         tool_utils,
         "get_isolated_tool_path",
-        lambda name: venv_exe if name == "semgrep" else None,
+        lambda name: venv_exe if name == "checkov" else None,
     )
 
-    assert tool_utils.find_tool("semgrep") == str(venv_exe)
+    assert tool_utils.find_tool("checkov") == str(venv_exe)
 
 
 def test_a_path_copy_is_still_found_when_no_isolated_venv_exists(tmp_path, monkeypatch):
@@ -50,14 +50,14 @@ def test_the_two_resolvers_agree_on_an_isolated_tool(tmp_path, monkeypatch):
     from scripts.cli.tool_manager import ToolManager
     from scripts.core import paths
 
-    venv_exe = _venv_exe(tmp_path, "semgrep")
-    stale = str(tmp_path / "stale" / "semgrep.EXE")
-    resolver = lambda name: venv_exe if name == "semgrep" else None  # noqa: E731
+    venv_exe = _venv_exe(tmp_path, "checkov")
+    stale = str(tmp_path / "stale" / "checkov.EXE")
+    resolver = lambda name: venv_exe if name == "checkov" else None  # noqa: E731
     monkeypatch.setattr(tool_utils.shutil, "which", lambda _name: stale)
     monkeypatch.setattr(tool_utils, "get_isolated_tool_path", resolver)
     monkeypatch.setattr(paths, "get_isolated_tool_path", resolver)
 
-    via_manager = ToolManager()._find_binary("semgrep")
-    via_utils = tool_utils.find_tool("semgrep")
+    via_manager = ToolManager()._find_binary("checkov")
+    via_utils = tool_utils.find_tool("checkov")
 
     assert via_manager == via_utils == str(venv_exe)

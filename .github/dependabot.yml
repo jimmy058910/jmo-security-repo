@@ -225,7 +225,7 @@ updates:
 # Important notes:
 # 1. Dependabot DOES NOT track binary tools (trivy, trufflehog, syft, etc.)
 #    Those are managed via versions.yaml + update_versions.py + CI checks
-# 2. Python security tools (semgrep, checkov) are tracked in the Dockerfile
+# 2. Python security tools (checkov) are tracked in the Dockerfile
 #    but should be manually synced via update_versions.py after Dependabot PRs
 # 3. For critical tool updates, use scripts/dev/update_versions.py directly
 # 4. The weekly version check in maintenance.yml creates issues for outdated tools

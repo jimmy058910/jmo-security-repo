@@ -8,7 +8,7 @@ Usage:
     generator = ProvenanceGenerator()
     provenance = generator.generate(
         findings_path=Path("results/findings.json"),
-        tools=["trivy", "semgrep"],
+        tools=["trivy", "opengrep"],
         targets=["repo1"]
     )
 """

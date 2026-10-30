@@ -62,7 +62,7 @@ FIXTURE_FINDINGS = {
             "severity": "HIGH",
             "title": "Smoke fixture finding",
             "description": "Present so the loader has something to load.",
-            "tool": "semgrep",
+            "tool": "opengrep",
             "ruleId": "smoke.fixture.rule",
             "location": {"path": "smoke/app.py", "startLine": 1},
         }

@@ -968,7 +968,7 @@ class TestToolExistsConsistencyHasTeeth:
         # A built-in (jmo-native) has no versions.yaml entry: it ships inside
         # JMo and `find_tool` answers for it with this interpreter.
         assert {*TOOL_MATRIX, POLICY_ENGINE} - BUILTIN_TOOLS <= known
-        for tool in ("trivy", "semgrep", "trufflehog", "syft"):
+        for tool in ("trivy", "opengrep", "trufflehog", "syft"):
             assert tool in known
         for host_dep in ("uv", "node", "java", "bash", "docker"):
             assert host_dep not in known

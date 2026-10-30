@@ -176,16 +176,17 @@ class TestInstallPriorities:
 class TestIsolatedTools:
     """Verify ISOLATED_TOOLS configuration."""
 
-    def test_isolated_venvs_are_semgrep_and_checkov(self) -> None:
-        """The tools that keep their own venv, named.
+    def test_the_only_isolated_venv_is_checkov(self) -> None:
+        """The tool that keeps its own venv, named.
 
         prowler's venv went with prowler: it existed because prowler pinned
-        ``pydantic<2`` while semgrep and checkov need ``>=2``. The other two
-        stay isolated from JMo's own environment. Dropping a tool from this dict
+        ``pydantic<2`` while semgrep and checkov need ``>=2``. semgrep's went
+        with semgrep, which opengrep's static binary replaced. checkov stays
+        isolated from JMo's own environment. Dropping a tool from this dict
         does not fail any other test in the class — they all parametrize over
         its keys — it just silently installs that tool into JMo's environment.
         """
-        assert set(ISOLATED_TOOLS) == {"semgrep", "checkov"}
+        assert set(ISOLATED_TOOLS) == {"checkov"}
 
     @pytest.mark.parametrize("tool", list(ISOLATED_TOOLS.keys()))
     def test_required_keys(self, tool: str) -> None:

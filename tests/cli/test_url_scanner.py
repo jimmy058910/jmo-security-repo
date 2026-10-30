@@ -225,10 +225,10 @@ class TestUrlScanner:
         _, rows, _ = _scan(
             tmp_path,
             [ToolResult(tool="zap", status="success", attempts=1)],
-            ["zap", "semgrep"],
+            ["zap", "opengrep"],
         )
 
-        assert rows["semgrep"].label == "skipped:not for this target type"
+        assert rows["opengrep"].label == "skipped:not for this target type"
 
     def test_per_tool_flags_applied(self, tmp_path):
         _, _, MockRunner = _scan(

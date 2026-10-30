@@ -26,7 +26,7 @@ log "OS: $OS | WSL: $WSL"
 
 REQ_TOOLS=(python3 pip3 jq curl git)
 # Curated tools by category
-OPT_TOOLS=(semgrep syft trivy checkov hadolint trufflehog shellcheck shfmt docker)
+OPT_TOOLS=(opengrep syft trivy checkov hadolint trufflehog shellcheck shfmt docker)
 
 missing=()
 for t in "${REQ_TOOLS[@]}"; do
@@ -53,14 +53,15 @@ hint_install() {
   case "$OS" in
   Darwin)
     case "$tool" in
-    semgrep | hadolint | checkov | trivy | syft) echo "brew install $tool" ;;
+    opengrep) echo "jmo tools install opengrep" ;;
+    hadolint | checkov | trivy | syft) echo "brew install $tool" ;;
     trufflehog) echo "brew install trufflesecurity/trufflehog/trufflehog" ;;
     *) echo "brew install $tool" ;;
     esac
     ;;
   Linux)
     case "$tool" in
-    semgrep) echo "pipx install semgrep || pip3 install --user semgrep" ;;
+    opengrep) echo "jmo tools install opengrep" ;;
     trufflehog) echo "pipx install trufflehog || pip3 install --user truffleHog" ;;
     syft) echo "curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin" ;;
     trivy) echo "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/install.sh | sh -s -- -b /usr/local/bin" ;;

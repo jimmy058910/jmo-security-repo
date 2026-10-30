@@ -27,7 +27,7 @@ image. Only the distribution moves. Assert the invariant, never a distribution.
 
 Usage::
 
-    python scripts/dev/reconcile_scan_accounting.py <results-dir> [--tools trivy semgrep ...]
+    python scripts/dev/reconcile_scan_accounting.py <results-dir> [--tools trivy opengrep ...]
 
 Exits non-zero if the invariant does not hold.
 """

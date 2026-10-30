@@ -46,11 +46,11 @@ def _write(path: Path, obj) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_semgrep_unparseable_files_are_extracted(tmp_path: Path):
-    """semgrep's `errors` entries name the file under `path`, the reason under
+def test_opengrep_unparseable_files_are_extracted(tmp_path: Path):
+    """opengrep's `errors` entries name the file under `path`, the reason under
     `message`."""
     out = _write(
-        tmp_path / "semgrep.json",
+        tmp_path / "opengrep.json",
         {
             "errors": [
                 {
@@ -70,11 +70,11 @@ def test_semgrep_unparseable_files_are_extracted(tmp_path: Path):
         },
     )
 
-    found = extract_tool_diagnostics("semgrep", out)
+    found = extract_tool_diagnostics("opengrep", out)
 
     assert [d.path for d in found] == ["r/broken/a.py", "r/broken/b.py"]
     assert all("Syntax error" in d.reason for d in found)
-    assert {d.tool for d in found} == {"semgrep"}
+    assert {d.tool for d in found} == {"opengrep"}
 
 
 def test_paths_are_normalized_like_location_path(tmp_path: Path):
@@ -85,11 +85,11 @@ def test_paths_are_normalized_like_location_path(tmp_path: Path):
     """
     root = "C:" + BS + "work" + BS + "repo"
     out = _write(
-        tmp_path / "semgrep.json",
+        tmp_path / "opengrep.json",
         {"errors": [{"path": root + BS + "pkg" + BS + "a.py", "message": "bad"}]},
     )
 
-    found = extract_tool_diagnostics("semgrep", out, (root,))
+    found = extract_tool_diagnostics("opengrep", out, (root,))
 
     assert [d.path for d in found] == ["pkg/a.py"]
 
@@ -102,9 +102,9 @@ def test_an_errors_string_is_one_diagnostic_not_one_per_character(tmp_path: Path
     name, so the same output under the one tool that keeps a channel must read
     as one run-level problem.
     """
-    out = _write(tmp_path / "semgrep.json", {"errors": "failed to run analysis"})
+    out = _write(tmp_path / "opengrep.json", {"errors": "failed to run analysis"})
 
-    found = extract_tool_diagnostics("semgrep", out)
+    found = extract_tool_diagnostics("opengrep", out)
 
     assert len(found) == 1, f"a string must not be iterated as a list: {found}"
     assert found[0].reason == "failed to run analysis"
@@ -125,8 +125,8 @@ def test_tools_without_a_channel_cost_nothing(tool: str, tmp_path: Path):
 
 def test_a_healthy_run_produces_no_diagnostics(tmp_path: Path):
     """The negative control. Verified on a real 152-finding scan: 0 and 0."""
-    out = _write(tmp_path / "semgrep.json", {"errors": [], "results": [{"x": 1}]})
-    assert extract_tool_diagnostics("semgrep", out) == []
+    out = _write(tmp_path / "opengrep.json", {"errors": [], "results": [{"x": 1}]})
+    assert extract_tool_diagnostics("opengrep", out) == []
     assert summarize([]) == "", "a healthy run must render nothing at all"
 
 
@@ -136,20 +136,20 @@ def test_a_healthy_run_produces_no_diagnostics(tmp_path: Path):
 def test_unreadable_or_odd_output_never_raises(tmp_path: Path, payload: str):
     """`safe_load_json_file` already warns about these; a second one would only
     teach the reader to skip both."""
-    out = tmp_path / "semgrep.json"
+    out = tmp_path / "opengrep.json"
     out.write_text(payload, encoding="utf-8")
-    assert extract_tool_diagnostics("semgrep", out) == []
+    assert extract_tool_diagnostics("opengrep", out) == []
 
 
 def test_summarize_names_the_tools_and_counts_files():
     found = [
         ToolDiagnostic("bandit", "syntax error", "a.py"),
         ToolDiagnostic("bandit", "syntax error", "b.py"),
-        ToolDiagnostic("semgrep", "timeout", "a.py"),
+        ToolDiagnostic("opengrep", "timeout", "a.py"),
     ]
     text = summarize(found)
     assert "2 file(s)" in text, text
-    assert "bandit" in text and "semgrep" in text, text
+    assert "bandit" in text and "opengrep" in text, text
 
 
 # ---------------------------------------------------------------------------
@@ -160,14 +160,14 @@ def test_summarize_names_the_tools_and_counts_files():
 def test_collect_tool_diagnostics_walks_the_results_tree(tmp_path: Path):
     results = tmp_path / "results"
     _write(
-        results / "individual-repos" / "r1" / "semgrep.json",
+        results / "individual-repos" / "r1" / "opengrep.json",
         {"errors": [{"path": "x/a.py", "message": "syntax error"}]},
     )
     _write(results / "individual-repos" / "r1" / "trivy.json", {"Results": []})
 
     found = nr.collect_tool_diagnostics(results)
 
-    assert [(d.tool, d.path) for d in found] == [("semgrep", "x/a.py")]
+    assert [(d.tool, d.path) for d in found] == [("opengrep", "x/a.py")]
 
 
 def test_every_target_type_is_walked_for_diagnostics(tmp_path: Path):
@@ -180,7 +180,7 @@ def test_every_target_type_is_walked_for_diagnostics(tmp_path: Path):
     kinds = ["repos", "images", "iac", "web", "gitlab", "k8s"]
     for kind in kinds:
         _write(
-            results / f"individual-{kind}" / "t" / "semgrep.json",
+            results / f"individual-{kind}" / "t" / "opengrep.json",
             {"errors": [{"path": f"{kind}/a.py", "message": "syntax error"}]},
         )
 

@@ -236,19 +236,15 @@ naming `verified`, in TruffleHog's flags counts as asking to verify.
 
 ### Most of the rule bundle is a frozen snapshot, JavaScript and TypeScript included
 
-**This describes v2.0.0.** Until v2.0.0 ships, JMo's code scanner is Semgrep, which
-does not read this bundle; read this entry, and its advice on an empty result, as
-applying from v2.0.0.
-
-JMo's code scanner reads the rule bundle in `scripts/jmo_rules/`
-([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,250 of its 1,420 rules come from one
+JMo's code scanner, opengrep, reads the rule bundle in `scripts/jmo_rules/`
+([RULE_BUNDLE.md](RULE_BUNDLE.md)), and 1,286 of its 1,456 rules come from one
 snapshot of opengrep-rules whose commit is dated 2025-01-26. Nothing refreshes
 it: a rule written since is not in the bundle until someone moves the pin and
 rebuilds. GitLab's `lgpl-cc` rules (v2.10.1, 100 rules) are maintained and
 cover Java, Ruby, PHP and Python, with one rule each for JavaScript, YAML and
 `.properties` files. Every other language is the snapshot's alone.
 
-That includes JavaScript and TypeScript: `javascript.yaml` holds 169 snapshot
+That includes JavaScript and TypeScript: `javascript.yaml` holds 176 snapshot
 rules and 1 from GitLab, and `typescript.yaml` holds 18 snapshot rules. GitLab's
 maintained JavaScript set, `rules/lgpl`, is not in the bundle. It is LGPL-3.0,
 and its rules are to be scored one at a time after v2.0.0
@@ -262,24 +258,51 @@ scanning is separate and is not affected. To take newer rules, move a source's
 pin in `scripts/dev/build_rule_bundle.py` and rebuild
 ([RULE_BUNDLE.md](RULE_BUNDLE.md#rebuilding)).
 
-### Semgrep also skips tests, build output and vendored code
+### Opengrep also skips tests, build output and vendored code
 
-Semgrep brings its own ignore list. When the scanned directory has no
-`.semgrepignore`, it skips `tests/` and `test/` at any depth, `build/`, `dist/`,
-`node_modules/`, `vendor/` and `.venv/`. JMo's own exclusions are passed on top of
-it, so a flaw that lives only in test code is not reported by Semgrep.
+Opengrep brings its own ignore list, as Semgrep did. When the scanned directory
+has no `.semgrepignore` (opengrep still reads that name), it skips `tests/` and
+`test/` at any depth, `build/`, `dist/` and `node_modules/`, and two kinds of file by
+name: Go test files (`*_test.go`) and minified JavaScript (`*.min.js`). JMo's own
+exclusions are passed on top of it, so a flaw that lives only in test code is not
+reported by opengrep.
 
-Measured with Semgrep 1.175.0 on a fixture with one Python file in each of those
-directories and five others: it scanned the five others and none of these, inside a
-git work tree or not. No flag or environment variable turns the list off.
+Measured with opengrep 1.32.0 on a fixture with one Python file in each of `tests/`,
+`test/`, `deep/tests/`, `build/`, `dist/` and `node_modules/` and two others (`src/`,
+`docs/`): it scanned the two others and none of these. Given `main.go`,
+`main_test.go`, `app.js`, `app.min.js`, `x_test.py` and `test_x.py`, it skipped
+`main_test.go` and `app.min.js` and read the rest, so the Go convention is the only
+test file name on the list. A repository whose only files are of the skipped kinds
+(Go test files and nothing else) examines 0 files, and its row reads
+`failed:examined 0 files`; under `--baseline-commit` the same result is
+`skipped:no changed file opengrep reads since the baseline commit`
+([SCAN_OPTIMIZATION.md](SCAN_OPTIMIZATION.md)). The list is matched against the
+path opengrep is handed, so JMo runs it from inside the target and names the target
+`.`: a repository checked out under a directory called `build/` or `tests/` is scanned
+all the same.
 
-It is kept because the only way around it is to write a `.semgrepignore` into the
-repository being scanned, and a scanner should not change the tree it reads.
+JMo leaves the list on: it does not pass the flag that turns it off.
 
-**What to do:** to have Semgrep read test code, put a `.semgrepignore` at the root
-of the scanned repository. An empty one disables the built-in list (measured: all
-13 files scanned). JMo still keeps the vendored trees and its results directory out
-through its own flags.
+When the scanned directory lies inside a git work tree, opengrep also honours that
+repository's `.gitignore`. A target that is itself gitignored, such as a `dist/` or
+`vendor/` folder scanned on its own, examines 0 files, and its row reads
+`failed:examined 0 files`; scanning the whole repository leaves the same folder out.
+Measured with opengrep 1.32.0 in a scratch git repository whose `.gitignore` lists
+`gen/`: a scan of `gen/` read `failed:examined 0 files`, and a scan of the repository
+read `src/a.py` and not `gen/a.py`.
+
+**What to do:** to have opengrep read the directories above, either put an empty
+`.semgrepignore` at the root of the scanned repository, or add
+`--x-ignore-semgrepignore-files` to `per_tool.opengrep.flags` in `jmo.yml`, which
+changes nothing in the repository. Measured on 1.32.0 with the fixture above: with
+either, all eight files were scanned. JMo still keeps the vendored trees and its
+results directory out through its own flags.
+
+For a gitignored target, add `--no-git-ignore` to `per_tool.opengrep.flags`. Measured on
+1.32.0 through JMo's scan loop, which runs opengrep from inside the target: the `gen/`
+scan above went from 0 files to 1, and the row from `failed` to `ran`. The flag reads
+gitignored files for every repository that config scans, so set it for the one scan that
+needs it.
 
 ### zizmor runs offline, so its online audits never run
 

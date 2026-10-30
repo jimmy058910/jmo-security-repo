@@ -182,11 +182,11 @@ def test_get_tool_category_sast():
     """Test SAST tool category detection."""
     from scripts.core.compliance_mapper import get_tool_category
 
-    result = get_tool_category("semgrep", ["sast"])
+    result = get_tool_category("opengrep", ["sast"])
     assert result == "sast"
 
     # Tag deliberately not "sast": the tool name alone must classify it.
-    result = get_tool_category("semgrep", ["security"])
+    result = get_tool_category("opengrep", ["security"])
     assert result == "sast"
 
 
@@ -243,7 +243,7 @@ def test_map_to_cis_controls_sast():
     """Test SAST tools map to CIS Controls."""
     from scripts.core.compliance_mapper import map_to_cis_controls_v8_1
 
-    result = map_to_cis_controls_v8_1("semgrep", ["sast"])
+    result = map_to_cis_controls_v8_1("opengrep", ["sast"])
     # SAST maps to the secure-application-development control family (16.x).
     assert any(c["control"] == "16.2" for c in result)
 
@@ -344,7 +344,7 @@ def test_map_to_mitre_attack_injection():
     """Test injection findings map to MITRE ATT&CK."""
     from scripts.core.compliance_mapper import map_to_mitre_attack
 
-    result = map_to_mitre_attack("semgrep", ["injection"], ["CWE-89"], "sql-injection")
+    result = map_to_mitre_attack("opengrep", ["injection"], ["CWE-89"], "sql-injection")
     # SQL injection (CWE-89) maps to T1190 Exploit Public-Facing Application.
     assert any(t["technique"] == "T1190" for t in result)
 
@@ -360,22 +360,27 @@ def test_map_to_mitre_attack_empty():
 # ========== Category 8: Rule-based OWASP Mappings ==========
 
 
-def test_map_rule_to_owasp_semgrep_django():
-    """Test semgrep Django security rules map to OWASP A05."""
+def test_map_rule_to_owasp_opengrep_django():
+    """Test opengrep Django security rules map to OWASP A05."""
     from scripts.core.compliance_mapper import map_rule_to_owasp_top10_2021
 
     result = map_rule_to_owasp_top10_2021(
-        "semgrep", "python.django.security.injection.sql"
+        "opengrep", "python.django.security.injection.sql"
     )
     assert "A05:2021" in result
 
 
-def test_map_rule_to_owasp_semgrep_secrets():
-    """Test semgrep secrets rules map to OWASP A02."""
+def test_map_rule_to_owasp_opengrep_has_no_secrets_rows():
+    """The rule bundle leaves out `generic/secrets/` (the secret scanners read
+    secrets), so no opengrep finding has a `generic.secrets.*` id and the two
+    globs that mapped them to A02 could never match. They are gone; an id of
+    that family maps to nothing, as it did for any rule with no row."""
     from scripts.core.compliance_mapper import map_rule_to_owasp_top10_2021
 
-    result = map_rule_to_owasp_top10_2021("semgrep", "generic.secrets.gitleaks.aws-key")
-    assert "A02:2021" in result
+    result = map_rule_to_owasp_top10_2021(
+        "opengrep", "generic.secrets.gitleaks.aws-key"
+    )
+    assert result == []
 
 
 def test_map_rule_to_owasp_unknown_rule():
@@ -441,7 +446,7 @@ def test_enrich_finding_with_rule_mapping():
     from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
     finding = create_finding(
-        tool_name="semgrep",
+        tool_name="opengrep",
         rule_id="python.django.security.injection.sql",
         tags=["injection"],
     )
@@ -457,7 +462,7 @@ def test_enrich_finding_combines_cwe_and_rule():
     from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
     finding = create_finding(
-        tool_name="semgrep",
+        tool_name="opengrep",
         rule_id="python.sql-injection",
         cwes=["CWE-89"],
         tags=["injection"],
@@ -487,12 +492,12 @@ def test_enrich_finding_risk_as_non_dict():
     """Test handling when risk is not a dict."""
     from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
-    finding = create_finding(tool_name="semgrep", tags=["sast"])
+    finding = create_finding(tool_name="opengrep", tags=["sast"])
     finding["risk"] = "high"  # String instead of dict
 
     result = enrich_finding_with_compliance(finding)
 
-    # Malformed risk must not break tool-based enrichment: semgrep+sast still
+    # Malformed risk must not break tool-based enrichment: opengrep+sast still
     # yields the CIS mapping, and the finding's identity is preserved.
     assert "cisControlsV8_1" in result.get("compliance", {})
     assert result["ruleId"] == "test-rule"
@@ -503,7 +508,7 @@ def test_enrich_finding_all_frameworks():
     from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
     finding = create_finding(
-        tool_name="semgrep",
+        tool_name="opengrep",
         rule_id="python.sql-injection",
         cwes=["CWE-89"],
         tags=["injection", "sast"],
@@ -614,12 +619,12 @@ def test_enrich_finding_missing_risk_field():
     """Test finding without risk field."""
     from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
-    finding = create_finding(tool_name="semgrep", tags=["sast"])
+    finding = create_finding(tool_name="opengrep", tags=["sast"])
     del finding["risk"]
 
     result = enrich_finding_with_compliance(finding)
 
-    # Missing risk field must not break tool-based enrichment (semgrep+sast).
+    # Missing risk field must not break tool-based enrichment (opengrep+sast).
     assert "cisControlsV8_1" in result.get("compliance", {})
     assert result["ruleId"] == "test-rule"
 
@@ -682,7 +687,7 @@ def test_enrich_sql_injection_finding():
     from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
     finding = create_finding(
-        tool_name="semgrep",
+        tool_name="opengrep",
         rule_id="python.django.security.injection.sql.sql-injection-db-cursor-execute",
         cwes=["CWE-89"],
         tags=["injection", "sql", "sast", "security"],
@@ -831,7 +836,7 @@ class TestCweIdNormalisation:
             map_to_pci_dss_4_0,
         )
 
-        # Exactly as semgrep stores them, description and all.
+        # Exactly as opengrep stores them, description and all.
         realistic = [
             "CWE-89: Improper Neutralization of Special Elements used in an SQL Command",
             "CWE-79: Improper Neutralization of Input During Web Page Generation",
@@ -859,7 +864,7 @@ class TestCweIdNormalisation:
             "ruleId": "python.lang.security.audit.sqli",
             "severity": "HIGH",
             "message": "SQL injection",
-            "tool": {"name": "semgrep", "version": "1"},
+            "tool": {"name": "opengrep", "version": "1"},
             "location": {"path": "a.py", "startLine": 1},
             "tags": ["sast"],
             "risk": {

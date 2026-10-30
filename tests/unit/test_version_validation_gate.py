@@ -135,13 +135,13 @@ def test_a_pypi_pin_to_an_unpublished_version_fails(
     import scripts.dev.update_versions as uv
 
     versions = yaml.safe_load((REPO_ROOT / "versions.yaml").read_text(encoding="utf-8"))
-    versions["python_tools"]["semgrep"]["version"] = "9.9.9-nonexistent"
+    versions["python_tools"]["checkov"]["version"] = "9.9.9-nonexistent"
     monkeypatch.setattr(uv, "load_versions", lambda: versions)
 
     _passed, failed = validate_all_versions()
 
-    assert "semgrep" in failed
-    assert "semgrep" in stub_registries["pypi"]
+    assert "checkov" in failed
+    assert "checkov" in stub_registries["pypi"]
 
 
 def test_every_tool_is_accounted_for_exactly_once(
@@ -332,7 +332,7 @@ def test_could_not_check_is_reported_as_a_failure_not_a_pass(
     monkeypatch.setattr(uv, "check_pypi_version_exists", lambda *_a: uv.UNKNOWN)
 
     bucket, message = uv._validate_one(
-        "semgrep", {"version": "1.175.0", "pypi_package": "semgrep"}
+        "checkov", {"version": "3.3.30", "pypi_package": "checkov"}
     )
 
     assert bucket == "failed"

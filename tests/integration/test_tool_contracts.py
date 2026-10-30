@@ -128,19 +128,35 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         ],
         "description": "Vulnerability scanner with Results array structure",
     },
-    "semgrep": {
+    "opengrep": {
         "required_keys": ["results"],
         "result_item_keys": ["check_id", "path", "extra"],
         "sample_target": "python-vulnerable",
-        # The file, not the directory: with no .semgrepignore, semgrep's
-        # built-in one skips `tests/`, so the directory scanned 0 files and
-        # `result_item_keys` was never checked. The file: 1 scanned, 4 results.
+        # Run from inside the sample, which the command names `.`, as the row
+        # does (R35). The sample sits under `tests/`, which opengrep's built-in
+        # ignore list skips when it is part of the path opengrep is handed: the
+        # directory by its path scanned 0 files (rc 0, 0 results, measured on
+        # v1.32.0, 2026-10-29) and `result_item_keys` was never checked, so this
+        # contract used to name the one file. Run this way both files are read
+        # (2 scanned, 6 results). The command is the descriptor row's (the
+        # configs its languages select, `-j 4`, no version check) minus
+        # `--output`, since this harness reads stdout; TestContractInfrastructure
+        # holds the two equal. Nothing is fetched: the rules are the committed
+        # bundle's.
+        "cwd": "{target}",
         "command": [
-            "semgrep",
+            "opengrep",
+            "scan",
             "--config",
-            "auto",
+            str(PROJECT_ROOT / "scripts" / "jmo_rules" / "generic.yaml"),
+            "--config",
+            str(PROJECT_ROOT / "scripts" / "jmo_rules" / "python.yaml"),
+            "--no-rewrite-rule-ids",
             "--json",
-            "{target}/vulnerable_app.py",
+            "--disable-version-check",
+            "-j",
+            "4",
+            ".",
         ],
         "ok_return_codes": (0,),
         "description": "SAST scanner with results array structure",
@@ -344,7 +360,9 @@ def run_tool_on_sample(
         encoding="utf-8",
         errors="replace",
         timeout=180,  # 3 minute timeout
-        cwd=PROJECT_ROOT,
+        cwd=contract["cwd"].replace("{target}", str(sample_target))
+        if "cwd" in contract
+        else PROJECT_ROOT,
         # Merged over the inherited environment, as ToolRunner merges a
         # definition's (osv-scanner's database directory).
         env={**os.environ, **contract["env"]} if "env" in contract else None,
@@ -652,9 +670,35 @@ class TestContractInfrastructure:
         ]
         assert not missing, f"{workflow}: no install line for {missing}"
 
+    def test_the_opengrep_contract_is_the_rows_command(self, tmp_path):
+        """The contract runs what a scan runs, so a change to the row (a flag, a
+        job count, a config) reaches the weekly job that watches opengrep's
+        output. Only `--output` differs: this harness reads stdout."""
+        from scripts.core.tool_descriptors import DESCRIPTORS, ScanContext
+
+        contract = TOOL_CONTRACTS["opengrep"]
+        sample = SAMPLES_DIR / contract["sample_target"]
+        ctx = ScanContext(
+            tool="opengrep",
+            target_type="repo",
+            target=sample,
+            out_dir=tmp_path,
+            binary="opengrep",
+            files=(str(sample / "vulnerable_app.py"),),
+        )
+        (invocation,) = DESCRIPTORS["opengrep"].invocations["repo"](ctx)
+        row = list(invocation.command)
+        at = row.index("--output")
+        del row[at : at + 2]
+
+        assert [p.replace("{target}", str(sample)) for p in contract["command"]] == row
+        assert Path(contract["cwd"].replace("{target}", str(sample))).resolve() == (
+            invocation.cwd
+        )
+
     def test_contracts_cover_key_adapters(self):
         """Verify contracts exist for critical adapters."""
-        critical_tools = ["trivy", "semgrep", "trufflehog", "checkov"]
+        critical_tools = ["trivy", "opengrep", "trufflehog", "checkov"]
 
         missing = [t for t in critical_tools if t not in TOOL_CONTRACTS]
 

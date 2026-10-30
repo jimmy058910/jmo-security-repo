@@ -7,7 +7,7 @@ Each adapter should gracefully handle bad input without crashing.
 
 Usage:
     pytest tests/adapters/test_adapter_malformed.py -v
-    pytest tests/adapters/test_adapter_malformed.py -v -k "semgrep"
+    pytest tests/adapters/test_adapter_malformed.py -v -k "opengrep"
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from scripts.core.adapters.checkov_adapter import CheckovAdapter
 from scripts.core.adapters.grype_adapter import GrypeAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
 from scripts.core.adapters.nuclei_adapter import NucleiAdapter
-from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
+from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 from scripts.core.adapters.shellcheck_adapter import ShellCheckAdapter
 from scripts.core.adapters.syft_adapter import SyftAdapter
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
@@ -39,7 +39,7 @@ ALL_ADAPTERS = [
     ("grype", GrypeAdapter),
     ("hadolint", HadolintAdapter),
     ("nuclei", NucleiAdapter),
-    ("semgrep", SemgrepAdapter),
+    ("opengrep", OpengrepAdapter),
     ("shellcheck", ShellCheckAdapter),
     ("syft", SyftAdapter),
     ("trivy", TrivyAdapter),
@@ -340,34 +340,34 @@ class TestAdapterLargeInputs:
 # ============================================================================
 
 
-class TestSemgrepMalformed:
-    """Semgrep-specific malformed input tests."""
+class TestOpengrepMalformed:
+    """Opengrep-specific malformed input tests."""
 
-    def test_semgrep_missing_results_key(self, tmp_path: Path):
-        """Semgrep should handle missing 'results' key."""
+    def test_opengrep_missing_results_key(self, tmp_path: Path):
+        """Opengrep should handle missing 'results' key."""
         content = '{"version": "1.0.0", "errors": []}'
-        test_file = tmp_path / "semgrep.json"
+        test_file = tmp_path / "opengrep.json"
         test_file.write_text(content, encoding="utf-8")
 
-        adapter = SemgrepAdapter()
+        adapter = OpengrepAdapter()
         result = adapter.parse(test_file)
 
         assert isinstance(result, list)
         assert len(result) == 0
 
-    def test_semgrep_results_not_array(self, tmp_path: Path):
-        """Semgrep should handle results not being an array."""
+    def test_opengrep_results_not_array(self, tmp_path: Path):
+        """Opengrep should handle results not being an array."""
         content = '{"results": {"not": "an array"}, "version": "1.0.0"}'
-        test_file = tmp_path / "semgrep.json"
+        test_file = tmp_path / "opengrep.json"
         test_file.write_text(content, encoding="utf-8")
 
-        adapter = SemgrepAdapter()
+        adapter = OpengrepAdapter()
         result = adapter.parse(test_file)
 
         assert isinstance(result, list)
 
-    def test_semgrep_result_missing_check_id(self, tmp_path: Path):
-        """Semgrep should handle result missing check_id."""
+    def test_opengrep_result_missing_check_id(self, tmp_path: Path):
+        """Opengrep should handle result missing check_id."""
         content = json.dumps(
             {
                 "results": [
@@ -380,10 +380,10 @@ class TestSemgrepMalformed:
                 "version": "1.0.0",
             }
         )
-        test_file = tmp_path / "semgrep.json"
+        test_file = tmp_path / "opengrep.json"
         test_file.write_text(content, encoding="utf-8")
 
-        adapter = SemgrepAdapter()
+        adapter = OpengrepAdapter()
         result = adapter.parse(test_file)
 
         assert isinstance(result, list)
@@ -534,7 +534,7 @@ class TestAdapterConcurrentFailures:
         indiv = tmp_path / "individual-repos" / "test-repo"
         indiv.mkdir(parents=True)
 
-        for tool in ["semgrep", "trivy", "checkov", "hadolint"]:
+        for tool in ["opengrep", "trivy", "checkov", "hadolint"]:
             (indiv / f"{tool}.json").write_text("INVALID{JSON", encoding="utf-8")
 
         findings = gather_results(tmp_path)

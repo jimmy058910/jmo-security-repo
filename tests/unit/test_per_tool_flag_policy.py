@@ -74,8 +74,8 @@ class TestReservedFlagsAreRefused:
 
     def test_a_following_flag_is_not_eaten_as_a_value(self):
         """`-o` immediately followed by another flag must not consume it."""
-        cfg = {"semgrep": {"flags": ["-o", "--verbose"]}}
-        assert tool_flags(cfg, "semgrep") == ["--verbose"]
+        cfg = {"opengrep": {"flags": ["-o", "--verbose"]}}
+        assert tool_flags(cfg, "opengrep") == ["--verbose"]
 
     def test_the_drop_is_announced(self, caplog):
         """Silently ignoring configuration is the #807 class; say so."""
@@ -245,21 +245,21 @@ REFUSED = [
     ("trufflehog", "--no-fail"),
     ("trufflehog", "--fail-on-scan-errors"),
     # Cmdliner: rc 2 and no output file, or a text report in JMo's JSON file.
-    ("semgrep", "-oother.json"),
-    ("semgrep", "-o other.json"),
-    ("semgrep", "-o=other.json"),
-    ("semgrep", "--output=other.json"),
-    ("semgrep", "-qoother.json"),
-    ("semgrep", "--json"),
-    ("semgrep", "--text"),
-    ("semgrep", "--sarif"),
-    ("semgrep", "--emacs"),
-    ("semgrep", "--vim"),
-    ("semgrep", "--junit-xml"),
-    ("semgrep", "--gitlab-sast"),
-    ("semgrep", "--gitlab-secrets"),
-    ("semgrep", "--error"),
-    ("semgrep", "--strict"),
+    ("opengrep", "-oother.json"),
+    ("opengrep", "-o other.json"),
+    ("opengrep", "-o=other.json"),
+    ("opengrep", "--output=other.json"),
+    ("opengrep", "-qoother.json"),
+    ("opengrep", "--json"),
+    ("opengrep", "--text"),
+    ("opengrep", "--sarif"),
+    ("opengrep", "--emacs"),
+    ("opengrep", "--vim"),
+    ("opengrep", "--junit-xml"),
+    ("opengrep", "--gitlab-sast"),
+    ("opengrep", "--gitlab-secrets"),
+    ("opengrep", "--error"),
+    ("opengrep", "--strict"),
     # argparse (configargparse): chains, and reads a long option's prefix.
     ("checkov", "-ocli"),
     ("checkov", "-o cli"),
@@ -354,10 +354,10 @@ REFUSED = [
 KEPT = [
     # Real flags a shared `-o`/`-f` refused. semgrep's `--config` is a list:
     # a second one adds rules (measured beside JMo's own `--config`).
-    ("semgrep", "-f rules.yaml"),
-    ("semgrep", "-frules.yaml"),
-    ("semgrep", "--config rules.yaml"),
-    ("semgrep", "--exclude tests"),
+    ("opengrep", "-f rules.yaml"),
+    ("opengrep", "-frules.yaml"),
+    ("opengrep", "--config rules.yaml"),
+    ("opengrep", "--exclude tests"),
     ("checkov", "-f main.tf"),
     ("shellcheck", "-o all"),
     ("shellcheck", "-oall"),
@@ -389,11 +389,11 @@ KEPT = [
     ("shellcheck", "-Sstyle"),
     ("shellcheck", "--color=always"),
     # A tool that takes no prefix rejects this itself, out loud.
-    ("semgrep", "--outp other.json"),
+    ("opengrep", "--outp other.json"),
     ("hadolint", "--form tty"),
     ("zizmor", "--form=plain"),
-    ("semgrep", "--json-output=other.json"),
-    ("semgrep", "--sarif-output=s.sarif"),
+    ("opengrep", "--json-output=other.json"),
+    ("opengrep", "--sarif-output=s.sarif"),
     ("trufflehog", "--results=unverified"),
     ("trufflehog", "--results=verified,unverified,unknown"),
     ("trufflehog", "--no-color"),
@@ -444,7 +444,7 @@ class TestEachToolsOwnGrammar:
         assert {name: d.flag_grammar for name, d in DESCRIPTORS.items()} == {
             "trufflehog": FlagGrammar.KINGPIN,
             "gitleaks": FlagGrammar.PFLAG,
-            "semgrep": FlagGrammar.CMDLINER,
+            "opengrep": FlagGrammar.CMDLINER,
             "syft": FlagGrammar.PFLAG,
             "trivy": FlagGrammar.PFLAG,
             "checkov": FlagGrammar.ARGPARSE,
@@ -464,9 +464,9 @@ class TestEachToolsOwnGrammar:
         and zizmor's `-qcfile` its `-q -c file`; Go's flag package rejects
         `-ftable` and reads `-format` as `--format`; checkov takes
         `--output-f=` for `--output-file-path` and shellcheck `--fo=` for
-        `--format=`, where semgrep, hadolint and zizmor reject `--outp` and
+        `--format=`, where opengrep, hadolint and zizmor reject `--outp` and
         `--form`; kingpin reads `--no-json` as `--json` given again. A flag
-        given twice is rc 2 or 1 for trufflehog, zizmor and semgrep, and rc 0
+        given twice is rc 2 or 1 for trufflehog, zizmor and opengrep, and rc 0
         for zap (`-cmd -cmd`), hadolint and the pflag tools."""
         assert {g for g in FlagGrammar if g.clusters} == {
             FlagGrammar.PFLAG,
@@ -492,15 +492,15 @@ class TestEachToolsOwnGrammar:
     def test_no_row_reserves_a_flag_only_another_tool_has(self):
         """The shared set's defect: one list for every tool refused semgrep's
         `--config` as `-f`. Each row's own list is its own spellings."""
-        assert "-f" not in DESCRIPTORS["semgrep"].reserved_flags
+        assert "-f" not in DESCRIPTORS["opengrep"].reserved_flags
         assert "-f" not in DESCRIPTORS["checkov"].reserved_flags
         assert "-o" not in DESCRIPTORS["shellcheck"].reserved_flags
 
 
 # Flags JMo passes that the parser takes more than once: a list option.
-# Measured beside JMo's own (semgrep 1.175.0, rc 0): a second `--config` adds
+# Measured beside JMo's own (opengrep 1.32.0, rc 0): a second `--config` adds
 # rules, a second `--exclude` adds exclusions.
-REPEATABLE = {("semgrep", "--config"), ("semgrep", "--exclude")}
+REPEATABLE = {("opengrep", "--config"), ("opengrep", "--exclude")}
 
 
 def _passed_flags(name: str, tmp_path: Path) -> set[str]:
@@ -543,7 +543,7 @@ class TestAFlagJmoPassesIsNotGivenTwice:
             if d.flag_grammar.refuses_repeats:
                 checked[name] = _passed_flags(name, tmp_path)
         # The derivation found what it has to: an empty set passes anything.
-        assert set(checked) == {"trufflehog", "semgrep", "zizmor"}
+        assert set(checked) == {"trufflehog", "opengrep", "zizmor"}
         assert {"--json", "--no-verification", "--exclude-paths"} <= checked[
             "trufflehog"
         ]
@@ -620,7 +620,7 @@ class TestEachRefusalSaysWhy:
         [
             ("checkov", "--soft-fail"),
             ("hadolint", "--no-fail"),
-            ("semgrep", "--error"),
+            ("opengrep", "--error"),
             ("grype", "--fail-on"),
         ],
     )
@@ -969,8 +969,9 @@ class TestTimeoutFloorReachesEveryTargetType:
         assert TOOL_TIMEOUT_DEFAULTS["zap"] == 900
         assert tool_timeout({}, "zap", 600) == 900
 
-    def test_semgrep_carries_a_floor_above_a_low_scan_default(self):
-        """#1204: semgrep had no floor, so it took the scan default.
+    def test_opengrep_carries_a_floor_above_a_low_scan_default(self):
+        """#1204: semgrep had no floor, so it took the scan default, and
+        opengrep's row, which replaced it, keeps the one #1204 added.
 
         Its cost is its RULE COUNT, not the tree it walks -- it restricts itself
         to git-tracked files, so the vendored-directory exclusions #1080 added
@@ -983,9 +984,9 @@ class TestTimeoutFloorReachesEveryTargetType:
         thing changes (#1061). 300/500/600/900 are the four defaults v1's
         profiles shipped; v2.0.0's top-level default is 600.
         """
-        assert TOOL_TIMEOUT_DEFAULTS["semgrep"] == 900
+        assert TOOL_TIMEOUT_DEFAULTS["opengrep"] == 900
         for scan_default in (300, 500, 600, 900):
-            assert tool_timeout({}, "semgrep", scan_default) == 900
+            assert tool_timeout({}, "opengrep", scan_default) == 900
 
     def test_a_generous_scan_default_is_not_lowered(self):
         assert tool_timeout({}, "zap", 1800) == 1800

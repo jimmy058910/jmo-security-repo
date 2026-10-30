@@ -47,7 +47,7 @@ pytestmark = [
 def generate_finding(index: int) -> dict[str, Any]:
     """Generate a realistic finding for stress testing."""
     severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
-    tools = ["semgrep", "trivy", "bandit", "checkov", "hadolint", "grype"]
+    tools = ["opengrep", "trivy", "bandit", "checkov", "hadolint", "grype"]
     rules = [f"CWE-{random.randint(1, 1000)}", f"CVE-2024-{random.randint(1000, 9999)}"]
 
     return {
@@ -141,7 +141,7 @@ class TestExtremeLoad:
 
         # Generate findings for multiple tools
         findings_per_tool = 20000  # 20k per tool, 5 tools = 100k
-        tools = ["semgrep", "trivy", "hadolint", "grype", "checkov"]
+        tools = ["opengrep", "trivy", "hadolint", "grype", "checkov"]
 
         for tool in tools:
             tool_findings = []
@@ -155,7 +155,7 @@ class TestExtremeLoad:
                     }
                 )
 
-            if tool == "semgrep":
+            if tool == "opengrep":
                 content = {"results": tool_findings, "version": "1.0.0"}
             elif tool == "trivy":
                 content = {
@@ -317,7 +317,9 @@ class TestExtremeLoad:
             ],
             "version": "1.0.0",
         }
-        (indiv / "semgrep.json").write_text(json.dumps(findings_data), encoding="utf-8")
+        (indiv / "opengrep.json").write_text(
+            json.dumps(findings_data), encoding="utf-8"
+        )
 
         process = psutil.Process() if psutil is not None else None
         rss_before = process.memory_info().rss if process is not None else 0
@@ -538,7 +540,7 @@ class TestDatabaseStress:
                         f"scan-{i:05d}",
                         f"fp-{i:05d}-{j}",
                         ["CRITICAL", "HIGH", "MEDIUM", "LOW"][j % 4],
-                        ["semgrep", "trivy", "bandit"][j % 3],
+                        ["opengrep", "trivy", "bandit"][j % 3],
                         f"CWE-{j * 10}",
                         f"file_{j}.py",
                         j * 100,
@@ -644,7 +646,7 @@ class TestReportGenerationStress:
                     "ruleId": f"CWE-{i % 100}",
                     "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW"][i % 4],
                     "tool": {
-                        "name": ["semgrep", "trivy", "bandit"][i % 3],
+                        "name": ["opengrep", "trivy", "bandit"][i % 3],
                         "version": "1.0.0",
                     },
                     "location": {

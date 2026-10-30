@@ -23,7 +23,8 @@ from scripts.core.tool_registry import BUILTIN_TOOLS, POLICY_ENGINE, TOOL_MATRIX
 
 V2_PHASE_2_MATRIX = {
     "trufflehog",
-    "semgrep",
+    # Phase 5, PR B: opengrep, in the slot semgrep had.
+    "opengrep",
     "syft",
     "trivy",
     "checkov",

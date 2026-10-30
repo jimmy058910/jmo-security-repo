@@ -8921,3 +8921,667 @@ rules:
     - A02:2025-Security Misconfiguration
     security-severity: MEDIUM
   severity: WARNING
+- id: problem-based-packs.insecure-transport.java-spring.bypass-tls-verification.bypass-tls-verification
+  message: Checks for redefinitions of functions that check TLS/SSL certificate verification.
+    This can lead to vulnerabilities, as simple errors in the code can result in lack
+    of proper certificate validation. This should only be used for debugging purposes
+    because it leads to vulnerability to MTM attacks.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://stackoverflow.com/questions/4072585/disabling-ssl-certificate-validation-in-spring-resttemplate
+    - https://stackoverflow.com/questions/35530558/how-to-fix-unsafe-implementation-of-x509trustmanager-in-android-app?rq=1
+    subcategory:
+    - vuln
+    technology:
+    - spring
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  pattern-either:
+  - pattern: "new HostnameVerifier() {\n  ...\n  public boolean verify(String hostname,\
+      \ SSLSession session) {\n    ...\n  }\n  ...\n};\n"
+  - pattern: "public RestTemplate restTemplate() throws KeyStoreException, NoSuchAlgorithmException,\
+      \ KeyManagementException {\n  ...\n  TrustStrategy $FUNCNAME = (X509Certificate[]\
+      \ chain, String authType) -> ...;\n  ...\n}\n"
+  - pattern: "TrustStrategy $FUNCNAME= new TrustStrategy() {\n  ...\n  public boolean\
+      \ isTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException\
+      \ {\n    ...\n  }\n  ...\n};\n"
+- id: problem-based-packs.insecure-transport.java-spring.spring-ftp-request.spring-ftp-request
+  message: Checks for outgoing connections to ftp servers via Spring plugin ftpSessionFactory.
+    FTP does not encrypt traffic, possibly leading to PII being sent plaintext over
+    the network.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://docs.spring.io/spring-integration/api/org/springframework/integration/ftp/session/AbstractFtpSessionFactory.html#setClientMode-int-
+    subcategory:
+    - vuln
+    technology:
+    - spring
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[fF][tT][pP]://'
+    replacement: sftp://
+    count: 1
+  pattern-either:
+  - pattern: '$SF = new DefaultFtpSessionFactory(...);
+
+      ...
+
+      $SF.setHost("=~/^[fF][tT][pP]://.*/");
+
+      ...
+
+      $SF.$FUNC(...);
+
+      '
+  - pattern: '$SF = new DefaultFtpSessionFactory(...);
+
+      ...
+
+      String $URL = "=~/^[fF][tT][pP]://.*/";
+
+      ...
+
+      $SF.setHost($URL);
+
+      ...
+
+      $SF.$FUNC(...);
+
+      '
+- id: problem-based-packs.insecure-transport.java-spring.spring-http-request.spring-http-request
+  message: Checks for requests sent via Java Spring RestTemplate API to http:// URLS.
+    This is dangerous because the server is attempting to connect to a website that
+    does not encrypt traffic with TLS. Instead, send requests only to https:// URLS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/web/client/RestTemplate.html#delete-java.lang.String-java.util.Map-
+    - https://www.baeldung.com/rest-template
+    subcategory:
+    - vuln
+    technology:
+    - spring
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  patterns:
+  - pattern-either:
+    - pattern: '$RESTTEMP = new RestTemplate(...);
+
+        ...
+
+        $RESTTEMP.$FUNC("=~/[hH][tT][tT][pP]://.*/", ...);
+
+        '
+    - pattern: '$RESTTEMP = new RestTemplate(...);
+
+        ...
+
+        String $URL = "=~/[hH][tT][tT][pP]://.*/";
+
+        ...
+
+        $RESTTEMP.$FUNC($URL, ...);
+
+        '
+    - pattern: '$RESTTEMP = new RestTemplate(...);
+
+        ...
+
+        $URL = new URI(..., "=~/[hH][tT][tT][pP]://.*/", ...);
+
+        ...
+
+        $RESTTEMP.$FUNC($URL, ...);
+
+        '
+  - metavariable-regex:
+      metavariable: $FUNC
+      regex: (delete|doExecute|exchange|getForEntity|getForObject|headForHeaders|optionsForAllow|patchForObject|postForEntity|postForLocation|postForObject|put)
+- id: problem-based-packs.insecure-transport.java-stdlib.bypass-tls-verification.bypass-tls-verification
+  message: Checks for redefinitions of the checkServerTrusted function in the X509TrustManager
+    class that disables TLS/SSL certificate verification. This should only be used
+    for debugging purposes because it leads to vulnerability to MTM attacks.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://riptutorial.com/java/example/16517/temporarily-disable-ssl-verification--for-testing-purposes-
+    - https://stackoverflow.com/questions/35530558/how-to-fix-unsafe-implementation-of-x509trustmanager-in-android-app?rq=1
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  patterns:
+  - pattern: "new X509TrustManager() {\n  ...\n  public void checkClientTrusted(X509Certificate[]\
+      \ certs, String authType) {...}\n  ...\n}\n"
+  - pattern-not: "new X509TrustManager() {\n  ...\n  public void checkServerTrusted(X509Certificate[]\
+      \ certs, String authType) {\n    ...\n    throw new CertificateException(...);\n\
+      \    ...\n  }\n  ...\n}\n"
+  - pattern-not: "new X509TrustManager() {\n  ...\n  public void checkServerTrusted(X509Certificate[]\
+      \ certs, String authType) {\n    ...\n    throw new IllegalArgumentException(...);\n\
+      \    ...\n  }\n  ...\n}\n"
+- id: problem-based-packs.insecure-transport.java-stdlib.disallow-old-tls-versions1.disallow-old-tls-versions1
+  message: Detects direct creations of SSLConnectionSocketFactories that don't disallow
+    SSL v2, SSL v3, and TLS v1. SSLSocketFactory can be used to validate the identity
+    of the HTTPS server against a list of trusted certificates. These protocols are
+    deprecated due to POODLE, man in the middle attacks, and other vulnerabilities.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://stackoverflow.com/questions/26429751/java-http-clients-and-poodle
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  patterns:
+  - pattern: 'new SSLConnectionSocketFactory(...);
+
+      '
+  - pattern-not: 'new SSLConnectionSocketFactory(..., new String[] {"TLSv1.2", "TLSv1.3"},
+      ...);
+
+      '
+  - pattern-not: 'new SSLConnectionSocketFactory(..., new String[] {"TLSv1.3", "TLSv1.2"},
+      ...);
+
+      '
+  - pattern-not: 'new SSLConnectionSocketFactory(..., new String[] {"TLSv1.3"}, ...);
+
+      '
+  - pattern-not: 'new SSLConnectionSocketFactory(..., new String[] {"TLSv1.2"}, ...);
+
+      '
+  - pattern-not-inside: '(SSLConnectionSocketFactory $SF) = new SSLConnectionSocketFactory(...);
+      ... (TlsConfig $TLSCONFIG) = TlsConfig.custom(). ... .setSupportedProtocols(TLS.V_1_2).
+      ... .build(); ... HttpClientConnectionManager cm = $CM.create(). ... .setSSLSocketFactory($SF).
+      ... .setDefaultTlsConfig($TLSCONFIG). ... .build();
+
+      '
+  - pattern-not-inside: '(SSLConnectionSocketFactory $SF) = new SSLConnectionSocketFactory(...);
+      ... (TlsConfig $TLSCONFIG) = TlsConfig.custom(). ... .setSupportedProtocols(TLS.V_1_3).
+      ... .build(); ... HttpClientConnectionManager cm = $CM.create(). ... .setSSLSocketFactory($SF).
+      ... .setDefaultTlsConfig($TLSCONFIG). ... .build();
+
+      '
+- id: problem-based-packs.insecure-transport.java-stdlib.disallow-old-tls-versions2.disallow-old-tls-versions2
+  message: Detects setting client protocols to insecure versions of TLS and SSL. These
+    protocols are deprecated due to POODLE, man in the middle attacks, and other vulnerabilities.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://stackoverflow.com/questions/26504653/is-it-possible-to-disable-sslv3-for-all-java-applications
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  patterns:
+  - pattern: $VALUE. ... .setProperty("jdk.tls.client.protocols", "$PATTERNS");
+  - metavariable-pattern:
+      metavariable: $PATTERNS
+      language: generic
+      patterns:
+      - pattern-either:
+        - pattern: TLS1
+        - pattern-regex: ^(.*TLSv1|.*SSLv.*)$
+        - pattern-regex: ^(.*TLSv1,.*)
+- id: problem-based-packs.insecure-transport.java-stdlib.ftp-request.ftp-request
+  message: Checks for outgoing connections to ftp servers. FTP does not encrypt traffic,
+    possibly leading to PII being sent plaintext over the network.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://www.codejava.net/java-se/ftp/connect-and-login-to-a-ftp-server
+    - https://commons.apache.org/proper/commons-net/apidocs/org/apache/commons/net/ftp/FTPClient.html
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[fF][tT][pP]://'
+    replacement: sftp://
+    count: 1
+  pattern-either:
+  - pattern: 'FTPClient $FTPCLIENT = new FTPClient();
+
+      ...
+
+      $FTPCLIENT.connect(...);
+
+      '
+  - pattern: 'URL $URL = new URL("=~/^[fF][tT][pP]://.*/");
+
+      ...
+
+      URLConnection $CONN = $URL.openConnection(...);
+
+      '
+- id: problem-based-packs.insecure-transport.java-stdlib.http-components-request.http-components-request
+  message: Checks for requests sent via Apache HTTP Components to http:// URLS. This
+    is dangerous because the server is attempting to connect to a website that does
+    not encrypt traffic with TLS. Instead, send requests only to https:// URLS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://hc.apache.org/httpcomponents-client-ga/quickstart.html
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  pattern-either:
+  - pattern: '$HTTPCLIENT = HttpClients.$CREATE(...);
+
+      ...
+
+      $HTTPREQ = new $HTTPFUNC("=~/[hH][tT][tT][pP]://.*/");
+
+      ...
+
+      $RESPONSE = $HTTPCLIENT.execute($HTTPREQ);
+
+      '
+  - pattern: '$HTTPCLIENT = HttpClients.$CREATE(...);
+
+      ...
+
+      $RESPONSE = $HTTPCLIENT.execute(new $HTTPFUNC("=~/[hH][tT][tT][pP]://.*/"));
+
+      '
+- id: problem-based-packs.insecure-transport.java-stdlib.httpclient-http-request.httpclient-http-request
+  message: Checks for requests sent via HttpClient to http:// URLS. This is dangerous
+    because the server is attempting to connect to a website that does not encrypt
+    traffic with TLS. Instead, send requests only to https:// URLS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://openjdk.java.net/groups/net/httpclient/intro.html
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  pattern-either:
+  - patterns:
+    - pattern: 'URI.create("=~/[hH][tT][tT][pP]://.*/", ...)
+
+        '
+    - pattern-inside: 'HttpClient $CLIENT = ...;
+
+        ...
+
+        HttpRequest $REQ = ...;
+
+        ...
+
+        $CLIENT.sendAsync(...);
+
+        '
+  - patterns:
+    - pattern: 'URI.create("=~/[hH][tT][tT][pP]://.*/", ...)
+
+        '
+    - pattern-inside: 'HttpClient $CLIENT = ...;
+
+        ...
+
+        HttpRequest $REQ = ...;
+
+        ...
+
+        $CLIENT.send(...);
+
+        '
+  - patterns:
+    - pattern: 'URI.create($URI)
+
+        '
+    - pattern-inside: 'String $URI = "=~/[hH][tT][tT][pP]://.*/";
+
+        ...
+
+        HttpClient $CLIENT = ...;
+
+        ...
+
+        HttpRequest $REQ = ...;
+
+        ...
+
+        $CLIENT.send(...);
+
+        '
+  - patterns:
+    - pattern: 'URI.create($URI)
+
+        '
+    - pattern-inside: 'String $URI = "=~/[hH][tT][tT][pP]://.*/";
+
+        ...
+
+        HttpClient $CLIENT = ...;
+
+        ...
+
+        HttpRequest $REQ = ...;
+
+        ...
+
+        $CLIENT.sendAsync(...);
+
+        '
+- id: problem-based-packs.insecure-transport.java-stdlib.httpget-http-request.httpget-http-request
+  message: Detected an HTTP request sent via HttpGet. This could lead to sensitive
+    information being sent  over an insecure channel. Instead, it is recommended to
+    send requests over HTTPS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/net/URLConnection.html
+    - https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/net/URL.html#openConnection()
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  patterns:
+  - pattern: '"=~/[Hh][Tt][Tt][Pp]://.*/"
+
+      '
+  - pattern-inside: '$R = new HttpGet("=~/[Hh][Tt][Tt][Pp]://.*/");
+
+      ...
+
+      $CLIENT. ... .execute($R, ...);
+
+      '
+- id: problem-based-packs.insecure-transport.java-stdlib.httpurlconnection-http-request.httpurlconnection-http-request
+  message: Detected an HTTP request sent via HttpURLConnection. This could lead to
+    sensitive information being sent over an insecure channel. Instead, it is recommended
+    to send requests over HTTPS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/net/URLConnection.html
+    - https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/net/URL.html#openConnection()
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  patterns:
+  - pattern: '"=~/[Hh][Tt][Tt][Pp]://.*/"
+
+      '
+  - pattern-either:
+    - pattern-inside: 'URL $URL = new URL ("=~/[Hh][Tt][Tt][Pp]://.*/", ...);
+
+        ...
+
+        $CON = (HttpURLConnection) $URL.openConnection(...);
+
+        ...
+
+        $CON.$FUNC(...);
+
+        '
+    - pattern-inside: 'URL $URL = new URL ("=~/[Hh][Tt][Tt][Pp]://.*/", ...);
+
+        ...
+
+        $CON = $URL.openConnection(...);
+
+        ...
+
+        $CON.$FUNC(...);
+
+        '
+- id: problem-based-packs.insecure-transport.java-stdlib.socket-request.socket-request
+  message: Insecure transport rules to catch socket connections to http, telnet, and
+    ftp servers. This is dangerous because these are protocols that do not encrypt
+    traffic.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: LOW
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://docs.oracle.com/javase/8/docs/api/java/net/Socket.html
+    subcategory:
+    - audit
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  pattern-either:
+  - pattern: '$SOCKET = new Socket("=~/[tT][eE][lL][nN][eE][tT]://.*/", ...);
+
+      ...
+
+      $OUT = new PrintWriter($SOCKET.getOutputStream(...), ...);
+
+      ...
+
+      $OUT.$FUNC(...);
+
+      '
+  - pattern: '$SOCKET = new Socket("=~/^[fF][tT][pP]://.*/", ...);
+
+      ...
+
+      $OUT = new PrintWriter($SOCKET.getOutputStream(...), ...);
+
+      ...
+
+      $OUT.$FUNC(...);
+
+      '
+  - pattern: '$SOCKET = new Socket("=~/[hH][tT][tT][pP]://.*/", ...);
+
+      ...
+
+      $OUT = new PrintWriter($SOCKET.getOutputStream(...), ...);
+
+      ...
+
+      $OUT.$FUNC(...);
+
+      '
+- id: problem-based-packs.insecure-transport.java-stdlib.telnet-request.telnet-request
+  message: Checks for attempts to connect through telnet. This is insecure as the
+    telnet protocol supports no encryption, and data passes through unencrypted.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://commons.apache.org/proper/commons-net/javadocs/api-3.6/org/apache/commons/net/telnet/TelnetClient.html
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  pattern: '$TELNETCLIENT = new TelnetClient(...);
+
+    ...
+
+    $TELNETCLIENT.connect(...);
+
+    '
+- id: problem-based-packs.insecure-transport.java-stdlib.tls-renegotiation.tls-renegotiation
+  message: Checks for cases where java applications are allowing unsafe renegotiation.
+    This leaves the application vulnerable to a man-in-the-middle attack where chosen
+    plain text is injected as prefix to a TLS connection.
+  severity: WARNING
+  metadata:
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://www.oracle.com/java/technologies/javase/tlsreadme.html
+    subcategory:
+    - vuln
+    technology:
+    - java
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  pattern: 'java.lang.System.setProperty("sun.security.ssl.allowUnsafeRenegotiation",
+    true);
+
+    '
+- id: problem-based-packs.insecure-transport.java-stdlib.unirest-http-request.unirest-http-request
+  message: Checks for requests sent via Unirest to http:// URLS. This is dangerous
+    because the server is attempting to connect to a website that does not encrypt
+    traffic with TLS. Instead, send requests only to https:// URLS.
+  severity: WARNING
+  metadata:
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    category: security
+    cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    owasp: A03:2017 - Sensitive Data Exposure
+    references:
+    - https://kong.github.io/unirest-java/#requests
+    subcategory:
+    - vuln
+    technology:
+    - unirest
+    vulnerability: Insecure Transport
+  languages:
+  - java
+  fix-regex:
+    regex: '[Hh][Tt][Tt][Pp]://'
+    replacement: https://
+    count: 1
+  pattern-either:
+  - pattern: 'Unirest.get("=~/[hH][tT][tT][pP]://.*/")
+
+      '
+  - pattern: 'Unirest.post("=~/[hH][tT][tT][pP]://.*/")
+
+      '

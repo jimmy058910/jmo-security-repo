@@ -19,7 +19,7 @@ Usage:
     pytest tests/integration/test_tool_smoke.py -v -m smoke
 
     # Run specific tool's smoke test
-    pytest tests/integration/test_tool_smoke.py -v -k "semgrep"
+    pytest tests/integration/test_tool_smoke.py -v -k "opengrep"
 
     # Run with explicit timeout (catch hangs faster)
     pytest tests/integration/test_tool_smoke.py -v --timeout=60
@@ -132,17 +132,25 @@ SMOKE_TEST_CONFIGS: dict[str, ToolSmokeConfig] = {
         output_format="ndjson",
         description="Secrets scanner",
     ),
-    "semgrep": ToolSmokeConfig(
-        name="semgrep",
+    "opengrep": ToolSmokeConfig(
+        name="opengrep",
         timeout=180,
         min_findings=0,  # Findings vary by ruleset - just check tool runs
         command_template=[
-            "semgrep",
+            "opengrep",
+            "scan",
+            # Relative to PROJECT_ROOT, where run_tool runs it: the bundle's
+            # JavaScript and generic files, as the row selects them for this
+            # fixture. A registry config would fetch rules over the network.
             "--config",
-            "auto",
+            "scripts/jmo_rules/javascript.yaml",
+            "--config",
+            "scripts/jmo_rules/generic.yaml",
+            "--no-rewrite-rule-ids",
             "--json",
             "--output",
             "{output}",
+            "--disable-version-check",
             "{target}",
         ],
         description="Multi-language SAST",

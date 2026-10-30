@@ -19,6 +19,7 @@ from scripts.cli.tool_manager import (
     print_tool_status_table,
 )
 from scripts.core.paths import clean_isolated_venvs
+from scripts.core.tool_descriptors import REMOVED_TOOLS, removed_tools_message
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
     POLICY_ENGINE,
@@ -141,13 +142,25 @@ def _osv_missing_ecosystems(statuses: dict[str, ToolStatus]) -> list[str] | None
     return sorted(set(ECOSYSTEMS) - present_ecosystems())
 
 
+def _refuse_removed_tools(tools: list[str]) -> int | None:
+    """Exit code 2, after saying so, when any named tool is one v2.0.0 removed:
+    a usage error, as `--tools semgrep` is. Without it `check` read the name as
+    a tool that is merely missing and `install --dry-run` offered to install
+    it. None when every name is still a name."""
+    removed = [t for t in tools if t in REMOVED_TOOLS]
+    if not removed:
+        return None
+    print(f"error: {removed_tools_message(removed)}", file=sys.stderr)
+    return 2
+
+
 def cmd_tools_check(args: argparse.Namespace) -> int:
     """
     Check tool installation status.
 
     Usage:
         jmo tools check                    # Every scanner, plus the policy engine
-        jmo tools check trivy semgrep      # Check specific tools
+        jmo tools check trivy opengrep     # Check specific tools
 
     With no tool names the table is the scan matrix (TOOL_MATRIX) and the
     policy engine gets a line of its own below it: opa evaluates policies in
@@ -156,8 +169,11 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
     Returns:
         0 when every checked tool is installed and able to run, 1 otherwise
     """
-    manager = ToolManager()
     tools = getattr(args, "tools", None) or []
+    refused = _refuse_removed_tools(tools)
+    if refused is not None:
+        return refused
+    manager = ToolManager()
     output_json = getattr(args, "json", False)
 
     policy_engine: ToolStatus | None = None
@@ -451,7 +467,7 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
 
     Usage:
         jmo tools install                     # Install all missing (parallel)
-        jmo tools install trivy semgrep       # Install specific tools
+        jmo tools install trivy opengrep       # Install specific tools
         jmo tools install --dry-run           # Show what would be installed
         jmo tools install --print-script      # Print install script
         jmo tools install --sequential        # Install sequentially (slower)
@@ -460,8 +476,11 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 1 on failure
     """
-    manager = ToolManager()
     tools_arg = getattr(args, "tools", None) or []
+    refused = _refuse_removed_tools(tools_arg)
+    if refused is not None:
+        return refused
+    manager = ToolManager()
     dry_run = getattr(args, "dry_run", False)
     print_script = getattr(args, "print_script", False)
     yes = getattr(args, "yes", False)
@@ -1189,7 +1208,7 @@ def cmd_tools_clean(args: argparse.Namespace) -> int:
     """
     Clean isolated virtual environments (Phase 5).
 
-    Removes the isolated venvs of the Python tools (semgrep, checkov).
+    Removes the isolated venvs of the Python tools (checkov).
     Useful when you need to fix a corrupted installation or reclaim disk space.
 
     Usage:
@@ -1229,7 +1248,7 @@ def cmd_tools_clean(args: argparse.Namespace) -> int:
     if force:
         print(colorize(f"Cleaned {len(removed)} isolated venv(s).", "green"))
         print("\nTo reinstall tools in isolated venvs, run:")
-        print("  jmo tools install semgrep checkov")
+        print("  jmo tools install checkov")
     else:
         print("To actually remove these, run:")
         print(colorize("  jmo tools clean --force", "cyan"))

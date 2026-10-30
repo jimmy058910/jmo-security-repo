@@ -355,7 +355,7 @@ class ToolInstaller:
                 if result.method in PINNED_INSTALL_METHODS:
                     # The version check decides the verdict, not the installer's
                     # exit code (#1093). `jmo tools update` printed
-                    # `[OK] semgrep (v1.161.0)` two lines after this warning
+                    # `[OK] <tool> (v1.161.0)` two lines after this warning
                     # said expected=1.175.0, then "All 6 tool(s) updated
                     # successfully!" at exit 0.
                     result.success = False
@@ -449,8 +449,8 @@ class ToolInstaller:
         # this method -- behind `jmo tools install <names>`, `jmo tools update`
         # and the scan-time auto-install -- did not, so a pip install of an
         # isolated tool ran against sys.executable and dragged cryptography
-        # 50 -> 46 and, via semgrep's mcp==1.29.0 pin, mcp 2.0 -> 1.29 off
-        # uv.lock. Measured twice.
+        # 50 -> 46 and, via an mcp==1.29.0 pin a scanner carried, mcp 2.0 -> 1.29
+        # off uv.lock. Measured twice.
         if tool_name in ISOLATED_TOOLS:
             if tool_info.pypi_package:
                 package_spec = f"{tool_info.pypi_package}=={tool_info.version}"
@@ -863,7 +863,7 @@ class ToolInstaller:
 
         Args:
             tool_name: Name of the tool
-            package_spec: Pip package specification (e.g., "semgrep==1.175.0")
+            package_spec: Pip package specification (e.g., "checkov==3.3.30")
 
         Returns:
             InstallResult with success status and details
@@ -1397,6 +1397,7 @@ class ToolInstaller:
         self, tool_name: str, tool_info: ToolInfo, start_time: float
     ) -> InstallResult:
         """Install by downloading binary release."""
+        import platform
         import time
 
         # Security: Validate version string before URL construction
@@ -1452,6 +1453,7 @@ class ToolInstaller:
         # | {arch_aarch}  | "x86_64"                        | "aarch64"                       |
         # | {trivy_arch}  | "64bit"                         | "ARM64"                         |
         # | {arch_x64}    | "x64"                           | "arm64"                         |
+        # | {arch_x86}    | "x86"                           | machine name (aarch64, arm64)   |
 
         # Go-style architecture (most common): x86_64 -> amd64
         arch_amd = "amd64" if arch == "x86_64" else "arm64" if arch == "arm64" else arch
@@ -1469,6 +1471,11 @@ class ToolInstaller:
         # gitleaks: x86_64 -> "x64", arm64 -> "arm64"
         arch_x64 = "x64" if arch == "x86_64" else arch
 
+        # opengrep: x86_64 -> "x86", otherwise the platform's own machine name.
+        # `arch` has folded aarch64 into arm64, but opengrep's Linux assets say
+        # aarch64 and its macOS assets arm64, so the raw name is read again.
+        arch_x86 = "x86" if arch == "x86_64" else platform.machine().lower()
+
         url = url_template.format(
             version=tool_info.version,
             os=os_name,
@@ -1479,6 +1486,7 @@ class ToolInstaller:
             arch_aarch=arch_aarch,
             trivy_arch=trivy_arch,
             arch_x64=arch_x64,
+            arch_x86=arch_x86,
         )
 
         # Log URL for debugging (helps users report issues with specific asset names)

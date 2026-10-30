@@ -228,6 +228,8 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("checkov", "CKV_K8S_12"),  # "Memory requests should be set"
     ],
     # ===== Secret Detection =====
+    # No opengrep rows: the bundle excludes `generic/secrets/` (secrets are
+    # gitleaks' and trufflehog's class), so no opengrep rule can pair with these.
     # GITLEAKS KEYS (#1328) are the `id` gitleaks 8.30.1's default config
     # prints (`config/gitleaks.toml` at tag v8.30.1), each commented with the
     # `description` it prints beside it, read from the tool's own file -- the
@@ -242,21 +244,18 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # unauthorized cloud resource access and data breaches on AWS
         # platforms."
         ("gitleaks", "aws-access-token"),
-        ("semgrep", "generic.secrets.security.detected-aws-account-id"),
     ],
     "secret-github-token": [
         ("trufflehog", "Github"),
         # "Uncovered a GitHub Personal Access Token, potentially leading to
         # unauthorized repository access and sensitive content exposure."
         ("gitleaks", "github-pat"),
-        ("semgrep", "generic.secrets.security.detected-github-pat"),
     ],
     "secret-private-key": [
         ("trufflehog", "PrivateKey"),
         # "Identified a Private Key, which may compromise cryptographic
         # security and sensitive data encryption."
         ("gitleaks", "private-key"),
-        ("semgrep", "generic.secrets.security.detected-private-key"),
     ],
     "secret-jwt": [
         ("trufflehog", "JWT"),
@@ -291,8 +290,7 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     # `oauth.component.spec.ts:91` fixture below both guard against).
     # ===== Code Security =====
     "code-hardcoded-password": [
-        ("semgrep", "python.lang.security.audit.hardcoded-password"),
-        ("semgrep", "generic.secrets.security.hardcoded-password"),
+        ("opengrep", "python.lang.security.audit.hardcoded-password"),
         ("trufflehog", "Password"),
     ],
 }
@@ -355,8 +353,8 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
     # #1328). gitleaks 8.30.1 ships ~222 short, hyphen-delimited default-config
     # ids that share prefixes by design (`aws-access-token` /
     # `yandex-aws-access-token`; `jwt` / `jwt-base64`), unlike the aliasing the
-    # fallback below exists for (trivy's `AVD-`-prefixed alias ids, semgrep's
-    # dotted-suffix registry ids). Measured against all 222:
+    # fallback below exists for (trivy's `AVD-`-prefixed alias ids, opengrep's
+    # dotted-suffix ids). Measured against all 222:
     # `yandex-aws-access-token` (a Yandex Cloud key, not AWS) resolved to
     # `secret-aws-access-key` and `jwt-base64` to `secret-jwt` purely because
     # each is a `-`-delimited prefix of an id this table lists -- the exact
@@ -368,7 +366,7 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
         return None
 
     # Try substring matching for rule IDs that carry a suffix or vary in wording
-    # (e.g. semgrep reports `...subprocess-shell-true.subprocess-shell-true` for
+    # (e.g. opengrep reports `...subprocess-shell-true.subprocess-shell-true` for
     # the rule mapped here as `...subprocess-shell-true`).
     # Require minimum length to avoid matching everything
     if len(rule_id_lower) >= 3:  # Minimum 3 chars for substring matching

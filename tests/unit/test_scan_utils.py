@@ -43,17 +43,17 @@ def test_tool_exists_not_found_with_hint():
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
 
-        result = tool_exists("semgrep")
+        result = tool_exists("opengrep")
 
         assert result is False
-        mock_find.assert_called_once_with("semgrep")
+        mock_find.assert_called_once_with("opengrep")
 
         # Verify error logged with installation hint
         mock_log.error.assert_called_once()
         error_msg = mock_log.error.call_args[0][0]
-        assert "semgrep" in error_msg
+        assert "opengrep" in error_msg
         assert "not found" in error_msg
-        assert "Install" in error_msg or "pip install semgrep" in error_msg
+        assert "Install" in error_msg or "jmo tools install opengrep" in error_msg
 
 
 def test_tool_exists_not_found_without_hint():
@@ -88,11 +88,11 @@ def test_write_stub_trufflehog(tmp_path):
     assert content == []
 
 
-def test_write_stub_semgrep(tmp_path):
-    """Test write_stub creates correct empty stub for semgrep."""
-    out_path = tmp_path / "semgrep.json"
+def test_write_stub_opengrep(tmp_path):
+    """Test write_stub creates correct empty stub for opengrep."""
+    out_path = tmp_path / "opengrep.json"
 
-    write_stub("semgrep", out_path)
+    write_stub("opengrep", out_path)
 
     assert out_path.exists()
     content = json.loads(out_path.read_text())
@@ -205,7 +205,7 @@ def test_tool_install_hints_complete():
 
     expected_tools = [
         "trufflehog",
-        "semgrep",
+        "opengrep",
         "trivy",
         "syft",
         "checkov",
@@ -283,10 +283,10 @@ class TestToolExclusionFlags:
     own way, so each spelling is pinned against what its binary accepts.
     """
 
-    def test_semgrep_uses_a_repeated_exclude_equals(self):
+    def test_opengrep_uses_a_repeated_exclude_equals(self):
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        assert tool_exclusion_flags("semgrep") == [
+        assert tool_exclusion_flags("opengrep") == [
             "--exclude=.git",
             "--exclude=node_modules",
             "--exclude=vendor",
@@ -429,7 +429,7 @@ class TestToolExclusionFlags:
         """
         from scripts.cli.scan_utils import excluded_dirs_for
 
-        sast = excluded_dirs_for("semgrep")
+        sast = excluded_dirs_for("opengrep")
         sbom = excluded_dirs_for("syft")
         sca = excluded_dirs_for("grype")
 
@@ -461,7 +461,7 @@ class TestToolExclusionFlags:
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        flags = tool_exclusion_flags("semgrep", results_dir_name="vendor")
+        flags = tool_exclusion_flags("opengrep", results_dir_name="vendor")
 
         assert flags.count("--exclude=vendor") == 1
 
@@ -747,7 +747,7 @@ class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
     def test_each_style_spells_the_results_dir_its_own_way(self):
         """The three spellings that matter, each measured against its binary.
 
-        semgrep takes one `--exclude=NAME` token; trivy needs the `**/` or it
+        opengrep takes one `--exclude=NAME` token; trivy needs the `**/` or it
         only matches at the scan root; checkov must NOT have it (`**` is not a
         regex, and one of its two call sites compiles unguarded, so it
         crashes). Asserted together because the whole hazard is that they look
@@ -755,11 +755,11 @@ class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        semgrep = tool_exclusion_flags("semgrep", results_dir_name="results")
+        opengrep = tool_exclusion_flags("opengrep", results_dir_name="results")
         trivy = tool_exclusion_flags("trivy", results_dir_name="results")
         checkov = tool_exclusion_flags("checkov", results_dir_name="results")
 
-        assert semgrep[-1] == "--exclude=results"
+        assert opengrep[-1] == "--exclude=results"
         assert trivy[-2:] == ["--skip-dirs", "**/results"]
         assert checkov[-2:] == ["--skip-path", r"[\\/]results$"]
         assert "**" not in " ".join(checkov)

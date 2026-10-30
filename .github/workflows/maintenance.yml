@@ -555,7 +555,7 @@ jobs:
       - name: Check PyPI for security tool updates
         run: |
           # Check if Python security tools have updates
-          for tool in semgrep checkov ruff; do
+          for tool in checkov ruff; do
             echo "Checking $tool..."
             CURRENT=$(grep -oP "${tool}==[0-9.]+" Dockerfile | head -n1 | cut -d'=' -f3 || echo "unknown")
             LATEST=$(pip index versions "$tool" 2>/dev/null | grep -oP '(?<=Available versions: )[0-9.]+' | head -n1 || echo "unknown")
@@ -630,7 +630,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
+        # (opengrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then

@@ -720,7 +720,7 @@ Commands:
 
 Examples:
   jmo tools check                     # Check every scanner and the policy engine
-  jmo tools check trivy semgrep       # Check specific tools
+  jmo tools check trivy opengrep      # Check specific tools
   jmo tools install                   # Install missing (interactive)
   jmo tools install --yes             # Install without prompts
   jmo tools update --critical-only    # Update critical tools
@@ -808,7 +808,7 @@ Options:
 What gets removed with --all:
   - ~/.jmo/ directory (config, cache, history, bins)
   - jmo-security pip package (if installed)
-  - pip-installed tools (semgrep, checkov, etc.)
+  - pip-installed tools (checkov)
   - Binary tools in ~/.jmo/bin/
 
 Examples:
@@ -865,7 +865,7 @@ Examples:
         description="""
 Clean isolated virtual environments used for tools with pip conflicts.
 
-Some Python tools (semgrep, checkov) pin dependencies that must not reach
+Python tools such as checkov pin dependencies that must not reach
 JMo's own environment, so they are installed in isolated venvs at
 ~/.jmo/tools/venvs/.
 
@@ -879,7 +879,7 @@ Examples:
   jmo tools clean --force   # Actually remove the isolated venvs
 
 After cleaning, reinstall tools with:
-  jmo tools install semgrep checkov
+  jmo tools install checkov
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1816,7 +1816,7 @@ Example:
         "--scan-args", help="JSON file with original scan arguments"
     )
     attest_parser.add_argument(
-        "--tools", nargs="+", help="Tools used in scan (e.g., trivy semgrep)"
+        "--tools", nargs="+", help="Tools used in scan (e.g., trivy opengrep)"
     )
     attest_parser.add_argument(
         "--human-logs",
@@ -1967,7 +1967,7 @@ Supports three modes:
     )
     diff_parser.add_argument(
         "--tool",
-        help="Filter by tool (comma-separated): semgrep,trivy",
+        help="Filter by tool (comma-separated): opengrep,trivy",
     )
     diff_parser.add_argument(
         "--only",

@@ -247,7 +247,7 @@ def test_cmd_tools_check_specific_tools():
     mock_manager.check_tool.return_value = mock_status
 
     args = argparse.Namespace(
-        tools=["trivy", "semgrep"],
+        tools=["trivy", "opengrep"],
         json=False,
     )
 
@@ -277,7 +277,7 @@ def test_cmd_tools_check_json_output_reports_missing_matrix_tools_through_exit_c
     mock_manager = MagicMock()
     mock_manager.check_matrix.return_value = {
         "trivy": _status("trivy"),
-        "semgrep": _status("semgrep", installed=False, installed_version=None),
+        "opengrep": _status("opengrep", installed=False, installed_version=None),
     }
     mock_manager.check_tool.return_value = _status(POLICY_ENGINE)
 
@@ -292,7 +292,7 @@ def test_cmd_tools_check_json_output_reports_missing_matrix_tools_through_exit_c
             result = cmd_tools_check(args)
 
     payload = json.loads("\n".join(captured))
-    assert payload["tools"]["semgrep"]["installed"] is False
+    assert payload["tools"]["opengrep"]["installed"] is False
     assert payload["tools"]["trivy"]["installed"] is True
     assert result == 1
 
@@ -335,12 +335,12 @@ def test_cmd_tools_check_json_for_named_tools_keys_each_tool_under_tools():
 
     statuses = {
         "trivy": _status("trivy", installed_version="0.70.0"),
-        "semgrep": _status("semgrep", installed=False, installed_version=None),
+        "opengrep": _status("opengrep", installed=False, installed_version=None),
     }
     mock_manager = MagicMock()
     mock_manager.check_tool.side_effect = lambda name: statuses[name]
 
-    args = argparse.Namespace(tools=["trivy", "semgrep"], json=True)
+    args = argparse.Namespace(tools=["trivy", "opengrep"], json=True)
 
     captured: list[str] = []
     with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
@@ -351,11 +351,11 @@ def test_cmd_tools_check_json_for_named_tools_keys_each_tool_under_tools():
             result = cmd_tools_check(args)
 
     payload = json.loads("\n".join(captured))
-    assert set(payload["tools"]) == {"trivy", "semgrep"}
+    assert set(payload["tools"]) == {"trivy", "opengrep"}
     assert payload["tools"]["trivy"]["installed_version"] == "0.70.0"
-    assert payload["tools"]["semgrep"]["installed"] is False
+    assert payload["tools"]["opengrep"]["installed"] is False
     assert "policy_engine" not in payload
-    assert result == 1  # semgrep still triggers rc=1 (not installed)
+    assert result == 1  # opengrep still triggers rc=1 (not installed)
 
 
 def _matrix_check(capsys, json_output=False):
@@ -857,6 +857,136 @@ def test_cmd_tools_install_dry_run():
     assert result == 0
 
 
+# ========== A removed tool is named as removed (v2.0.0) ==========
+
+
+class TestARemovedToolIsNamedAsRemoved:
+    """`--tools semgrep` says semgrep was removed and that opengrep replaced it.
+    `jmo tools check semgrep` said "semgrep MISSING ... See JMo documentation
+    for semgrep", and `jmo tools install semgrep --dry-run` printed "Would
+    install semgrep" and exited 0: two commands that sent a user to install a
+    tool JMo no longer has. They say what `--tools` says, exit 2 as a usage
+    error does, and touch nothing."""
+
+    @staticmethod
+    def _never_asked():
+        manager = MagicMock()
+        manager.check_tool.side_effect = AssertionError("a removed tool was checked")
+        manager.get_missing_tools.side_effect = AssertionError("looked for a tool")
+        return manager
+
+    def test_check_names_the_replacement(self, capsys):
+        from scripts.cli.tool_commands import cmd_tools_check
+
+        manager = self._never_asked()
+        args = argparse.Namespace(tools=["semgrep"], json=False)
+        with patch("scripts.cli.tool_commands.ToolManager", return_value=manager):
+            result = cmd_tools_check(args)
+
+        said = capsys.readouterr().err
+        assert result == 2
+        assert "semgrep: removed in v2.0.0" in said
+        assert "opengrep replaced semgrep" in said
+        assert "MISSING" not in said
+        manager.check_tool.assert_not_called()
+
+    def test_check_json_is_refused_the_same_way(self, capsys):
+        from scripts.cli.tool_commands import cmd_tools_check
+
+        args = argparse.Namespace(tools=["trivy", "semgrep"], json=True)
+        with patch(
+            "scripts.cli.tool_commands.ToolManager", return_value=self._never_asked()
+        ):
+            result = cmd_tools_check(args)
+
+        captured = capsys.readouterr()
+        assert result == 2
+        assert captured.out == ""
+        assert "opengrep replaced semgrep" in captured.err
+
+    def test_install_dry_run_does_not_offer_it(self, capsys):
+        from scripts.cli.tool_commands import cmd_tools_install
+
+        manager = self._never_asked()
+        args = argparse.Namespace(
+            tools=["semgrep"], dry_run=True, print_script=False, yes=True
+        )
+        with patch("scripts.cli.tool_commands.ToolManager", return_value=manager):
+            result = cmd_tools_install(args)
+
+        captured = capsys.readouterr()
+        assert result == 2
+        assert "Would install" not in captured.out + captured.err
+        assert "opengrep replaced semgrep" in captured.err
+        manager.check_tool.assert_not_called()
+
+    def test_install_installs_nothing_when_one_name_is_removed(self, capsys):
+        from scripts.cli.tool_commands import cmd_tools_install
+
+        args = argparse.Namespace(
+            tools=["trivy", "semgrep"], dry_run=False, print_script=False, yes=True
+        )
+        with (
+            patch(
+                "scripts.cli.tool_commands.ToolManager",
+                return_value=self._never_asked(),
+            ),
+            patch("scripts.cli.tool_installer.ToolInstaller") as installer,
+        ):
+            result = cmd_tools_install(args)
+
+        assert result == 2
+        installer.assert_not_called()
+
+    def test_a_removed_tool_with_no_successor_says_only_that(self, capsys):
+        from scripts.cli.tool_commands import cmd_tools_check
+
+        args = argparse.Namespace(tools=["bandit"], json=False)
+        with patch(
+            "scripts.cli.tool_commands.ToolManager", return_value=self._never_asked()
+        ):
+            result = cmd_tools_check(args)
+
+        said = capsys.readouterr().err
+        assert result == 2
+        assert "bandit: removed in v2.0.0 (see docs/TOOLS.md)" in said
+        assert "replaced" not in said
+
+    def test_the_wording_is_the_one_tools_flag_uses(self):
+        """One sentence, said once: `parse_tool_names` and the two commands."""
+        from scripts.core.tool_descriptors import (
+            UnknownToolError,
+            parse_tool_names,
+            removed_tools_message,
+        )
+
+        with pytest.raises(UnknownToolError) as exc:
+            parse_tool_names(["semgrep"])
+
+        assert removed_tools_message(["semgrep"]) in str(exc.value)
+
+    def test_the_policy_engine_and_unknown_names_are_not_refused(self):
+        """Only a removed name is refused here: `opa` is no scanner and is
+        checked by name, and an unknown name keeps its old behaviour."""
+        from scripts.cli.tool_commands import cmd_tools_check
+
+        mock_status = MagicMock()
+        mock_status.installed = True
+        mock_status.execution_ready = True
+        mock_manager = MagicMock()
+        mock_manager.check_tool.return_value = mock_status
+        args = argparse.Namespace(tools=["opa", "no-such-tool"], json=True)
+        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+            with (
+                patch("scripts.cli.tool_commands._status_json", return_value={}),
+                patch("builtins.print"),
+            ):
+                result = cmd_tools_check(args)
+
+        assert result == 0
+        assert mock_manager.check_tool.call_count == 2
+
+
 # ========== Category: Helper Functions ==========
 
 
@@ -978,7 +1108,7 @@ class TestUninstallTools:
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool = MagicMock()
-        mock_tool.pypi_package = "semgrep"
+        mock_tool.pypi_package = "checkov"
 
         mock_registry = MagicMock()
         mock_registry.get_tool.return_value = mock_tool
@@ -991,7 +1121,7 @@ class TestUninstallTools:
             # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
             with patch("shutil.rmtree"), patch("builtins.print"):
                 errors = []
-                _uninstall_tools([("semgrep", "pip")], errors)
+                _uninstall_tools([("checkov", "pip")], errors)
 
         assert len(errors) == 0
         mock_run.assert_called()
@@ -2134,7 +2264,7 @@ class TestCmdToolsInstallInteractive:
         installed_status.installed_version = "0.50.0"
 
         missing_status = MagicMock()
-        missing_status.name = "semgrep"
+        missing_status.name = "opengrep"
         missing_status.installed = False
         missing_status.is_critical = False
 
@@ -2145,7 +2275,7 @@ class TestCmdToolsInstallInteractive:
         mock_manager.platform = "linux"
 
         args = MagicMock()
-        args.tools = ["trivy", "semgrep"]
+        args.tools = ["trivy", "opengrep"]
         args.print_script = False
         args.dry_run = True
         args.yes = True
@@ -3008,7 +3138,7 @@ class TestUninstallToolsExecution:
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = "semgrep"
+        mock_tool_info.pypi_package = "checkov"
 
         mock_result = MagicMock()
         mock_result.returncode = 1
@@ -3022,7 +3152,7 @@ class TestUninstallToolsExecution:
             mock_registry_cls.return_value = mock_registry
 
             with patch("subprocess.run", return_value=mock_result):
-                _uninstall_tools([("semgrep", "pip")], errors)
+                _uninstall_tools([("checkov", "pip")], errors)
 
         # Partial failure should show warning but not add to errors
         captured = capsys.readouterr()
@@ -3033,7 +3163,7 @@ class TestUninstallToolsExecution:
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = "semgrep"
+        mock_tool_info.pypi_package = "checkov"
 
         errors = []
 
@@ -3045,7 +3175,7 @@ class TestUninstallToolsExecution:
             with patch("subprocess.run", side_effect=Exception("Network error")):
                 # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
                 with patch("shutil.rmtree"):
-                    _uninstall_tools([("semgrep", "pip")], errors)
+                    _uninstall_tools([("checkov", "pip")], errors)
 
         assert len(errors) == 1
         assert "pip uninstall" in errors[0]

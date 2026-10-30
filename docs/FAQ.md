@@ -43,7 +43,7 @@ Docker users skip this step — all scanners are pre-installed in the image.
 
 ### Do I need all 15 scanners?
 
-No, and you rarely run them all. `jmo scan` considers every scanner, but the target's content decides which ones run: hadolint needs Dockerfiles, shellcheck needs shell scripts, zizmor needs GitHub Actions workflows or actions, or a Dependabot config, osv-scanner needs a dependency lockfile, jmo-native needs JS/TS source, `.env` files, Firebase rules or Supabase migrations, checkov needs Terraform or CloudFormation, and zap and nuclei only run on `--url` targets. To narrow the list yourself, use `--tools` (for example `jmo scan --repo . --tools trufflehog semgrep trivy`), `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
+No, and you rarely run them all. `jmo scan` considers every scanner, but the target's content decides which ones run: hadolint needs Dockerfiles, shellcheck needs shell scripts, zizmor needs GitHub Actions workflows or actions, or a Dependabot config, osv-scanner needs a dependency lockfile, jmo-native needs JS/TS source, `.env` files, Firebase rules or Supabase migrations, checkov needs Terraform or CloudFormation, and zap and nuclei only run on `--url` targets. To narrow the list yourself, use `--tools` (for example `jmo scan --repo . --tools trufflehog opengrep trivy`), `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
 
 See [docs/TOOLS.md](TOOLS.md) for the full tool list and when each tool runs.
 
@@ -76,7 +76,7 @@ Target flags are mutually exclusive — pick one per `jmo scan` invocation. For 
 
 ### How long do scans take?
 
-Runtime depends on target size, network speed (for tools fetching vulnerability databases), and which tools run. Narrow the list with `--tools` for quick feedback loops (for example `jmo scan --repo . --tools trufflehog semgrep`). See [SCAN_OPTIMIZATION.md](SCAN_OPTIMIZATION.md) for more.
+Runtime depends on target size, network speed (for tools fetching vulnerability databases), and which tools run. Narrow the list with `--tools` for quick feedback loops (for example `jmo scan --repo . --tools trufflehog opengrep`). See [SCAN_OPTIMIZATION.md](SCAN_OPTIMIZATION.md) for more.
 
 ### Can I skip specific tools?
 
@@ -85,10 +85,10 @@ Yes. List the tools you want at the top level of `jmo.yml`; anything not listed 
 ```yaml
 tools:
   - trufflehog
-  - semgrep
+  - opengrep
   - trivy
 per_tool:
-  semgrep:
+  opengrep:
     timeout: 600
 ```
 
@@ -194,7 +194,7 @@ jmo ci --repo . --policy zero-secrets --policy owasp-top-10 --fail-on-policy-vio
 
 ### Does JMo Security work on Windows?
 
-Yes — native Windows 10/11 is tested in CI on every release. Some tools (ZAP, Semgrep runner) work best through WSL or Docker; `jmo tools check` tells you which tools are available on your platform. See [packaging/WINDOWS_COMPATIBILITY.md](../packaging/WINDOWS_COMPATIBILITY.md).
+Yes — native Windows 10/11 is tested in CI on every release. Some tools (ZAP) work best through WSL or Docker; `jmo tools check` tells you which tools are available on your platform. See [packaging/WINDOWS_COMPATIBILITY.md](../packaging/WINDOWS_COMPATIBILITY.md).
 
 ### Does JMo Security work on Apple Silicon (arm64)?
 
