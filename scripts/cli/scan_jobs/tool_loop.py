@@ -52,7 +52,6 @@ from ...core.scan_timings import (
 )
 from ...core.tool_descriptors import (
     DESCRIPTORS,
-    PART_OUTPUT,
     VENDORED_DIRS,
     ExclusionStyle,
     Fallback,
@@ -583,10 +582,24 @@ def _unlink(path: Path) -> None:
         logger.warning("could not remove %s from an earlier scan: %s", path, exc)
 
 
-def _remove_parts(out_dir: Path, tool: str) -> None:
-    """Remove the fallback outputs (`PART_OUTPUT`) an earlier scan left."""
-    for stale in out_dir.glob(PART_OUTPUT.format(tool=tool, n="*")):
-        _unlink(stale)
+def _remove_outputs(out_dir: Path, tool: str) -> None:
+    """Remove the outputs an earlier scan left for `tool`, before it runs.
+
+    The report reads what this scan's row vouches for, and a row can only
+    vouch for a file this scan wrote: a tool that exits 0 and writes nothing is
+    `failed:no output` only when no earlier file is there to pass for its
+    output (#1371). Every file of the tool's goes: `<tool>.json`, git history's
+    `<tool>.git.json`, and a fallback's `<tool>.part<N>.json` (their number
+    follows the inputs, so an earlier scan's may be more than this one writes).
+
+    A file is a tool's by its name before the first dot, the rule the report
+    maps an output to its adapter by (`normalize_and_report.tool_of_output`,
+    not imported: see `_kept_findings`). A `<tool>*` prefix match would take
+    `yara-x.json` for yara's.
+    """
+    for stale in out_dir.glob("*.json"):
+        if stale.name.split(".", 1)[0] == tool:
+            _unlink(stale)
 
 
 def _fallen_back(
@@ -726,9 +739,7 @@ def run_tools(
         if builder is None:
             rows[tool] = ToolRun(tool, State.SKIPPED, d.off_target_reason)
             continue
-        # A fallback writes one file per input, so an earlier scan's may be
-        # more than this one writes, and the report reads every file here.
-        _remove_parts(out_dir, tool)
+        _remove_outputs(out_dir, tool)
 
         binary = _resolve(d, find)
         if not binary:
@@ -890,7 +901,8 @@ def run_tools(
                 tool,
                 len(fallback.invocations),
             )
-            # It wrote nothing, so a file there is an earlier scan's.
+            # Anything it wrote before failing is partial: the fallback's
+            # files replace it.
             _unlink(inv.output_file)
             instead.extend(fallback.invocations)
         gone = {id(inv) for _, inv, _ in pairs}

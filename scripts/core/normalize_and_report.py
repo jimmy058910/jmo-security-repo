@@ -22,7 +22,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,7 +40,12 @@ from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 # Priority calculation (v0.9.0 Feature #5: EPSS/KEV)
 from scripts.core.priority_calculator import PriorityCalculator
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
-from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME, read_scan_root
+from scripts.core.scan_timings import (
+    SCAN_TIMINGS_FILENAME,
+    State,
+    ToolRun,
+    read_scan_root,
+)
 from scripts.core.tool_diagnostics import (
     ToolDiagnostic,
     extract_tool_diagnostics,
@@ -333,9 +338,8 @@ def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
         if not target_dir.exists():
             continue
         for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-            for tool_output in target.glob("*.json"):
-                if tool_output.name == SCAN_TIMINGS_FILENAME:
-                    continue
+            # Debug: `gather_results` says what it leaves out, once.
+            for tool_output in _outputs_of_this_scan(target, logger.debug):
                 adapter_name = loader._tool_to_adapter_name(tool_of_output(tool_output))
                 out.extend(extract_tool_diagnostics(adapter_name, tool_output, roots))
     return out
@@ -461,6 +465,112 @@ def _target_dirs(results_dir: Path) -> list[Path]:
     ]
 
 
+def _scan_rows(target: Path, warn: Callable[..., None]) -> dict[str, ToolRun] | None:
+    """The rows `jmo scan` recorded for one target, by tool.
+
+    None when there are none to go by: the folder has no `scan-timings.json`
+    (output `jmo scan` did not write), or it has one that cannot be read, which
+    is said, since reading everything on its account is a guess. A row that
+    does not parse is left out and said: its tool then has no row.
+    """
+    timings = target / SCAN_TIMINGS_FILENAME
+    try:
+        document = json.loads(timings.read_bytes())
+    except FileNotFoundError:
+        return None
+    # `UnicodeDecodeError` is a `ValueError`, not a `JSONDecodeError`.
+    except (OSError, ValueError) as e:
+        warn(
+            "%s/%s cannot be read, so every tool output is reported: %s",
+            target.name,
+            timings.name,
+            e,
+        )
+        return None
+    entries = document.get("tools") if isinstance(document, dict) else None
+    if not isinstance(entries, list):
+        warn(
+            "%s/%s has no list of tool rows, so every tool output is reported",
+            target.name,
+            timings.name,
+        )
+        return None
+    rows: dict[str, ToolRun] = {}
+    for entry in entries:
+        try:
+            row = ToolRun.from_dict(entry)
+        except (AttributeError, KeyError, TypeError, ValueError) as e:
+            warn(
+                "%s/%s: a tool row cannot be read and is ignored: %s",
+                target.name,
+                timings.name,
+                e,
+            )
+            continue
+        rows[row.tool] = row
+    return rows
+
+
+def _outputs_of_this_scan(target: Path, warn: Callable[..., None]) -> list[Path]:
+    """The tool outputs in one target's folder that this scan produced (#1371,
+    #1432). Shared by `gather_results` and `collect_tool_diagnostics`, which
+    must read the same files.
+
+    A folder holds an earlier scan's outputs too (a results directory reused),
+    and a failed tool may leave output behind. The scan's own account of what
+    it ran is `scan-timings.json`, so a tool's output is read when its row is
+    `ran`, or when a run of it worked (`kept_findings` is a count, 0 included,
+    #1369), and not when the tool has no row or its row is anything else. A
+    folder without rows is read whole.
+
+    `warn` is told of an output left out that the reader would take for this
+    scan's: a tool the scan did not run, and a row that failed. A `skipped`
+    row's file is a stub the scan itself wrote, which would warn on every
+    report (#784).
+    """
+    rows = _scan_rows(target, warn)
+    outputs: list[Path] = []
+    for path in target.glob("*.json"):
+        # JMo's own scan-phase instrumentation, written by write_scan_timings
+        # into the same directory as the tool outputs. It is not a tool result,
+        # so no adapter exists for it and the registry lookup in the reader
+        # warned about it on *every* report run (#784). A warning that always
+        # fires teaches the reader to skip the whole class -- and "no adapter
+        # plugin found" is precisely the message that matters when a real
+        # adapter goes missing.
+        #
+        # Compared against the constant rather than the literal string so
+        # renaming the artifact cannot quietly resurrect the warning.
+        if path.name == SCAN_TIMINGS_FILENAME:
+            continue
+        if rows is not None:
+            tool = tool_of_output(path)
+            row = rows.get(tool)
+            if row is None:
+                warn(
+                    "%s/%s is not reported: this scan did not run %s (it has no "
+                    "row in %s), so the file is an earlier scan's",
+                    target.name,
+                    path.name,
+                    tool,
+                    SCAN_TIMINGS_FILENAME,
+                )
+                continue
+            if row.state is not State.RAN and row.kept_findings is None:
+                if row.state is State.FAILED:
+                    warn(
+                        "%s/%s is not reported: %s's row is %s and no run of it "
+                        "worked, so what it wrote is partial",
+                        target.name,
+                        path.name,
+                        tool,
+                        row.label,
+                    )
+                continue
+        outputs.append(path)
+    return outputs
+
+
 def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
 
@@ -507,24 +617,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                 continue
 
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-                # Discover all tool outputs using plugin registry
-                # TODO(issue-#1432): a failed row's output still feeds findings.json
-                for tool_output in target.glob("*.json"):
-                    # JMo's own scan-phase instrumentation, written by
-                    # write_scan_timings into the same directory as the tool
-                    # outputs. It is not a tool result, so no adapter exists for
-                    # it and the registry lookup below warned about it on
-                    # *every* report run (#784). A warning that always fires
-                    # teaches the reader to skip the whole class -- and "no
-                    # adapter plugin found" is precisely the message that
-                    # matters when a real adapter goes missing.
-                    #
-                    # Compared against the constant rather than the literal
-                    # string so renaming the artifact cannot quietly resurrect
-                    # the warning.
-                    if tool_output.name == SCAN_TIMINGS_FILENAME:
-                        continue
-
+                # Discover the tool outputs this scan produced, through the
+                # plugin registry
+                for tool_output in _outputs_of_this_scan(target, logger.warning):
                     # e.g. "trivy", "osv-scanner"; "trufflehog" for
                     # trufflehog.git.json as well
                     tool_name = tool_of_output(tool_output)
