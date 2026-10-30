@@ -812,9 +812,10 @@ All notable changes to JMo Security will be documented in this file.
   `individual-images/<group>_<repo>__<image>/`; until now none was scanned. With no such
   tool, no image target is created and one INFO line says how many were found. The images
   are read from each Dockerfile's `FROM` instructions (continuations joined, heredoc bodies
-  skipped, as Docker reads them), the `image:` of each `docker-compose*.yml` service that has
-  no `build:`, and the `spec.containers` of each Pod in a `*.k8s.yaml` or `*.k8s.yml` file;
-  nothing else (not `compose.yaml`, `initContainers` or a Deployment's template). One target
+  skipped, as Docker reads them), the `image:` of each service that has no `build:` in a
+  `docker-compose*` or `compose*` file, and the `containers` and `initContainers` of each
+  Kubernetes manifest (a YAML document with an `apiVersion` and a `kind`: a Pod's, or a
+  workload's pod template, a CronJob's included), whatever the file is called (#1410). One target
   per reference per scan: a reference another target already covers (an `--image`, or an
   image a second project names) is logged at INFO naming the target that scans it. Build
   arguments (`FROM $BASE`), build stages and `scratch` are skipped, and a value that is not

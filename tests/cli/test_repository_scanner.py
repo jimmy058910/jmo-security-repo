@@ -20,7 +20,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
-from scripts.cli.scan_jobs.tool_loop import collect_files, iter_repo_files
+from scripts.cli.scan_jobs.tool_loop import (
+    MAX_FILE_ARGS,
+    collect_files,
+    iter_repo_files,
+)
 from scripts.core.scan_timings import Reason, State
 from scripts.core.tool_descriptors import DESCRIPTORS, ExclusionStyle
 from scripts.core.tool_registry import TOOL_MATRIX, TOOL_SCAN_TYPES
@@ -982,6 +986,48 @@ class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
             "the user's src/results/ was skipped"
         )
         assert not any("own.sh" in f for f in found), "JMo's output was scanned"
+
+
+class TestTheFileCapIsForAToolsCommandLine:
+    """`collect_files` cuts its list to `MAX_FILE_ARGS` because a tool's
+    command line is finite. A caller that reads the files itself (image
+    discovery, #1410) asks for no cap, and loses nothing to it."""
+
+    @staticmethod
+    def _repo_of_many(tmp_path):
+        return _repo(
+            tmp_path,
+            files={f"a/f{i:03d}.sh": "" for i in range(MAX_FILE_ARGS + 1)},
+        )
+
+    def test_a_tools_list_is_cut_and_the_cut_is_named(self, tmp_path, caplog):
+        """A guard: the default is what every tool caller gets."""
+        repo = self._repo_of_many(tmp_path)
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            found = collect_files(repo, ("**/*.sh",), "shellcheck")
+
+        assert len(found) == MAX_FILE_ARGS
+        assert "command-line length limit" in caplog.text
+        assert "1 file(s) NOT scanned" in caplog.text
+
+    def test_no_cap_returns_every_file_without_a_warning(self, tmp_path, caplog):
+        repo = self._repo_of_many(tmp_path)
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            found = collect_files(repo, ("**/*.sh",), "image discovery", max_files=None)
+
+        assert len(found) == MAX_FILE_ARGS + 1
+        assert caplog.text == ""
+
+    def test_a_smaller_cap_is_the_one_applied_and_named(self, tmp_path, caplog):
+        repo = self._repo_of_many(tmp_path)
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            found = collect_files(repo, ("**/*.sh",), "shellcheck", max_files=2)
+
+        assert [Path(f).name for f in found] == ["f000.sh", "f001.sh"]
+        assert "scanning the first 2 " in caplog.text
 
 
 if __name__ == "__main__":

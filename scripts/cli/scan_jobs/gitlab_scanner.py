@@ -11,8 +11,10 @@ own (#1311).
    scanned with its own output (#1364).
 2. Run scan_repository() with every requested tool.
 3. When a requested tool reads an image, discover the images its Dockerfiles
-   (`FROM`), `docker-compose*.yml` files and `*.k8s.yaml` Pods (`image:`)
-   name.
+   (`FROM`), compose files (`docker-compose*` and `compose*`, `.yml` or
+   `.yaml`) and Kubernetes manifests (any YAML document with an `apiVersion`
+   and a `kind`: the `containers` and `initContainers` of a Pod, or of a
+   workload's pod template) name (`image:`).
 4. Scan each with scan_image(), with every requested tool as `--image` would,
    into `individual-images/<group>_<repo>__<image>/`. Its rows go back to the
    orchestrator, which records it as an image target beside this one.
@@ -28,6 +30,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
+from fnmatch import fnmatchcase
 from functools import partial
 from pathlib import Path
 
@@ -81,6 +84,19 @@ _HEREDOC = re.compile(
     r"""(?:^|\s)\d*<<(-?)(["']?)([^\s"'<]+)\2(?=\s|$)|"[^"]*"|'[^']*'"""
 )
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
+
+# The Compose specification's file names, `compose.yaml` first, and the
+# `docker-compose` ones it superseded. Every other YAML file is read as
+# Kubernetes manifests.
+_COMPOSE_NAMES = ("docker-compose*.y*ml", "compose*.y*ml")
+_YAML_PATTERNS = ("**/*.yaml", "**/*.yml")
+# Where a manifest keeps a pod spec: a Pod's `spec`, a Deployment's,
+# StatefulSet's, DaemonSet's or Job's template, and a CronJob's job template.
+_POD_SPEC_PATHS = (
+    ("spec",),
+    ("spec", "template", "spec"),
+    ("spec", "jobTemplate", "spec", "template", "spec"),
+)
 
 
 def _instructions(
@@ -321,16 +337,35 @@ def _image_value(
     return str(value), _where(source, repo_path, line, label)
 
 
+def _pod_images(manifest: dict) -> Iterator[object]:
+    """The `image:` of each container a manifest's pod specs hold. An
+    ephemeral container is added to a running Pod, never written in a file."""
+    for path in _POD_SPEC_PATHS:
+        node: object = manifest
+        for key in path:
+            node = node.get(key) if isinstance(node, dict) else None
+        if not isinstance(node, dict):
+            continue
+        for field in ("containers", "initContainers"):
+            containers = node.get(field)
+            if isinstance(containers, list):
+                for container in containers:
+                    if isinstance(container, dict) and "image" in container:
+                        yield container["image"]
+
+
 def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     """
     Discover container images referenced in repository files.
 
     Reads:
     - each Dockerfile's FROM instructions (`is_dockerfile`)
-    - each `docker-compose*.yml`/`.yaml` service's `image:`, unless the service
-      has `build:`
-    - each `*.k8s.yaml`/`*.k8s.yml` document's `spec.containers` images (a
-      Pod's; not `initContainers`, nor a Deployment's template)
+    - each compose file's (`docker-compose*` or `compose*`, `.yml`/`.yaml`)
+      service `image:`, unless the service has `build:`
+    - each Kubernetes manifest's `containers` and `initContainers` images: a
+      manifest is any YAML document with a string `apiVersion` and `kind`,
+      and its pod spec is a Pod's `spec`, a workload's `spec.template.spec`
+      or a CronJob's `spec.jobTemplate.spec.template.spec`
 
     Args:
         repo_path: Path to cloned repository
@@ -350,10 +385,16 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     # through the same walk: `*Dockerfile*` read `pkg/dockerfile_utils.py`
     # (`from os import path`) and a `Dockerfile.md` ("From the root..."), and
     # each named an image to pull from Docker Hub (measured: `os`, `the`), and
-    # a vendored tree's Dockerfile too.
+    # a vendored tree's Dockerfile too. No cap: it is for a tool's command
+    # line, and nothing here is put on one.
+    # TODO(issue-#1410): misses `Containerfile`, `Dockerfile-dev`,
+    # `Dockerfile_prod` and `prod-Dockerfile`: neither `is_dockerfile` nor
+    # `DOCKERFILE_PATTERNS` knows them.
     dockerfiles = [
         Path(found)
-        for found in collect_files(repo_path, DOCKERFILE_PATTERNS, "image discovery")
+        for found in collect_files(
+            repo_path, DOCKERFILE_PATTERNS, "image discovery", max_files=None
+        )
         if is_dockerfile(Path(found).name)
     ]
     for dockerfile in dockerfiles:
@@ -383,13 +424,26 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
             )
             continue  # Skip files that can't be read
 
-    # Pattern 2: docker-compose.yml images
+    # Patterns 2 and 3 read the YAML files of one walk, the Dockerfiles' (a
+    # vendored tree is skipped): a compose file by its name, every other file
+    # as manifests. A name is matched with its case (`fnmatchcase`): the glob
+    # ignores it on Windows.
+    compose_files: list[Path] = []
+    manifest_files: list[Path] = []
+    for found in collect_files(
+        repo_path, _YAML_PATTERNS, "image discovery", max_files=None
+    ):
+        yaml_file = Path(found)
+        if any(fnmatchcase(yaml_file.name, name) for name in _COMPOSE_NAMES):
+            compose_files.append(yaml_file)
+        else:
+            manifest_files.append(yaml_file)
+
+    # Pattern 2: compose images
     # services:
     #   web:
     #     image: nginx:latest
-    # TODO(issue-#1410): misses `compose.yaml`, `Containerfile`, `Dockerfile-dev`
-    # and k8s workloads other than a Pod's `spec.containers`.
-    for compose_file in repo_path.rglob("docker-compose*.y*ml"):
+    for compose_file in compose_files:
         try:
             with open(compose_file, encoding="utf-8") as f:
                 data = yaml.load(f, Loader=_LineLoader)  # nosec B506 - a SafeLoader subclass
@@ -418,34 +472,35 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
             continue  # Skip files that can't be parsed
 
     # Pattern 3: Kubernetes manifests
+    # apiVersion: apps/v1
+    # kind: Deployment
     # spec:
-    #   containers:
-    #   - image: nginx:latest
-    for k8s_file in list(repo_path.rglob("*.k8s.yaml")) + list(
-        repo_path.rglob("*.k8s.yml")
-    ):
+    #   template:
+    #     spec:
+    #       containers:
+    #       - image: nginx:latest
+    for manifest_file in manifest_files:
         try:
-            with open(k8s_file, encoding="utf-8") as f:
-                # K8s manifests can contain multiple documents
-                docs = yaml.load_all(f, Loader=_LineLoader)  # nosec B506 - a SafeLoader subclass
-                for doc in docs:
-                    if not isinstance(doc, dict):
-                        continue
-                    # Look for containers in pod specs
-                    spec = doc.get("spec", {})
-                    if isinstance(spec, dict):
-                        containers = spec.get("containers", [])
-                        if isinstance(containers, list):
-                            for container in containers:
-                                if isinstance(container, dict) and "image" in container:
-                                    image, where = _image_value(
-                                        container["image"], k8s_file, repo_path, label
-                                    )
-                                    if _scannable(image, where):
-                                        images.add(image)
+            text = manifest_file.read_text(encoding="utf-8")
+            # Lockfiles and CI files are YAML too, and the pure-Python loader
+            # takes seconds on a large one: parse only a file that names both.
+            if "apiVersion" not in text or "kind" not in text:
+                continue
+            # A manifest file can contain multiple documents
+            for doc in yaml.load_all(text, Loader=_LineLoader):  # nosec B506 - a SafeLoader subclass
+                if not (
+                    isinstance(doc, dict)
+                    and isinstance(doc.get("apiVersion"), str)
+                    and isinstance(doc.get("kind"), str)
+                ):
+                    continue
+                for value in _pod_images(doc):
+                    image, where = _image_value(value, manifest_file, repo_path, label)
+                    if _scannable(image, where):
+                        images.add(image)
         except Exception as e:
             logger.debug(
-                f"Skipping Kubernetes manifest {k8s_file}: failed to parse - {type(e).__name__}: {e}"
+                f"Skipping Kubernetes manifest {manifest_file}: failed to parse - {type(e).__name__}: {e}"
             )
             continue  # Skip files that can't be parsed
 

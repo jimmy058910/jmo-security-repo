@@ -134,6 +134,7 @@ def collect_files(
     tool_name: str,
     skip_tree: Path | None = None,
     accepts_name: Callable[[str], bool] | None = None,
+    max_files: int | None = MAX_FILE_ARGS,
 ) -> list[str]:
     """Collect matching files for a tool that takes file arguments.
 
@@ -147,6 +148,9 @@ def collect_files(
     named when the patterns match it only by ignoring case. One they match as
     spelled is a name the test refuses on purpose (`Dockerfile.md` is no
     Dockerfile), and a WARNING beside every run read as a missed file.
+
+    `max_files` is the cap for a tool's command line; `None` is no cap, for a
+    caller that reads the files itself.
     """
     seen: set[Path] = set()
     for pattern in patterns:
@@ -179,17 +183,17 @@ def collect_files(
             )
 
     files = sorted(seen)
-    if len(files) > MAX_FILE_ARGS:
+    if max_files is not None and len(files) > max_files:
         logger.warning(
             "%s: %d matching files in %s, scanning the first %d "
             "(command-line length limit) - %d file(s) NOT scanned",
             tool_name,
             len(files),
             repo.name,
-            MAX_FILE_ARGS,
-            len(files) - MAX_FILE_ARGS,
+            max_files,
+            len(files) - max_files,
         )
-        files = files[:MAX_FILE_ARGS]
+        files = files[:max_files]
     return [str(f) for f in files]
 
 

@@ -1648,6 +1648,273 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         dockerfile = "FROM golang:alpine AS builder\nRUN go build\nFROM scratch\n"
         assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == set()
 
+    # --- #1410: compose.yaml and workload manifests -------------------------
+
+    @pytest.mark.parametrize(
+        "name",
+        ["compose.yaml", "compose.yml", "compose.override.yaml", "deploy/compose.yaml"],
+    )
+    def test_the_compose_specifications_own_file_names_are_read(self, tmp_path, name):
+        """`compose.yaml` and `compose.yml` are the names the Compose
+        specification gives a project, and only `docker-compose*` was read:
+        a project on the current names had no image scanned (measured)."""
+        compose = (
+            "services:\n"
+            "  web:\n    image: nginx:1.27\n"
+            "  app:\n    build: .\n    image: example-local/app:dev\n"
+        )
+        assert self._discover(tmp_path, {name: compose}) == {"nginx:1.27"}
+
+    def test_a_compose_file_in_a_vendored_tree_is_not_read(self, tmp_path):
+        """The one walk skips `node_modules`, `vendor`, `.venv`, `venv` and
+        `.git` for compose files as it does for Dockerfiles: a dependency's
+        example compose file names images the repository does not use."""
+        images = self._discover(
+            tmp_path,
+            {
+                "docker-compose.yml": "services:\n  web:\n    image: nginx:1.27\n",
+                "node_modules/dep/docker-compose.yml": (
+                    "services:\n  web:\n    image: alpine:3.14\n"
+                ),
+            },
+        )
+        assert images == {"nginx:1.27"}
+
+    def test_a_pods_init_containers_are_images_to_scan(self, tmp_path):
+        """An init container's image runs in the cluster as the app's does."""
+        pod = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  initContainers:\n  - name: wait\n    image: busybox:1.36\n"
+            "  containers:\n  - name: app\n    image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"pod.k8s.yaml": pod}) == {
+            "busybox:1.36",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        ("api_version", "kind"),
+        [
+            ("apps/v1", "Deployment"),
+            ("apps/v1", "StatefulSet"),
+            ("apps/v1", "DaemonSet"),
+            ("batch/v1", "Job"),
+        ],
+    )
+    def test_a_workloads_pod_template_is_read(self, tmp_path, api_version, kind):
+        """A Deployment names its images under `spec.template.spec`, not
+        `spec`: only a bare Pod's `spec.containers` was read, so the usual
+        workload kinds named no image at all."""
+        workload = (
+            f"apiVersion: {api_version}\nkind: {kind}\nmetadata:\n  name: w\n"
+            "spec:\n  template:\n    spec:\n"
+            "      initContainers:\n      - name: wait\n        image: busybox:1.36\n"
+            "      containers:\n      - name: app\n        image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"k8s/workload.yaml": workload}) == {
+            "busybox:1.36",
+            "nginx:1.27",
+        }
+
+    def test_a_cron_jobs_job_template_is_read(self, tmp_path):
+        """A CronJob's pod template is one level deeper:
+        `spec.jobTemplate.spec.template.spec`."""
+        cron = (
+            "apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: nightly\n"
+            "spec:\n  schedule: '0 * * * *'\n  jobTemplate:\n    spec:\n"
+            "      template:\n        spec:\n"
+            "          initContainers:\n          - name: wait\n"
+            "            image: busybox:1.36\n"
+            "          containers:\n          - name: job\n"
+            "            image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"k8s/cron.yaml": cron}) == {
+            "busybox:1.36",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize("name", ["deploy/app.yaml", "deploy/app.yml"])
+    def test_a_manifest_is_found_by_its_content_not_a_k8s_file_name(
+        self, tmp_path, name
+    ):
+        """Almost no repository names a manifest `*.k8s.yaml`: it has an
+        `apiVersion` and a `kind`, and that is what makes it one."""
+        pod = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  containers:\n  - name: app\n    image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {name: pod}) == {"nginx:1.27"}
+
+    def test_every_document_of_a_multi_document_file_is_read(self, tmp_path):
+        """One file holds a ConfigMap, a Pod, an empty document and a
+        Deployment: the ConfigMap names nothing, the others each name images."""
+        manifests = (
+            "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cfg\n"
+            "data:\n  image: not-an-image-here\n"
+            "---\n"
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  initContainers:\n  - name: wait\n    image: busybox:1.36\n"
+            "  containers:\n  - name: app\n    image: redis:7\n"
+            "---\n"
+            "---\n"
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: d\nspec:\n"
+            "  template:\n    spec:\n      containers:\n"
+            "      - name: web\n        image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"deploy/all.yaml": manifests}) == {
+            "busybox:1.36",
+            "redis:7",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        ("name", "body"),
+        [
+            pytest.param(
+                ".gitlab-ci.yml",
+                "image: alpine:3.15\nstages:\n  - build\nbuild:\n"
+                "  image: python:3.12\n  script:\n    - make\n",
+                id="gitlab-ci",
+            ),
+            pytest.param(
+                "deploy/app.yaml",
+                "kind: Pod\nspec:\n  containers:\n  - name: app\n"
+                "    image: nginx:1.27\n",
+                id="kind-without-apiversion",
+            ),
+            pytest.param(
+                "deploy/app.yaml",
+                "apiVersion: 1\nkind: Pod\nspec:\n  containers:\n  - name: app\n"
+                "    image: nginx:1.27\n",
+                id="apiversion-not-a-string",
+            ),
+        ],
+    )
+    def test_a_yaml_file_that_is_not_a_manifest_names_no_image(
+        self, tmp_path, name, body
+    ):
+        """Only a document with a string `apiVersion` and `kind` is a
+        manifest. A CI file's `image:` is the job's runner image, not one the
+        repository ships, and the pipeline file is no Kubernetes object."""
+        assert self._discover(tmp_path, {name: body}) == set()
+
+    def test_a_yaml_file_naming_neither_apiversion_nor_kind_is_not_parsed(
+        self, tmp_path, monkeypatch
+    ):
+        """Lockfiles and CI files are YAML, and the pure-Python loader takes
+        seconds on a large one (0.37 s on a real 430 KB `pnpm-lock.yaml`), so
+        a file is parsed for manifests only when its text holds both words."""
+        from scripts.cli.scan_jobs import gitlab_scanner
+
+        parsed: list[object] = []
+        real_load_all = gitlab_scanner.yaml.load_all
+
+        def spy(stream, Loader):
+            parsed.append(stream)
+            return real_load_all(stream, Loader=Loader)
+
+        monkeypatch.setattr(gitlab_scanner.yaml, "load_all", spy)
+        pod = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  containers:\n  - name: app\n    image: nginx:1.27\n"
+        )
+        images = self._discover(
+            tmp_path,
+            {
+                "pnpm-lock.yaml": "lockfileVersion: '9.0'\npackages:\n  a@1: {}\n",
+                ".gitlab-ci.yml": "image: alpine:3.15\nscript:\n  - make\n",
+                "deploy/app.yaml": pod,
+            },
+        )
+        assert images == {"nginx:1.27"}
+        assert len(parsed) == 1
+
+    def test_a_manifest_that_does_not_parse_is_skipped_and_the_walk_goes_on(
+        self, tmp_path
+    ):
+        """Parsing is per file: one broken manifest must not stop the others
+        being read. (The pre-existing malformed-file test names no `kind`, so
+        it no longer reaches the parser; this one does.)"""
+        images = self._discover(
+            tmp_path,
+            {
+                "a-broken.yaml": "apiVersion: v1\nkind: Pod\nspec: [unclosed\n",
+                "b-good.yaml": (
+                    "apiVersion: v1\nkind: Pod\nspec:\n  containers:\n"
+                    "  - name: app\n    image: nginx:1.27\n"
+                ),
+            },
+        )
+        assert images == {"nginx:1.27"}
+
+    @pytest.mark.parametrize(
+        ("name", "body", "images"),
+        [
+            pytest.param(
+                "list.k8s.yaml",
+                "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n"
+                "  kind: Pod\n  spec:\n    containers:\n    - name: app\n"
+                "      image: nginx:1.27\n",
+                set(),
+                id="kind-list",
+            ),
+            pytest.param(
+                "pod.k8s.yaml",
+                "apiVersion: v1\nkind: Pod\nspec:\n  containers:\n"
+                "  - name: app\n    image: nginx:1.27\n"
+                "  ephemeralContainers:\n  - name: debugger\n"
+                "    image: busybox:1.36\n",
+                {"nginx:1.27"},
+                id="ephemeral-containers",
+            ),
+        ],
+    )
+    def test_what_a_cluster_adds_or_wraps_is_not_read(
+        self, tmp_path, name, body, images
+    ):
+        """Guards for the limits of the reading, which the manifest rule does
+        not widen: an ephemeral container is added to a running Pod by a
+        debugger, and a `List` only wraps objects that are files of their own
+        elsewhere. Neither is an image the repository names to run."""
+        assert self._discover(tmp_path, {name: body}) == images
+
+    @pytest.mark.parametrize(
+        ("filler", "body", "last", "last_body"),
+        [
+            pytest.param(
+                "a/f{:03d}.yaml",
+                "x: 1\n",
+                "z/compose.yaml",
+                "services:\n  web:\n    image: nginx:1.27\n",
+                id="yaml",
+            ),
+            pytest.param(
+                "a{:03d}/Dockerfile",
+                "FROM scratch\n",
+                "z/Dockerfile",
+                "FROM nginx:1.27\n",
+                id="dockerfile",
+            ),
+        ],
+    )
+    def test_discovery_reads_every_file_not_the_first_300(
+        self, tmp_path, caplog, filler, body, last, last_body
+    ):
+        """The walk's 300-file cut is for a tool's command line, and discovery
+        puts nothing on one: past it, a repository with many YAML files or
+        Dockerfiles lost the files that sort last, under a WARNING that blamed
+        a command-line limit (measured: 350 YAML files and a `z/compose.yaml`
+        gave 300, without the compose file)."""
+        from scripts.cli.scan_jobs.tool_loop import MAX_FILE_ARGS
+
+        files = {filler.format(i): body for i in range(MAX_FILE_ARGS + 1)}
+        files[last] = last_body
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            images = self._discover(tmp_path, files)
+
+        assert images == {"nginx:1.27"}
+        assert "command-line length limit" not in caplog.text, caplog.text
+
 
 class TestAGitlabUrlIsClonedFromTheHostItNames:
     """`--gitlab-url gitlab.example.com` (no scheme) used to be replaced by
