@@ -80,12 +80,13 @@ _DIRECTIVES = frozenset({"syntax", "escape", "check"})
 # is matched too, to be stepped over, and has no marker group: a quoted span
 # (`echo "cat <<EOF here"`) and a backslash with the character it escapes
 # (`don\'t` opens no span; inside double quotes `\"` does not close one;
-# inside single quotes a backslash is a plain character). The scan runs left
-# to right, so the quote that opens the word itself (`<<"EOF"`) is part of
-# the word: the match starts at the space before `<<`.
+# inside single quotes a backslash is a plain character). An escaped space is
+# left alone: `<<` is an operator, so `a\ <<EOF` still opens a heredoc. The
+# scan runs left to right, so the quote that opens the word itself (`<<"EOF"`)
+# is part of the word: the match starts at the space before `<<`.
 _HEREDOC = re.compile(
     r"""(?:^|\s)\d*<<(-?)(["']?)([^\s"'<]+)\2(?=\s|$)"""
-    r"""|\\.|"(?:[^"\\]|\\.)*"|'[^']*'"""
+    r"""|\\\S|"(?:[^"\\]|\\.)*"|'[^']*'"""
 )
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
 

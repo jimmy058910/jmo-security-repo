@@ -1574,6 +1574,10 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
             pytest.param(
                 r'RUN printf \"x && cat <<EOF > "/y"', id="escaped-double-quote"
             ),
+            # An escaped space is no quote: `<<` is an operator, so the marker
+            # after `a\ ` still opens a heredoc. This one passed before the
+            # fix and failed after its first version (a fix to it, not a guard).
+            pytest.param(r"RUN echo a\ <<EOF", id="escaped-space-before-the-marker"),
             # The rest passed before the fix (found by probe). They guard it:
             # a quote that closes and one that never does read as shell reads them.
             pytest.param(
