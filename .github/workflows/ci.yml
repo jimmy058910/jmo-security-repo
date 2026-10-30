@@ -1855,7 +1855,10 @@ jobs:
   #
   # Always runs and filters in-job, as tool-contract-tests does, so the check
   # name is stable. The filter is that job's opengrep paths, plus the two files
-  # that decide how a Windows asset is fetched and named.
+  # that decide how a Windows asset is fetched and named, plus the two the
+  # checks in step 3 and the pytest step depend on: normalize_finding_path
+  # (adapters/common.py) and the report phase that applies it to every tool's
+  # location.path (normalize_and_report.py).
   #
   # PYTHONUTF8 is deliberately absent, as in windows-native-encoding. The other
   # Windows shard sets it, which hides code that only works under Python's
@@ -1888,7 +1891,10 @@ jobs:
         uses: dorny/paths-filter@v4
         with:
           # tool-contract-tests' opengrep paths, and the installer: it names the
-          # Windows download and renames it to opengrep.exe.
+          # Windows download and renames it to opengrep.exe. common.py and
+          # normalize_and_report.py are the path normalizer and the report phase:
+          # the tests and the scan step compare opengrep's backslash paths
+          # through them.
           filters: |
             opengrep:
               - 'versions.yaml'
@@ -1899,6 +1905,8 @@ jobs:
               - 'scripts/core/rule_bundle.py'
               - 'scripts/cli/scan_utils.py'
               - 'scripts/core/adapters/opengrep_adapter.py'
+              - 'scripts/core/adapters/common.py'
+              - 'scripts/core/normalize_and_report.py'
               - 'scripts/dev/fetch_rule_fixture.py'
               - 'scripts/jmo_rules/**'
               - 'tests/integration/test_rule_bundle_fixture.py'
