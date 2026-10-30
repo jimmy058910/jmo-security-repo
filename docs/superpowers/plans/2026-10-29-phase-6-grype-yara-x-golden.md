@@ -527,6 +527,35 @@ any gate counts them, and every later PR's `jmo scan` gates stop writing the rea
 - [ ] **Step 4:** Commit `fix: a non-interactive scan leaves ~/.jmo/config.yml alone`, body
   `Closes #1506`.
 
+## Task A5b: Two versions of one package take their own SBOM entry (folded in, no issue)
+
+Found by A5's review (2026-10-30); folded into PR A on Jimmy's word rather than filed.
+
+**Files:** `scripts/core/normalize_and_report.py` (`_find_sbom_match`, the function A5
+changed), its tests beside A5's.
+
+- [ ] **Step 1: Failing test:** one target whose SBOM lists one package at two versions
+  (two paths); a trivy finding naming that package and one of the versions, at a path
+  syft does not list (the by-name fallback) → `context.sbom` carries that version, for
+  each version in turn.
+- [ ] **Step 2:** Among by-name candidates, prefer the one whose version equals trivy's
+  `InstalledVersion`; without a version match, behave as today.
+- [ ] **Step 3:** Commit `fix: SBOM enrichment takes the package version trivy names`.
+
+## Task A6b: Every prompt guard survives a closed stdin (folded in, no issue)
+
+Found by A6's review (2026-10-30); folded into PR A on Jimmy's word rather than filed.
+
+**Files:** `scripts/cli/jmo.py`: the four guards A6 did not touch (the missing-tools
+prompt, `_collect_email_opt_in`, the resume prompt, the MCP install prompt), each calling a
+bare `sys.stdin.isatty()`; A6's `_stream_is_tty`.
+
+- [ ] **Step 1: Measure first:** run each guard's path with stdin closed (`<&-`, or
+  `sys.stdin = None` in-process): which raise, and what the user sees.
+- [ ] **Step 2: Failing tests** for each guard that raises; then implement with
+  `_stream_is_tty`, the closed stream read as not interactive.
+- [ ] **Step 3:** Commit `fix: a closed stdin reads as non-interactive at every prompt`.
+
 ## Task A7: The e2e helper's HOME hides the scanners and moves their caches (#1517)
 
 **Files:** `tests/conftest.py:106` (`jmo_runner`), `tests/e2e/test_linux_specific.py` (its
