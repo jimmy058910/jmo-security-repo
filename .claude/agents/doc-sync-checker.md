@@ -92,7 +92,7 @@ The full inventory is [docs/index.md](../../docs/index.md).
 1. **Check current tool lists in all docs:**
 
    ```bash
-   Grep: "trivy|semgrep|trufflehog|syft|checkov|hadolint|shellcheck|zizmor|yara|grype|zap|nuclei"
+   Grep: "trivy|opengrep|trufflehog|syft|checkov|hadolint|shellcheck|zizmor|yara|grype|zap|nuclei"
    ```
 
 2. **Identify docs that list tools:**
@@ -416,13 +416,13 @@ markdownlint docs/ README.md QUICKSTART.md
 
 **Current:**
 ```markdown
-Supported tools: trivy, semgrep, trufflehog
+Supported tools: trivy, opengrep, trufflehog
 ```
 
 **Update to:**
 
 ```markdown
-Supported tools: trivy, semgrep, trufflehog, snyk
+Supported tools: trivy, opengrep, trufflehog, snyk
 ```
 
 **Reason:** Snyk adapter was added in PR #XX

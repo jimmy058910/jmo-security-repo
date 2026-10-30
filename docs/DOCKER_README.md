@@ -250,7 +250,7 @@ results/
 ├── individual-repos/
 │   └── your-project/
 │       ├── trufflehog.json    # Secrets scan (working tree)
-│       ├── semgrep.json       # SAST results
+│       ├── opengrep.json      # SAST results
 │       ├── trivy.json         # Vulnerabilities
 │       └── ...
 └── summaries/
@@ -315,7 +315,7 @@ Every scanner in the image is considered; the ones the repository has content fo
 
 ```bash
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --tools trufflehog semgrep trivy --human-logs
+  scan --repo /scan --results /scan/results --tools trufflehog opengrep trivy --human-logs
 ```
 
 `--tools` replaces the list for this run; `--skip-tools zap nuclei` removes names from it instead.
@@ -488,11 +488,11 @@ Mount a custom configuration file. Every setting is a top-level key; a `tools:` 
 ```bash
 # Create jmo.yml in your project
 cat > jmo.yml <<EOF
-tools: [trufflehog, semgrep, trivy]
+tools: [trufflehog, opengrep, trivy]
 timeout: 300
 threads: 8
 per_tool:
-  semgrep:
+  opengrep:
     flags: ["--exclude", "node_modules", "--exclude", "*.test.js"]
   trivy:
     flags: ["--severity", "HIGH,CRITICAL"]
@@ -612,10 +612,12 @@ suppressions:
 
 ```bash
 # Run as current user to avoid permission issues
-docker run --rm --user $(id -u):$(id -g) \
+docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp \
   -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results
 ```
+
+Keep `-e HOME=/tmp` with `--user`. With a uid other than 1000 the container's `HOME` is `/`, and opengrep cannot unpack itself there: it exits 2 with `failed to open '/.cache/opengrep/v1.32.0/opengrep.bin' for writing` (measured). Any writable directory will do.
 
 ### Resource Limits
 
@@ -1046,8 +1048,8 @@ docker run --rm \
 # Fix permissions
 chmod 755 ~/.jmo
 
-# Run as current user
-docker run --rm --user $(id -u):$(id -g) \
+# Run as current user (-e HOME=/tmp: opengrep needs a writable HOME)
+docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp \
   -v ~/.jmo:/root/.jmo ...
 ```
 
@@ -1137,7 +1139,7 @@ sudo usermod -aG docker $USER
 
 ```bash
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --tools trufflehog semgrep trivy
+  scan --repo /scan --results /scan/results --tools trufflehog opengrep trivy
 ```
 
 **Solution 2:** Increase threads
@@ -1207,10 +1209,10 @@ docker run --rm -v "C:\Projects\myrepo://scan" \
 
 **Problem:** Container created files as root
 
-**Solution:** Run as current user:
+**Solution:** Run as current user, with a writable `HOME` (opengrep unpacks itself there; with a uid other than 1000 the container's `HOME` is `/`):
 
 ```bash
-docker run --rm --user $(id -u):$(id -g) \
+docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp \
   -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results
 ```
@@ -1293,7 +1295,7 @@ docker build -t my-custom-security:latest .
 **1. Run as non-root:**
 
 ```bash
-docker run --rm --user $(id -u):$(id -g) ...
+docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp ...
 ```
 
 **2. Use read-only volumes when possible:**

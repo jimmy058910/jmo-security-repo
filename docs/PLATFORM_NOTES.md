@@ -38,7 +38,10 @@ Cross-platform compatibility guide for JMo Security development on Windows, WSL,
 
 ```bash
 # Homebrew is recommended for security tools
-brew install trivy semgrep shellcheck
+brew install trivy shellcheck
+
+# opengrep, the code scanner, is one static binary that JMo downloads itself
+jmo tools install opengrep
 
 # Some tools require Rosetta 2 on Apple Silicon
 softwareupdate --install-rosetta
@@ -59,7 +62,10 @@ softwareupdate --install-rosetta
 sudo apt-get install shellcheck
 
 # Tools installed via pip
-pip install --user semgrep checkov
+pip install --user checkov
+
+# opengrep, the code scanner, is one static binary that JMo downloads itself
+jmo tools install opengrep
 
 # Ensure ~/.local/bin is in PATH
 export PATH="$HOME/.local/bin:$PATH"

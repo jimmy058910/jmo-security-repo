@@ -123,7 +123,7 @@ jmo scan --image nginx:latest --results-dir ./image-scan
 jmo ci --repo . --fail-on HIGH
 ```
 
-**Narrow the tool list:** `jmo scan` considers all 15 scanners and the target's content decides which run. Use `--tools trivy semgrep` or `--skip-tools zap` to narrow it. See [docs/TOOLS.md](docs/TOOLS.md).
+**Narrow the tool list:** `jmo scan` considers all 15 scanners and the target's content decides which run. Use `--tools trivy opengrep` or `--skip-tools zap` to narrow it. See [docs/TOOLS.md](docs/TOOLS.md).
 
 ---
 

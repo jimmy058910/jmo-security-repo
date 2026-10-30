@@ -120,7 +120,7 @@ python3 scripts/dev/update_versions.py --sync
 python3 scripts/dev/update_versions.py --report
 ```
 
-**Critical tools** (must be updated within 7 days of new release): trivy, trufflehog, semgrep, checkov, zap, syft
+**Critical tools** (must be updated within 7 days of new release): trivy, trufflehog, opengrep, checkov, zap, syft
 
 **Complete guide:** [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
 
@@ -234,7 +234,7 @@ These checks run automatically on commit and are also enforced in CI (note: the 
 jmo scan --repo . --human-logs
 
 # Quick scan with a narrowed tool list
-jmo scan --repo . --tools trivy semgrep --human-logs
+jmo scan --repo . --tools trivy opengrep --human-logs
 
 # Generate reports from existing scan (--profile writes parse timings)
 jmo report ./results --profile --human-logs
@@ -308,7 +308,7 @@ All outputs use the standardized metadata wrapper:
     "schema_version": "1.2.0",
     "timestamp": "2025-12-22T10:30:00Z",
     "scan_id": "abc123",
-    "tools": ["trivy", "semgrep", "checkov", "..."],
+    "tools": ["trivy", "opengrep", "checkov", "..."],
     "finding_count": 68
   },
   "findings": [...]
@@ -1089,7 +1089,7 @@ JMo Security uses a plugin-based architecture for all 15 adapters. This enables 
 
 > **Important:** Use the utilities in `scripts/core/adapters/common.py` for consistent JSON loading and error handling. This ensures proper UTF-8 handling, empty file detection, and standardized logging.
 >
-> **Severity Mapping:** Use `map_tool_severity()` from `scripts/core/common_finding.py` for tool-specific severity normalization. This centralized function handles mappings for ZAP, Semgrep, Nuclei, and falls back to generic normalization for other tools. See [Severity Mapping](#severity-mapping) for details.
+> **Severity Mapping:** Use `map_tool_severity()` from `scripts/core/common_finding.py` for tool-specific severity normalization. This centralized function handles mappings for ZAP, Opengrep, Nuclei, and falls back to generic normalization for other tools. See [Severity Mapping](#severity-mapping) for details.
 >
 > **Compliance Enrichment:** Adapters should NOT handle compliance enrichment. Return raw findings and let the report phase handle enrichment. All findings are enriched centrally in `normalize_and_report.py` via `enrich_findings_with_compliance()` after collection and deduplication. This single-pass batch operation is more efficient than per-adapter enrichment.
 
@@ -1221,7 +1221,7 @@ jmo report results --human-logs
 ### Adding a tool that emits SARIF
 
 Many scanners emit SARIF 2.1.0 (trivy, gitleaks, trufflehog, osv-scanner, zizmor,
-opengrep, semgrep, checkov, kube-linter, hadolint, gosec, bandit, CodeQL). For any of
+opengrep, checkov, kube-linter, hadolint, gosec, bandit, CodeQL). For any of
 them the adapter is **one binding file** over the shared importer in
 `scripts/core/adapters/sarif_common.py`. `zizmor_adapter.py`, `gitleaks_adapter.py` and
 `osv_scanner_adapter.py` are the three shipped examples, 34 lines each:
@@ -1349,7 +1349,7 @@ JMo Security provides centralized severity mapping via `map_tool_severity()` in 
 | Tool | Tool Severity Values | CommonFinding Mapping |
 |------|---------------------|----------------------|
 | ZAP | informational, low, medium, high, critical | INFO, LOW, MEDIUM, HIGH, CRITICAL |
-| Semgrep | error, warning, info | HIGH, MEDIUM, LOW |
+| Opengrep | error, warning, info | HIGH, MEDIUM, LOW |
 | Nuclei | info, low, medium, high, critical, unknown | INFO, LOW, MEDIUM, HIGH, CRITICAL, INFO |
 
 **Usage in Adapters:**
@@ -1359,7 +1359,7 @@ from scripts.core.common_finding import map_tool_severity
 
 # Tool-specific mapping (uses TOOL_SEVERITY_MAPPINGS)
 severity = map_tool_severity("zap", "informational")  # Returns "INFO"
-severity = map_tool_severity("semgrep", "ERROR")      # Returns "HIGH"
+severity = map_tool_severity("opengrep", "ERROR")     # Returns "HIGH"
 severity = map_tool_severity("nuclei", "critical")    # Returns "CRITICAL"
 
 # Unknown tools fall back to generic normalize_severity()
