@@ -19,6 +19,7 @@ reacts to.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -1038,6 +1039,26 @@ class TestServerModules:
 
         assert rc == 0, _triples(_results(out))
 
+    def test_many_template_literal_decoys_are_scanned_in_linear_time(self, tmp_path):
+        """Crafted input: each `import "server-only"` text was checked against
+        every string in the file, so 20,000 decoys (720 KB) took 6 s and twice
+        that many, four times as long. The bound is generous (linear is well
+        under a second)."""
+        decoy = b'const d = `\nimport "server-only"\n`;\n'
+        target = tmp_path / "t"
+        _plant(target, "lib/a.ts", decoy * 30_000 + _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        started = time.perf_counter()
+        rc = _run(target, out)
+        elapsed = time.perf_counter() - started
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "lib/a.ts", 30_000 * 3 + 1)
+        ]
+        assert elapsed < 5, f"{elapsed:.1f} s for 30,000 decoys"
+
     @pytest.mark.parametrize(
         ("rel", "head"),
         [
@@ -1552,6 +1573,28 @@ class TestFirebaseRules:
             (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 3),
             (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 5),
         ]
+
+    @pytest.mark.parametrize(
+        "run", [b"\n", b"\r\n", b" \n"], ids=["LF", "CRLF", "SP-LF"]
+    )
+    def test_a_long_run_of_blank_lines_is_scanned_in_linear_time(self, tmp_path, run):
+        """Crafted input: each newline's look-ahead for the next statement
+        rescanned the whole whitespace run after it, so 50,000 blank lines
+        took 16 s and a megabyte, minutes. The bound is generous (linear is
+        well under a tenth of a second) so a slow runner cannot trip it."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", b"allow read: if true" + run * 40_000)
+        out = tmp_path / "o.sarif"
+
+        started = time.perf_counter()
+        rc = _run(target, out)
+        elapsed = time.perf_counter() - started
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 1)
+        ]
+        assert elapsed < 5, f"{elapsed:.1f} s for 40,000 blank lines"
 
     @pytest.mark.parametrize(
         ("rule", "findings"),
