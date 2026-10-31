@@ -1574,16 +1574,16 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
             pytest.param(
                 r'RUN printf \"x && cat <<EOF > "/y"', id="escaped-double-quote"
             ),
-            # An escaped space is no quote: `<<` is an operator, so the marker
-            # after `a\ ` still opens a heredoc. This one passed before the
-            # fix and failed after its first version (a fix to it, not a guard).
-            pytest.param(r"RUN echo a\ <<EOF", id="escaped-space-before-the-marker"),
             # The rest passed before the fix (found by probe). They guard it:
-            # a quote that closes and one that never does read as shell reads them.
+            # a quote that closes and one that never does read as shell reads
+            # them, and an escaped backslash escapes no space after it.
             pytest.param(
                 'RUN echo "x y" && cat <<EOF > /x', id="guard-closed-quoted-span"
             ),
             pytest.param("RUN echo it's <<EOF", id="guard-unbalanced-apostrophe"),
+            pytest.param(
+                r"RUN echo a\\ <<EOF", id="guard-escaped-backslash-then-space"
+            ),
         ],
     )
     def test_an_escaped_quote_does_not_hide_a_heredoc_marker(self, tmp_path, line):
@@ -1599,6 +1599,29 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
             "alpine:3.19",
             "nginx:1.27",
         }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            pytest.param(r"RUN echo a\ <<EOF", id="escaped-space-before-the-marker"),
+            pytest.param("RUN echo a\\\t<<EOF", id="escaped-tab-before-the-marker"),
+        ],
+    )
+    def test_an_escaped_whitespace_before_the_operator_opens_no_heredoc(
+        self, tmp_path, caplog, line
+    ):
+        """A backslash escapes the next character, whitespace too, so `a\\ <<EOF`
+        is one word and not a heredoc, as BuildKit reads it: the Dockerfile
+        builds, and the FROM after it is read. Taking the space for a word
+        break opened a heredoc that swallowed every later FROM."""
+        dockerfile = f"FROM alpine:3.19\n{line}\nFROM nginx:1.27\n"
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"Dockerfile": dockerfile})
+
+        assert images == {"alpine:3.19", "nginx:1.27"}
+        assert caplog.messages == []
 
     @pytest.mark.parametrize(
         ("line", "marker", "indent"),
