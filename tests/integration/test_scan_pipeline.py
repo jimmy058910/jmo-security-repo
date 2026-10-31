@@ -8,9 +8,9 @@ These tests validate the complete scan workflow:
 - Output generation
 - Deduplication effectiveness
 
-Requires: semgrep, the tool that reports on this fixture (measured
-2026-09-26: semgrep 3 findings; trufflehog, if installed, 0).
-Runtime: ~15 seconds per scan with semgrep and trufflehog installed
+Requires: opengrep, the tool that reports on this fixture (measured
+2026-10-31 with opengrep 1.32.0: 4 findings; trufflehog, if installed, 0).
+Runtime: ~8 seconds per scan with opengrep and trufflehog installed
 
 Until #1334 these asserted nothing: they read `findings.json`, `summary.md`
 and `individual-sast/` at the results root, where no scan writes, and each
@@ -61,11 +61,11 @@ def isolated_jmo_state(tmp_path_factory, monkeypatch):
     """
     sandbox = tmp_path_factory.mktemp("jmo-sandbox")
     # The real user base, read before HOME moves: on Linux a `pip --user`
-    # scanner (semgrep, as the nightly installs it) finds its packages through
-    # HOME, so under the sandbox it died with "No module named 'semgrep'",
-    # rc 1 and no output, and semgrep's row read `failed` (measured in WSL
-    # and in the nightly). Windows keeps the user site under APPDATA, which is
-    # why only Linux showed it.
+    # scanner (semgrep, as the nightly installed it until opengrep replaced
+    # it) finds its packages through HOME, so under the sandbox it died with
+    # "No module named 'semgrep'", rc 1 and no output, and semgrep's row read
+    # `failed` (measured in WSL and in the nightly). Windows keeps the user
+    # site under APPDATA, which is why only Linux showed it.
     monkeypatch.setenv("PYTHONUSERBASE", site.getuserbase())
     monkeypatch.setenv("HOME", str(sandbox))
     monkeypatch.setenv("USERPROFILE", str(sandbox))
@@ -123,18 +123,22 @@ def run_scan(
 
 
 def assert_scanned(result: subprocess.CompletedProcess, results_dir: Path) -> None:
-    """The scan exited 0, and semgrep, the tool that reports on this fixture,
-    ran. A semgrep that is not installed skips the test rather than failing
+    """The scan exited 0, and opengrep, the tool that reports on this fixture,
+    ran. An opengrep that is not installed skips the test rather than failing
     it; one that ran and failed shows in the return code first."""
     assert result.returncode == 0, result.stderr[-3000:]
     meta = json.loads((results_dir / ".scan_metadata.json").read_bytes())
-    semgrep = next(row for row in meta["tool_runs"] if row["tool"] == "semgrep")
-    if semgrep["state"] == "skipped" and semgrep["reason"] == "not installed":
-        pytest.skip("semgrep is not installed: it is the tool that reports here")
+    rows = {row["tool"]: row for row in meta["tool_runs"]}
+    # Named, not a bare StopIteration: semgrep's row vanished that way (#1526).
+    assert "opengrep" in rows, f"no opengrep row; the scan's rows: {sorted(rows)}"
+    opengrep = rows["opengrep"]
+    if opengrep["state"] == "skipped" and opengrep["reason"] == "not installed":
+        pytest.skip("opengrep is not installed: it is the tool that reports here")
     # The reason and detail, spelled out: pytest cuts a dict repr to `...`
     # before them, and the nightly's failure said nothing but `failed`.
-    assert semgrep["state"] == "ran", (
-        f"semgrep {semgrep['state']}: {semgrep.get('reason')}: {semgrep.get('detail')}"
+    assert opengrep["state"] == "ran", (
+        f"opengrep {opengrep['state']}: {opengrep.get('reason')}: "
+        f"{opengrep.get('detail')}"
     )
 
 
@@ -233,7 +237,7 @@ class TestScanPipeline:
         assert_scanned(run_scan(sample_vulnerable_repo, results_dir), results_dir)
 
         findings = load_findings(results_dir)
-        assert findings, "semgrep ran and the report holds nothing"
+        assert findings, "opengrep ran and the report holds nothing"
         for finding in findings:
             assert finding.get("severity"), finding
             assert finding.get("message") or finding.get("title"), finding
@@ -261,9 +265,10 @@ class TestDeduplicationEffectiveness:
     ):
         """The report neither invents findings nor drops them all.
 
-        This fixture has no duplicates to remove (measured 2026-09-26: 3 raw,
-        3 reported), so the 20-50% reduction this test used to promise was
-        never observable here: the relation, not a ratio, is what holds.
+        This fixture has no duplicates to remove (measured 2026-10-31: 4 raw,
+        4 reported, all opengrep's), so the 20-50% reduction this test used to
+        promise was never observable here: the relation, not a ratio, is what
+        holds.
         """
         results_dir = tmp_path / "results"
 

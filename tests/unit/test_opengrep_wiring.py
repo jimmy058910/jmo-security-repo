@@ -1237,10 +1237,13 @@ def test_the_incremental_recipe_through_the_real_binary(
     tmp_path, commit, scanned
 ) -> None:
     """The recipe in docs/SCAN_OPTIMIZATION.md, run for real on a repository
-    whose last commit is each kind. Measured before the skip: a test-only
-    commit read `failed:examined 0 files` and a deletion-only one the same, so
-    a CI job that scanned every push exited 1 on them; a commit with source
-    still reads `ran`, having read only what the commit changed."""
+    whose last commit is each kind. Measured before `Reason.NO_CHANGED_FILES`
+    existed: a test-only commit read `failed:examined 0 files` and a
+    deletion-only one the same, so a CI job that scanned every push exited 1
+    on them; a commit with source still reads `ran`, having read only what the
+    commit changed."""
+    if shutil.which("opengrep") is None:
+        pytest.skip("opengrep is not on PATH")
     repo = _history(tmp_path)
     _commit(repo, commit, "last")
     out = tmp_path / "out"
