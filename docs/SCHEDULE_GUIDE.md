@@ -73,8 +73,15 @@ the scan runs with no target.
 | Container images | `{"images": ["nginx:latest", ...]}` | `--image` (repeatable) |
 | Web URLs | `{"web": {"urls": ["https://...", ...]}}` | `--url` (repeatable) |
 | IaC files | `{"iac": {"terraform_state": ..., "cloudformation": ..., "k8s_manifest": ...}}` | — |
-| GitLab | `{"gitlab": {"repo": ..., "group": ...}}` | — |
+| GitLab | `{"gitlab": {"repo": ..., "group": ..., "url": ...}}` | — |
 | Kubernetes | `{"kubernetes": {"context": ..., "namespace": ...}}` | — |
+
+A GitLab target's optional `url` is a self-hosted instance's address; without
+it the scan uses gitlab.com. Every backend passes it on as `--gitlab-url`.
+`ScanSchedule.from_simple_args(gitlab_url=...)` stores it as `jmo scan` clones
+from it (a bare host becomes `https://<host>`), and a URL `jmo scan` would
+refuse (`ssh://`, a user or `@` before the host, a `%` escape, ...) is refused
+when the schedule is stored and again when it is exported or installed.
 
 The GitLab CI generator currently emits only the first three; IaC, GitLab and
 Kubernetes targets reach the GitHub Actions and local-cron backends.

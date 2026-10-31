@@ -7,7 +7,11 @@ import shlex
 from datetime import UTC
 from typing import Any
 
-from scripts.core.schedule_manager import ScanSchedule, reject_api_spec_without_url
+from scripts.core.schedule_manager import (
+    ScanSchedule,
+    gitlab_target_url,
+    reject_api_spec_without_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +250,11 @@ class GitLabCIGenerator:
         # GitHub generator does with `${{ secrets.GITLAB_TOKEN }}`.
         if "gitlab" in targets:
             gitlab = targets["gitlab"]
+            # Without it a self-hosted instance's project is cloned from
+            # gitlab.com, which is offered the instance's token.
+            gitlab_url = gitlab_target_url(gitlab)
+            if gitlab_url:
+                cmd_parts.append(f"--gitlab-url {shlex.quote(gitlab_url)}")
             if "repo" in gitlab:
                 cmd_parts.append(f"--gitlab-repo {shlex.quote(gitlab['repo'])}")
             if "group" in gitlab:

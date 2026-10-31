@@ -465,6 +465,22 @@ All notable changes to JMo Security will be documented in this file.
   GitLab host is written with one, and a client may decode it to another host), a `:` with
   no port after it, and whitespace, a backslash, `?` or `#`. A reason names the problem and
   never repeats the value, which can hold a password typed into it.
+- **A schedule, a cron job, a generated workflow and the wizard's workflow keep a
+  self-hosted GitLab URL, so they no longer clone gitlab.com with the instance's token.**
+  A schedule stored a GitLab target as a repository or a group and no URL, and the cron
+  line, the GitHub Actions workflow and the GitLab CI job emitted `--gitlab-repo` or
+  `--gitlab-group` without `--gitlab-url`, as did the wizard's GitHub Actions workflow
+  for the URL it had asked for. `jmo scan` then used `https://gitlab.com`, which was
+  offered the self-hosted instance's token. `targets.gitlab` gains an optional `url`
+  (`ScanSchedule.from_simple_args(gitlab_url=...)` stores it as `jmo scan` clones from
+  it; without one, gitlab.com is still the default) and each of those writes
+  `--gitlab-url <url>`, shell-quoted, when there is one; the wizard writes it when it is
+  not gitlab.com. They check it with the check `jmo scan` makes of `--gitlab-url`, now
+  `gitlab_clone_base` in `scripts/core/validation.py`, so a schedule cannot store a URL
+  the scan would refuse (`ScheduleManager.create` and `update` raise), and an exporter,
+  `jmo schedule install` or the wizard refuses a hand-edited one with a reason that never
+  repeats it. `jmo schedule create` has no GitLab flags, so a GitLab schedule is still
+  made through `from_simple_args` or `schedules.json`.
 - **A closed stdin (`jmo scan <&-`) no longer breaks the prompt guards that ask whether
   stdin is a terminal.** A process started with stdin closed has `sys.stdin` set to None,
   and those guards asked `sys.stdin.isatty()`, which raises. The first-run email prompt of

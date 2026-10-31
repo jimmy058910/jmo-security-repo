@@ -66,7 +66,11 @@ MAXIMAL_TARGETS: dict[str, object] = {
         "k8s_manifest": "/srv/deploy.yaml",
     },
     "web": {"urls": ["https://example.test/app"], "api_spec": "/srv/openapi.yaml"},
-    "gitlab": {"repo": "group/project", "group": "mygroup"},
+    "gitlab": {
+        "repo": "group/project",
+        "group": "mygroup",
+        "url": "https://gitlab.example.test:8443",
+    },
     "kubernetes": {"context": "prod-cluster", "namespace": "payments"},
 }
 
@@ -84,6 +88,7 @@ EXPECTED: list[tuple[str, str]] = [
     ("--api-spec", "/srv/openapi.yaml"),
     ("--gitlab-repo", "group/project"),
     ("--gitlab-group", "mygroup"),
+    ("--gitlab-url", "https://gitlab.example.test:8443"),
     ("--k8s-context", "prod-cluster"),
     ("--k8s-namespace", "payments"),
 ]

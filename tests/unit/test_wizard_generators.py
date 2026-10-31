@@ -16,10 +16,12 @@ There are no scan profiles (v2.0.0): nothing here selects one, and threads /
 timeout defaults come from jmo.yml's top level (or 4 / 600), not a profile.
 """
 
+import shlex
 from dataclasses import dataclass, field
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 from scripts.cli.wizard_generators import (
     JMO_DOCKER_IMAGE_FULL,
@@ -45,6 +47,7 @@ class MockTarget:
     url: str | None = None
     iac_type: str | None = None
     gitlab_repo: str | None = None
+    gitlab_url: str = "https://gitlab.com"
     k8s_context: str | None = None
 
 
@@ -412,6 +415,104 @@ def test_generate_github_actions_native_mode_gitlab(mock_config):
     assert "Configure GitLab Access" in result
     assert "GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}" in result
     assert "NOTE: Add GITLAB_TOKEN secret" in result
+
+
+def _native_scan_command(config) -> str:
+    """The native workflow's scan step, as its shell receives it."""
+    workflow = yaml.safe_load(generate_github_actions(config))
+    steps = workflow["jobs"]["security-scan"]["steps"]
+    run = next(s["run"] for s in steps if s.get("name") == "Run Security Scan")
+    return run.replace("\\\n", " ")
+
+
+def _native_scan_argv(config) -> list[str]:
+    """The `jmo` argv of the native workflow's scan step, as its shell lexes it."""
+    return shlex.split(_native_scan_command(config))
+
+
+def _gitlab_config(mock_config, url):
+    mock_config.use_docker = False
+    mock_config.target.type = "gitlab"
+    mock_config.target.gitlab_repo = "dev/app"
+    mock_config.target.gitlab_url = url
+    return mock_config
+
+
+def test_generate_github_actions_native_mode_gitlab_keeps_a_self_hosted_url(
+    mock_config,
+):
+    """Without `--gitlab-url` the workflow cloned `dev/app` from gitlab.com and
+    offered it the self-hosted instance's token."""
+    argv = _native_scan_argv(_gitlab_config(mock_config, "https://gitlab.example.test"))
+
+    assert argv[argv.index("--gitlab-url") + 1] == "https://gitlab.example.test"
+    assert argv[argv.index("--gitlab-repo") + 1] == "dev/app"
+
+
+def test_generate_github_actions_native_mode_gitlab_emits_the_url_a_scan_clones_from(
+    mock_config,
+):
+    argv = _native_scan_argv(
+        _gitlab_config(mock_config, "  gitlab.example.test:8443/gl/ ")
+    )
+
+    assert argv[argv.index("--gitlab-url") + 1] == "https://gitlab.example.test:8443/gl"
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://gitlab.com", "https://gitlab.com/", "HTTPS://gitlab.com", "", "  ", None],
+    ids=["default", "slash", "uppercase", "empty", "blank", "none"],
+)
+def test_generate_github_actions_native_mode_gitlab_default_url_is_no_flag(
+    mock_config, url
+):
+    """The wizard's default is gitlab.com, which `jmo scan` assumes."""
+    result = generate_github_actions(_gitlab_config(mock_config, url))
+
+    assert "--gitlab-url" not in result
+    assert "--gitlab-repo dev/app" in result
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://gitlab.example.test/$(touch${IFS}/tmp/pwned);id",
+        "https://gitlab.example.test/`id`",
+        "https://gitlab.example.test/it's",
+        'https://gitlab.example.test/say"hi"',
+    ],
+    ids=["substitution", "backticks", "single-quote", "double-quotes"],
+)
+def test_generate_github_actions_native_mode_gitlab_quotes_the_url(mock_config, url):
+    """The step is shell: the URL is written shell-quoted, so a shell reads it
+    back as the URL and nothing more."""
+    config = _gitlab_config(mock_config, url)
+
+    command = _native_scan_command(config)
+
+    assert f"--gitlab-url {shlex.quote(url)}" in command
+    argv = shlex.split(command)
+    assert argv[argv.index("--gitlab-url") + 1] == url
+
+
+@pytest.mark.parametrize(
+    ("url", "named"),
+    [
+        ("ssh://git@gitlab.example.test", "ssh://"),
+        ("https://deploy:hunter2@gitlab.example.test", "--gitlab-token"),
+        ("https:/gitlab.example.test", "scheme word"),
+    ],
+    ids=["ssh", "userinfo", "scheme-word"],
+)
+def test_generate_github_actions_native_mode_gitlab_refuses_a_url_the_scan_refuses(
+    mock_config, url, named
+):
+    with pytest.raises(ValueError, match="gitlab") as refused:
+        generate_github_actions(_gitlab_config(mock_config, url))
+
+    assert named in str(refused.value)
+    assert "hunter2" not in str(refused.value)
 
 
 def test_generate_github_actions_native_mode_k8s(mock_config):

@@ -12,6 +12,8 @@ from typing import Any, TypeVar
 
 from croniter import croniter
 
+from scripts.core.validation import gitlab_clone_base
+
 logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
@@ -95,6 +97,55 @@ def reject_api_spec_without_url(web: dict[str, Any]) -> None:
             "definition, so this schedule would render a command that exits 2. "
             "Add the API's address as a URL."
         )
+
+
+class InvalidGitLabUrlError(ValueError):
+    """A schedule names a GitLab URL that `jmo scan --gitlab-url` would refuse."""
+
+
+def gitlab_target_url(gitlab: dict[str, Any]) -> str | None:
+    """The `--gitlab-url` a schedule's `targets["gitlab"]` needs, or None.
+
+    None when the target names no URL, which `jmo scan` reads as gitlab.com.
+    Otherwise the URL as `scan_gitlab_repo` clones from it (`gitlab_clone_base`,
+    the one check of a GitLab URL): a bare host becomes `https://<host>`.
+    Without `--gitlab-url` a scan of a self-hosted instance cloned gitlab.com and
+    offered it the instance's token, so every writer and every generator asks
+    this, and a URL the scan would refuse is refused where the schedule is built
+    or stored, not when it first fires. The message never repeats the URL, which
+    may carry credentials typed into it.
+
+    Raises:
+        InvalidGitLabUrlError: `url` is not text, or the scan would refuse it.
+    """
+    raw = gitlab.get("url")
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise InvalidGitLabUrlError(
+            "gitlab.url must be text, the GitLab instance's URL"
+        )
+    if not raw.strip():
+        return None
+    try:
+        return gitlab_clone_base(raw)
+    except ValueError as exc:
+        raise InvalidGitLabUrlError(
+            f"gitlab.url is a URL `jmo scan --gitlab-url` would refuse: {exc}"
+        ) from None
+
+
+def _reject_unusable_gitlab_url(schedule: ScanSchedule) -> None:
+    """Raise if `schedule`'s GitLab target holds a URL the scan would refuse.
+
+    Called by the manager before it stores a schedule, so a schedule built any
+    way (the factory, the CLI, a `ScanSchedule(...)` written out by hand) cannot
+    be stored with one. Not called when the file is read: one hand-edited
+    schedule must not take out `list`, and the generators check it again.
+    """
+    gitlab = schedule.spec.jobTemplate.targets.get("gitlab")
+    if gitlab:
+        gitlab_target_url(gitlab)
 
 
 @dataclass
@@ -273,6 +324,13 @@ class ScanSchedule:
             gitlab["repo"] = kwargs.pop("gitlab_repo")
         if "gitlab_group" in kwargs:
             gitlab["group"] = kwargs.pop("gitlab_group")
+        # A self-hosted instance's address. Stored as `jmo scan` clones from it,
+        # and refused here if the scan would refuse it; a blank one is the
+        # gitlab.com default and is not stored.
+        if "gitlab_url" in kwargs:
+            url = gitlab_target_url({"url": kwargs.pop("gitlab_url")})
+            if url:
+                gitlab["url"] = url
         if gitlab:
             targets["gitlab"] = gitlab
 
@@ -376,6 +434,8 @@ class ScheduleManager:
         except ValueError as e:
             raise ValueError(f"Invalid cron syntax: {e}")
 
+        _reject_unusable_gitlab_url(schedule)
+
         # Compute next run time
         now = datetime.now(UTC)
         schedule.status.nextScheduleTime = self._next_run(schedule.spec.schedule, now)
@@ -439,6 +499,8 @@ class ScheduleManager:
         Friday 02:00 for a Monday-05:30 schedule -- three days and three and a
         half hours out, on the wrong weekday, at rc 0 with a success message.
         """
+        _reject_unusable_gitlab_url(schedule)
+
         manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
 
         # Find and replace
