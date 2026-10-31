@@ -380,6 +380,17 @@ class TestCommentStripping:
         assert "block" not in stripped
         assert "comment" not in stripped
 
+    def test_sql_literals_and_comments_are_blanked_but_line_breaks_are_kept(self):
+        text = "a 'b\n c' $t$ d\n$t$ -- e\n/* f */ g\n"
+
+        blanked = native_checks.blank_sql_literals(text)
+
+        assert len(blanked) == len(text)
+        assert [i for i, c in enumerate(blanked) if c == "\n"] == [
+            i for i, c in enumerate(text) if c == "\n"
+        ]
+        assert blanked.split() == ["a", "g"]
+
 
 class TestMigrationRules:
     """SQL findings are located at their `create table` statement,
@@ -492,6 +503,70 @@ class TestMigrationRules:
         mig = target / "supabase" / "migrations"
         (mig / "1_init.sql").write_bytes(created)
         (mig / "2_drop.sql").write_bytes(dropped)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            b"create function f() returns void as $$ begin\n"
+            b"  execute 'drop table public.notes';\n"
+            b"end $$ language plpgsql;\n",
+            b"comment on table public.notes is 'drop table public.notes';\n",
+            b"insert into log values ('it''s; drop table public.notes');\n",
+            b"create function f() returns void as $fn$ begin\n"
+            b"  drop table public.notes;\n"
+            b"end $fn$ language plpgsql;\n",
+            # A different tag, or `$$`, inside a tagged body does not close it.
+            b"select $a$ $$ drop table public.notes $$ $a$;\n",
+        ],
+        ids=["dollar body", "string", "string with ''", "tagged body", "nested tag"],
+    )
+    def test_a_drop_table_inside_a_string_or_a_body_does_not_drop_the_table(
+        self, tmp_path, statement
+    ):
+        """`drop table` in a function body or a string literal ran no drop at
+        migration time, but popped the table from the RLS state, so a table
+        without Row Level Security read as gone."""
+        target = self._migrations(tmp_path)
+        (target / "supabase" / "migrations" / "1.sql").write_bytes(
+            b"create table public.notes (id int);\n" + statement
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_TABLE_NO_RLS, "supabase/migrations/1.sql", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "before",
+        [
+            b"select 'a''b';\n",
+            b"create function f() returns void as $$ begin null; end $$;\n",
+            b"select $1, $2;\n",
+            # A `--` or `/*` inside a string is not a comment, and a quote
+            # inside a comment does not open a string.
+            b"comment on table public.notes is 'x -- y';\n",
+            b"select '/*';\n",
+            b"-- it's a comment\n",
+            b"/* don't */\n",
+        ],
+    )
+    def test_a_real_drop_after_a_string_or_a_body_still_drops_the_table(
+        self, tmp_path, before
+    ):
+        target = self._migrations(tmp_path)
+        (target / "supabase" / "migrations" / "1.sql").write_bytes(
+            b"create table public.notes (id int);\n"
+            + before
+            + b"drop table public.notes;\n"
+        )
         out = tmp_path / "o.sarif"
 
         rc = _run(target, out)

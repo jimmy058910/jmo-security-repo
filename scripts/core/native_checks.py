@@ -391,6 +391,31 @@ def strip_sql_comments(text: str) -> str:
     return "".join(out)
 
 
+# Leftmost token first, as `_CODE_TOKENS` does for JS: a comment, a '...'
+# string (`''` is a quote inside it), or a `$$...$$`/`$tag$...$tag$` body, the
+# one hiding a quote or `--` from the others. A tag is an identifier, and
+# `a$$` is one (so is `$1`, which has no closing `$`). Unterminated runs to
+# the end, as Postgres would reject it anyway.
+_SQL_TOKENS = re.compile(
+    r"""--[^\n]*"""
+    r"""|/\*.*?(?:\*/|\Z)"""
+    r"""|'[^']*(?:''[^']*)*'?"""
+    r"""|(?<![\w$])\$(?P<tag>[A-Za-z_]\w*|)\$.*?(?:\$(?P=tag)\$|\Z)""",
+    re.DOTALL,
+)
+
+
+def blank_sql_literals(text: str) -> str:
+    """Blank `--` and `/* */` comments, `'...'` string literals and
+    dollar-quoted bodies in migration SQL, one for one and keeping every line
+    break, so a statement written inside one (`execute 'drop table x'` in a
+    function body) is not read as run, and offsets still line up with
+    :func:`strip_sql_comments`'s text. Read from the raw text rather than from
+    that function's output, which is not string-aware: it would blank the
+    closing quote of `'a -- b'`, and this would then read on as one string."""
+    return _SQL_TOKENS.sub(lambda match: _NOT_NEWLINE.sub(" ", match.group(0)), text)
+
+
 # --- walk --------------------------------------------------------------------
 
 
@@ -598,12 +623,15 @@ def scan_migrations(root: Path) -> list[NativeFinding]:
             raw = path.read_bytes()
         except OSError:
             continue
-        sql = strip_sql_comments(raw.decode("utf-8", errors="replace"))
+        text = raw.decode("utf-8", errors="replace")
+        sql = strip_sql_comments(text)
+        # A drop is read where it runs: not inside a string or a body.
+        run_sql = blank_sql_literals(text)
         statements = sorted(
             (
                 match
                 for regex in (CREATE_TABLE_RE, RLS_RE, DROP_TABLE_RE, POLICY_RE)
-                for match in regex.finditer(sql)
+                for match in regex.finditer(run_sql if regex is DROP_TABLE_RE else sql)
             ),
             key=lambda match: match.start(),
         )
