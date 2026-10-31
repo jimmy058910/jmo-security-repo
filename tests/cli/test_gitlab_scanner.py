@@ -1574,6 +1574,16 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
                 "https://gitlab.example.com:8443/sub/group/app.git",
             ),
             ("[::1]:8443", "https://[::1]:8443/group/app.git"),
+            # A bare value is checked as the URL it becomes, so it takes every host
+            # the explicit form takes (docker network names, IDN, a rooted name).
+            ("gitlab_web", "https://gitlab_web/group/app.git"),
+            ("gitlab_web:8080", "https://gitlab_web:8080/group/app.git"),
+            ("https://gitlab_web:8080", "https://gitlab_web:8080/group/app.git"),
+            (
+                "gitlab.ex\u00e4mple.com",
+                "https://gitlab.ex\u00e4mple.com/group/app.git",
+            ),
+            ("gitlab.example.com.", "https://gitlab.example.com./group/app.git"),
             ("", "https://gitlab.com/group/app.git"),
             ("   ", "https://gitlab.com/group/app.git"),
             (None, "https://gitlab.com/group/app.git"),
@@ -1592,6 +1602,11 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
             "uppercase-scheme-keeps-the-host-case",
             "https-with-port-and-subpath",
             "bare-ipv6-with-port",
+            "bare-underscore-host",
+            "bare-underscore-host-with-port",
+            "https-underscore-host-with-port",
+            "bare-idn-host",
+            "bare-host-with-trailing-dot",
             "empty-is-the-default",
             "blank-is-the-default",
             "none-is-the-default",
@@ -1634,24 +1649,32 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
         pytest.param("///", "does not start with a host", id="three-slashes"),
         pytest.param(" / ", "does not start with a host", id="slash-with-whitespace"),
         pytest.param("/sub", "does not start with a host", id="path-only"),
-        pytest.param("host:/x", "does not start with a host", id="colon-slash"),
-        # One slash after the scheme: the scheme was read as a host called `https`.
+        pytest.param("host:/x", "no port", id="colon-slash"),
+        pytest.param("https://gitlab.example.com:/x", "no port", id="empty-port"),
+        # A mistyped scheme is read as a host called `https` or `http`: git took
+        # it for the host and CONNECTed to it.
+        pytest.param("https:/gitlab.example.com", "scheme word", id="https-one-slash"),
+        pytest.param("http:/gitlab.example.com", "scheme word", id="http-one-slash"),
+        pytest.param("https//gitlab.example.com", "scheme word", id="https-no-colon"),
+        pytest.param("http//gitlab.example.com", "scheme word", id="http-no-colon"),
+        pytest.param("https/gitlab.example.com", "scheme word", id="https-slash-only"),
         pytest.param(
-            "https:/gitlab.example.com",
-            "does not start with a host",
-            id="https-one-slash",
+            "https://https://evil.com", "scheme word", id="https-twice-with-slashes"
         ),
         pytest.param(
-            "http:/gitlab.example.com",
-            "does not start with a host",
-            id="http-one-slash",
+            "https://https:/evil.com", "scheme word", id="https-twice-one-slash"
         ),
+        pytest.param("HTTP://http/x", "scheme word", id="uppercase-http-host"),
         # git resolves a host written before an `@` to the part after it.
         pytest.param(
             "https://gitlab.example.com@evil.com/", "--gitlab-token", id="host-at-host"
         ),
         pytest.param(
             "gitlab.example.com@evil.com", "--gitlab-token", id="bare-host-at-host"
+        ),
+        # A value with no scheme is screened for `@` anywhere, before it is a URL.
+        pytest.param(
+            "gitlab.example.com/a@b", "--gitlab-token", id="bare-at-sign-in-path"
         ),
         pytest.param(
             "https://user:pw@gitlab.example.com", "--gitlab-token", id="userinfo"

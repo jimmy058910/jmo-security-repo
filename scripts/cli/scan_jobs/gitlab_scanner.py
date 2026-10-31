@@ -587,20 +587,11 @@ _URL_SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*)://")
 # `git@host:group/project`: the address git's ssh transport takes, which is not
 # a URL and not a host name with a port (`host:8443` has no `@` before the colon).
 _SCP_ADDRESS = re.compile(r"[^/:@\s]+@[^/:\s]+:")
-# A value with no scheme begins with a host (a name, an IPv4 address or a
-# bracketed IPv6 one), then an optional port and an optional path. Anything else
-# would become a URL whose authority is not what the user began with: `/x` gives
-# `https:///x`, and curl takes the first path segment of that for the host.
-_BARE_HOST = re.compile(
-    r"(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)"
-    r"(:\d+)?(/[^\s\\@]*)?"
-)
 # No GitLab base URL holds these, and urllib, curl and git do not agree on what
 # they end or hide: whitespace and control characters (urllib drops some), a
 # backslash (read as a slash by some parsers), and `?` and `#` (end the authority,
 # and swallow the `/<project>.git` appended to the base).
 _URL_UNSAFE = re.compile(r"[\s\x00-\x1f\x7f\\?#]")
-
 _GITLAB_URL_HAS_AT_SIGN = (
     "the GitLab URL has an @ before its host, which git takes to end the user "
     "name; credentials go in --gitlab-token or GITLAB_TOKEN, not in the URL"
@@ -610,21 +601,25 @@ _GITLAB_URL_HAS_AT_SIGN = (
 def _gitlab_clone_base(raw: str | None) -> str:
     """The URL a GitLab project is cloned from, as `<base>/<full_path>.git`.
 
-    Whatever the user typed is the host: nothing here substitutes another one,
-    and the base returned is checked to name a host before it is returned. A
-    value with no scheme is a host name (`gitlab.example.com`, with a port or a
-    sub-path if the instance has one) and is cloned over https. Nothing or
+    Whatever the user typed is the host: nothing here substitutes another one.
+    A value with no scheme is a host name (`gitlab.example.com`, with a port or
+    a sub-path if the instance has one) and is cloned over https. Nothing or
     whitespace is the documented default, gitlab.com. An `http://` or `https://`
     URL is kept as it was written, with its scheme in lower case.
+
+    The two forms then go through one check, the URL that would be cloned: it
+    must parse, with scheme http or https, a host, no `@` before the host and a
+    valid port, and the host must not be `http` or `https` (a scheme mistyped as
+    `https/host` or `https:/host` would otherwise be a host called `https`).
 
     Raises:
         ValueError: The value names a transport the scan does not clone over
             (`ssh://`, `git@host:path`, `ftp://`, ...), no host, or a host that
             another reader of the URL would not take it to name (a user or `@`
-            before it, a backslash, whitespace, `?`, `#`). The message is the
-            reason the target is abandoned. It never repeats the value, which
-            may carry credentials the user typed into it; the token is passed
-            by `--gitlab-token`, not here.
+            before it, a backslash, whitespace, `?`, `#`, a scheme word). The
+            message is the reason the target is abandoned. It never repeats
+            the value, which may carry credentials the user typed into it; the
+            token is passed by `--gitlab-token`, not here.
     """
     url = (raw or "").strip()
     if not url:
@@ -650,12 +645,12 @@ def _gitlab_clone_base(raw: str | None) -> str:
             "unsupported GitLab URL form user@host:path "
             "(use http://, https:// or a bare host name)"
         )
-    elif _BARE_HOST.fullmatch(url):
-        base = f"https://{url}"
-    elif "@" in url.split("/", 1)[0]:
+    elif "@" in url:
         raise ValueError(_GITLAB_URL_HAS_AT_SIGN)
-    else:
+    elif url.startswith("/"):
         raise ValueError("the GitLab URL does not start with a host name")
+    else:
+        base = f"https://{url}"
     base = base.rstrip("/")
     try:
         parts = urlsplit(base)
@@ -666,6 +661,13 @@ def _gitlab_clone_base(raw: str | None) -> str:
         raise ValueError(_GITLAB_URL_HAS_AT_SIGN)
     if parts.scheme not in ("http", "https") or not parts.hostname:
         raise ValueError("the GitLab URL names no host")
+    if parts.hostname in ("http", "https"):
+        raise ValueError(
+            "the GitLab URL's host is a scheme word (http or https): a scheme "
+            "was mistyped, as in https:/host or https//host"
+        )
+    if parts.netloc.endswith(":"):
+        raise ValueError("the GitLab URL has a ':' with no port after it")
     return base
 
 

@@ -452,15 +452,17 @@ All notable changes to JMo Security will be documented in this file.
   A value with no scheme is now a host name, cloned over `https://` (`gitlab.example.com`,
   with or without a trailing `/`, a port or a sub-path); an `http://` or `https://` URL is
   cloned as written, its scheme in lower case; an empty value is still gitlab.com, the
-  documented default. Any other value abandons the target with `failed:target not scanned`,
-  before git starts and before the credential helper that carries the token is written: a
-  scheme other than those two (`ssh://`, `git://`, `ftp://`, `file://`),
-  `git@host:group/app`, a value that does not begin with a host (`/`, `/sub`, `https:/host`,
-  `https:///sub`: curl takes the first segment of the project path for the host there), an
-  `@` before the host (`https://user:pw@host`, `https://host@evil.com`: git resolves it to
-  the part after the `@`, and credentials belong in `--gitlab-token` or `GITLAB_TOKEN`), and
-  whitespace, a backslash, `?` or `#`. A reason names the problem and never repeats the
-  value, which can hold a password typed into it.
+  documented default. Either form is checked as the URL it becomes, and any other value
+  abandons the target with `failed:target not scanned`, before git starts and before the
+  credential helper that carries the token is written: a scheme other than those two
+  (`ssh://`, `git://`, `ftp://`, `file://`), `git@host:group/app`, a value with no host
+  (`/`, `/sub`, `https:///sub`: curl takes the first segment of the project path for the
+  host there), a host that is a scheme word (`https:/host`, `https//host`,
+  `https://https://host`: git took `https` for the host and connected to it), an `@` before
+  the host (`https://user:pw@host`, `https://host@evil.com`: git resolves it to the part
+  after the `@`, and credentials belong in `--gitlab-token` or `GITLAB_TOKEN`), a `:` with
+  no port after it, and whitespace, a backslash, `?` or `#`. A reason names the problem and
+  never repeats the value, which can hold a password typed into it.
 - **A closed stdin (`jmo scan <&-`) no longer breaks the prompt guards that ask whether
   stdin is a terminal.** A process started with stdin closed has `sys.stdin` set to None,
   and those guards asked `sys.stdin.isatty()`, which raises. The first-run email prompt of
