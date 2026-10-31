@@ -173,13 +173,14 @@ MIDDLEWARE_FILES = (
     "src/proxy.ts",
     "src/proxy.js",
 )
-# An import statement starts its line (a BOM may precede the first): the text
-# `import "server-only"` held in a string is not one.
+# An import statement starts its line (a BOM may precede the first) outside
+# every string (`_has_server_only_import`): the text `import "server-only"`
+# held in a string, a template literal's line included, is not one.
 SERVER_ONLY_IMPORT = re.compile(
     r"""^\ufeff?import\s*(["'])server-only\1""", re.MULTILINE
 )
 USE_SERVER_DIRECTIVE = re.compile(r"""\ufeff?\s*(["'])use server\1""")
-# Firestore and Storage rules are the rules language (FIREBASE_OPEN); the
+# Firestore and Storage rules are the rules language (FIREBASE_ALLOW); the
 # Realtime Database's are JSON (RTDB_OPEN).
 RULES_FILE_NAMES = ("firestore.rules", "storage.rules", "database.rules.json")
 
@@ -552,6 +553,25 @@ def _is_route_handler(path: Path, rel: str) -> bool:
     return False
 
 
+def _has_server_only_import(code: str) -> bool:
+    """Whether `code` (comment-stripped) holds an `import "server-only"`
+    statement. A match counts only when it starts outside every string token
+    (`_CODE_TOKENS`), since a template literal's line may start with the text.
+    Strings are not blanked first: that would blank the import's own
+    specifier."""
+    starts = [match.start() for match in SERVER_ONLY_IMPORT.finditer(code)]
+    if not starts:
+        return False
+    strings = [
+        (token.start(), token.end())
+        for token in _CODE_TOKENS.finditer(code)
+        if token.group(0)[0] in "'\"`"
+    ]
+    return any(
+        not any(begin <= start < end for begin, end in strings) for start in starts
+    )
+
+
 def _is_next_server_module(path: Path, rel: str, code: str) -> bool:
     """Whether Next.js itself keeps this module off the browser
     (`ROUTE_HANDLER_DIRS` and the markers beside it). `code` is the
@@ -559,7 +579,7 @@ def _is_next_server_module(path: Path, rel: str, code: str) -> bool:
     return (
         _is_route_handler(path, rel)
         or rel in MIDDLEWARE_FILES
-        or SERVER_ONLY_IMPORT.search(code) is not None
+        or _has_server_only_import(code)
         or USE_SERVER_DIRECTIVE.match(code) is not None
     )
 
