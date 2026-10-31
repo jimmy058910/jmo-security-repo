@@ -825,6 +825,53 @@ class TestPublicEnvName:
             "startColumn": 8,
         }
 
+    @pytest.mark.parametrize(
+        ("line", "column"),
+        [
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY: placeholder", 1),
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY : placeholder", 1),
+            (b"export NEXT_PUBLIC_STRIPE_SECRET_KEY: placeholder", 8),
+            # `=` first: the name ends there whatever the value holds.
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY=a:b", 1),
+            # `:` first: the `=` belongs to the value.
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY: a=b", 1),
+        ],
+    )
+    def test_either_separator_ends_the_name(self, tmp_path, line, column):
+        """dotenv's `KEY: value` form was not read: only the text left of the
+        first `=` was examined, and that line has none."""
+        target = tmp_path / "t"
+        _plant(target, ".env", b"# a comment\n" + line + b"\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        [result] = _results(out)
+        assert result["locations"][0]["physicalLocation"]["region"] == {
+            "startLine": 2,
+            "startColumn": column,
+        }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # The secret-looking text is the value, behind either separator.
+            b"CALLBACK_URL: https://app.example.com/NEXT_PUBLIC_X_SECRET_SENTINEL",
+            b"CALLBACK_URL=NEXT_PUBLIC_X_SECRET_SENTINEL: x",
+            b"NEXT_PUBLIC_X_SECRET_SENTINEL",
+        ],
+    )
+    def test_a_value_is_never_read_behind_either_separator(self, tmp_path, line):
+        target = tmp_path / "t"
+        _plant(target, ".env", line + b"\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+        assert "SENTINEL" not in out.read_text(encoding="utf-8")
+
 
 _SERVICE_ROLE_LINE = (
     b"const admin = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY);\n"
