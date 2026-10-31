@@ -1171,3 +1171,166 @@ def test_a_repositorys_ids_are_the_same_as_before_the_enrichment_was_scoped(scan
         "axios 0.21.0": "93817962fb756f90",
         "lodash 4.17.15": "5f8a409eda8a6ea2",
     }
+
+
+# --- one package at two versions: trivy's InstalledVersion tells them apart --------
+#
+# syft lists a package once per copy: two lockfiles of one repository, or one
+# npm lockfile holding a nested copy. The copies share a name, so the name does
+# not say which one trivy's finding is of; its InstalledVersion does.
+
+LODASH_VERSIONS = ["4.17.15", "4.17.21"]
+
+
+def trivy_npm_doc(target: str, name: str, version: str) -> bytes:
+    """trivy's report of one vulnerability in npm package `name` at `version`,
+    found in the lockfile `target`."""
+    return json.dumps(
+        {
+            "SchemaVersion": 2,
+            "Results": [
+                {
+                    "Target": target,
+                    "Class": "lang-pkgs",
+                    "Type": "npm",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": ADVISORY,
+                            "PkgName": name,
+                            "InstalledVersion": version,
+                            "Severity": "HIGH",
+                            "Title": f"{name}: command injection",
+                        }
+                    ],
+                }
+            ],
+        }
+    ).encode()
+
+
+def lodash_in_two_lockfiles(
+    scan, installed: str, *, order: int = 1, finding_in: str = "c/package-lock.json"
+) -> dict[str, Any]:
+    """One repository whose syft document lists lodash 4.17.15 in `a/` and
+    4.17.21 in `b/` (`order` -1: the other way round), and a trivy finding of
+    lodash `installed` in `finding_in`; the finding, as reported."""
+    packages = [
+        ("lodash", "4.17.15", "/a/package-lock.json"),
+        ("lodash", "4.17.21", "/b/package-lock.json"),
+    ][::order]
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {
+            "syft.json": syft_doc(packages),
+            "trivy.json": trivy_npm_doc(finding_in, "lodash", installed),
+        },
+    )
+    (trivy,) = of_tool(scan.run(), "trivy")
+    return trivy
+
+
+@pytest.mark.parametrize("installed", LODASH_VERSIONS)
+@pytest.mark.parametrize("order", [1, -1], ids=["old-first", "new-first"])
+def test_a_package_found_by_name_is_the_version_trivy_names(scan, installed, order):
+    """trivy's finding is in a lockfile syft does not list, so only the package's
+    name finds it. Two versions of lodash share that name; taking the first
+    listed tagged a finding of 4.17.21 `pkg:lodash@4.17.15`."""
+    trivy = lodash_in_two_lockfiles(scan, installed, order=order)
+
+    assert sbom_package(trivy) == ("lodash", installed)
+    assert package_tags(trivy) == [f"pkg:lodash@{installed}"]
+
+
+@pytest.mark.parametrize("order", [1, -1], ids=["old-first", "new-first"])
+def test_a_version_syft_does_not_list_takes_the_first_package_of_that_name(scan, order):
+    """No listed version is trivy's: nothing tells the copies apart, and the first
+    listed is the answer it always was."""
+    trivy = lodash_in_two_lockfiles(scan, "4.17.99", order=order)
+
+    assert sbom_package(trivy) == ("lodash", LODASH_VERSIONS[::order][0])
+
+
+def test_a_package_at_the_findings_path_wins_over_the_version_elsewhere(scan):
+    """The path already says which copy: a finding in `a/package-lock.json` is of
+    the copy listed there, though 4.17.21 (its InstalledVersion) is listed in
+    `b/`. The version only breaks a tie."""
+    trivy = lodash_in_two_lockfiles(scan, "4.17.21", finding_in="a/package-lock.json")
+
+    assert sbom_package(trivy) == ("lodash", "4.17.15")
+
+
+def lodash_twice_in_one_lockfile(scan, installed: str, order: int) -> dict[str, Any]:
+    """One repository whose syft document lists lodash 4.17.15 and 4.17.21 both
+    in `package-lock.json` (`order` -1: the other way round), and a trivy
+    finding of lodash `installed` in it; the finding, as reported."""
+    packages = [
+        ("lodash", "4.17.15", "/package-lock.json"),
+        ("lodash", "4.17.21", "/package-lock.json"),
+    ][::order]
+    scan.add(
+        "individual-repos",
+        "app-one",
+        {
+            "syft.json": syft_doc(packages),
+            "trivy.json": trivy_npm_doc("package-lock.json", "lodash", installed),
+        },
+    )
+    (trivy,) = of_tool(scan.run(), "trivy")
+    return trivy
+
+
+@pytest.mark.parametrize("installed", LODASH_VERSIONS)
+@pytest.mark.parametrize("order", [1, -1], ids=["old-first", "new-first"])
+def test_a_lockfile_listing_a_package_twice_gives_the_version_trivy_names(
+    scan, installed, order
+):
+    """npm lists a nested copy of a package beside the top-level one in one
+    lockfile. Both entries are at the finding's path, and the path alone does
+    not pick between them."""
+    trivy = lodash_twice_in_one_lockfile(scan, installed, order)
+
+    assert sbom_package(trivy) == ("lodash", installed)
+    assert package_tags(trivy) == [f"pkg:lodash@{installed}"]
+
+
+@pytest.mark.parametrize("order", [1, -1], ids=["old-first", "new-first"])
+def test_a_version_the_lockfile_does_not_list_takes_the_first_copy_at_the_path(
+    scan, order
+):
+    """As for a package found by name: no listed version is trivy's, so the first
+    copy listed at the path is the answer it always was."""
+    trivy = lodash_twice_in_one_lockfile(scan, "4.17.99", order)
+
+    assert sbom_package(trivy) == ("lodash", LODASH_VERSIONS[::order][0])
+
+
+def test_a_version_is_compared_as_the_text_trivy_wrote_less_its_whitespace():
+    """syft's versions are stripped when indexed; the finding's is stripped to
+    meet them."""
+    pair = sbom_pair(None, None)
+    pair["trivy"]["raw"]["InstalledVersion"] = " 4.17.21 "
+    second = {
+        **pair["syft"],
+        "id": "s2",
+        "raw": {"name": "lodash", "version": "4.17.21"},
+    }
+
+    nr._enrich_trivy_with_syft([pair["syft"], second, pair["trivy"]])
+
+    assert sbom_package(pair["trivy"]) == ("lodash", "4.17.21")
+
+
+def test_a_finding_that_names_no_version_takes_the_first_package_of_that_name():
+    """No InstalledVersion is no version to match: it is not a match for a copy
+    syft lists without one either."""
+    pair = sbom_pair(None, None)
+    versionless = {**pair["syft"], "id": "s2", "raw": {"name": "lodash"}}
+
+    nr._enrich_trivy_with_syft([pair["syft"], versionless, pair["trivy"]])
+
+    assert pair["trivy"]["context"]["sbom"] == {
+        "name": "lodash",
+        "version": "4.17.15",
+        "path": "package-lock.json",
+    }

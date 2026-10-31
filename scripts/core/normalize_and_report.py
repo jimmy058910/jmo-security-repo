@@ -1015,6 +1015,14 @@ def _find_sbom_match(
       `group:artifact` also matches syft's bare artifactId (syft keeps the group
       in the package URL only). The by-name lookup is NOT widened that way: a
       bare artifactId alone names no group.
+    - Among several candidates of that name, the one whose version equals the
+      finding's `raw.InstalledVersion` wins (compared as text); with no such
+      version, or none named, the first. The candidates are those at the path
+      (npm lists a nested copy of a package beside the top-level one in one
+      lockfile) or, failing a path match, those anywhere in the target (the
+      package in two lockfiles). The version never overrides the path: a
+      package of that name at the finding's path is taken even when the
+      finding's version is listed elsewhere.
     - A finding with no package name matches by path only when exactly one
       package is at that path. With several, any pick is a guess.
 
@@ -1033,6 +1041,14 @@ def _find_sbom_match(
         raw = {}
     pkg_name = str(raw.get("PkgName") or "").strip().lower()
     pkg_path = str(raw.get("PkgPath") or "").strip()
+    installed = str(raw.get("InstalledVersion") or "").strip()
+
+    def of_installed_version(candidates: list[dict[str, str]]) -> dict[str, str]:
+        """The candidate at the version trivy found, else the first."""
+        return next(
+            (p for p in candidates if installed and p["version"] == installed),
+            candidates[0],
+        )
 
     # `dict.fromkeys`: a finding whose location is its PkgPath asks once.
     at_path = [
@@ -1044,10 +1060,10 @@ def _find_sbom_match(
     names = {pkg_name, pkg_name.rsplit(":", 1)[-1]}
     at_path = [p for p in at_path if p["name"].lower() in names]
     if at_path:
-        return at_path[0]
+        return of_installed_version(at_path)
 
     named = by_name.get(pkg_name, [])
-    return named[0] if named else None
+    return of_installed_version(named) if named else None
 
 
 def _attach_sbom_context(finding: dict[str, Any], match: dict[str, str]) -> None:
