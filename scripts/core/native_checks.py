@@ -142,7 +142,11 @@ MIDDLEWARE_FILES = (
     "src/proxy.ts",
     "src/proxy.js",
 )
-SERVER_ONLY_IMPORT = re.compile(r"""\bimport\s*(["'])server-only\1""")
+# An import statement starts its line (a BOM may precede the first): the text
+# `import "server-only"` held in a string is not one.
+SERVER_ONLY_IMPORT = re.compile(
+    r"""^\ufeff?import\s*(["'])server-only\1""", re.MULTILINE
+)
 USE_SERVER_DIRECTIVE = re.compile(r"""\ufeff?\s*(["'])use server\1""")
 # Firestore and Storage rules. The Realtime Database's are JSON
 # (`database.rules.json`), which FIREBASE_OPEN's syntax can never match.
@@ -430,12 +434,24 @@ def _lines(text: str) -> list[str]:
     return [line.removesuffix("\r") for line in text.split("\n")]
 
 
+def _is_route_handler(path: Path, rel: str) -> bool:
+    """An App Router `route.*`. A folder whose name starts with `_` is a
+    private folder: Next.js routes nothing below it."""
+    if path.stem != "route":
+        return False
+    for prefix in ROUTE_HANDLER_DIRS:
+        if rel.startswith(prefix):
+            below = rel[len(prefix) :].split("/")[:-1]
+            return not any(folder.startswith("_") for folder in below)
+    return False
+
+
 def _is_next_server_module(path: Path, rel: str, code: str) -> bool:
     """Whether Next.js itself keeps this module off the browser
     (`ROUTE_HANDLER_DIRS` and the markers beside it). `code` is the
     comment-stripped text, so a commented-out marker does not count."""
     return (
-        (path.stem == "route" and rel.startswith(ROUTE_HANDLER_DIRS))
+        _is_route_handler(path, rel)
         or rel in MIDDLEWARE_FILES
         or SERVER_ONLY_IMPORT.search(code) is not None
         or USE_SERVER_DIRECTIVE.match(code) is not None
