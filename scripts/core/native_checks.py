@@ -416,6 +416,7 @@ def strip_code_comments(text: str) -> str:
     return _CODE_TOKENS.sub(blank, text)
 
 
+# TODO(issue-#1523): read create, RLS and policy statements string-aware, as drop is.
 def strip_sql_comments(text: str) -> str:
     """Blank `--` and `/* */` comments in migration SQL, preserving every
     line break. Not string-aware: a `--` or `/*` inside a string literal
