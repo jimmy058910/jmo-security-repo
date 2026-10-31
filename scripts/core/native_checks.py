@@ -62,8 +62,9 @@ order, so a later ``disable row level security``, ``drop table``
 or ``drop policy`` counts.
 
 **No secret value ever reaches the output.** The public-env-secret rule
-reads only the *name* on a `.env` line, left of its first `=`,
-and reports the name it matched, so no part of a value is ever read.
+reads only the *name* on a `.env` line, left of its first `=` (or `:`, in the
+`KEY: value` form), and reports the name it matched, so no part of a value is
+ever read.
 """
 
 from __future__ import annotations
@@ -158,6 +159,8 @@ PUBLIC_SECRET = re.compile(
 SERVICE_ROLE = re.compile(
     r"process\.env\.(NEXT_PUBLIC_)?SUPABASE_SERVICE_ROLE_KEY|service_role"
 )
+# Where a dotenv name ends: `KEY=value`, or the `KEY: value` form.
+_ENV_SEPARATOR = re.compile(r"[=:]")
 BROWSER_LLM = re.compile(r"dangerouslyAllowBrowser\s*:\s*true")
 _FIREBASE_VERB = r"(?:read|write|get|list|create|update|delete)"
 FIREBASE_OPEN = re.compile(
@@ -466,10 +469,11 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
                 continue
             searched = line
             if is_env:
-                # Only the name, left of the first `=` (an `export ` before
-                # it included), never the value.
-                name, eq, _ = line.partition("=")
-                searched = name if eq else ""
+                # Only the name, left of the first `=` or `:` (`KEY: value`),
+                # whichever comes first, an `export ` before it included;
+                # never the value.
+                separator = _ENV_SEPARATOR.search(line)
+                searched = line[: separator.start()] if separator else ""
             match = PUBLIC_SECRET.search(searched)
             if match:
                 findings.append(_public_env_finding(rel, lineno, match))
