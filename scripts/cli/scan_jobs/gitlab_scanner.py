@@ -29,7 +29,6 @@ import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import yaml
 
@@ -47,6 +46,7 @@ from scripts.core.tool_descriptors import (
     is_dockerfile,
 )
 from scripts.core.validation import (
+    gitlab_clone_base,
     image_reference_problem,
     sanitize_subprocess_output,
 )
@@ -582,102 +582,6 @@ def _scan_named_images(
                 )
 
 
-_GITLAB_DEFAULT_URL = "https://gitlab.com"
-_URL_SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*)://")
-# `git@host:group/project`: the address git's ssh transport takes, which is not
-# a URL and not a host name with a port (`host:8443` has no `@` before the colon).
-_SCP_ADDRESS = re.compile(r"[^/:@\s]+@[^/:\s]+:")
-# No GitLab base URL holds these, and urllib, curl and git do not agree on what
-# they end or hide: whitespace and control characters (urllib drops some), a
-# backslash (read as a slash by some parsers), and `?` and `#` (end the authority,
-# and swallow the `/<project>.git` appended to the base).
-_URL_UNSAFE = re.compile(r"[\s\x00-\x1f\x7f\\?#]")
-_GITLAB_URL_HAS_AT_SIGN = (
-    "the GitLab URL has an @ before its host, which git takes to end the user "
-    "name; credentials go in --gitlab-token or GITLAB_TOKEN, not in the URL"
-)
-
-
-def _gitlab_clone_base(raw: str | None) -> str:
-    """The URL a GitLab project is cloned from, as `<base>/<full_path>.git`.
-
-    Whatever the user typed is the host: nothing here substitutes another one.
-    A value with no scheme is a host name (`gitlab.example.com`, with a port or
-    a sub-path if the instance has one) and is cloned over https. Nothing or
-    whitespace is the documented default, gitlab.com. An `http://` or `https://`
-    URL is kept as it was written, with its scheme in lower case.
-
-    The two forms then go through one check, the URL that would be cloned: it
-    must parse, with scheme http or https, a host, no `@` before the host and a
-    valid port, no `%` in the host or port, and the host must not be `http` or
-    `https`, with or without a root dot (a scheme mistyped as `https/host`,
-    `https:/host` or `https./host` would otherwise be a host called `https`).
-
-    Raises:
-        ValueError: The value names a transport the scan does not clone over
-            (`ssh://`, `git@host:path`, `ftp://`, ...), no host, or a host that
-            another reader of the URL would not take it to name (a user or `@`
-            before it, a backslash, whitespace, `?`, `#`, a scheme word, a `%`
-            escape). The message is the reason the target is abandoned. It
-            never repeats the value, which may carry credentials the user typed
-            into it; the token is passed by `--gitlab-token`, not here.
-    """
-    url = (raw or "").strip()
-    if not url:
-        return _GITLAB_DEFAULT_URL
-    if _URL_UNSAFE.search(url):
-        raise ValueError(
-            "the GitLab URL has whitespace, a backslash, ? or # in it, which "
-            "git and the URL parser read differently"
-        )
-    if "://" in url:
-        scheme = _URL_SCHEME.match(url)
-        if scheme is None:
-            raise ValueError("the GitLab URL has an unrecognisable scheme")
-        name = scheme.group(1).lower()
-        if name not in ("http", "https"):
-            raise ValueError(
-                f"unsupported GitLab URL scheme {name}:// "
-                "(use http://, https:// or a bare host name)"
-            )
-        base = name + url[len(name) :]
-    elif _SCP_ADDRESS.match(url):
-        raise ValueError(
-            "unsupported GitLab URL form user@host:path "
-            "(use http://, https:// or a bare host name)"
-        )
-    elif "@" in url:
-        raise ValueError(_GITLAB_URL_HAS_AT_SIGN)
-    elif url.startswith("/"):
-        raise ValueError("the GitLab URL does not start with a host name")
-    else:
-        base = f"https://{url}"
-    base = base.rstrip("/")
-    try:
-        parts = urlsplit(base)
-        _ = parts.port  # raises ValueError for a port out of range
-    except ValueError:
-        raise ValueError("the GitLab URL is not a valid URL") from None
-    if "@" in parts.netloc:
-        raise ValueError(_GITLAB_URL_HAS_AT_SIGN)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        raise ValueError("the GitLab URL names no host")
-    # `rstrip(".")`: a DNS name may end in a root dot, so `https.` is `https`.
-    if parts.hostname.rstrip(".") in ("http", "https"):
-        raise ValueError(
-            "the GitLab URL's host is a scheme word (http or https): a scheme "
-            "was mistyped, as in https:/host or https//host"
-        )
-    if "%" in parts.netloc:
-        raise ValueError(
-            "the GitLab URL has a % escape in its host or port: no GitLab host "
-            "is written with one, and a client may decode it to another host"
-        )
-    if parts.netloc.endswith(":"):
-        raise ValueError("the GitLab URL has a ':' with no port after it")
-    return base
-
-
 def scan_gitlab_repo(
     gitlab_info: dict[str, str],
     results_dir: Path,
@@ -734,7 +638,7 @@ def scan_gitlab_repo(
     # Before the temporary directory and the credential helper below exist: a URL
     # that is refused never gets the token anywhere near git.
     try:
-        clone_url = _gitlab_clone_base(gitlab_url)
+        clone_url = gitlab_clone_base(gitlab_url)
     except ValueError as e:
         logger.error(f"GitLab URL refused for {full_path}: {e}")
         statuses = _record_abandoned_target(
