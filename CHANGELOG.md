@@ -86,6 +86,8 @@ All notable changes to JMo Security will be documented in this file.
   Phase 1 golden's 303 all present. A Conan lockfile is not among the accepted names: OSV
   publishes no ConanCenter database, so a Conan-only repository reads `skipped:no lockfile`
   ([Known limitations](docs/KNOWN_LIMITATIONS.md#osv-scanner-reads-pomxml-and-requirementstxt-for-direct-dependencies-only)).
+  A .NET `<name>.deps.json` is read as NuGet; a file named only `deps.json` is never handed
+  over, since osv-scanner rejects that name and a rejected name aborts its whole run.
 - **`jmo tools update` fills osv-scanner's offline vulnerability databases.** Installing
   osv-scanner, or running `jmo tools update` (or `jmo tools update osv-scanner`) with it
   already installed, fetches all eleven ecosystems' databases from OSV's own hosted zips

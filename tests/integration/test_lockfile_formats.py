@@ -102,6 +102,7 @@ def kitchen_sink() -> dict[str, bytes]:
     return files
 
 
+# TODO(issue-#1524): grade the seven formats sca-kitchen-sink has no file for (above).
 @pytest.mark.timeout(300)
 def test_every_lockfile_format_reaches_osv_scanner_offline(
     kitchen_sink, tmp_path, monkeypatch
