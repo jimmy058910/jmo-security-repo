@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from scripts.core import native_checks
+from tests.conftest import median_seconds
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "samples" / "native"
 README = FIXTURE / "README.md"
@@ -308,6 +309,48 @@ class TestCommentStripping:
         assert stripped.split("\n")[1] == "// not a comment"
         assert stripped.split("\n")[3] == " " * 12
 
+    @pytest.mark.parametrize("eol", ["\n", "\r\n"], ids=["LF", "CRLF"])
+    @pytest.mark.parametrize("quote", ["'", '"', "`"])
+    def test_a_backslash_before_a_line_break_continues_the_string(self, quote, eol):
+        """A backslash before a CRLF ended the string at the line break, so the
+        next line's closing quote opened a new string and swallowed the
+        comment after it: the LF and CRLF checkouts of one file differed."""
+        text = f"x = {quote}a \\{eol}b{quote}; // gone{eol}y = 1;{eol}"
+
+        stripped = native_checks.strip_code_comments(text)
+
+        assert "gone" not in stripped
+        assert stripped.startswith(f"x = {quote}a \\{eol}b{quote};")
+        assert stripped.count("\n") == text.count("\n")
+        assert len(stripped) == len(text)
+
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_lf_and_crlf_checkouts_of_one_file_give_the_same_findings(
+        self, tmp_path, eol
+    ):
+        """The named key sits in the comment after a string continued over a
+        line break, so it is not a finding; the same key in code is."""
+        commented = (
+            b'const u = "https://a.example/ \\' + eol + b'  b"; '
+            b"// process.env.SUPABASE_SERVICE_ROLE_KEY" + eol
+        )
+        coded = (
+            b'const u = "https://a.example/ \\' + eol + b'  b"; '
+            b"const k = process.env.SUPABASE_SERVICE_ROLE_KEY;" + eol
+        )
+        results = {}
+        for name, body in (("commented", commented), ("coded", coded)):
+            target = tmp_path / name
+            _plant(target, "src/a.ts", body)
+            out = tmp_path / f"{name}.sarif"
+            results[name] = (_run(target, out), _triples(_results(out)))
+
+        assert results["commented"] == (0, [])
+        assert results["coded"] == (
+            1,
+            [(native_checks.RULE_SERVICE_ROLE, "src/a.ts", 2)],
+        )
+
     def test_commented_out_firestore_rule_is_not_caught(self, tmp_path):
         target = tmp_path / "t"
         target.mkdir()
@@ -337,6 +380,17 @@ class TestCommentStripping:
         assert stripped.count("\n") == text.count("\n")
         assert "block" not in stripped
         assert "comment" not in stripped
+
+    def test_sql_literals_and_comments_are_blanked_but_line_breaks_are_kept(self):
+        text = "a 'b\n c' $t$ d\n$t$ -- e\n/* f */ g\n"
+
+        blanked = native_checks.blank_sql_literals(text)
+
+        assert len(blanked) == len(text)
+        assert [i for i, c in enumerate(blanked) if c == "\n"] == [
+            i for i, c in enumerate(text) if c == "\n"
+        ]
+        assert blanked.split() == ["a", "g"]
 
 
 class TestMigrationRules:
@@ -450,6 +504,70 @@ class TestMigrationRules:
         mig = target / "supabase" / "migrations"
         (mig / "1_init.sql").write_bytes(created)
         (mig / "2_drop.sql").write_bytes(dropped)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            b"create function f() returns void as $$ begin\n"
+            b"  execute 'drop table public.notes';\n"
+            b"end $$ language plpgsql;\n",
+            b"comment on table public.notes is 'drop table public.notes';\n",
+            b"insert into log values ('it''s; drop table public.notes');\n",
+            b"create function f() returns void as $fn$ begin\n"
+            b"  drop table public.notes;\n"
+            b"end $fn$ language plpgsql;\n",
+            # A different tag, or `$$`, inside a tagged body does not close it.
+            b"select $a$ $$ drop table public.notes $$ $a$;\n",
+        ],
+        ids=["dollar body", "string", "string with ''", "tagged body", "nested tag"],
+    )
+    def test_a_drop_table_inside_a_string_or_a_body_does_not_drop_the_table(
+        self, tmp_path, statement
+    ):
+        """`drop table` in a function body or a string literal ran no drop at
+        migration time, but popped the table from the RLS state, so a table
+        without Row Level Security read as gone."""
+        target = self._migrations(tmp_path)
+        (target / "supabase" / "migrations" / "1.sql").write_bytes(
+            b"create table public.notes (id int);\n" + statement
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_TABLE_NO_RLS, "supabase/migrations/1.sql", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "before",
+        [
+            b"select 'a''b';\n",
+            b"create function f() returns void as $$ begin null; end $$;\n",
+            b"select $1, $2;\n",
+            # A `--` or `/*` inside a string is not a comment, and a quote
+            # inside a comment does not open a string.
+            b"comment on table public.notes is 'x -- y';\n",
+            b"select '/*';\n",
+            b"-- it's a comment\n",
+            b"/* don't */\n",
+        ],
+    )
+    def test_a_real_drop_after_a_string_or_a_body_still_drops_the_table(
+        self, tmp_path, before
+    ):
+        target = self._migrations(tmp_path)
+        (target / "supabase" / "migrations" / "1.sql").write_bytes(
+            b"create table public.notes (id int);\n"
+            + before
+            + b"drop table public.notes;\n"
+        )
         out = tmp_path / "o.sarif"
 
         rc = _run(target, out)
@@ -825,6 +943,53 @@ class TestPublicEnvName:
             "startColumn": 8,
         }
 
+    @pytest.mark.parametrize(
+        ("line", "column"),
+        [
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY: placeholder", 1),
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY : placeholder", 1),
+            (b"export NEXT_PUBLIC_STRIPE_SECRET_KEY: placeholder", 8),
+            # `=` first: the name ends there whatever the value holds.
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY=a:b", 1),
+            # `:` first: the `=` belongs to the value.
+            (b"NEXT_PUBLIC_STRIPE_SECRET_KEY: a=b", 1),
+        ],
+    )
+    def test_either_separator_ends_the_name(self, tmp_path, line, column):
+        """dotenv's `KEY: value` form was not read: only the text left of the
+        first `=` was examined, and that line has none."""
+        target = tmp_path / "t"
+        _plant(target, ".env", b"# a comment\n" + line + b"\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        [result] = _results(out)
+        assert result["locations"][0]["physicalLocation"]["region"] == {
+            "startLine": 2,
+            "startColumn": column,
+        }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # The secret-looking text is the value, behind either separator.
+            b"CALLBACK_URL: https://app.example.com/NEXT_PUBLIC_X_SECRET_SENTINEL",
+            b"CALLBACK_URL=NEXT_PUBLIC_X_SECRET_SENTINEL: x",
+            b"NEXT_PUBLIC_X_SECRET_SENTINEL",
+        ],
+    )
+    def test_a_value_is_never_read_behind_either_separator(self, tmp_path, line):
+        target = tmp_path / "t"
+        _plant(target, ".env", line + b"\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+        assert "SENTINEL" not in out.read_text(encoding="utf-8")
+
 
 _SERVICE_ROLE_LINE = (
     b"const admin = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY);\n"
@@ -847,6 +1012,20 @@ class TestServerModules:
             ("src/lib/save.ts", b"// Server actions.\n\n'use server'\n"),
             ("src/lib/bom.ts", b'\xef\xbb\xbf"use server";\n'),
             ("src/middleware.ts", b""),
+            # Next.js 16 renamed `middleware` to `proxy`.
+            ("src/proxy.ts", b""),
+            ("src/proxy.js", b""),
+            # An import on a later line, and on the first behind a BOM.
+            ("lib/a.ts", b'import x from "y";\nimport "server-only";\n'),
+            ("lib/bom.ts", b'\xef\xbb\xbfimport "server-only";\n'),
+            # A real import still counts after a template literal holding the text.
+            (
+                "lib/a.ts",
+                b'const d = `\nimport "server-only"\n`;\nimport "server-only";\n',
+            ),
+            # Route groups and an underscore inside a name are still routes.
+            ("app/(shop)/checkout/route.ts", b""),
+            ("src/app/route_x/route.ts", b""),
         ],
     )
     def test_a_server_module_under_a_client_directory_is_not_client_code(
@@ -860,6 +1039,26 @@ class TestServerModules:
 
         assert rc == 0, _triples(_results(out))
 
+    def test_many_template_literal_decoys_are_scanned_in_linear_time(self, tmp_path):
+        """Crafted input: each `import "server-only"` text was checked against
+        every string in the file, so 20,000 decoys (720 KB) took 6 s and twice
+        that many, four times as long. The bound is generous (linear is well
+        under a second), on the median of three scans: a rescan of a fixed
+        file is repeatable, and one descheduled run cannot trip it."""
+        decoy = b'const d = `\nimport "server-only"\n`;\n'
+        target = tmp_path / "t"
+        _plant(target, "lib/a.ts", decoy * 30_000 + _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rcs: list[int] = []
+        elapsed = median_seconds(lambda: rcs.append(_run(target, out)), samples=3)
+
+        assert rcs == [1] * 3
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "lib/a.ts", 30_000 * 3 + 1)
+        ]
+        assert elapsed < 5, f"{elapsed:.1f} s for 30,000 decoys"
+
     @pytest.mark.parametrize(
         ("rel", "head"),
         [
@@ -868,6 +1067,21 @@ class TestServerModules:
             ("lib/admin.ts", b'import x from "y";\n"use server";\n'),
             ("lib/route.ts", b""),
             ("src/lib/middleware.ts", b""),
+            ("src/lib/proxy.ts", b""),
+            ("app/proxy.ts", b""),
+            # `import "server-only"` held in a string is not an import.
+            ("lib/a.ts", b"const msg = 'import \"server-only\"';\n"),
+            ("lib/a.ts", b"const msg = \"import 'server-only'\";\n"),
+            # ...and in a template literal, whose lines may start `import`.
+            ("lib/a.ts", b'const docs = `\nimport "server-only"\n`;\n'),
+            ("lib/a.ts", b"const docs = `\nimport 'server-only';\n`;\n"),
+            ("lib/a.ts", b'const a = `x ${y}\nimport "server-only"\n`;\n'),
+            # ...and in a string continued over a line end with a backslash.
+            ("lib/a.ts", b"const s = \"x\\\nimport 'server-only'\";\n"),
+            # Next.js private folders: `route.*` below one is not a route.
+            ("src/app/_private/route.ts", b""),
+            ("app/_lib/route.ts", b""),
+            ("app/shop/_internal/deep/route.js", b""),
         ],
     )
     def test_the_same_reference_elsewhere_is_still_client_code(
@@ -885,6 +1099,313 @@ class TestServerModules:
         assert rc == 1
         line = head.count(b"\n") + 1
         assert _triples(_results(out)) == [(native_checks.RULE_SERVICE_ROLE, rel, line)]
+
+
+_BACKEND = b'{"dependencies": {"express": "4"}}'
+
+
+_SERVER_FRAMEWORKS = [
+    "express",
+    "fastify",
+    "hono",
+    "koa",
+    "@nestjs/core",
+    "@hapi/hapi",
+    "restify",
+]
+_BROWSER_FRAMEWORKS = [
+    "next",
+    "vite",
+    "react-scripts",
+    "expo",
+    "react",
+    "react-dom",
+    "vue",
+    "@vue/cli-service",
+    "nuxt",
+    "svelte",
+    "@sveltejs/kit",
+    "@angular/core",
+    "gatsby",
+    "astro",
+    "@remix-run/react",
+    "solid-js",
+    "preact",
+    "parcel",
+    "webpack",
+    "esbuild",
+    "rollup",
+    "browserify",
+    "@rspack/core",
+    "@rsbuild/core",
+    "lit",
+]
+
+
+def _package(**sections: object) -> bytes:
+    return json.dumps(sections).encode()
+
+
+class TestSrcOfABackendOnlyRepository:
+    """`src/` is client code unless the root `package.json` names a server
+    framework (Express, Fastify, Hono, ...) and no browser framework (Next.js,
+    React, Angular, ...): only positive evidence of a backend makes it an
+    Express or Hono service's server code."""
+
+    @pytest.mark.parametrize("section", ["dependencies", "devDependencies"])
+    @pytest.mark.parametrize("framework", _SERVER_FRAMEWORKS)
+    def test_a_server_framework_alone_makes_src_server_code(
+        self, tmp_path, section, framework
+    ):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _package(**{section: {framework: "1"}}))
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize(
+        "package",
+        [
+            b"\xef\xbb\xbf" + _BACKEND,
+            _package(dependencies={"express": "4", "typescript": "5"}),
+            _package(
+                dependencies={"express": "4"}, devDependencies={"@types/node": "22"}
+            ),
+            # Only `dependencies` and `devDependencies` count, and only as objects.
+            _package(dependencies={"express": "4"}, peerDependencies={"next": "16"}),
+            _package(dependencies={"express": "4"}, devDependencies=["react"]),
+        ],
+        ids=[
+            "BOM",
+            "typescript beside",
+            "types beside",
+            "peer ignored",
+            "list ignored",
+        ],
+    )
+    def test_src_is_server_code(self, tmp_path, package):
+        target = tmp_path / "t"
+        _plant(target, "package.json", package)
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize("section", ["dependencies", "devDependencies"])
+    @pytest.mark.parametrize("framework", _BROWSER_FRAMEWORKS)
+    def test_a_browser_framework_keeps_src_client_code(
+        self, tmp_path, section, framework
+    ):
+        target = tmp_path / "t"
+        sections: dict[str, dict[str, str]] = {"dependencies": {"express": "4"}}
+        sections.setdefault(section, {})[framework] = "1"
+        _plant(target, "package.json", _package(**sections))
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "src/index.ts", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "package",
+        [
+            # No server framework named: an Angular, Gatsby, React or webpack
+            # app, or nothing at all, ships `src/` to the browser.
+            _package(name="svc"),
+            _package(devDependencies={"typescript": "5"}),
+            _package(dependencies={"@angular/core": "19"}),
+            _package(dependencies={"gatsby": "5"}),
+            _package(dependencies={"react": "19"}),
+            _package(devDependencies={"webpack": "5"}),
+            _package(peerDependencies={"next": "16"}),
+            # A backend on a framework the list does not know keeps `src/` client.
+            _package(dependencies={"sails": "1"}),
+            # A list where an object belongs names nothing.
+            _package(dependencies=["next"]),
+            _package(dependencies=["express"]),
+        ],
+        ids=[
+            "names nothing",
+            "typescript only",
+            "angular",
+            "gatsby",
+            "react",
+            "webpack",
+            "peer only",
+            "unlisted server framework",
+            "list of next",
+            "list of express",
+        ],
+    )
+    def test_without_a_server_framework_src_is_client_code(self, tmp_path, package):
+        target = tmp_path / "t"
+        _plant(target, "package.json", package)
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "src/index.ts", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "package",
+        [None, b"{", b"[]", b'"next"', b"\xff\xfe\x00"],
+        ids=["absent", "truncated", "a list", "a string", "not text"],
+    )
+    def test_without_a_usable_root_package_json_src_is_client_code(
+        self, tmp_path, package
+    ):
+        target = tmp_path / "t"
+        if package is not None:
+            _plant(target, "package.json", package)
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "src/index.ts", 1)
+        ]
+
+    def test_a_package_json_that_is_a_directory_is_no_package_json(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "package.json/x", b"")
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+
+    @pytest.mark.parametrize(
+        "package",
+        [
+            # Express beside code bundled by esbuild, or by rollup around lit.
+            _package(dependencies={"express": "4"}, devDependencies={"esbuild": "0"}),
+            _package(
+                dependencies={"express": "4", "lit": "3"},
+                devDependencies={"rollup": "4"},
+            ),
+            # Express alone, serving static scripts.
+            _BACKEND,
+        ],
+        ids=["esbuild", "lit and rollup", "express only"],
+    )
+    @pytest.mark.parametrize(
+        "rel",
+        ["src/client/main.ts", "src/client/ui/app.js", "src/public/app.js"],
+    )
+    def test_the_browser_folders_of_src_stay_client_code(self, tmp_path, package, rel):
+        """A backend repository's `src/client/` and `src/public/` hold browser
+        code: the service-role key there is a leak whatever the root
+        `package.json` lists."""
+        target = tmp_path / "t"
+        _plant(target, "package.json", package)
+        _plant(target, rel, _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [(native_checks.RULE_SERVICE_ROLE, rel, 1)]
+
+    @pytest.mark.parametrize(
+        "rel",
+        [
+            "src/index.ts",
+            "src/routes/users.ts",
+            # `src/client` is a folder name, not a prefix of one.
+            "src/clientele/x.ts",
+            "src/public_api/x.ts",
+            "src/publicity.ts",
+            # Another folder's `client/` is not `src/client/`, and a root
+            # `client/` sits in no client directory at all.
+            "src/lib/client/x.ts",
+            "client/x.ts",
+            # A server marker below `src/client/` still wins.
+            "src/client/api/x.ts",
+        ],
+    )
+    def test_the_rest_of_a_backends_src_is_still_server_code(self, tmp_path, rel):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(target, rel, _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize(
+        "rel", ["app/a.ts", "lib/a.ts", "components/a.ts", "pages/a.ts"]
+    )
+    def test_only_src_changes(self, tmp_path, rel):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(target, rel, _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [(native_checks.RULE_SERVICE_ROLE, rel, 1)]
+
+    def test_only_the_root_package_json_decides(self, tmp_path):
+        """A nested app's `package.json` changes nothing (#1381 tracks
+        monorepos): a backend-only one under a root without a `package.json`
+        leaves `src/` client code, and a Next.js one under a backend-only
+        root does not make it so."""
+        without_root = tmp_path / "a"
+        _plant(without_root, "apps/api/package.json", _BACKEND)
+        _plant(without_root, "src/index.ts", _SERVICE_ROLE_LINE)
+        backend_root = tmp_path / "b"
+        _plant(backend_root, "package.json", _BACKEND)
+        _plant(backend_root, "apps/web/package.json", b'{"dependencies":{"next":"16"}}')
+        _plant(backend_root, "src/index.ts", _SERVICE_ROLE_LINE)
+
+        assert _run(without_root, tmp_path / "a.sarif") == 1
+        assert _run(backend_root, tmp_path / "b.sarif") == 0
+
+    def test_the_other_checks_still_read_a_backend_only_src(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(
+            target,
+            "src/llm.ts",
+            b"const c = new OpenAI({ dangerouslyAllowBrowser: true });\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_BROWSER_LLM, "src/llm.ts", 1)
+        ]
+
+    def test_each_run_reads_the_package_json_afresh(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+
+        before = _run(target, tmp_path / "before.sarif")
+        _plant(target, "package.json", b'{"dependencies": {"next": "16"}}')
+        after = _run(target, tmp_path / "after.sarif")
+
+        assert (before, after) == (0, 1)
 
 
 class TestLineNumbers:
@@ -961,12 +1482,366 @@ class TestFirebaseRules:
 
         assert rc == 0, _triples(_results(out))
 
+    @pytest.mark.parametrize(
+        "rule",
+        [
+            # No condition: unconditional.
+            b"allow read;",
+            b"allow read, write;",
+            b"allow get , list ;",
+            b"allow create }",
+            # The condition is `if true` however it is laid out.
+            b"allow read: if true }",
+            b"allow read:\n      if true;",
+            b"allow read: if\n      true\n      ;",
+            b"allow read: if true /* why */;",
+        ],
+    )
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_statement_is_judged_whole_and_found_at_its_allow(
+        self, tmp_path, rule, eol
+    ):
+        """A rule is one statement, `allow` to its `;`, which may span lines:
+        a bare `allow read;` is unconditional, and the finding sits at the
+        `allow`, not at a later line of the statement."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule).replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        [result] = _results(out)
+        assert result["ruleId"] == native_checks.RULE_FIREBASE_OPEN
+        assert result["locations"][0]["physicalLocation"]["region"] == {
+            "startLine": 5,
+            "startColumn": 7,
+        }
+
+    @pytest.mark.parametrize(
+        "rule",
+        [
+            # The condition continues on the next line.
+            b"allow read: if true\n        && request.auth != null;",
+            b"allow read: if true &&\n        request.auth != null;",
+            b"allow read, write: if true // for now\n        && request.auth != null;",
+            # Not `if true`, whatever else it holds.
+            b"allow read: if false;",
+            b"allow read: if request.auth != null && true;",
+            b"allow read: if trueish;",
+            # Not the keyword, a verb or a whole statement.
+            b"disallow read;",
+            b"allow readwrite;",
+            b"allow reads;",
+            b"// allow read;",
+            b"/* allow read, write: if true; */",
+        ],
+    )
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_statement_that_is_not_unconditional_is_not_a_finding(
+        self, tmp_path, rule, eol
+    ):
+        """`if true` followed on the next line by `&& request.auth != null`
+        was read as open, because each line was matched alone."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule).replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_a_statement_closed_by_its_block_brace_is_still_judged(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "firestore.rules",
+            b"service cloud.firestore {\n"
+            b"  match /databases/{d}/documents {\n"
+            b"    match /a/{x} { allow read: if true }\n"
+            b"    match /b/{x} { allow read: if request.auth != null }\n"
+            b"    match /c/{x} { allow write }\n"
+            b"  }\n"
+            b"}\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 3),
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 5),
+        ]
+
+    @pytest.mark.parametrize(
+        "run", [b"\n", b"\r\n", b" \n"], ids=["LF", "CRLF", "SP-LF"]
+    )
+    def test_a_long_run_of_blank_lines_is_scanned_in_linear_time(self, tmp_path, run):
+        """Crafted input: each newline's look-ahead for the next statement
+        rescanned the whole whitespace run after it, so 50,000 blank lines
+        took 16 s and a megabyte, minutes. The bound is generous (linear is
+        well under a tenth of a second) so a slow runner cannot trip it, on the
+        median of three scans of the fixed file (one descheduled run cannot)."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", b"allow read: if true" + run * 40_000)
+        out = tmp_path / "o.sarif"
+
+        rcs: list[int] = []
+        elapsed = median_seconds(lambda: rcs.append(_run(target, out)), samples=3)
+
+        assert rcs == [1] * 3
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 1)
+        ]
+        assert elapsed < 5, f"{elapsed:.1f} s for 40,000 blank lines"
+
+    @pytest.mark.parametrize(
+        ("rule", "findings"),
+        [
+            # A statement with no `;` ends where the next line starts another.
+            (b"allow read: if true\n      allow write: if request.auth != null", [5]),
+            (b"allow read: if true\n\n      // why\n      allow write: if false", [5]),
+            (b"allow read\n      allow write: if request.auth != null", [5]),
+            (b"allow read: if true\n      allow write: if true", [5, 6]),
+            (b"allow read: if request.auth != null\n      allow write: if true", [6]),
+            (b"allow read: if true\n      function ok() { return true; }", [5]),
+            (
+                b"allow read: if true\n      match /y/{id} { allow write: if false }",
+                [5],
+            ),
+            # The line after `if true` may still continue it.
+            (b"allow read: if true\n      allow write: if true\n      && false", [5]),
+        ],
+        ids=[
+            "allow after",
+            "comment between",
+            "bare allow",
+            "both open",
+            "second open",
+            "function after",
+            "match after",
+            "continued last",
+        ],
+    )
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_statement_without_a_semicolon_does_not_swallow_the_next(
+        self, tmp_path, rule, findings, eol
+    ):
+        """`allow read: if true` then `allow write: if request.auth != null`
+        read as one statement whose condition was not `if true`, so the open
+        read went unreported."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule).replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", line)
+            for line in findings
+        ]
+
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_storage_rules_with_a_function_after_an_open_read(self, tmp_path, eol):
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "storage.rules",
+            (
+                b"rules_version = '2';\n"
+                b"service firebase.storage {\n"
+                b"  match /b/{bucket}/o {\n"
+                b"    allow read: if true\n"
+                b"    function signedIn() { return request.auth != null; }\n"
+                b"    allow write: if signedIn();\n"
+                b"  }\n"
+                b"}\n"
+            ).replace(b"\n", eol),
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "storage.rules", 4)
+        ]
+
+    def test_each_statement_is_judged_alone(self, tmp_path):
+        rules = (
+            b"allow read: if true;\n"
+            b"      allow write: if request.auth != null;\n"
+            b"      allow create;\n"
+            b"      allow delete: if request.auth != null; allow update;"
+        )
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rules))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", line)
+            for line in (5, 7, 8)
+        ]
+        last = _results(out)[-1]["locations"][0]["physicalLocation"]["region"]
+        assert (
+            last["startColumn"]
+            == len(b"      allow delete: if request.auth != null; ") + 1
+        )
+
     def test_a_file_named_database_rules_is_not_read(self, tmp_path):
-        """Realtime Database rules are JSON (`database.rules.json`), which the
-        rules-language pattern can never match; no Firebase file is named
+        """Realtime Database rules are JSON, in `database.rules.json`
+        (`TestRealtimeDatabaseRules`); no Firebase file is named
         `database.rules`."""
         target = tmp_path / "t"
         _plant(target, "database.rules", b"allow read, write: if true;\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+
+_RTDB_PRETTY = (
+    b"{\n"
+    b'  "rules": {\n'
+    b'    ".read": true,\n'
+    b'    "public": { ".write": "true" },\n'
+    b'    "private": {\n'
+    b'      ".read": "auth != null",\n'
+    b'      ".write": false\n'
+    b"    },\n"
+    b'    "list": [{ ".read": true }]\n'
+    b"  }\n"
+    b"}\n"
+)
+
+
+class TestRealtimeDatabaseRules:
+    """`database.rules.json` is JSON, not the rules language: a `.read` or
+    `.write` key of `true` (or `"true"`), at any depth, is open."""
+
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_true_read_or_write_is_a_finding_at_its_own_line(self, tmp_path, eol):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", _RTDB_PRETTY.replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "database.rules.json", line)
+            for line in (3, 4, 9)
+        ]
+        first = _results(out)[0]
+        assert first["locations"][0]["physicalLocation"]["region"] == {
+            "startLine": 3,
+            "startColumn": 5,
+        }
+        assert '".read": true' in first["message"]["text"]
+
+    def test_a_nested_file_is_read_by_its_name(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "firebase/database.rules.json", b'{"rules": {".read": true}}')
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firebase/database.rules.json", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "rules",
+        [
+            b'{"rules": {".read": false, ".write": false}}',
+            b'{"rules": {".read": "auth != null"}}',
+            b'{"rules": {".write": "true && auth != null"}}',
+            b'{"rules": {".read": "false", ".write": null}}',
+            b'{"rules": {".read": 1}}',
+            # Other keys, and the word `true` anywhere else.
+            b'{"rules": {".validate": true, ".indexOn": "true", "read": true}}',
+            b'{"rules": {"x": ".read", "y": true}}',
+            # The key's text inside a string, or inside a longer key.
+            b'{"note": "see \\".read\\": true"}',
+            b'{"x\\".read": true}',
+            b"{}",
+            b"[]",
+        ],
+    )
+    def test_anything_else_is_not_a_finding(self, tmp_path, rules):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", rules)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize(
+        "rules",
+        [
+            b'{"rules": {".read": true,}}',
+            b'{"rules": {".read": true}',
+            b"",
+            b"allow read, write: if true;\n",
+            b"[" * 100000,
+        ],
+        ids=["trailing comma", "truncated", "empty", "not JSON", "deeply nested"],
+    )
+    def test_unparseable_json_is_no_finding_and_no_crash(self, tmp_path, rules):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", rules)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_a_byte_order_mark_does_not_hide_the_file(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", b'\xef\xbb\xbf{"rules": {".read": true}}')
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+
+    def test_a_comment_is_not_part_of_the_rules(self, tmp_path):
+        """Firebase's tooling accepts `//` and `/* */` in this file; a
+        commented-out key grants nothing."""
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "database.rules.json",
+            b"{\n"
+            b'  "rules": {\n'
+            b'    // ".read": true,\n'
+            b'    /* ".write": true, */\n'
+            b'    ".read": "auth != null",\n'
+            b'    ".write": true // open\n'
+            b"  }\n"
+            b"}\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "database.rules.json", 6)
+        ]
+
+    def test_the_rules_language_files_are_not_read_as_json(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", b'{"rules": {".read": true}}\n')
+        _plant(target, "storage.rules", b'{"rules": {".write": "true"}}\n')
         out = tmp_path / "o.sarif"
 
         rc = _run(target, out)

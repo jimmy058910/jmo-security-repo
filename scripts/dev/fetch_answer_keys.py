@@ -7,7 +7,8 @@ An answer key is somebody else's file, pinned by commit and checked against a
 sha256 each, kept in `$JMO_ANSWER_KEYS_DIR` or `~/.cache/jmo-answer-keys`, as
 `<root>/<key>/<commit>/<path>`. Never inside the repository: sca-kitchen-sink's
 lockfiles are vulnerable on purpose, so tracking them would raise Dependabot
-alerts on JMo's own repository. A test whose key is absent skips and names the
+alerts on JMo's own repository, and vibeproof's fixtures hold three Postgres
+URIs that trufflehog finds. A test whose key is absent skips and names the
 command above.
 
 A file is written only after its bytes match the pin: they go to a temporary
@@ -72,6 +73,30 @@ SCA_KITCHEN_SINK_FILES: dict[str, str] = {
     "csharp/API.deps.json": "400975c04be8a4e64d25f0403712417465071eb20726054d9e9f8ed091f35954",
 }
 
+VIBEPROOF = "vibeproof"
+VIBEPROOF_COMMIT = "2c57bfae70ab9bb1e059f8522fe1603b613ac42a"
+VIBEPROOF_URL = "https://raw.githubusercontent.com/humora2504/vibeproof/{commit}/{path}"
+# humora2504/vibeproof (MIT): the fixtures its own test suite scans, a vulnerable
+# project and a clean one. The hashes were measured on the blobs at the commit
+# above. `vulnerable/env.fixture` and `clean/env.example.fixture` carry tokens in
+# place of credentials; the test that reads them builds the real files.
+VIBEPROOF_FILES: dict[str, str] = {
+    "test/fixtures/.gitignore": "3ee3be110dc18537e0ce3a2f027c8235143e348b162d4825a8e0af42973cf757",
+    "test/fixtures/clean/.gitignore": "18d08748340596f6fc068ee2304c4a3e34e58c207df214f491587ece87ab47b1",
+    "test/fixtures/clean/env.example.fixture": "68022d12b3f58bffcf1c935a84ddd90adf64af14fb5a8753fbb1e85ffa30c8dd",
+    "test/fixtures/clean/package.json": "f500958b6425dcaa338f4fdee28ee4d482b6e61c7a828dd24cff2f28cb20a3c4",
+    "test/fixtures/clean/src/app/api/items/route.ts": "7651d37a392613ba5e0952ba8d628c97cbcf1d4076cdfe3101db825ad19b6525",
+    "test/fixtures/clean/src/lib/server.ts": "e587c5d734c8a1cca41b69196032fe4c07dd20f559012a7e2511d907b5b67efa",
+    "test/fixtures/clean/supabase/migrations/001_init.sql": "4fa94c8224fca29fc786516eb86c585dd3a9f6ad6057fc01f7af2bf2295a5c8c",
+    "test/fixtures/vulnerable/.gitignore": "16d30e4462189fb14dd611bdb708c510630c576a1f35b9383e89a4352da36c97",
+    "test/fixtures/vulnerable/env.fixture": "aea8e768ca79e30342d0636bc9cf2e42e7bdffe7a4838005e0bfd53b80faa880",
+    "test/fixtures/vulnerable/firestore.rules": "cc6e6efc37538d8041a014b7b30ae5ee746490d84f6e8c0643de0e5068440a5d",
+    "test/fixtures/vulnerable/package.json": "2e6fcb50347744a4a9c8bb0a69a3a28ac0f22a3397aa5c95f88ea9fdf73ab6c3",
+    "test/fixtures/vulnerable/src/app/api/delete/route.ts": "13752f3f1ffff75a8c803064210ed5d27a1319fe782642b4b809dca35550cee8",
+    "test/fixtures/vulnerable/src/lib/admin.ts": "359dd0fa7a39f99198960b0530d77e75aa469904532b025db903bd58035fbf10",
+    "test/fixtures/vulnerable/supabase/migrations/001_init.sql": "365428d836db5f6dd43c0fb9360b80d8ef9135fb3fc1dcc18e0f150ba7e6bda9",
+}
+
 
 def answer_keys_dir() -> Path:
     """`$JMO_ANSWER_KEYS_DIR`, else `~/.cache/jmo-answer-keys`; an empty
@@ -83,6 +108,11 @@ def answer_keys_dir() -> Path:
 def sca_kitchen_sink_dir(root: Path | None = None) -> Path:
     """Where the key's files are: `<root>/sca-kitchen-sink/<commit>`."""
     return (root or answer_keys_dir()) / SCA_KITCHEN_SINK / SCA_KITCHEN_SINK_COMMIT
+
+
+def vibeproof_dir(root: Path | None = None) -> Path:
+    """Where the key's files are: `<root>/vibeproof/<commit>`."""
+    return (root or answer_keys_dir()) / VIBEPROOF / VIBEPROOF_COMMIT
 
 
 def download(url: str) -> bytes:
@@ -170,7 +200,18 @@ def sca_kitchen_sink(root: Path | None = None) -> list[str]:
     )
 
 
-KEYS: dict[str, Callable[[], list[str]]] = {SCA_KITCHEN_SINK: sca_kitchen_sink}
+def vibeproof(root: Path | None = None) -> list[str]:
+    """humora2504/vibeproof's test fixtures at the pinned commit; the problems
+    met, none when every file is in place."""
+    return _fetch_pinned(
+        vibeproof_dir(root), VIBEPROOF_COMMIT, VIBEPROOF_URL, VIBEPROOF_FILES
+    )
+
+
+KEYS: dict[str, Callable[[], list[str]]] = {
+    SCA_KITCHEN_SINK: sca_kitchen_sink,
+    VIBEPROOF: vibeproof,
+}
 
 
 def main(argv: list[str] | None = None) -> int:

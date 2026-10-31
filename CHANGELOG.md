@@ -114,9 +114,17 @@ All notable changes to JMo Security will be documented in this file.
   (`jmo.supabase.table-without-rls`, HIGH, CWE-862) or enabled with no policy
   (`jmo.supabase.rls-without-policy`, LOW, no CWE), both the final state of
   `supabase/migrations/*.sql` applied in order, so a later migration that disables Row
-  Level Security, drops a policy or drops the table counts; and a Firebase rule that
-  allows any access unconditionally, in `firestore.rules` or `storage.rules`
-  (`jmo.firebase.rules-open`, HIGH, CWE-862). A repository with none of
+  Level Security, drops a policy or drops the table counts (a `drop table` inside a string
+  or a dollar-quoted body does not); and a Firebase rule that allows any access
+  unconditionally, read per `allow` statement in `firestore.rules` or `storage.rules`
+  (no condition, or one that is exactly `if true`), or a Realtime Database `.read` or
+  `.write` set to `true` in `database.rules.json` (`jmo.firebase.rules-open`, HIGH,
+  CWE-862). Client code is JS/TS under the root's `app/`, `src/`, `components/`, `pages/`
+  or `lib/` that Next.js does not keep on the server (route handlers outside `_` folders,
+  `middleware` or `proxy`, a line-start `import "server-only"`, `"use server"`); a
+  backend-only repository's `src/` (a known server framework and no browser framework in
+  the root `package.json`) is server code, except `src/client/` and `src/public/`. A
+  dotenv name may end at `:` as well as `=`. A repository with none of
   that is `skipped:no JS/TS, .env, Firebase rules or Supabase migrations`. Its tracked
   fixture (`tests/fixtures/samples/native/`, with a README) is placeholder values only
   and produces exactly its documented 8 findings and 4 negatives. Measured on three

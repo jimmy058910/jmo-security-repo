@@ -428,7 +428,7 @@ and this does not apply.
 ### jmo-native reads one application, at the repository root
 
 jmo-native decides what it reads by path from the scanned root
-([TOOLS.md](TOOLS.md#jmo-native)), and four things follow from that.
+([TOOLS.md](TOOLS.md#jmo-native)), and five things follow from that.
 
 - **A nested application is not seen as one.** Client code is looked for only
   under the root's `app/`, `src/`, `components/`, `pages/` or `lib/`, and the
@@ -437,9 +437,18 @@ jmo-native decides what it reads by path from the scanned root
   `packages/db/supabase/migrations/` is not read, so no table is checked. The
   other checks still read their files wherever they sit: JS/TS source and `.env`
   files for the public-env check, JS/TS source for the browser-LLM check, and
-  `firestore.rules` and `storage.rules` for the Firebase check. Reading each
-  application from its own root is
+  `firestore.rules`, `storage.rules` and `database.rules.json` for the Firebase
+  check. Reading each application from its own root is
   [#1381](https://github.com/jimmy058910/jmo-security-repo/issues/1381).
+- **A backend is recognised by its framework.** The root's `src/` is read as
+  server code only when the root `package.json` names a server framework
+  (Express, Fastify, Hono, Koa, NestJS, hapi or restify) and no browser
+  framework. A backend on any other framework keeps `src/` as client code, so a
+  `service_role` reference there is reported though it never reaches a browser.
+  The other side hides a finding: browser code that a repository read as a backend
+  keeps in `src/` outside `src/client/` and `src/public/` (which stay client
+  code), built by a bundler the list does not name, reads as server code and is
+  not checked.
 - **Only `public`-schema tables are checked.** A table in another schema
   (`private.notes`) is skipped, since Supabase's API serves `public` by default. A
   schema exposed to the API by configuration is not checked.

@@ -124,11 +124,15 @@ class TestTheRow:
 _LLM = b"const c = new OpenAI({ dangerouslyAllowBrowser: true });\n"
 _ENV = b"NEXT_PUBLIC_STRIPE_SECRET_KEY=placeholder\n"
 _RULES = b"allow read, write: if true;\n"
+_RTDB_RULES = b'{"rules": {".read": true}}\n'
 _SQL = b"create table notes (id int);\n"
 
 READ = [
     *[(f"app/page{suffix}", _LLM) for suffix in native_checks.CODE_SUFFIXES],
-    *[(name, _RULES) for name in native_checks.RULES_FILE_NAMES],
+    *[
+        (name, _RTDB_RULES if name.endswith(".json") else _RULES)
+        for name in native_checks.RULES_FILE_NAMES
+    ],
     (".env", _ENV),
     (".env.local", _ENV),
     (".env.example", _ENV),
@@ -141,8 +145,8 @@ NOT_READ = [
     ("lib.py", _LLM),
     ("README.md", _ENV),
     ("firebase.json", _RULES),
-    # Realtime Database rules are JSON, `database.rules.json`: no Firebase
-    # file has this name, and the pack does not read it.
+    # Realtime Database rules are `database.rules.json`: no Firebase file
+    # has this name, and the pack does not read it.
     ("database.rules", _RULES),
     ("db/schema.sql", _SQL),
     # A nested app's migrations: the runner reads the root's only

@@ -28,7 +28,7 @@ The six rules, exactly:
 - ``jmo.supabase.rls-without-policy`` -- RLS enabled, but no policy: the table
   is locked to everyone, including the application itself.
 - ``jmo.firebase.rules-open`` -- a Firebase rule granting unconditional access
-  (``if true``).
+  (``if true`` or no condition; a Realtime Database ``".read": true``).
 
 Exit codes match `yara_runner.py`'s:
 
@@ -62,13 +62,16 @@ order, so a later ``disable row level security``, ``drop table``
 or ``drop policy`` counts.
 
 **No secret value ever reaches the output.** The public-env-secret rule
-reads only the *name* on a `.env` line, left of its first `=`,
-and reports the name it matched, so no part of a value is ever read.
+reads only the *name* on a `.env` line, left of its first `=` (or `:`, in the
+`KEY: value` form), and reports the name it matched, so no part of a value is
+ever read.
 """
 
 from __future__ import annotations
 
 import argparse
+import bisect
+import functools
 import json
 import os
 import re
@@ -124,25 +127,71 @@ CODE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs")
 # TODO(issue-#1381): root-relative, so a monorepo's nested app
 # (`apps/web/src/...`) is never client code.
 CLIENT_DIRS = ("app/", "src/", "components/", "pages/", "lib/")
+# `src/` is server code only on positive evidence: the root `package.json`
+# names a server framework and no browser framework (an Express or Hono
+# service). A repository naming neither, or an unlisted server framework,
+# keeps `src/` as client code. Even then, these two folders hold browser code
+# (a backend's frontend, its static scripts), so they stay client code.
+SRC_BROWSER_DIRS = ("src/client/", "src/public/")
+SERVER_FRAMEWORKS = frozenset(
+    {"express", "fastify", "hono", "koa", "@nestjs/core", "@hapi/hapi", "restify"}
+)
+BROWSER_FRAMEWORKS = frozenset(
+    {
+        "next",
+        "vite",
+        "react-scripts",
+        "expo",
+        "react",
+        "react-dom",
+        "vue",
+        "@vue/cli-service",
+        "nuxt",
+        "svelte",
+        "@sveltejs/kit",
+        "@angular/core",
+        "gatsby",
+        "astro",
+        "@remix-run/react",
+        "solid-js",
+        "preact",
+        "parcel",
+        "webpack",
+        "esbuild",
+        "rollup",
+        "browserify",
+        "@rspack/core",
+        "@rsbuild/core",
+        "lit",
+    }
+)
 SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functions/")
 # Server-only by Next.js's own rules, wherever they sit, so none
 # can hide a real client reference: an App Router route handler, the root's
-# or `src/`'s middleware, a module importing `server-only` (the build fails
-# if a client module does), and one whose first statement is "use server".
+# or `src/`'s middleware (`proxy` since Next.js 16), a module importing
+# `server-only` (the build fails if a client module does), and one whose
+# first statement is "use server".
 ROUTE_HANDLER_DIRS = ("app/", "src/app/")
-# TODO(issue-#1380): Next.js 16 renamed middleware to `proxy.ts`, which is
-# not here yet, so a service-role reference in `src/proxy.ts` reads as client.
 MIDDLEWARE_FILES = (
     "middleware.ts",
     "middleware.js",
     "src/middleware.ts",
     "src/middleware.js",
+    "proxy.ts",
+    "proxy.js",
+    "src/proxy.ts",
+    "src/proxy.js",
 )
-SERVER_ONLY_IMPORT = re.compile(r"""\bimport\s*(["'])server-only\1""")
+# An import statement starts its line (a BOM may precede the first) outside
+# every string (`_has_server_only_import`): the text `import "server-only"`
+# held in a string, a template literal's line included, is not one.
+SERVER_ONLY_IMPORT = re.compile(
+    r"""^\ufeff?import\s*(["'])server-only\1""", re.MULTILINE
+)
 USE_SERVER_DIRECTIVE = re.compile(r"""\ufeff?\s*(["'])use server\1""")
-# Firestore and Storage rules. The Realtime Database's are JSON
-# (`database.rules.json`), which FIREBASE_OPEN's syntax can never match.
-RULES_FILE_NAMES = ("firestore.rules", "storage.rules")
+# Firestore and Storage rules are the rules language (FIREBASE_ALLOW); the
+# Realtime Database's are JSON (RTDB_OPEN).
+RULES_FILE_NAMES = ("firestore.rules", "storage.rules", "database.rules.json")
 
 # Case-sensitive, and never inside a longer name (`INVITE_SECRET` is not
 # `VITE_SECRET`): Next.js, Vite, CRA and Expo inline exactly these upper-case
@@ -155,11 +204,36 @@ PUBLIC_SECRET = re.compile(
 SERVICE_ROLE = re.compile(
     r"process\.env\.(NEXT_PUBLIC_)?SUPABASE_SERVICE_ROLE_KEY|service_role"
 )
+# Where a dotenv name ends: `KEY=value`, or the `KEY: value` form.
+_ENV_SEPARATOR = re.compile(r"[=:]")
 BROWSER_LLM = re.compile(r"dangerouslyAllowBrowser\s*:\s*true")
 _FIREBASE_VERB = r"(?:read|write|get|list|create|update|delete)"
-FIREBASE_OPEN = re.compile(
-    r"allow\s+" + _FIREBASE_VERB + r"(?:\s*,\s*" + _FIREBASE_VERB + r")*"
-    r"\s*:\s*if\s+true\s*(?:;|\}|$)"
+# A new line that starts another statement. The `;` is optional in the rules
+# language as far as this pack can tell, so a statement without one must end
+# here, or it would swallow the next and its condition would no longer read as
+# `if true`. Only the line's own indent (`[^\S\n]`: any whitespace but a
+# newline, a CR included) is read after the newline, so a run of blank lines is
+# not rescanned at each of its newlines: a blank line ends at the next
+# newline's check, and the scan stays linear on crafted input.
+_NEXT_STATEMENT = r"\n[^\S\n]*(?:allow|match|function)\b"
+# One `allow` statement: from the keyword to its `;`, to the `}` closing its
+# block, to a new line that starts another `allow`, `match` or `function`, or
+# to the end of the text, across lines. `condition` is what follows the `:`,
+# absent for a bare `allow read;`.
+FIREBASE_ALLOW = re.compile(
+    r"\ballow\s+" + _FIREBASE_VERB + r"(?:\s*,\s*" + _FIREBASE_VERB + r")*"
+    r"\s*(?::(?P<condition>(?:(?!" + _NEXT_STATEMENT + r")[^;}])*))?"
+    r"(?:;|\}|\Z|(?=" + _NEXT_STATEMENT + r"))"
+)
+# What an open statement's whole condition is. A longer one (`if true &&
+# request.auth != null`) is not open.
+_IF_TRUE = re.compile(r"\s*if\s+true\s*")
+
+# `".read": true` or `".read": "true"`. A real key's opening quote never
+# follows a backslash, so `(?<!\\)` skips a `"` that closes an escape inside a
+# longer key; it is matched on text that already parsed as JSON.
+RTDB_OPEN = re.compile(
+    r"""(?<!\\)"(?P<key>\.read|\.write)"\s*:\s*(?P<value>true|"true")"""
 )
 
 _NAME = r'(?:"?(?P<schema>\w+)"?\.)?"?(?P<table>\w+)"?'
@@ -275,9 +349,13 @@ RULES: dict[str, RuleMeta] = {
         short="Firebase rule allows unconditional access",
         full=(
             "A Firebase security rule grants read and/or write access "
-            "unconditionally (`if true`), exposing the resource to any client."
+            "unconditionally (`if true`, or no condition at all), exposing the "
+            "resource to any client."
         ),
-        help="Replace `if true` with an authorization check such as `if request.auth != null`.",
+        help=(
+            "Replace the open rule with an authorization check such as "
+            "`if request.auth != null`."
+        ),
         severity="HIGH",
         cwe="CWE-862",
     ),
@@ -307,11 +385,12 @@ def _log(message: str) -> None:
 # as well as at its quote, since JS forbids a raw newline in one: a stray
 # quote (`Don't` in JSX text, the regex literal /'/) costs one line, not the
 # rest of the file. A backtick string may span lines, and an
-# escape (`\` plus any character, a newline included) never ends a string.
+# escape (`\` plus any character, a newline included, CRLF as one) never ends
+# a string: a continued line reads the same in an LF and a CRLF checkout.
 _CODE_TOKENS = re.compile(
-    r"""'(?:\\.|[^'\\\n])*'?"""
-    r"""|"(?:\\.|[^"\\\n])*"?"""
-    r"""|`(?:\\.|[^`\\])*`?"""
+    r"""'(?:\\(?:\r\n|.)|[^'\\\n])*'?"""
+    r"""|"(?:\\(?:\r\n|.)|[^"\\\n])*"?"""
+    r"""|`(?:\\(?:\r\n|.)|[^`\\])*`?"""
     r"""|//[^\n]*"""
     r"""|/\*.*?(?:\*/|\Z)""",
     re.DOTALL,
@@ -337,11 +416,14 @@ def strip_code_comments(text: str) -> str:
     return _CODE_TOKENS.sub(blank, text)
 
 
+# TODO(issue-#1523): read create, RLS and policy statements string-aware, as drop is.
 def strip_sql_comments(text: str) -> str:
     """Blank `--` and `/* */` comments in migration SQL, preserving every
-    line break. Not string-aware: no test in this pack needs a `--` or `/*`
-    protected inside a SQL string literal, so this stays the small scanner
-    the brief asks for rather than growing SQL-string handling nothing uses.
+    line break. Not string-aware: a `--` or `/*` inside a string literal
+    starts a comment here. The `drop table` check reads strings properly
+    (:func:`blank_sql_literals`); the `create table`, Row Level Security and
+    policy statements are still read from this function's output, so a
+    comment marker inside a string can hide one of them.
     """
     out: list[str] = []
     i, n = 0, len(text)
@@ -378,6 +460,31 @@ def strip_sql_comments(text: str) -> str:
             out.append(ch if ch == "\n" else " ")
             i += 1
     return "".join(out)
+
+
+# Leftmost token first, as `_CODE_TOKENS` does for JS: a comment, a '...'
+# string (`''` is a quote inside it), or a `$$...$$`/`$tag$...$tag$` body, the
+# one hiding a quote or `--` from the others. A tag is an identifier, so `$1`
+# (a parameter) opens no body, nor does the `$$` ending an identifier like
+# `a$$`. Unterminated runs to the end, as Postgres would reject it anyway.
+_SQL_TOKENS = re.compile(
+    r"""--[^\n]*"""
+    r"""|/\*.*?(?:\*/|\Z)"""
+    r"""|'[^']*(?:''[^']*)*'?"""
+    r"""|(?<![\w$])\$(?P<tag>[A-Za-z_]\w*|)\$.*?(?:\$(?P=tag)\$|\Z)""",
+    re.DOTALL,
+)
+
+
+def blank_sql_literals(text: str) -> str:
+    """Blank `--` and `/* */` comments, `'...'` string literals and
+    dollar-quoted bodies in migration SQL, one for one and keeping every line
+    break, so a statement written inside one (`execute 'drop table x'` in a
+    function body) is not read as run, and offsets still line up with
+    :func:`strip_sql_comments`'s text. Read from the raw text rather than from
+    that function's output, which is not string-aware: it would blank the
+    closing quote of `'a -- b'`, and this would then read on as one string."""
+    return _SQL_TOKENS.sub(lambda match: _NOT_NEWLINE.sub(" ", match.group(0)), text)
 
 
 # --- walk --------------------------------------------------------------------
@@ -424,16 +531,103 @@ def _lines(text: str) -> list[str]:
     return [line.removesuffix("\r") for line in text.split("\n")]
 
 
+@functools.lru_cache(maxsize=4)
+def _client_dirs(root: Path) -> tuple[str, ...]:
+    """`CLIENT_DIRS`, less `src/` (but for `SRC_BROWSER_DIRS`) when the root's
+    `package.json` parses to an object whose `dependencies` or
+    `devDependencies` (each an object) name a server framework and no browser
+    framework. Only the root's: a nested
+    app's `package.json` changes nothing (#1381). Anything else -- no
+    `package.json`, one that does not parse, no server framework named --
+    leaves `CLIENT_DIRS` whole. Cached for the run (`_scan` clears it), not
+    read per file."""
+    try:
+        package = json.loads((root / "package.json").read_bytes())
+    except (OSError, ValueError, RecursionError):
+        return CLIENT_DIRS
+    if not isinstance(package, dict):
+        return CLIENT_DIRS
+    names: set[str] = set()
+    for section in ("dependencies", "devDependencies"):
+        deps = package.get(section)
+        if isinstance(deps, dict):
+            names.update(deps)
+    if names & SERVER_FRAMEWORKS and not names & BROWSER_FRAMEWORKS:
+        return tuple(d for d in CLIENT_DIRS if d != "src/") + SRC_BROWSER_DIRS
+    return CLIENT_DIRS
+
+
+def _is_route_handler(path: Path, rel: str) -> bool:
+    """An App Router `route.*`. A folder whose name starts with `_` is a
+    private folder: Next.js routes nothing below it."""
+    if path.stem != "route":
+        return False
+    for prefix in ROUTE_HANDLER_DIRS:
+        if rel.startswith(prefix):
+            below = rel[len(prefix) :].split("/")[:-1]
+            return not any(folder.startswith("_") for folder in below)
+    return False
+
+
+def _has_server_only_import(code: str) -> bool:
+    """Whether `code` (comment-stripped) holds an `import "server-only"`
+    statement. A match counts only when it starts outside every string token
+    (`_CODE_TOKENS`), since a template literal's line may start with the text.
+    Strings are not blanked, which would blank the import's own specifier. The
+    string spans come in order and never overlap, so one `bisect` finds the
+    only span that could hold a match: linear-ish on a file full of decoys."""
+    starts = [match.start() for match in SERVER_ONLY_IMPORT.finditer(code)]
+    if not starts:
+        return False
+    begins: list[int] = []
+    ends: list[int] = []
+    for token in _CODE_TOKENS.finditer(code):
+        if token.group(0)[0] in "'\"`":
+            begins.append(token.start())
+            ends.append(token.end())
+    for start in starts:
+        held_by = bisect.bisect_right(begins, start) - 1
+        if held_by < 0 or start >= ends[held_by]:
+            return True
+    return False
+
+
 def _is_next_server_module(path: Path, rel: str, code: str) -> bool:
     """Whether Next.js itself keeps this module off the browser
     (`ROUTE_HANDLER_DIRS` and the markers beside it). `code` is the
     comment-stripped text, so a commented-out marker does not count."""
     return (
-        (path.stem == "route" and rel.startswith(ROUTE_HANDLER_DIRS))
+        _is_route_handler(path, rel)
         or rel in MIDDLEWARE_FILES
-        or SERVER_ONLY_IMPORT.search(code) is not None
+        or _has_server_only_import(code)
         or USE_SERVER_DIRECTIVE.match(code) is not None
     )
+
+
+def _rtdb_findings(rel: str, name: str, text: str) -> list[NativeFinding]:
+    """`database.rules.json`: every `".read"`/`".write"` key set to `true`,
+    at any depth. The text must parse as JSON first (comments blanked, as
+    Firebase's tooling accepts them), so a key's text inside a string is
+    never one; a file that does not parse gives nothing."""
+    code = strip_code_comments(text.removeprefix("\ufeff"))
+    try:
+        json.loads(code)
+    except (ValueError, RecursionError):
+        return []
+    findings: list[NativeFinding] = []
+    for match in RTDB_OPEN.finditer(code):
+        line, col = _line_col(code, match.start())
+        findings.append(
+            NativeFinding(
+                RULE_FIREBASE_OPEN,
+                rel,
+                line,
+                col,
+                f'{name} allows unconditional access (`"{match.group("key")}": '
+                f"{match.group('value')}`)",
+            )
+        )
+    return findings
 
 
 def scan_file(path: Path, root: Path) -> list[NativeFinding]:
@@ -454,7 +648,7 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
         body = text if is_env else strip_code_comments(text)
         is_client = (
             is_code
-            and rel.startswith(CLIENT_DIRS)
+            and rel.startswith(_client_dirs(root))
             and not any(marker in f"/{rel}" for marker in SERVER_MARKERS)
             and not _is_next_server_module(path, rel, body)
         )
@@ -463,10 +657,11 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
                 continue
             searched = line
             if is_env:
-                # Only the name, left of the first `=` (an `export ` before
-                # it included), never the value.
-                name, eq, _ = line.partition("=")
-                searched = name if eq else ""
+                # Only the name, left of the first `=` or `:` (`KEY: value`),
+                # whichever comes first, an `export ` before it included;
+                # never the value.
+                separator = _ENV_SEPARATOR.search(line)
+                searched = line[: separator.start()] if separator else ""
             match = PUBLIC_SECRET.search(searched)
             if match:
                 findings.append(_public_env_finding(rel, lineno, match))
@@ -504,19 +699,24 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
         except OSError:
             return findings
         text = raw.decode("utf-8", errors="replace")
+        if name.endswith(".json"):
+            return _rtdb_findings(rel, name, text)
         stripped = strip_code_comments(text)
-        for lineno, line in enumerate(_lines(stripped), start=1):
-            match = FIREBASE_OPEN.search(line)
-            if match:
-                findings.append(
-                    NativeFinding(
-                        RULE_FIREBASE_OPEN,
-                        rel,
-                        lineno,
-                        match.start() + 1,
-                        f"{name} allows unconditional read/write access (`if true`)",
-                    )
+        for match in FIREBASE_ALLOW.finditer(stripped):
+            condition = match.group("condition")
+            if condition is not None and not _IF_TRUE.fullmatch(condition):
+                continue
+            lineno, col = _line_col(stripped, match.start())
+            findings.append(
+                NativeFinding(
+                    RULE_FIREBASE_OPEN,
+                    rel,
+                    lineno,
+                    col,
+                    f"{name} allows unconditional read/write access "
+                    f"({'no condition' if condition is None else '`if true`'})",
                 )
+            )
         return findings
 
     return findings
@@ -574,12 +774,15 @@ def scan_migrations(root: Path) -> list[NativeFinding]:
             raw = path.read_bytes()
         except OSError:
             continue
-        sql = strip_sql_comments(raw.decode("utf-8", errors="replace"))
+        text = raw.decode("utf-8", errors="replace")
+        sql = strip_sql_comments(text)
+        # A drop is read where it runs: not inside a string or a body.
+        run_sql = blank_sql_literals(text)
         statements = sorted(
             (
                 match
                 for regex in (CREATE_TABLE_RE, RLS_RE, DROP_TABLE_RE, POLICY_RE)
-                for match in regex.finditer(sql)
+                for match in regex.finditer(run_sql if regex is DROP_TABLE_RE else sql)
             ),
             key=lambda match: match.start(),
         )
@@ -765,6 +968,7 @@ def _scan(target: Path, out_path: Path, exclude_dirs: frozenset[str]) -> int:
         )
         return EXIT_ERROR
 
+    _client_dirs.cache_clear()
     findings: list[NativeFinding] = []
     for path in iter_target_files(target, exclude_dirs):
         findings.extend(scan_file(path, target))
