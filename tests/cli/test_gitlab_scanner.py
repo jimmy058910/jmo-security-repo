@@ -1610,7 +1610,6 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
             pytest.param("RUN cat <<\tEOF > /x", "EOF", "", id="tab"),
             pytest.param('RUN cat << "EOF" > /x', "EOF", "", id="space-then-quoted"),
             pytest.param("COPY << EOF /x", "EOF", "", id="copy"),
-            pytest.param("RUN cat <<- EOF > /x", "EOF", "\t", id="chomp-then-space"),
             # The dash after the whitespace is part of the word, not chomp.
             pytest.param("RUN cat << -EOF", "-EOF", "", id="space-then-dash-word"),
             # A marker with quotes or backslashes is named without them (all
@@ -1627,6 +1626,11 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
             # (this passed before the change, as did the control below it).
             pytest.param(
                 r'RUN cat <<"E\xF" > /x', r"E\xF", "", id="guard-other-escape-kept"
+            ),
+            # `<<-` is chomp only when the word goes on: the first dash of
+            # `<<--EOF` is chomp and the marker is `-EOF`.
+            pytest.param(
+                "RUN cat <<--EOF > /x", "-EOF", "\t", id="guard-double-dash-is-chomp"
             ),
             pytest.param("RUN cat <<EOF > /x", "EOF", "", id="guard-no-whitespace"),
         ],
@@ -1655,6 +1659,20 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
             # passed before the change and must keep passing.
             pytest.param("RUN cat <<", id="guard-lone-operator"),
             pytest.param("RUN cat <<-", id="lone-chomp-operator"),
+            # BuildKit folds whitespace only directly after `<<`, so after
+            # `<<-` the marker is a word of its own and the `<<-` has none.
+            pytest.param("RUN cat <<- EOF", id="chomp-then-space"),
+            pytest.param("RUN cat <<-  EOF", id="chomp-then-two-spaces"),
+            pytest.param("RUN cat <<-\tEOF", id="chomp-then-tab"),
+            pytest.param('RUN cat <<- "EOF"', id="chomp-then-quoted"),
+            # Only space, tab and CR are folded, not every Unicode space.
+            pytest.param("RUN cat <<\u00a0EOF", id="no-break-space-is-not-folded"),
+            # BuildKit's marker is `[^<]*`: a `<` anywhere in the word, in
+            # quotes or escaped too, makes the word no heredoc.
+            pytest.param("RUN cat <<'a<b'", id="lt-in-single-quotes"),
+            pytest.param("RUN cat <<\\<", id="escaped-lt"),
+            pytest.param('RUN cat <<EOF"cat <<EOF"', id="lt-in-a-quoted-part"),
+            pytest.param('RUN cat <<"E\\<"', id="escaped-lt-in-double-quotes"),
             pytest.param('RUN cat <<""', id="guard-empty-quoted-word"),
             pytest.param("RUN cat <<<word", id="guard-here-string"),
             pytest.param("RUN cat <<< word", id="guard-here-string-with-a-space"),

@@ -74,25 +74,31 @@ _FROM_LINE = re.compile(
 # a directive Docker knows: an unknown one is a comment, and ends them.
 _DIRECTIVE = re.compile(r"\s*#\s*([a-zA-Z][a-zA-Z0-9]*)\s*=\s*(.+?)\s*$")
 _DIRECTIVES = frozenset({"syntax", "escape", "check"})
-# A heredoc's opening word, as BuildKit reads it: `<<` or `<<-`, whitespace if
-# any (`<< EOF`: BuildKit folds it into the word), then a marker of plain
-# characters, escaped characters and quoted spans (`<<EOF`, `<<\EOF`,
-# `<<EO"F"`, `<<'a b'`; `_unquoted` names it). A dash right after `<<` is
-# chomp, so `<<-` alone names nothing; after whitespace it belongs to the
-# marker (`<< -EOF`). `<<<` is a here-string. The body runs to the line
-# holding the marker alone, leading tabs stripped first for `<<-`. What shell
-# reads as one unit is matched too, to be stepped over, and has no marker
-# group: a quoted span (`echo "cat <<EOF here"`) and a backslash with the
-# character it escapes (`don\'t` opens no span; inside double quotes `\"` does
-# not close one; inside single quotes a backslash is a plain character). An
-# escaped space is left alone: `<<` is an operator, so `a\ <<EOF` still opens
-# a heredoc. The scan runs left to right, so the quote that opens the marker
-# itself (`<<"EOF"`) is part of it: the match starts at the space before `<<`.
-_MARKER_WORD = r"""(?:[^\s"'\\<]|\\.|"(?:[^"\\]|\\.)*"|'[^']*')+"""
+# A heredoc's opening word, as BuildKit reads it: `<<`, then whitespace if any
+# (`<< EOF`: BuildKit folds space, tab and CR after `<<` into the word, and
+# nothing else), or `<<-` (chomp) with the marker right after it. A dash after
+# whitespace belongs to the marker (`<< -EOF`), and `<<- EOF` opens nothing:
+# the `<<-` is a word of its own with no marker. The marker is plain
+# characters, escaped characters and quoted spans, none of them `<` (`<<EOF`,
+# `<<\EOF`, `<<EO"F"`, `<<'a b'`; `_unquoted` names it); `<<<` is a here-string.
+# The body runs to the line holding the marker alone, leading tabs stripped
+# first for `<<-`. What shell reads as one unit is matched too, to be stepped
+# over, and has no marker group: a quoted span (`echo "cat <<EOF here"`) and a
+# backslash with the character it escapes (`don\'t` opens no span; inside
+# double quotes `\"` does not close one; inside single quotes a backslash is a
+# plain character). An escaped space is left alone: `<<` is an operator, so
+# `a\ <<EOF` still opens a heredoc. The scan runs left to right, so the quote
+# that opens the marker itself (`<<"EOF"`) is part of it: the match starts at
+# the space before `<<`. The alternatives start on different characters (the
+# opener on whitespace, a digit or `<`, the rest on a backslash or a quote), so
+# their order does not matter.
+_MARKER_WORD = r"""(?:[^\s"'\\<]|\\[^<]|"(?:[^"\\<]|\\[^<])*"|'[^'<]*')+"""
 _HEREDOC = re.compile(
-    rf"(?:^|\s)\d*<<(?:(-)|(?!-))\s*({_MARKER_WORD})(?=\s|$)"
+    rf"(?:^|\s)\d*<<(?:(-)|(?!-)[ \t\r]*)({_MARKER_WORD})(?=\s|$)"
     r"""|\\\S|"(?:[^"\\]|\\.)*"|'[^']*'"""
 )
+# What `_unquoted` removes from a marker word: an escaped character, a
+# double-quoted span, a single-quoted span (groups 1, 2 and 3).
 _QUOTING = re.compile(r"""\\(.)|"((?:[^"\\]|\\.)*)"|'([^']*)'""")
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
 
