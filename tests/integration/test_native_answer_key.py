@@ -433,7 +433,8 @@ def test_materialising_replaces_every_token_and_leaves_the_source(
     _materialise(tmp_path, "env.fixture", ".env")
 
     body = (tmp_path / ".env").read_bytes()
-    assert b"__" not in body
+    left = b"__" in body  # a bool, so a failure never prints `body`
+    assert not left, "a token was left unreplaced"
     assert body.count(b"\r\n") == 1  # bytes in, bytes out
     assert source.read_bytes() == original
 
