@@ -198,12 +198,19 @@ SERVICE_ROLE = re.compile(
 _ENV_SEPARATOR = re.compile(r"[=:]")
 BROWSER_LLM = re.compile(r"dangerouslyAllowBrowser\s*:\s*true")
 _FIREBASE_VERB = r"(?:read|write|get|list|create|update|delete)"
+# A new line that starts another statement. The `;` is optional in the rules
+# language as far as this pack can tell, so a statement without one must end
+# here, or it would swallow the next and its condition would no longer read as
+# `if true`.
+_NEXT_STATEMENT = r"\n\s*(?:allow|match|function)\b"
 # One `allow` statement: from the keyword to its `;`, to the `}` closing its
-# block, or to the end of the text, across lines. `condition` is what follows
-# the `:`, absent for a bare `allow read;`.
+# block, to a new line that starts another `allow`, `match` or `function`, or
+# to the end of the text, across lines. `condition` is what follows the `:`,
+# absent for a bare `allow read;`.
 FIREBASE_ALLOW = re.compile(
     r"\ballow\s+" + _FIREBASE_VERB + r"(?:\s*,\s*" + _FIREBASE_VERB + r")*"
-    r"\s*(?::(?P<condition>[^;}]*))?(?:;|\}|\Z)"
+    r"\s*(?::(?P<condition>(?:(?!" + _NEXT_STATEMENT + r")[^;}])*))?"
+    r"(?:;|\}|\Z|(?=" + _NEXT_STATEMENT + r"))"
 )
 # What an open statement's whole condition is. A longer one (`if true &&
 # request.auth != null`) is not open.
