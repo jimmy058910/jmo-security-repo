@@ -78,11 +78,16 @@ def scan(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
     )
+    # Relative, as in tests/integration/test_scan_accounting.py: with
+    # DOCKER_CONTAINER set the scan refuses a drive-letter --repos-dir as
+    # MSYS-mangled, which on native Windows is every tmp_path, and the scan
+    # would stop before the reminder.
+    monkeypatch.chdir(tmp_path)
     argv = [
         "jmo",
         "scan",
         "--repos-dir",
-        str(repos_dir),
+        repos_dir.name,
         "--results-dir",
         str(results_dir),
         "--config",
