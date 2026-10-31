@@ -43,13 +43,28 @@ class TestAdvancedTargets:
         unlike U1 this test is not pinned to a commit. It scans the container
         images the repository names as targets too.
         """
-        gitlab_url = os.environ.get("TEST_GITLAB_URL", "https://gitlab.com")
+        # The failures below name the variable and the expected form, never the
+        # value read: an override can carry a credential (an old-form URL with
+        # a token in it) and pytest prints the failure. pytest.fail, not assert,
+        # because pytest's assertion rewriting prints the operands of a failed
+        # assert, which here are the override.
+        gitlab_url = os.environ.get("TEST_GITLAB_URL") or "https://gitlab.com"
+        if not gitlab_url.startswith(("https://", "http://")):
+            pytest.fail(
+                "TEST_GITLAB_URL must start with https:// or http:// (for example "
+                "https://gitlab.com); jmo clones from https://gitlab.com instead "
+                "of any value without a scheme, so the test would scan a "
+                "repository it did not name",
+                pytrace=False,
+            )
         gitlab_repo = os.environ.get("TEST_GITLAB_REPO", "gitlab-org/gitlab-runner")
         is_group_repo = re.fullmatch(r"[\w.-]+/[\w.-]+", gitlab_repo) is not None
-        assert is_group_repo and not gitlab_repo.endswith(".git"), (
-            "TEST_GITLAB_REPO must be <group>/<repo> (for example "
-            f"gitlab-org/gitlab-runner), not a URL; read {gitlab_repo!r}"
-        )
+        if not is_group_repo or gitlab_repo.endswith(".git"):
+            pytest.fail(
+                "TEST_GITLAB_REPO must be <group>/<repo> (for example "
+                "gitlab-org/gitlab-runner), without a URL or a .git suffix",
+                pytrace=False,
+            )
         rc, stdout, stderr, results_dir = jmo_scan_runner(
             [
                 "ci",

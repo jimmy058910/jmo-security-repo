@@ -147,7 +147,8 @@ pytest tests/e2e/ -m docker -v
 TEST_REPO=https://github.com/myorg/myrepo.git TEST_REPO_COMMIT=<40-char sha> pytest tests/e2e/test_scan_workflows.py -k "U1" -v
 TEST_IMAGE=nginx:1.25 pytest tests/e2e/test_scan_workflows.py -k "U2" -v
 # A1 scans TEST_GITLAB_REPO (group/repo, not a URL; default gitlab-org/gitlab-runner)
-# on TEST_GITLAB_URL (default https://gitlab.com)
+# on TEST_GITLAB_URL (https:// or http://, default https://gitlab.com; a value
+# without a scheme fails the test, since jmo would clone from gitlab.com instead)
 GITLAB_TOKEN=<token> TEST_GITLAB_REPO=mygroup/myrepo pytest tests/e2e/test_advanced_targets.py -k "gitlab" -v
 # Test a local build instead of the released image
 JMO_DOCKER_REGISTRY=jmo-security-dev pytest tests/e2e/test_docker_workflows.py -k "U9" -v
