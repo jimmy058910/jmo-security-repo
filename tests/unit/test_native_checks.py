@@ -308,6 +308,48 @@ class TestCommentStripping:
         assert stripped.split("\n")[1] == "// not a comment"
         assert stripped.split("\n")[3] == " " * 12
 
+    @pytest.mark.parametrize("eol", ["\n", "\r\n"], ids=["LF", "CRLF"])
+    @pytest.mark.parametrize("quote", ["'", '"', "`"])
+    def test_a_backslash_before_a_line_break_continues_the_string(self, quote, eol):
+        """A backslash before a CRLF ended the string at the line break, so the
+        next line's closing quote opened a new string and swallowed the
+        comment after it: the LF and CRLF checkouts of one file differed."""
+        text = f"x = {quote}a \\{eol}b{quote}; // gone{eol}y = 1;{eol}"
+
+        stripped = native_checks.strip_code_comments(text)
+
+        assert "gone" not in stripped
+        assert stripped.startswith(f"x = {quote}a \\{eol}b{quote};")
+        assert stripped.count("\n") == text.count("\n")
+        assert len(stripped) == len(text)
+
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_lf_and_crlf_checkouts_of_one_file_give_the_same_findings(
+        self, tmp_path, eol
+    ):
+        """The named key sits in the comment after a string continued over a
+        line break, so it is not a finding; the same key in code is."""
+        commented = (
+            b'const u = "https://a.example/ \\' + eol + b'  b"; '
+            b"// process.env.SUPABASE_SERVICE_ROLE_KEY" + eol
+        )
+        coded = (
+            b'const u = "https://a.example/ \\' + eol + b'  b"; '
+            b"const k = process.env.SUPABASE_SERVICE_ROLE_KEY;" + eol
+        )
+        results = {}
+        for name, body in (("commented", commented), ("coded", coded)):
+            target = tmp_path / name
+            _plant(target, "src/a.ts", body)
+            out = tmp_path / f"{name}.sarif"
+            results[name] = (_run(target, out), _triples(_results(out)))
+
+        assert results["commented"] == (0, [])
+        assert results["coded"] == (
+            1,
+            [(native_checks.RULE_SERVICE_ROLE, "src/a.ts", 2)],
+        )
+
     def test_commented_out_firestore_rule_is_not_caught(self, tmp_path):
         target = tmp_path / "t"
         target.mkdir()
