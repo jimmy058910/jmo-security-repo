@@ -387,10 +387,17 @@ review — run in another shell inside the suite's window:
 | `jmo scan` (positive control) | 14:15:31 |
 | `~/.jmo/config.yml` mtime | 14:15:32 |
 
-`_show_kofi_reminder()` bumps `scan_count:` in `~/.jmo/config.yml` on **every**
-scan, so any dogfood run mutates the exact file the guard watches. Two scans,
+`_show_kofi_reminder()` bumped `scan_count:` in `~/.jmo/config.yml` on **every**
+scan, so any dogfood run mutated the exact file the guard watches. Two scans,
 two accusations, both wrong; the same suite had reported 0 errors an hour
 earlier with no scan running.
+
+**Since #1506 only an interactive scan counts.** `_show_kofi_reminder` now
+returns before it touches `~/.jmo` unless stdin and stdout are both terminals and
+`CI`, `JMO_NON_INTERACTIVE` and `DOCKER_CONTAINER` are unset. A gate scan whose
+output is piped or redirected, a cron job and every test's captured output leave
+the file alone. A `jmo scan` typed at a terminal while the suite runs still
+mutates it, so the sequencing advice below holds for that case.
 
 **Sequence the two.** Verifying against real binaries and running the suite are
 both required here and they cannot share a window. If a run comes back with
@@ -398,10 +405,10 @@ errors whose named tests cannot reach the guarded state, check what else on the
 machine touched `~/.jmo/` before touching the tests.
 
 **Temporary `--history-db` and `--results-dir` do not isolate it.** The counter
-lives at `Path.home() / ".jmo" / "config.yml"` (`scripts/cli/jmo.py:2511`,
-inside `_show_kofi_reminder`, `def` at `:2505`), a path neither flag touches, so
-a gate run with both pointed at tmp still writes the real file. The flags
-protect the history database and the results tree, not the config.
+lives at `Path.home() / ".jmo" / "config.yml"` (inside `_show_kofi_reminder` in
+`scripts/cli/jmo.py`), a path neither flag touches, so an interactive gate run
+with both pointed at tmp still writes the real file. The flags protect the
+history database and the results tree, not the config.
 
 **Recurrence, 2026-09-28:** a gate `jmo scan` run beside the suite produced 2
 false teardown errors in `test_load_4_store_1000_scans` (the long test that
@@ -412,6 +419,42 @@ happened to be open). Same mechanism, same fix: sequence them.
 which is what actually isolates it — `HOME` alone does not work on Windows,
 because `Path.home()` there does not read it (the failure message of
 `_guard_real_jmo_install` in `tests/conftest.py` says so).
+
+### `jmo_runner`: a home of its own hides the scanners and moves their caches
+
+A subprocess scan still writes under its home when it has a finding:
+`~/.jmo/cache/epss_scores.db` and a 1.6 MB `kev_catalog.json` (a network fetch),
+measured with the Ko-fi write gone. So `jmo_runner` keeps its fake HOME, and a
+bare fake HOME costs two things (#1517):
+
+- **It hides the scanners.** `~/.jmo/bin`, `tools` (isolated venvs),
+  `yara-rules` and `osv-db` are not under it, so a scan "passed" having run
+  nothing: `--allow-missing-tools` exits 0 whatever it found. The fixture links
+  the four real directories in (`bin` is 1.1 GB; they are links, not copies).
+  `osv-db` is not optional: without it osv-scanner's row reads `failed`, "offline
+  database missing".
+- **It moves their caches.** trivy and grype put their databases under the home:
+  with `~/.jmo/bin` on PATH, `test_linux_specific.py` fetched 1.6 GB + 3.2 GB
+  into each of five scan tests: **24 GB in 6 min 57 s**, against 5.0 MB in 11 s
+  when no scanner was found. The fixture sets `TRIVY_CACHE_DIR` and
+  `GRYPE_DB_CACHE_DIR` to the developer's own caches for the whole run. Two scans
+  on one cache do not fail (4 in parallel on a warm cache, 2 on an empty one,
+  measured), so there is no xdist group.
+
+Rules that follow:
+
+- A scan through `jmo_runner` names its tools. A test of a path, a permission or
+  an argument passes `*CHEAP_SCAN_TOOLS` (shellcheck). A test about what a scan
+  reads names a scanner that lives only in `~/.jmo/bin`, is `requires_tools`, and
+  asserts `scanner_states(results_dir)[tool] == "ran"`. A return code cannot
+  tell a scan that ran from one that found no scanner.
+- Left unpinned, one scan is minutes, not seconds: grype alone took 92 s on the
+  first scan after its database moved on, inside a 120 s budget, and the
+  refresh lands in the developer's cache, not in `--basetemp`.
+- The links are the real directories. A `jmo tools install`, `update` or
+  `uninstall` through `jmo_runner` would change the developer's install; no test
+  does. Where a link is refused (Windows without Developer Mode) the real `bin`
+  goes on PATH instead and the venvs, rules and OSV database stay hidden.
 
 ## Counting tests: compare like with like
 

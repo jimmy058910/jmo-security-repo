@@ -15,9 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import IS_MACOS, assert_no_jmo_traceback
+from tests.conftest import CHEAP_SCAN_TOOLS, IS_MACOS, assert_no_jmo_traceback
 
 macos_only = pytest.mark.skipif(not IS_MACOS, reason="macOS-only test")
+
+# Each scan below tests a path, an attribute or an argument, so it names one
+# cheap scanner and not every eligible one (#1517; see test_linux_specific.py).
 
 
 @macos_only
@@ -50,6 +53,7 @@ class TestMacOSPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_SCAN_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -71,6 +75,7 @@ class TestMacOSPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_SCAN_TOOLS,
                 "--repo",
                 str(tmp_path / "testrepo"),  # Different case
                 "--allow-missing-tools",
@@ -118,6 +123,7 @@ class TestMacOSPermissions:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_SCAN_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -150,6 +156,7 @@ class TestMacOSExtendedAttributes:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_SCAN_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",

@@ -4,8 +4,10 @@
 ``~/.jmo``, read ``config.yml``, bumped ``scan_count`` and rewrote the file,
 whether or not anyone was there to read the reminder it prints every third
 scan. A scan run by CI, cron, a pipe or a redirect therefore edited the
-maintainer's real config, and every e2e test that spawned ``jmo scan`` did too:
-``jmo_runner`` points HOME at a scratch directory for no other reason.
+maintainer's real config, and every e2e test that spawned ``jmo scan`` did too.
+``jmo_runner`` points HOME at a scratch directory first for that reason; it
+keeps doing so (#1517) for the EPSS and KEV caches a scan with findings writes
+under ``~/.jmo/cache``.
 
 The tests run ``cmd_scan`` to the reminder -- the tool pre-flight and the
 per-target scan are stubbed, nothing else -- with ``Path.home()`` redirected to

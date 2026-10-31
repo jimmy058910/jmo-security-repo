@@ -8,7 +8,10 @@ This module provides:
 - Common test utilities
 """
 
+import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +25,10 @@ import pytest
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX = sys.platform == "linux"
 IS_MACOS = sys.platform == "darwin"
+
+# The developer's own home, read at import: `jmo_runner` redirects HOME for the
+# test, and on Linux and macOS `Path.home()` reads it.
+_REAL_HOME = Path.home()
 
 
 # ============================================================================
@@ -102,8 +109,77 @@ def python_executable() -> str:
     return sys.executable
 
 
+@pytest.fixture(scope="session")
+def real_home() -> Path:
+    """The developer's own home directory, as it was before any test redirected HOME.
+
+    `jmo_runner` reads the installed scanners and their caches from here. A test
+    of the fixture overrides this with a directory of its own.
+    """
+    return _REAL_HOME
+
+
+# What a scan reads from `~/.jmo` that is not its own state: the scanners `jmo
+# tools install` puts in `bin`, their venvs in `tools`, the yara rules, and
+# osv-scanner's offline database (without `osv-db` its row reads "offline
+# database missing", measured).
+_SCANNER_DIRS = ("bin", "tools", "yara-rules", "osv-db")
+
+
+def _link_installed_scanners(
+    real_home: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Make the developer's installed scanners visible from `fake_home`.
+
+    Each directory in `_SCANNER_DIRS` that the developer has is linked, not
+    copied (`bin` alone is 1.1 GB). Where a link is refused (Windows without
+    Developer Mode raises OSError) the real `bin` goes on PATH instead: tool
+    lookup reads PATH as well as `~/.jmo/bin` (measured), so only the venvs,
+    the rules and the OSV database stay out of reach there.
+    """
+    for name in _SCANNER_DIRS:
+        target = real_home / ".jmo" / name
+        link = fake_home / ".jmo" / name
+        if not target.is_dir() or link.is_symlink() or link.exists():
+            continue
+        link.parent.mkdir(exist_ok=True)
+        try:
+            link.symlink_to(target, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            if name == "bin":
+                monkeypatch.setenv(
+                    "PATH", os.pathsep.join([str(target), os.environ.get("PATH", "")])
+                )
+
+
+def _share_scanner_caches(real_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point trivy and grype at the developer's own databases.
+
+    Both look under the home for them, so a home of the test's own made each
+    scan fetch trivy's 1.6 GB and grype's 3.2 GB afresh (24 GB over the five
+    Linux scan tests, #1517). Two scans on one cache do not fail: 4 in parallel
+    on a warm cache, and 2 on an empty one, all returned 0 with the same findings
+    (measured, trivy 0.74.0 and grype 0.118.0). A variable the developer set
+    themselves is left alone.
+    """
+    if IS_WINDOWS:
+        local = os.environ.get("LOCALAPPDATA")
+        base = Path(local) if local else real_home / "AppData" / "Local"
+    elif IS_MACOS:
+        base = real_home / "Library" / "Caches"
+    else:
+        xdg = os.environ.get("XDG_CACHE_HOME")
+        base = Path(xdg) if xdg else real_home / ".cache"
+    for var, cache in (
+        ("TRIVY_CACHE_DIR", base / "trivy"),
+        ("GRYPE_DB_CACHE_DIR", base / "grype" / "db"),
+    ):
+        if var not in os.environ:
+            monkeypatch.setenv(var, str(cache))
+
+
 @pytest.fixture
-def jmo_runner(monkeypatch, tmp_path):
+def jmo_runner(monkeypatch, tmp_path, real_home):
     """
     Pytest fixture providing a helper to run JMo commands.
 
@@ -118,10 +194,13 @@ def jmo_runner(monkeypatch, tmp_path):
     test's tmp_path, closing two separate real-state leaks with two separate
     injection points:
 
-    - `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
-      resolves `Path.home()` with no injection point, so a bare
-      `jmo_runner(["scan", ...])` would otherwise write to the developer's
-      real `~/.jmo/config.yml`. Both HOME (Linux/macOS) and USERPROFILE
+    - A scan writes under `Path.home()` with no injection point. Its report
+      phase creates `~/.jmo/cache/` (the EPSS scores, and the CISA KEV
+      catalogue, fetched: 1.6 MB) whenever the scan has a finding, and a scan
+      at a terminal counts itself in `~/.jmo/config.yml` for the Ko-fi reminder
+      (`_show_kofi_reminder`, #933). Output captured by this fixture is not a
+      terminal, so since #1506 the counter is never written and the cache is the
+      reason for the redirect. Both HOME (Linux/macOS) and USERPROFILE
       (Windows -- see ntpath.expanduser) are set, since this fixture is
       shared across all three platform e2e suites; each platform's
       Path.home() reads only its own var and ignores the other.
@@ -131,6 +210,21 @@ def jmo_runner(monkeypatch, tmp_path):
       NOT redirect this -- it is cwd-relative, not home-relative -- so the
       default `cwd` here is this test's tmp_path too, unless the caller
       passes its own `cwd=`.
+
+    A home of its own also hides what a scan reads from the real one, and moves
+    where the scanners keep their databases (#1517), so the fixture puts both
+    back:
+
+    - `bin`, `tools`, `yara-rules` and `osv-db` of the real `~/.jmo` are linked
+      into the test's home, so a scan finds the scanners the developer
+      installed. They are the real directories: a command that installs,
+      updates or uninstalls tools through this fixture would change the
+      developer's install. None of the current callers do.
+    - trivy and grype read the developer's own caches (`TRIVY_CACHE_DIR`,
+      `GRYPE_DB_CACHE_DIR`), the same for every test in the run.
+
+    A scan that only checks a path or an argument should still name its tools
+    (`CHEAP_SCAN_TOOLS`); every eligible scanner is minutes, not seconds.
 
     monkeypatch.setattr(Path, "home", ...) in a caller's own test body has
     NO effect here -- this spawns a real subprocess, and that patches only
@@ -145,6 +239,8 @@ def jmo_runner(monkeypatch, tmp_path):
     """
     fake_home = tmp_path / "home"
     fake_home.mkdir(exist_ok=True)
+    _link_installed_scanners(real_home, fake_home, monkeypatch)
+    _share_scanner_caches(real_home, monkeypatch)
     monkeypatch.setenv("USERPROFILE", str(fake_home))
     monkeypatch.setenv("HOME", str(fake_home))
 
@@ -216,6 +312,38 @@ def assert_no_jmo_traceback(output: str) -> None:
         f"JMo raised a traceback ({len(frames)} frame(s) in its own package, "
         f"first: {frames[0]!r}). Output tail:\n{output[-3000:]}"
     )
+
+
+# A scan that only checks a path, an argument or a permission names its tools
+# with this (`jmo scan ... *CHEAP_SCAN_TOOLS`) instead of running every eligible
+# scanner. shellcheck is offline and finishes in milliseconds. Left unpinned, a
+# scan through `jmo_runner` runs trivy and grype, and grype alone measured 92 s
+# on the first scan after its database moved on (#1517); `test_windows_specific`
+# pins its own `CHEAP_TOOLS` the same way (#833).
+CHEAP_SCAN_TOOLS = ["--tools", "shellcheck"]
+
+
+def scanner_installed(name: str) -> bool:
+    """Whether the developer has scanner `name`, in `~/.jmo/bin` or on PATH."""
+    search = os.pathsep.join(
+        [str(_REAL_HOME / ".jmo" / "bin"), os.environ.get("PATH", "")]
+    )
+    return shutil.which(name, path=search) is not None
+
+
+def scanner_states(results_dir: Path) -> dict[str, str]:
+    """What happened to each scanner in a finished one-target scan.
+
+    Maps tool name to its row's `state` in `.scan_metadata.json`: `ran`,
+    `skipped` or `failed`. A scan test that means to scan asserts `ran` here;
+    a scan that found no scanner still exits 0 under `--allow-missing-tools`,
+    so its return code says nothing (#1517). With several targets a tool has
+    one row per target and the last wins.
+    """
+    metadata = json.loads(
+        (Path(results_dir) / ".scan_metadata.json").read_text(encoding="utf-8")
+    )
+    return {row["tool"]: row["state"] for row in metadata["tool_runs"]}
 
 
 # ============================================================================
@@ -351,8 +479,13 @@ def _guard_real_zap_home(request):
 #   ~/.jmo/config.yml  - `_show_kofi_reminder()` (scripts/cli/jmo.py),
 #                         reached from `cmd_scan()`, has no injection point
 #                         at all: it resolves `Path.home() / ".jmo" /
-#                         "config.yml"` unconditionally and rewrites the
-#                         whole file with `yaml.safe_dump`.
+#                         "config.yml"` and rewrites the whole file with
+#                         `yaml.safe_dump`. Since #1506 it does so only for an
+#                         interactive scan (stdin and stdout both terminals,
+#                         none of CI, JMO_NON_INTERACTIVE, DOCKER_CONTAINER
+#                         set), which a test's captured output never is: a
+#                         write now comes from a test that fakes a terminal, or
+#                         from a `jmo scan` typed at one while the suite ran.
 #
 # Measured (#802) before any guard existed: +38 scans, +4240 findings,
 # +33.8MB across three full-suite runs (~13 scans/run).
@@ -481,6 +614,18 @@ def _guard_real_history_db(request):
     # is already refreshed so the next test compares against reality.
 
 
+_KOFI_WRITE_HINT = (
+    "_show_kofi_reminder() (scripts/cli/jmo.py) writes it for an interactive "
+    "scan (stdin and stdout both terminals, CI, JMO_NON_INTERACTIVE and "
+    "DOCKER_CONTAINER unset; #1506) and resolves Path.home() with no "
+    "injection point. A test that fakes a terminal must patch it before "
+    "calling cmd_scan()/main(['scan', ...]):\n"
+    "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))\n"
+    "If no test does, a `jmo scan` typed at a terminal while the suite ran "
+    "wrote it."
+)
+
+
 def _read_jmo_config_bytes() -> bytes | None:
     return _REAL_JMO_CONFIG.read_bytes() if _REAL_JMO_CONFIG.exists() else None
 
@@ -511,10 +656,7 @@ def _guard_real_jmo_config(request):
         pytest.fail(
             f"{request.node.nodeid} created the real config file "
             f"{_REAL_JMO_CONFIG}, which did not exist before this test.\n"
-            "_show_kofi_reminder() (scripts/cli/jmo.py) resolves "
-            "Path.home() unconditionally with no injection point -- patch "
-            "it before calling cmd_scan()/main(['scan', ...]):\n"
-            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))",
+            f"{_KOFI_WRITE_HINT}",
             pytrace=False,
         )
     else:
@@ -522,10 +664,7 @@ def _guard_real_jmo_config(request):
             f"{request.node.nodeid} wrote to the real config file "
             f"{_REAL_JMO_CONFIG} ({len(before)} bytes -> "
             f"{len(after) if after is not None else 0} bytes).\n"
-            "_show_kofi_reminder() (scripts/cli/jmo.py) resolves "
-            "Path.home() unconditionally with no injection point -- patch "
-            "it before calling cmd_scan()/main(['scan', ...]):\n"
-            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))",
+            f"{_KOFI_WRITE_HINT}",
             pytrace=False,
         )
 
