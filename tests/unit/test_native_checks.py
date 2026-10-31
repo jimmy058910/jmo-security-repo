@@ -19,12 +19,12 @@ reacts to.
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 import pytest
 
 from scripts.core import native_checks
+from tests.conftest import median_seconds
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "samples" / "native"
 README = FIXTURE / "README.md"
@@ -1043,17 +1043,17 @@ class TestServerModules:
         """Crafted input: each `import "server-only"` text was checked against
         every string in the file, so 20,000 decoys (720 KB) took 6 s and twice
         that many, four times as long. The bound is generous (linear is well
-        under a second)."""
+        under a second), on the median of three scans: a rescan of a fixed
+        file is repeatable, and one descheduled run cannot trip it."""
         decoy = b'const d = `\nimport "server-only"\n`;\n'
         target = tmp_path / "t"
         _plant(target, "lib/a.ts", decoy * 30_000 + _SERVICE_ROLE_LINE)
         out = tmp_path / "o.sarif"
 
-        started = time.perf_counter()
-        rc = _run(target, out)
-        elapsed = time.perf_counter() - started
+        rcs: list[int] = []
+        elapsed = median_seconds(lambda: rcs.append(_run(target, out)), samples=3)
 
-        assert rc == 1
+        assert rcs == [1] * 3
         assert _triples(_results(out)) == [
             (native_checks.RULE_SERVICE_ROLE, "lib/a.ts", 30_000 * 3 + 1)
         ]
@@ -1581,16 +1581,16 @@ class TestFirebaseRules:
         """Crafted input: each newline's look-ahead for the next statement
         rescanned the whole whitespace run after it, so 50,000 blank lines
         took 16 s and a megabyte, minutes. The bound is generous (linear is
-        well under a tenth of a second) so a slow runner cannot trip it."""
+        well under a tenth of a second) so a slow runner cannot trip it, on the
+        median of three scans of the fixed file (one descheduled run cannot)."""
         target = tmp_path / "t"
         _plant(target, "firestore.rules", b"allow read: if true" + run * 40_000)
         out = tmp_path / "o.sarif"
 
-        started = time.perf_counter()
-        rc = _run(target, out)
-        elapsed = time.perf_counter() - started
+        rcs: list[int] = []
+        elapsed = median_seconds(lambda: rcs.append(_run(target, out)), samples=3)
 
-        assert rc == 1
+        assert rcs == [1] * 3
         assert _triples(_results(out)) == [
             (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 1)
         ]
