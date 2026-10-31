@@ -1285,6 +1285,122 @@ class TestFirebaseRules:
 
         assert rc == 0, _triples(_results(out))
 
+    @pytest.mark.parametrize(
+        "rule",
+        [
+            # No condition: unconditional.
+            b"allow read;",
+            b"allow read, write;",
+            b"allow get , list ;",
+            b"allow create }",
+            # The condition is `if true` however it is laid out.
+            b"allow read: if true }",
+            b"allow read:\n      if true;",
+            b"allow read: if\n      true\n      ;",
+            b"allow read: if true /* why */;",
+        ],
+    )
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_statement_is_judged_whole_and_found_at_its_allow(
+        self, tmp_path, rule, eol
+    ):
+        """A rule is one statement, `allow` to its `;`, which may span lines:
+        a bare `allow read;` is unconditional, and the finding sits at the
+        `allow`, not at a later line of the statement."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule).replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        [result] = _results(out)
+        assert result["ruleId"] == native_checks.RULE_FIREBASE_OPEN
+        assert result["locations"][0]["physicalLocation"]["region"] == {
+            "startLine": 5,
+            "startColumn": 7,
+        }
+
+    @pytest.mark.parametrize(
+        "rule",
+        [
+            # The condition continues on the next line.
+            b"allow read: if true\n        && request.auth != null;",
+            b"allow read: if true &&\n        request.auth != null;",
+            b"allow read, write: if true // for now\n        && request.auth != null;",
+            # Not `if true`, whatever else it holds.
+            b"allow read: if false;",
+            b"allow read: if request.auth != null && true;",
+            b"allow read: if trueish;",
+            # Not the keyword, a verb or a whole statement.
+            b"disallow read;",
+            b"allow readwrite;",
+            b"allow reads;",
+            b"// allow read;",
+            b"/* allow read, write: if true; */",
+        ],
+    )
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_statement_that_is_not_unconditional_is_not_a_finding(
+        self, tmp_path, rule, eol
+    ):
+        """`if true` followed on the next line by `&& request.auth != null`
+        was read as open, because each line was matched alone."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule).replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_a_statement_closed_by_its_block_brace_is_still_judged(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "firestore.rules",
+            b"service cloud.firestore {\n"
+            b"  match /databases/{d}/documents {\n"
+            b"    match /a/{x} { allow read: if true }\n"
+            b"    match /b/{x} { allow read: if request.auth != null }\n"
+            b"    match /c/{x} { allow write }\n"
+            b"  }\n"
+            b"}\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 3),
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 5),
+        ]
+
+    def test_each_statement_is_judged_alone(self, tmp_path):
+        rules = (
+            b"allow read: if true;\n"
+            b"      allow write: if request.auth != null;\n"
+            b"      allow create;\n"
+            b"      allow delete: if request.auth != null; allow update;"
+        )
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rules))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", line)
+            for line in (5, 7, 8)
+        ]
+        last = _results(out)[-1]["locations"][0]["physicalLocation"]["region"]
+        assert (
+            last["startColumn"]
+            == len(b"      allow delete: if request.auth != null; ") + 1
+        )
+
     def test_a_file_named_database_rules_is_not_read(self, tmp_path):
         """Realtime Database rules are JSON, in `database.rules.json`
         (`TestRealtimeDatabaseRules`); no Firebase file is named

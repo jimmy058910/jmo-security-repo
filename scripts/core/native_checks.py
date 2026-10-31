@@ -28,7 +28,7 @@ The six rules, exactly:
 - ``jmo.supabase.rls-without-policy`` -- RLS enabled, but no policy: the table
   is locked to everyone, including the application itself.
 - ``jmo.firebase.rules-open`` -- a Firebase rule granting unconditional access
-  (``if true``; a Realtime Database ``".read": true``).
+  (``if true`` or no condition; a Realtime Database ``".read": true``).
 
 Exit codes match `yara_runner.py`'s:
 
@@ -171,10 +171,16 @@ SERVICE_ROLE = re.compile(
 _ENV_SEPARATOR = re.compile(r"[=:]")
 BROWSER_LLM = re.compile(r"dangerouslyAllowBrowser\s*:\s*true")
 _FIREBASE_VERB = r"(?:read|write|get|list|create|update|delete)"
-FIREBASE_OPEN = re.compile(
-    r"allow\s+" + _FIREBASE_VERB + r"(?:\s*,\s*" + _FIREBASE_VERB + r")*"
-    r"\s*:\s*if\s+true\s*(?:;|\}|$)"
+# One `allow` statement: from the keyword to its `;`, to the `}` closing its
+# block, or to the end of the text, across lines. `condition` is what follows
+# the `:`, absent for a bare `allow read;`.
+FIREBASE_ALLOW = re.compile(
+    r"\ballow\s+" + _FIREBASE_VERB + r"(?:\s*,\s*" + _FIREBASE_VERB + r")*"
+    r"\s*(?::(?P<condition>[^;}]*))?(?:;|\}|\Z)"
 )
+# What an open statement's whole condition is. A longer one (`if true &&
+# request.auth != null`) is not open.
+_IF_TRUE = re.compile(r"\s*if\s+true\s*")
 
 # `".read": true` or `".read": "true"`. A real key's opening quote never
 # follows a backslash, so `(?<!\\)` skips a `"` that closes an escape inside a
@@ -296,9 +302,13 @@ RULES: dict[str, RuleMeta] = {
         short="Firebase rule allows unconditional access",
         full=(
             "A Firebase security rule grants read and/or write access "
-            "unconditionally (`if true`), exposing the resource to any client."
+            "unconditionally (`if true`, or no condition at all), exposing the "
+            "resource to any client."
         ),
-        help="Replace `if true` with an authorization check such as `if request.auth != null`.",
+        help=(
+            "Replace the open rule with an authorization check such as "
+            "`if request.auth != null`."
+        ),
         severity="HIGH",
         cwe="CWE-862",
     ),
@@ -404,9 +414,9 @@ def strip_sql_comments(text: str) -> str:
 
 # Leftmost token first, as `_CODE_TOKENS` does for JS: a comment, a '...'
 # string (`''` is a quote inside it), or a `$$...$$`/`$tag$...$tag$` body, the
-# one hiding a quote or `--` from the others. A tag is an identifier, and
-# `a$$` is one (so is `$1`, which has no closing `$`). Unterminated runs to
-# the end, as Postgres would reject it anyway.
+# one hiding a quote or `--` from the others. A tag is an identifier, so `$1`
+# (a parameter) opens no body, nor does the `$$` ending an identifier like
+# `a$$`. Unterminated runs to the end, as Postgres would reject it anyway.
 _SQL_TOKENS = re.compile(
     r"""--[^\n]*"""
     r"""|/\*.*?(?:\*/|\Z)"""
@@ -616,18 +626,21 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
         if name.endswith(".json"):
             return _rtdb_findings(rel, name, text)
         stripped = strip_code_comments(text)
-        for lineno, line in enumerate(_lines(stripped), start=1):
-            match = FIREBASE_OPEN.search(line)
-            if match:
-                findings.append(
-                    NativeFinding(
-                        RULE_FIREBASE_OPEN,
-                        rel,
-                        lineno,
-                        match.start() + 1,
-                        f"{name} allows unconditional read/write access (`if true`)",
-                    )
+        for match in FIREBASE_ALLOW.finditer(stripped):
+            condition = match.group("condition")
+            if condition is not None and not _IF_TRUE.fullmatch(condition):
+                continue
+            lineno, col = _line_col(stripped, match.start())
+            findings.append(
+                NativeFinding(
+                    RULE_FIREBASE_OPEN,
+                    rel,
+                    lineno,
+                    col,
+                    f"{name} allows unconditional read/write access "
+                    f"({'no condition' if condition is None else '`if true`'})",
                 )
+            )
         return findings
 
     return findings
