@@ -317,11 +317,12 @@ def _log(message: str) -> None:
 # as well as at its quote, since JS forbids a raw newline in one: a stray
 # quote (`Don't` in JSX text, the regex literal /'/) costs one line, not the
 # rest of the file. A backtick string may span lines, and an
-# escape (`\` plus any character, a newline included) never ends a string.
+# escape (`\` plus any character, a newline included, CRLF as one) never ends
+# a string: a continued line reads the same in an LF and a CRLF checkout.
 _CODE_TOKENS = re.compile(
-    r"""'(?:\\.|[^'\\\n])*'?"""
-    r"""|"(?:\\.|[^"\\\n])*"?"""
-    r"""|`(?:\\.|[^`\\])*`?"""
+    r"""'(?:\\(?:\r\n|.)|[^'\\\n])*'?"""
+    r"""|"(?:\\(?:\r\n|.)|[^"\\\n])*"?"""
+    r"""|`(?:\\(?:\r\n|.)|[^`\\])*`?"""
     r"""|//[^\n]*"""
     r"""|/\*.*?(?:\*/|\Z)""",
     re.DOTALL,
