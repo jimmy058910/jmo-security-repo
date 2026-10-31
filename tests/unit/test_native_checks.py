@@ -1072,23 +1072,81 @@ class TestServerModules:
 _BACKEND = b'{"dependencies": {"express": "4"}}'
 
 
+_SERVER_FRAMEWORKS = [
+    "express",
+    "fastify",
+    "hono",
+    "koa",
+    "@nestjs/core",
+    "@hapi/hapi",
+    "restify",
+]
+_BROWSER_FRAMEWORKS = [
+    "next",
+    "vite",
+    "react-scripts",
+    "expo",
+    "react",
+    "react-dom",
+    "vue",
+    "@vue/cli-service",
+    "nuxt",
+    "svelte",
+    "@sveltejs/kit",
+    "@angular/core",
+    "gatsby",
+    "astro",
+    "@remix-run/react",
+    "solid-js",
+    "preact",
+    "parcel",
+    "webpack",
+]
+
+
+def _package(**sections: object) -> bytes:
+    return json.dumps(sections).encode()
+
+
 class TestSrcOfABackendOnlyRepository:
-    """`src/` is client code unless the root `package.json` shows the
-    repository ships no browser framework (Next.js, Vite, CRA, Expo): then it
-    is an Express or Hono service's server code."""
+    """`src/` is client code unless the root `package.json` names a server
+    framework (Express, Fastify, Hono, ...) and no browser framework (Next.js,
+    React, Angular, ...): only positive evidence of a backend makes it an
+    Express or Hono service's server code."""
+
+    @pytest.mark.parametrize("section", ["dependencies", "devDependencies"])
+    @pytest.mark.parametrize("framework", _SERVER_FRAMEWORKS)
+    def test_a_server_framework_alone_makes_src_server_code(
+        self, tmp_path, section, framework
+    ):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _package(**{section: {framework: "1"}}))
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
 
     @pytest.mark.parametrize(
         "package",
         [
-            _BACKEND,
             b"\xef\xbb\xbf" + _BACKEND,
-            b'{"devDependencies": {"typescript": "5"}}',
-            # Names no browser framework, since it names nothing.
-            b'{"name": "svc"}',
-            # Only `dependencies` and `devDependencies` count.
-            b'{"peerDependencies": {"next": "16"}}',
+            _package(dependencies={"express": "4", "typescript": "5"}),
+            _package(
+                dependencies={"express": "4"}, devDependencies={"@types/node": "22"}
+            ),
+            # Only `dependencies` and `devDependencies` count, and only as objects.
+            _package(dependencies={"express": "4"}, peerDependencies={"next": "16"}),
+            _package(dependencies={"express": "4"}, devDependencies=["react"]),
         ],
-        ids=["express", "BOM", "devDependencies", "no dependencies", "peer"],
+        ids=[
+            "BOM",
+            "typescript beside",
+            "types beside",
+            "peer ignored",
+            "list ignored",
+        ],
     )
     def test_src_is_server_code(self, tmp_path, package):
         target = tmp_path / "t"
@@ -1101,16 +1159,58 @@ class TestSrcOfABackendOnlyRepository:
         assert rc == 0, _triples(_results(out))
 
     @pytest.mark.parametrize("section", ["dependencies", "devDependencies"])
-    @pytest.mark.parametrize("framework", ["next", "vite", "react-scripts", "expo"])
+    @pytest.mark.parametrize("framework", _BROWSER_FRAMEWORKS)
     def test_a_browser_framework_keeps_src_client_code(
         self, tmp_path, section, framework
     ):
         target = tmp_path / "t"
-        _plant(
-            target,
-            "package.json",
-            json.dumps({section: {"express": "4", framework: "1"}}).encode(),
-        )
+        sections: dict[str, dict[str, str]] = {"dependencies": {"express": "4"}}
+        sections.setdefault(section, {})[framework] = "1"
+        _plant(target, "package.json", _package(**sections))
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "src/index.ts", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "package",
+        [
+            # No server framework named: an Angular, Gatsby, React or webpack
+            # app, or nothing at all, ships `src/` to the browser.
+            _package(name="svc"),
+            _package(devDependencies={"typescript": "5"}),
+            _package(dependencies={"@angular/core": "19"}),
+            _package(dependencies={"gatsby": "5"}),
+            _package(dependencies={"react": "19"}),
+            _package(devDependencies={"webpack": "5"}),
+            _package(peerDependencies={"next": "16"}),
+            # A backend on a framework the list does not know keeps `src/` client.
+            _package(dependencies={"sails": "1"}),
+            # A list where an object belongs names nothing.
+            _package(dependencies=["next"]),
+            _package(dependencies=["express"]),
+        ],
+        ids=[
+            "names nothing",
+            "typescript only",
+            "angular",
+            "gatsby",
+            "react",
+            "webpack",
+            "peer only",
+            "unlisted server framework",
+            "list of next",
+            "list of express",
+        ],
+    )
+    def test_without_a_server_framework_src_is_client_code(self, tmp_path, package):
+        target = tmp_path / "t"
+        _plant(target, "package.json", package)
         _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
         out = tmp_path / "o.sarif"
 
