@@ -6,10 +6,11 @@
 signature-base replaces yara-python and the ReversingLabs rules, and is the one tool that
 reads vendored dependency trees; every adapter in the final matrix (14) has a non-empty
 golden fixture captured through `jmo scan`, guarded so that a missing or empty one fails;
-and the 26 open Phase 6 issues close: the 22 whose premises were re-measured on
-2026-10-29, #1502, which that measurement filed, #1506, filed from Phase 5's PR B, and
+and the 27 open Phase 6 issues close: the 22 whose premises were re-measured on
+2026-10-29, #1502, which that measurement filed, #1506, filed from Phase 5's PR B,
 two filed from PR A on 2026-10-30: the e2e helper's #1517, from its measurement, and
-the raised scanner's stale timings, #1518, from building Task A2.
+the raised scanner's stale timings, #1518, from building Task A2; and the GitLab URL
+token leak, #1522, found by PR T's review and fixed by PR A's Task A2d.
 
 **Architecture:** eight PRs in two groups. Four touch no file that Phase 5's Tasks B1–B8
 list (A, D, T, N). Four do (G, Y, E, F). **No Phase 6 implementation PR opened before Phase 5's
@@ -351,7 +352,7 @@ reports are in `~/.cache/jmo-p6/premise/`.
 
 | PR | Tasks | P5 file? | Closes |
 |---|---|---|---|
-| A — plan text; the report holds only what this scan produced, and the scan writes nothing it does not need | A1–A8 | no (A3 becomes P5 if it must edit `basic_reporter.py`; A7 edits `tests/conftest.py`, a P5 file: re-read it on `dev`) | #1007 #1309 #1371 #1408 #1432 #1506 #1517 #1518 |
+| A — plan text; the report holds only what this scan produced, and the scan writes nothing it does not need | A1–A8 | no (A3 becomes P5 if it must edit `basic_reporter.py`; A7 edits `tests/conftest.py`, a P5 file: re-read it on `dev`) | #1007 #1309 #1371 #1408 #1432 #1506 #1517 #1518 #1522 |
 | D — image discovery and validation | D1–D4 | no | #1405 #1415 #1416 |
 | T — tests that cannot fail; juice-shop's markers and the lockfile oracle | T1–T6 | no (CI wiring moves to F4) | #1173 #1353 |
 | N — the native pack's precision and answer key | N1–N3 | no | #1380 |
@@ -468,10 +469,10 @@ failure after the repository's scan never comes there.
   and its rows read `ran`; the image failure is logged and recorded.
 - [ ] **Step 3:** Commit `fix: a GitLab repository keeps its findings when its image step fails`.
 
-## Task A2d: A GitLab URL without a scheme clones from that host, never gitlab.com (folded in, no issue)
+## Task A2d: A GitLab URL without a scheme clones from that host, never gitlab.com (#1522)
 
 Found by PR T's review of its Task T5b (2026-10-30); a security defect, folded into PR A on
-Jimmy's word rather than filed.
+Jimmy's word, then filed as #1522 and rostered in Phase 6 (roster PR, 2026-10-30).
 
 **Files:** `scripts/cli/scan_jobs/gitlab_scanner.py` (`scan_gitlab_repo`, the clone URL),
 its tests; `scan_orchestrator.py` (the `or "https://gitlab.com"` default) read, not changed
@@ -1217,7 +1218,7 @@ cache), `tests/integration/test_benchproctor.py`
   JavaScript Youden's J recorded per framework (F7). Each fails on a regression from its
   recorded table.
 - No CI job reads green on all skips.
-- The 26 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
+- The 27 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
 
 ## New defects found by the measurement (routing proposed; four filed)
 
