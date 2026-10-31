@@ -1017,6 +1017,11 @@ class TestServerModules:
             # An import on a later line, and on the first behind a BOM.
             ("lib/a.ts", b'import x from "y";\nimport "server-only";\n'),
             ("lib/bom.ts", b'\xef\xbb\xbfimport "server-only";\n'),
+            # A real import still counts after a template literal holding the text.
+            (
+                "lib/a.ts",
+                b'const d = `\nimport "server-only"\n`;\nimport "server-only";\n',
+            ),
             # Route groups and an underscore inside a name are still routes.
             ("app/(shop)/checkout/route.ts", b""),
             ("src/app/route_x/route.ts", b""),
@@ -1046,6 +1051,12 @@ class TestServerModules:
             # `import "server-only"` held in a string is not an import.
             ("lib/a.ts", b"const msg = 'import \"server-only\"';\n"),
             ("lib/a.ts", b"const msg = \"import 'server-only'\";\n"),
+            # ...and in a template literal, whose lines may start `import`.
+            ("lib/a.ts", b'const docs = `\nimport "server-only"\n`;\n'),
+            ("lib/a.ts", b"const docs = `\nimport 'server-only';\n`;\n"),
+            ("lib/a.ts", b'const a = `x ${y}\nimport "server-only"\n`;\n'),
+            # ...and in a string continued over a line end with a backslash.
+            ("lib/a.ts", b"const s = \"x\\\nimport 'server-only'\";\n"),
             # Next.js private folders: `route.*` below one is not a route.
             ("src/app/_private/route.ts", b""),
             ("app/_lib/route.ts", b""),
