@@ -28,7 +28,7 @@ The six rules, exactly:
 - ``jmo.supabase.rls-without-policy`` -- RLS enabled, but no policy: the table
   is locked to everyone, including the application itself.
 - ``jmo.firebase.rules-open`` -- a Firebase rule granting unconditional access
-  (``if true``).
+  (``if true``; a Realtime Database ``".read": true``).
 
 Exit codes match `yara_runner.py`'s:
 
@@ -148,9 +148,9 @@ SERVER_ONLY_IMPORT = re.compile(
     r"""^\ufeff?import\s*(["'])server-only\1""", re.MULTILINE
 )
 USE_SERVER_DIRECTIVE = re.compile(r"""\ufeff?\s*(["'])use server\1""")
-# Firestore and Storage rules. The Realtime Database's are JSON
-# (`database.rules.json`), which FIREBASE_OPEN's syntax can never match.
-RULES_FILE_NAMES = ("firestore.rules", "storage.rules")
+# Firestore and Storage rules are the rules language (FIREBASE_OPEN); the
+# Realtime Database's are JSON (RTDB_OPEN).
+RULES_FILE_NAMES = ("firestore.rules", "storage.rules", "database.rules.json")
 
 # Case-sensitive, and never inside a longer name (`INVITE_SECRET` is not
 # `VITE_SECRET`): Next.js, Vite, CRA and Expo inline exactly these upper-case
@@ -170,6 +170,13 @@ _FIREBASE_VERB = r"(?:read|write|get|list|create|update|delete)"
 FIREBASE_OPEN = re.compile(
     r"allow\s+" + _FIREBASE_VERB + r"(?:\s*,\s*" + _FIREBASE_VERB + r")*"
     r"\s*:\s*if\s+true\s*(?:;|\}|$)"
+)
+
+# `".read": true` or `".read": "true"`. A real key's opening quote never
+# follows a backslash, so `(?<!\\)` skips a `"` that closes an escape inside a
+# longer key; it is matched on text that already parsed as JSON.
+RTDB_OPEN = re.compile(
+    r"""(?<!\\)"(?P<key>\.read|\.write)"\s*:\s*(?P<value>true|"true")"""
 )
 
 _NAME = r'(?:"?(?P<schema>\w+)"?\.)?"?(?P<table>\w+)"?'
@@ -484,6 +491,32 @@ def _is_next_server_module(path: Path, rel: str, code: str) -> bool:
     )
 
 
+def _rtdb_findings(rel: str, name: str, text: str) -> list[NativeFinding]:
+    """`database.rules.json`: every `".read"`/`".write"` key set to `true`,
+    at any depth. The text must parse as JSON first (comments blanked, as
+    Firebase's tooling accepts them), so a key's text inside a string is
+    never one; a file that does not parse gives nothing."""
+    code = strip_code_comments(text.removeprefix("\ufeff"))
+    try:
+        json.loads(code)
+    except (ValueError, RecursionError):
+        return []
+    findings: list[NativeFinding] = []
+    for match in RTDB_OPEN.finditer(code):
+        line, col = _line_col(code, match.start())
+        findings.append(
+            NativeFinding(
+                RULE_FIREBASE_OPEN,
+                rel,
+                line,
+                col,
+                f'{name} allows unconditional access (`"{match.group("key")}": '
+                f"{match.group('value')}`)",
+            )
+        )
+    return findings
+
+
 def scan_file(path: Path, root: Path) -> list[NativeFinding]:
     """Every check that reads one file directly (the migration/RLS check is
     separate: it reads the whole `supabase/migrations/*.sql` set at once)."""
@@ -553,6 +586,8 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
         except OSError:
             return findings
         text = raw.decode("utf-8", errors="replace")
+        if name.endswith(".json"):
+            return _rtdb_findings(rel, name, text)
         stripped = strip_code_comments(text)
         for lineno, line in enumerate(_lines(stripped), start=1):
             match = FIREBASE_OPEN.search(line)
