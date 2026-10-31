@@ -38,6 +38,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -220,12 +221,54 @@ def _materialise(target: Path, source: str, built: str) -> None:
     body = (target / source).read_bytes()
     for token, value in _tokens().items():
         body = body.replace(token, value)
-    # Names only: a leftover would be silently scanned as itself.
-    assert b"__ANON_JWT__" not in body, f"{source}: a token was left unreplaced"
-    assert b"__SERVICE_JWT__" not in body, f"{source}: a token was left unreplaced"
-    assert b"__STRIPE_LIVE__" not in body, f"{source}: a token was left unreplaced"
-    assert b"__DB_PASSWORD__" not in body, f"{source}: a token was left unreplaced"
+    # Names only, and not an `assert` (which would print `body`, the secrets
+    # materialised): a leftover would be silently scanned as itself, and a
+    # token upstream adds later is caught too.
+    left = sorted(set(re.findall(rb"__[A-Z_]+__", body)))
+    if left:
+        pytest.fail(
+            f"{source}: unreplaced token(s) {[t.decode() for t in left]}",
+            pytrace=False,
+        )
     (target / built).write_bytes(body)
+
+
+def test_an_unknown_leftover_token_fails_naming_only_the_token(
+    tmp_path: Path,
+) -> None:
+    """A token the table does not replace (one upstream adds later) fails, and
+    the message carries its name: not the file, nor any materialised value."""
+    (tmp_path / "env.fixture").write_bytes(
+        b"A=__ANON_JWT__\nB=__NEW_UPSTREAM_TOKEN__\n"
+    )
+
+    with pytest.raises(pytest.fail.Exception) as raised:
+        _materialise(tmp_path, "env.fixture", ".env")
+
+    message = str(raised.value)
+    assert "__NEW_UPSTREAM_TOKEN__" in message
+    assert "__ANON_JWT__" not in message
+    assert not any(value.decode() in message for value in _tokens().values())
+
+
+def test_a_pack_that_prints_a_secret_value_fails_naming_only_the_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = _tokens()[b"__DB_PASSWORD__"]
+
+    def leaky(argv: list[str]) -> int:
+        out = Path(argv[argv.index("--output") + 1])
+        out.write_bytes(b'{"runs": [{"results": []}], "x": "' + value + b'"}')
+        return native_checks.EXIT_CLEAN
+
+    monkeypatch.setattr(native_checks, "main", leaky)
+
+    with pytest.raises(pytest.fail.Exception) as raised:
+        _run_pack(tmp_path, tmp_path / "o.sarif")
+
+    message = str(raised.value)
+    assert "__DB_PASSWORD__" in message
+    assert value.decode() not in message
 
 
 # --- the key ------------------------------------------------------------------
@@ -272,7 +315,15 @@ def _run_pack(target: Path, out: Path) -> set[Triple]:
     assert rc in (native_checks.EXIT_CLEAN, native_checks.EXIT_FINDINGS), (
         f"the pack did not scan {target.name}: exit {rc}"
     )
-    results = json.loads(out.read_text(encoding="utf-8"))["runs"][0]["results"]
+    sarif = out.read_bytes()
+    # Names only: vibeproof's own runner asserts no secret is printed in full.
+    printed = [name.decode() for name, value in _tokens().items() if value in sarif]
+    if printed:
+        pytest.fail(
+            f"{target.name}: the pack's output holds the value of {printed}",
+            pytrace=False,
+        )
+    results = json.loads(sarif)["runs"][0]["results"]
     return {
         (
             r["ruleId"],
