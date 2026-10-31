@@ -1584,6 +1584,11 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
                 "https://gitlab.ex\u00e4mple.com/group/app.git",
             ),
             ("gitlab.example.com.", "https://gitlab.example.com./group/app.git"),
+            # Only the authority is screened for `%`: a sub-path may carry one.
+            (
+                "https://gitlab.example.com/gl%2Fprefix",
+                "https://gitlab.example.com/gl%2Fprefix/group/app.git",
+            ),
             ("", "https://gitlab.com/group/app.git"),
             ("   ", "https://gitlab.com/group/app.git"),
             (None, "https://gitlab.com/group/app.git"),
@@ -1607,6 +1612,7 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
             "https-underscore-host-with-port",
             "bare-idn-host",
             "bare-host-with-trailing-dot",
+            "percent-escape-in-the-path-is-kept",
             "empty-is-the-default",
             "blank-is-the-default",
             "none-is-the-default",
@@ -1665,6 +1671,24 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
             "https://https:/evil.com", "scheme word", id="https-twice-one-slash"
         ),
         pytest.param("HTTP://http/x", "scheme word", id="uppercase-http-host"),
+        # A DNS name ends in a root dot as well, so `https.` is the host `https`.
+        pytest.param(
+            "https.//gitlab.example.com", "scheme word", id="https-dot-slashes"
+        ),
+        pytest.param("https./gitlab.example.com", "scheme word", id="https-dot-slash"),
+        pytest.param("http.//gitlab.example.com", "scheme word", id="http-dot-slashes"),
+        pytest.param("https://https.//evil.com", "scheme word", id="https-twice-dot"),
+        pytest.param("HTTPS://HTTP../x", "scheme word", id="uppercase-two-dots"),
+        # No GitLab host is written with a percent escape, and a client may decode
+        # one to a host this check never saw: `%68ttps` is `https`.
+        pytest.param("%68ttps//gitlab.example.com", "% escape", id="percent-https"),
+        pytest.param(
+            "https://%67itlab.example.com", "% escape", id="percent-in-host-letter"
+        ),
+        pytest.param(
+            "https://gitlab.example.com%2eevil.com", "% escape", id="percent-dot"
+        ),
+        pytest.param("https://[fe80::1%25eth0]:8443", "% escape", id="percent-zone"),
         # git resolves a host written before an `@` to the part after it.
         pytest.param(
             "https://gitlab.example.com@evil.com/", "--gitlab-token", id="host-at-host"

@@ -458,9 +458,11 @@ All notable changes to JMo Security will be documented in this file.
   (`ssh://`, `git://`, `ftp://`, `file://`), `git@host:group/app`, a value with no host
   (`/`, `/sub`, `https:///sub`: curl takes the first segment of the project path for the
   host there), a host that is a scheme word (`https:/host`, `https//host`,
-  `https://https://host`: git took `https` for the host and connected to it), an `@` before
-  the host (`https://user:pw@host`, `https://host@evil.com`: git resolves it to the part
-  after the `@`, and credentials belong in `--gitlab-token` or `GITLAB_TOKEN`), a `:` with
+  `https://https://host`, `https.//host`: git took `https` for the host and connected to
+  it), an `@` before the host (`https://user:pw@host`, `https://host@evil.com`: git resolves
+  it to the part after the `@`, and credentials belong in `--gitlab-token` or
+  `GITLAB_TOKEN`), a `%` escape in the host or port (`https://%67itlab.example.com`: no
+  GitLab host is written with one, and a client may decode it to another host), a `:` with
   no port after it, and whitespace, a backslash, `?` or `#`. A reason names the problem and
   never repeats the value, which can hold a password typed into it.
 - **A closed stdin (`jmo scan <&-`) no longer breaks the prompt guards that ask whether

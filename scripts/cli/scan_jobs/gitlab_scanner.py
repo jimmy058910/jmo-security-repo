@@ -609,17 +609,18 @@ def _gitlab_clone_base(raw: str | None) -> str:
 
     The two forms then go through one check, the URL that would be cloned: it
     must parse, with scheme http or https, a host, no `@` before the host and a
-    valid port, and the host must not be `http` or `https` (a scheme mistyped as
-    `https/host` or `https:/host` would otherwise be a host called `https`).
+    valid port, no `%` in the host or port, and the host must not be `http` or
+    `https`, with or without a root dot (a scheme mistyped as `https/host`,
+    `https:/host` or `https./host` would otherwise be a host called `https`).
 
     Raises:
         ValueError: The value names a transport the scan does not clone over
             (`ssh://`, `git@host:path`, `ftp://`, ...), no host, or a host that
             another reader of the URL would not take it to name (a user or `@`
-            before it, a backslash, whitespace, `?`, `#`, a scheme word). The
-            message is the reason the target is abandoned. It never repeats
-            the value, which may carry credentials the user typed into it; the
-            token is passed by `--gitlab-token`, not here.
+            before it, a backslash, whitespace, `?`, `#`, a scheme word, a `%`
+            escape). The message is the reason the target is abandoned. It
+            never repeats the value, which may carry credentials the user typed
+            into it; the token is passed by `--gitlab-token`, not here.
     """
     url = (raw or "").strip()
     if not url:
@@ -661,10 +662,16 @@ def _gitlab_clone_base(raw: str | None) -> str:
         raise ValueError(_GITLAB_URL_HAS_AT_SIGN)
     if parts.scheme not in ("http", "https") or not parts.hostname:
         raise ValueError("the GitLab URL names no host")
-    if parts.hostname in ("http", "https"):
+    # `rstrip(".")`: a DNS name may end in a root dot, so `https.` is `https`.
+    if parts.hostname.rstrip(".") in ("http", "https"):
         raise ValueError(
             "the GitLab URL's host is a scheme word (http or https): a scheme "
             "was mistyped, as in https:/host or https//host"
+        )
+    if "%" in parts.netloc:
+        raise ValueError(
+            "the GitLab URL has a % escape in its host or port: no GitLab host "
+            "is written with one, and a client may decode it to another host"
         )
     if parts.netloc.endswith(":"):
         raise ValueError("the GitLab URL has a ':' with no port after it")
