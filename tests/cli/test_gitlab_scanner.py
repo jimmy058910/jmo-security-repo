@@ -1601,8 +1601,101 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         }
 
     @pytest.mark.parametrize(
+        ("line", "marker", "indent"),
+        [
+            # Whitespace between `<<` and the word: BuildKit folds it into the
+            # word, so each of these opens a heredoc (all failed).
+            pytest.param("RUN cat << EOF > /x", "EOF", "", id="space"),
+            pytest.param("RUN cat <<  EOF > /x", "EOF", "", id="two-spaces"),
+            pytest.param("RUN cat <<\tEOF > /x", "EOF", "", id="tab"),
+            pytest.param('RUN cat << "EOF" > /x', "EOF", "", id="space-then-quoted"),
+            pytest.param("COPY << EOF /x", "EOF", "", id="copy"),
+            pytest.param("RUN cat <<- EOF > /x", "EOF", "\t", id="chomp-then-space"),
+            # The dash after the whitespace is part of the word, not chomp.
+            pytest.param("RUN cat << -EOF", "-EOF", "", id="space-then-dash-word"),
+            # A marker with quotes or backslashes is named without them (all
+            # failed): `\EOF` was the marker `\EOF`, and nothing closed it.
+            pytest.param(r"RUN cat <<\EOF > /x", "EOF", "", id="backslash-first"),
+            pytest.param(r"RUN cat <<-\EOF > /x", "EOF", "\t", id="chomp-backslash"),
+            pytest.param(r"RUN cat <<E\OF > /x", "EOF", "", id="backslash-inside"),
+            pytest.param('RUN cat <<EO"F" > /x', "EOF", "", id="quoted-part"),
+            pytest.param("RUN cat <<'one two' > /x", "one two", "", id="quoted-spaced"),
+            pytest.param(
+                r'RUN cat <<"E\"F" > /x', 'E"F', "", id="escaped-quote-in-quotes"
+            ),
+            # Inside double quotes a backslash escapes only `"`, `$` and `\`
+            # (this passed before the change, as did the control below it).
+            pytest.param(
+                r'RUN cat <<"E\xF" > /x', r"E\xF", "", id="guard-other-escape-kept"
+            ),
+            pytest.param("RUN cat <<EOF > /x", "EOF", "", id="guard-no-whitespace"),
+        ],
+    )
+    def test_a_heredoc_word_is_read_as_buildkit_reads_it(
+        self, tmp_path, line, marker, indent
+    ):
+        """A heredoc not recognised leaves its body to be read as Dockerfile
+        lines: `from os import path` named the image `os`, which failed as an
+        image target and made the scan exit 1. An opening word that is read
+        wrongly (`<<- EOF` gave the marker `-`) swallows every later FROM."""
+        dockerfile = (
+            f"FROM alpine:3.19\n{line}\n{indent}from os import path\n"
+            f"{indent}{marker}\nFROM nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {
+            "alpine:3.19",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # A word that is only `<<` or `<<-` names no marker (`<<-` was
+            # read as the marker `-`, which no line closed). The `guard-` ones
+            # passed before the change and must keep passing.
+            pytest.param("RUN cat <<", id="guard-lone-operator"),
+            pytest.param("RUN cat <<-", id="lone-chomp-operator"),
+            pytest.param('RUN cat <<""', id="guard-empty-quoted-word"),
+            pytest.param("RUN cat <<<word", id="guard-here-string"),
+            pytest.param("RUN cat <<< word", id="guard-here-string-with-a-space"),
+            pytest.param('RUN "<<EOF"', id="guard-whole-word-quoted"),
+        ],
+    )
+    def test_a_word_that_names_no_marker_opens_no_heredoc(self, tmp_path, caplog, line):
+        """BuildKit reads no heredoc here, so what follows is read, and no
+        WARNING says the rest of the file is a body."""
+        dockerfile = f"FROM alpine:3.19\n{line}\nFROM nginx:1.27\n"
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"Dockerfile": dockerfile})
+
+        assert images == {"alpine:3.19", "nginx:1.27"}
+        assert caplog.messages == []
+
+    @pytest.mark.parametrize(
         ("dockerfile", "images", "messages"),
         [
+            pytest.param(
+                "FROM alpine:3.19\nRUN <<\\EOF\nfrom os import path\nFROM nginx:1.27\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'EOF', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="escaped-marker-is-named-without-the-backslash",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nCOPY << 'A B' /dest/\nbody\nFROM nginx:1.27\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'A B', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="spaced-quoted-marker-is-named-without-the-quotes",
+            ),
             pytest.param(
                 "FROM alpine:3.19\nRUN <<EOF\nfrom os import path\nFROM nginx:1.27\n"
                 "FROM busybox:1\n",
