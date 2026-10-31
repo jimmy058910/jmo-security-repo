@@ -1,0 +1,365 @@
+{
+  "metadata": {
+    "target": "juice-shop/juice-shop",
+    "commit": "1618a611b173b4bf114028e6e02549950606e29d",
+    "generated": "2026-10-30T22:27:38Z",
+    "tools_used": [
+      "checkov",
+      "gitleaks",
+      "hadolint",
+      "opengrep",
+      "syft",
+      "trivy",
+      "trufflehog",
+      "zizmor"
+    ]
+  },
+  "lines": [
+    {
+      "file": "data/static/securityQuestions.yml",
+      "line": 3,
+      "challenges": [
+        "resetPasswordJimChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "data/static/securityQuestions.yml",
+      "line": 15,
+      "challenges": [
+        "resetPasswordBjoernOwaspChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "data/static/securityQuestions.yml",
+      "line": 19,
+      "challenges": [
+        "resetPasswordBjoernChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "data/static/securityQuestions.yml",
+      "line": 21,
+      "challenges": [
+        "resetPasswordBenderChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "data/static/securityQuestions.yml",
+      "line": 25,
+      "challenges": [
+        "resetPasswordUvoginChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "data/static/web3-snippets/ETHWalletBank.sol",
+      "line": 34,
+      "challenges": [
+        "web3WalletChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "data/static/web3-snippets/HoneyPotNFT.sol",
+      "line": 26,
+      "challenges": [
+        "nftMintChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "data/static/web3-snippets/JuiceShopSBT.sol",
+      "line": 18,
+      "challenges": [
+        "nftUnlockChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "frontend/src/app/app.routing.ts",
+      "line": 79,
+      "challenges": [
+        "adminSectionChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "frontend/src/app/app.routing.ts",
+      "line": 186,
+      "challenges": [
+        "scoreBoardChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "frontend/src/app/app.routing.ts",
+      "line": 239,
+      "challenges": [
+        "web3SandboxChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "frontend/src/app/app.routing.ts",
+      "line": 261,
+      "challenges": [
+        "tokenSaleChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "frontend/src/app/app.routing.ts",
+      "line": 300,
+      "challenges": [
+        "tokenSaleChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "frontend/src/app/search-result/search-result.component.ts",
+      "line": 111,
+      "challenges": [
+        "restfulXssChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "frontend/src/app/search-result/search-result.component.ts",
+      "line": 144,
+      "challenges": [
+        "localXssChallenge",
+        "xssBonusChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "infrastructure/docker-compose.yml",
+      "line": 59,
+      "challenges": [
+        "vulnerableDockerImageChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "infrastructure/terraform/networking.tf",
+      "line": 171,
+      "challenges": [
+        "iacLeakedKeyChallenge"
+      ],
+      "tools": [
+        "gitleaks",
+        "trufflehog"
+      ]
+    },
+    {
+      "file": "lib/insecurity.ts",
+      "line": 124,
+      "challenges": [
+        "redirectCryptoCurrencyChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "lib/insecurity.ts",
+      "line": 125,
+      "challenges": [
+        "redirectCryptoCurrencyChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "lib/insecurity.ts",
+      "line": 126,
+      "challenges": [
+        "redirectCryptoCurrencyChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "lib/insecurity.ts",
+      "line": 136,
+      "challenges": [
+        "redirectChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "models/user.ts",
+      "line": 73,
+      "challenges": [
+        "weakPasswordChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "routes/chat.ts",
+      "line": 179,
+      "challenges": [
+        "chatbotGreedyInjectionChallenge",
+        "chatbotPromptInjectionChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "routes/chat.ts",
+      "line": 184,
+      "challenges": [
+        "chatbotPromptInjectionChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "routes/login.ts",
+      "line": 34,
+      "challenges": [
+        "loginAdminChallenge",
+        "loginBenderChallenge",
+        "loginJimChallenge"
+      ],
+      "tools": [
+        "opengrep"
+      ]
+    },
+    {
+      "file": "routes/search.ts",
+      "line": 23,
+      "challenges": [
+        "dbSchemaChallenge",
+        "unionSqlInjectionChallenge"
+      ],
+      "tools": [
+        "opengrep"
+      ]
+    },
+    {
+      "file": "routes/updateProductReviews.ts",
+      "line": 16,
+      "challenges": [
+        "forgedReviewChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "routes/updateProductReviews.ts",
+      "line": 18,
+      "challenges": [
+        "forgedReviewChallenge",
+        "noSqlReviewsChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "routes/updateProductReviews.ts",
+      "line": 20,
+      "challenges": [
+        "noSqlReviewsChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "server.ts",
+      "line": 288,
+      "challenges": [
+        "directoryListingChallenge"
+      ],
+      "tools": [
+        "opengrep"
+      ]
+    },
+    {
+      "file": "server.ts",
+      "line": 289,
+      "challenges": [
+        "directoryListingChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "server.ts",
+      "line": 300,
+      "challenges": [
+        "accessLogDisclosureChallenge"
+      ],
+      "tools": [
+        "opengrep"
+      ]
+    },
+    {
+      "file": "server.ts",
+      "line": 302,
+      "challenges": [
+        "accessLogDisclosureChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "server.ts",
+      "line": 365,
+      "challenges": [
+        "resetPasswordMortyChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "server.ts",
+      "line": 389,
+      "challenges": [
+        "changeProductChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "server.ts",
+      "line": 530,
+      "challenges": [
+        "registerAdminChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "server.ts",
+      "line": 750,
+      "challenges": [
+        "exposedMetricsChallenge"
+      ],
+      "tools": []
+    },
+    {
+      "file": "terraform/networking.tf",
+      "line": 171,
+      "challenges": [
+        "iacLeakedKeyChallenge"
+      ],
+      "tools": [
+        "gitleaks",
+        "trufflehog"
+      ]
+    }
+  ],
+  "recall_by_type": {
+    ".sol": {
+      "marked": 3,
+      "detected": 0
+    },
+    ".tf": {
+      "marked": 2,
+      "detected": 2
+    },
+    ".ts": {
+      "marked": 27,
+      "detected": 4
+    },
+    ".yml": {
+      "marked": 6,
+      "detected": 0
+    }
+  },
+  "recall_total": {
+    "marked": 38,
+    "detected": 6
+  }
+}

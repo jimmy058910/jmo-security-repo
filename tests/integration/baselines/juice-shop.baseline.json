@@ -1,94 +1,169 @@
 {
   "metadata": {
     "target": "juice-shop/juice-shop",
-    "version": "16.0.0",
-    "generated": "2026-01-22T00:00:00Z",
+    "version": "1618a611b173b4bf114028e6e02549950606e29d",
+    "generated": "2026-10-30T22:04:43Z",
     "tools_used": [
-      "semgrep",
+      "checkov",
+      "gitleaks",
+      "hadolint",
+      "opengrep",
+      "syft",
       "trivy",
       "trufflehog",
-      "njsscan",
-      "checkov",
-      "gitleaks"
+      "zizmor"
     ],
-    "notes": "OWASP Juice Shop - intentionally vulnerable web application for security training"
+    "findings_per_tool": {
+      "checkov": 111,
+      "gitleaks": 69,
+      "hadolint": 6,
+      "opengrep": 223,
+      "syft": 52,
+      "trivy": 87,
+      "trufflehog": 6,
+      "zizmor": 95
+    },
+    "finding_count": 640,
+    "notes": "OWASP Juice Shop at the commit one after the v20.2.0 tag"
   },
   "expected_findings": [
     {
-      "rule_id": "CWE-79",
-      "severity": "HIGH",
-      "category": "xss",
-      "min_count": 5,
-      "description": "Cross-Site Scripting (XSS) vulnerabilities in user input handling"
-    },
-    {
-      "rule_id": "CWE-89",
-      "severity": "CRITICAL",
-      "category": "sqli",
-      "min_count": 3,
-      "description": "SQL Injection vulnerabilities in database queries"
-    },
-    {
-      "rule_id": "CWE-22",
-      "severity": "HIGH",
-      "category": "path-traversal",
-      "min_count": 2,
-      "description": "Path Traversal vulnerabilities allowing file access"
+      "rule_id": "CWE-427",
+      "severity": "MEDIUM",
+      "category": "cwe-427",
+      "min_count": 100
     },
     {
       "rule_id": "CWE-798",
       "severity": "HIGH",
       "category": "hardcoded-secrets",
-      "min_count": 1,
-      "description": "Hardcoded credentials and secrets in source code"
+      "min_count": 72
     },
     {
-      "rule_id": "CWE-327",
-      "severity": "MEDIUM",
-      "category": "weak-crypto",
-      "min_count": 1,
-      "description": "Use of weak cryptographic algorithms"
-    },
-    {
-      "rule_id": "CWE-502",
+      "rule_id": "CWE-89",
       "severity": "HIGH",
-      "category": "deserialization",
-      "min_count": 1,
-      "description": "Insecure deserialization vulnerabilities"
+      "category": "sqli",
+      "min_count": 18
     },
     {
-      "rule_id": "CWE-918",
+      "rule_id": "CWE-915",
       "severity": "MEDIUM",
-      "category": "ssrf",
-      "min_count": 1,
-      "description": "Server-Side Request Forgery (SSRF) vulnerabilities"
+      "category": "cwe-915",
+      "min_count": 18
     },
     {
-      "rule_id": "CWE-352",
+      "rule_id": "CWE-223",
+      "severity": "LOW",
+      "category": "cwe-223",
+      "min_count": 15
+    },
+    {
+      "rule_id": "CWE-284",
       "severity": "MEDIUM",
-      "category": "csrf",
-      "min_count": 1,
-      "description": "Cross-Site Request Forgery (CSRF) vulnerabilities"
+      "category": "cwe-284",
+      "min_count": 15
     },
     {
-      "rule_id": "CWE-1321",
+      "rule_id": "CWE-79",
       "severity": "HIGH",
-      "category": "prototype-pollution",
-      "min_count": 1,
-      "description": "JavaScript prototype pollution vulnerabilities"
+      "category": "xss",
+      "min_count": 11
     },
     {
-      "rule_id": "npm-vulnerability",
+      "rule_id": "CWE-326",
+      "severity": "MEDIUM",
+      "category": "cwe-326",
+      "min_count": 10
+    },
+    {
+      "rule_id": "CWE-116",
+      "severity": "MEDIUM",
+      "category": "cwe-116",
+      "min_count": 6
+    },
+    {
+      "rule_id": "CWE-548",
+      "severity": "MEDIUM",
+      "category": "cwe-548",
+      "min_count": 5
+    },
+    {
+      "rule_id": "CWE-73",
+      "severity": "MEDIUM",
+      "category": "cwe-73",
+      "min_count": 4
+    },
+    {
+      "rule_id": "CWE-95",
       "severity": "HIGH",
-      "category": "dependency",
-      "min_count": 5,
-      "description": "Known vulnerabilities in npm dependencies"
+      "category": "cwe-95",
+      "min_count": 3
+    },
+    {
+      "rule_id": "CWE-353",
+      "severity": "MEDIUM",
+      "category": "cwe-353",
+      "min_count": 3
+    },
+    {
+      "rule_id": "CWE-1357",
+      "severity": "MEDIUM",
+      "category": "cwe-1357",
+      "min_count": 3
+    },
+    {
+      "rule_id": "CWE-22",
+      "severity": "MEDIUM",
+      "category": "path-traversal",
+      "min_count": 2
+    },
+    {
+      "rule_id": "CWE-601",
+      "severity": "MEDIUM",
+      "category": "cwe-601",
+      "min_count": 2
+    },
+    {
+      "rule_id": "CWE-732",
+      "severity": "MEDIUM",
+      "category": "cwe-732",
+      "min_count": 2
+    },
+    {
+      "rule_id": "CWE-1333",
+      "severity": "MEDIUM",
+      "category": "cwe-1333",
+      "min_count": 2
+    },
+    {
+      "rule_id": "CWE-94",
+      "severity": "MEDIUM",
+      "category": "cwe-94",
+      "min_count": 1
+    },
+    {
+      "rule_id": "CWE-134",
+      "severity": "LOW",
+      "category": "cwe-134",
+      "min_count": 1
+    },
+    {
+      "rule_id": "CWE-522",
+      "severity": "HIGH",
+      "category": "cwe-522",
+      "min_count": 1
+    },
+    {
+      "rule_id": "CWE-1104",
+      "severity": "MEDIUM",
+      "category": "cwe-1104",
+      "min_count": 1
     }
   ],
   "tolerance": {
     "missing_critical": 0,
-    "missing_high": 1,
-    "missing_medium": 3,
+    "missing_high": 0,
+    "missing_medium": 0,
     "extra_findings_ratio": 0.3
   }
 }

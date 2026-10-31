@@ -96,7 +96,9 @@ tests/e2e/
 
 `test_advanced_targets.py` — Optional advanced scenarios:
 
-- A1: GitLab repo scan (requires GITLAB_TOKEN)
+- A1: GitLab repo scan with `--gitlab-repo` (requires GITLAB_TOKEN); clones
+  the default branch (no ref option, so it is not pinned) and scans the
+  images the repository names
 - A2: K8s cluster scan (requires kubectl + cluster)
 - A3: Full scan with the default tool matrix (long-running)
 
@@ -139,9 +141,15 @@ pytest tests/e2e/test_docker_workflows.py -v
 # Docker tests only
 pytest tests/e2e/ -m docker -v
 
-# With custom targets via environment variables
-TEST_REPO=https://github.com/myorg/myrepo.git pytest tests/e2e/test_scan_workflows.py -k "U1" -v
+# With custom targets via environment variables. The repository cases clone
+# TEST_REPO at TEST_REPO_COMMIT (default: juice-shop at its pinned commit); set
+# both, because a commit of one repository does not exist in another.
+TEST_REPO=https://github.com/myorg/myrepo.git TEST_REPO_COMMIT=<40-char sha> pytest tests/e2e/test_scan_workflows.py -k "U1" -v
 TEST_IMAGE=nginx:1.25 pytest tests/e2e/test_scan_workflows.py -k "U2" -v
+# A1 scans TEST_GITLAB_REPO (group/repo, not a URL; default gitlab-org/gitlab-runner)
+# on TEST_GITLAB_URL (https:// or http://, default https://gitlab.com; a value
+# without a scheme fails the test, since jmo would clone from gitlab.com instead)
+GITLAB_TOKEN=<token> TEST_GITLAB_REPO=mygroup/myrepo pytest tests/e2e/test_advanced_targets.py -k "gitlab" -v
 # Test a local build instead of the released image
 JMO_DOCKER_REGISTRY=jmo-security-dev pytest tests/e2e/test_docker_workflows.py -k "U9" -v
 ```
@@ -153,7 +161,10 @@ Each test validates:
 1. **Exit code:** 0 (no findings) or 1 (findings found), not 2+ (error)
 2. **Output files:** findings.json, SUMMARY.md, dashboard.html present
 3. **JSON schema:** CommonFinding v1.2.0 compliance
-4. **Findings count:** >= 1 finding for vulnerable targets
+4. **Scanned something:** `meta.target_count` >= 1 for every scan, and >= 1
+   finding for a repository target, whether `--repo` or `--gitlab-repo` (a scan
+   that rejected every target exits 1 and writes empty outputs, so existing
+   files prove nothing)
 5. **Performance:** Within the test's time limit
 
 ## CI/CD Integration

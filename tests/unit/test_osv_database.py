@@ -55,6 +55,9 @@ ACCEPTED = {
     "pom.xml": "Maven",
     "packages.lock.json": "NuGet",
     "packages.config": "NuGet",
+    "API.deps.json": "NuGet",
+    "my.app.deps.json": "NuGet",
+    ".deps.json": "NuGet",
     "pubspec.lock": "Pub",
     "mix.lock": "Hex",
     # CRAN: mapped here, fetched by O2 beside the ten (fetch_all reads this
@@ -80,6 +83,9 @@ REJECTED = (
     "REQUIREMENTS-dev.txt",
     "Package-Lock.json",
     "cargo.lock",
+    "x.DEPS.JSON",
+    "deps.json.bak",
+    "myapp-deps.json",
 )
 
 
@@ -102,6 +108,19 @@ def test_the_wildcard_is_exact_only_where_it_is_spelled() -> None:
     assert ecosystem_of("Requirements-dev.txt") is None
 
 
+def test_a_dotnet_deps_json_is_read_by_its_suffix_and_a_bare_deps_json_is_not() -> None:
+    """Measured, 2.6.0 and 2.7.0, `-L` with the frozen NuGet database: `API.deps.json`,
+    `my.app.deps.json` and a file named just `.deps.json` are each read (373
+    packages, the advisory found); a bare `deps.json` is rc 127 ("could not
+    determine extractor"), which loses every lockfile's findings, as is
+    `x.DEPS.JSON`. So the pattern needs the dot and is case-sensitive."""
+    for name in ("API.deps.json", "my.app.deps.json", ".deps.json"):
+        assert ecosystem_of(name) == "NuGet", name
+        assert ecosystem_of(f"src/Api/bin/Release/net9.0/{name}") == "NuGet", name
+    for name in ("deps.json", "x.DEPS.JSON", "x.Deps.json", "deps.json.bak"):
+        assert ecosystem_of(name) is None, name
+
+
 def test_a_conan_lockfile_is_not_read() -> None:
     """OSV publishes no ConanCenter database (404, and absent from
     its ecosystems list), so a `conan.lock` could only ever fail its row."""
@@ -113,9 +132,16 @@ def test_the_map_is_exactly_the_accepted_names() -> None:
     """The walk's patterns are derived from this map, so a name added here is
     a name handed to osv-scanner: one it rejects would cost every other
     lockfile's findings."""
-    stood_for = {"requirements.txt", "requirements-dev.txt"}
+    stood_for = {
+        "requirements.txt",
+        "requirements-dev.txt",
+        "API.deps.json",
+        "my.app.deps.json",
+        ".deps.json",
+    }
     assert set(LOCKFILE_ECOSYSTEMS) == (set(ACCEPTED) - stood_for) | {
-        "requirements*.txt"
+        "requirements*.txt",
+        "*.deps.json",
     }
 
 
