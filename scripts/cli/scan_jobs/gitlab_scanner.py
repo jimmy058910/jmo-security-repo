@@ -727,19 +727,35 @@ def scan_gitlab_repo(
             )
 
             if images is not None:
-                _scan_named_images(
-                    clone_path,
-                    full_path,
-                    safe_name,
-                    images,
-                    tools=tools,
-                    timeout=timeout,
-                    retries=retries,
-                    per_tool_config=per_tool_config,
-                    allow_missing_tools=allow_missing_tools,
-                    find_tool_func=find_tool_func,
-                    write_stub_func=write_stub_func,
-                )
+                try:
+                    _scan_named_images(
+                        clone_path,
+                        full_path,
+                        safe_name,
+                        images,
+                        tools=tools,
+                        timeout=timeout,
+                        retries=retries,
+                        per_tool_config=per_tool_config,
+                        allow_missing_tools=allow_missing_tools,
+                        find_tool_func=find_tool_func,
+                        write_stub_func=write_stub_func,
+                    )
+                except Exception as e:
+                    # The repository's scan returned, so its outputs are where
+                    # the report reads them and its rows stand. Falling through
+                    # to the generic `except` below would rewrite them as
+                    # `failed:target not scanned` and the report would withhold
+                    # its findings. The step contains its own failures, so
+                    # this is a fault in its handlers.
+                    logger.warning(
+                        "Image scan failed for %s after its repository was "
+                        "scanned, whose results stand: %s: %s",
+                        full_path,
+                        type(e).__name__,
+                        e,
+                        exc_info=True,
+                    )
             return full_path, statuses
 
         except subprocess.TimeoutExpired:

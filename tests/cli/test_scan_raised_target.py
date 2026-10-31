@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -32,6 +33,7 @@ from unittest.mock import patch
 import pytest
 
 from scripts.cli import jmo
+from scripts.cli.scan_jobs.gitlab_scanner import DiscoveredImages
 from scripts.cli.scan_orchestrator import ScanConfig, ScanOrchestrator, ScanTargets
 from scripts.cli.scan_session import ScanSession
 from scripts.core.normalize_and_report import gather_results
@@ -410,3 +412,62 @@ def test_a_timings_write_that_fails_does_not_replace_the_targets_failure(
         and "bad" in r.getMessage()
         for r in caplog.records
     ), [r.getMessage() for r in caplog.records]
+
+
+GITLAB_SCANNER = "scripts.cli.scan_jobs.gitlab_scanner"
+
+
+@pytest.mark.parametrize("fails", ["the image step", "its record of an image"])
+def test_a_gitlab_repository_keeps_its_findings_when_its_image_step_fails(
+    scan, monkeypatch, caplog, fails
+):
+    """`scan_repository` returned, so the repository's rows and output are
+    final, and whatever the image step raises past that is the images' own.
+    The generic `except` used to rewrite the repository's `ran` rows as
+    `failed:target not scanned`, and the report then withheld the findings of a
+    scan that worked. Two ways in: the step raising outright (what the
+    docstring of `_record_abandoned_target` promises cannot reach it), and the
+    one measured way out of the real step, its own handler failing to record
+    an image it had claimed."""
+    out = scan.results / "individual-gitlab" / "group_app"
+    real_run = subprocess.run
+
+    def run(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and cmd[:2] == ["git", "clone"]:
+            return types.SimpleNamespace(returncode=0, stderr=b"")
+        return real_run(cmd, *args, **kwargs)
+
+    def scan_repository(*, results_dir, result_name, label, **kwargs):
+        # What a scan that worked leaves, as `run_tools` writes it.
+        earlier_scan(results_dir / result_name, ("gitlab", label), "trivy")
+        return result_name, {"trivy": ToolRun("trivy", State.RAN, exit_code=0)}
+
+    monkeypatch.setattr(f"{GITLAB_SCANNER}.subprocess.run", run)
+    monkeypatch.setattr(f"{GITLAB_SCANNER}.scan_repository", scan_repository)
+    if fails == "the image step":
+        monkeypatch.setattr(f"{GITLAB_SCANNER}._scan_named_images", explode)
+    else:
+        monkeypatch.setattr(
+            f"{GITLAB_SCANNER}._discover_container_images",
+            lambda *args, **kwargs: {"alpine:3.19"},
+        )
+        monkeypatch.setattr(
+            f"{GITLAB_SCANNER}.scan_image",
+            lambda **kw: (kw["image"], {"trivy": ToolRun("trivy", State.RAN)}),
+        )
+        monkeypatch.setattr(DiscoveredImages, "add", explode)
+
+    with caplog.at_level(logging.WARNING, logger=GITLAB_SCANNER):
+        scan.run(*GITLAB_FLAGS, "--tools", "trivy")
+    findings = scan.report()
+
+    assert len(findings) == EARLIER_FINDINGS
+    timings = _timings(out)
+    assert (timings["outcome"], timings["error"]) == (OUTCOME_COMPLETED, None)
+    assert [(r["tool"], r["state"]) for r in timings["tools"]] == [("trivy", "ran")]
+    logged = [
+        r.getMessage()
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name == GITLAB_SCANNER
+    ]
+    assert any("group/app" in m and "scanner exploded" in m for m in logged), logged

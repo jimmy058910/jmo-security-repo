@@ -1018,6 +1018,53 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
         assert "folders failed" in (rows["trivy"].detail or "")
         assert not mock_scan_image.called
 
+    def test_a_raise_out_of_the_image_step_keeps_the_repositorys_rows(
+        self, tmp_path, caplog
+    ):
+        """`_scan_named_images` contains its own failures, but a fault in its
+        handlers can still escape it, and by then the repository's rows and
+        outputs are final: `_record_abandoned_target` says a failure past the
+        scan does not come to it. The repository's rows come back as they
+        were, no abandoned-target timings are written over them, and the
+        WARNING names the target and the error."""
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                return_value=("group_app", _rows(trivy=True)),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner._scan_named_images",
+                side_effect=RuntimeError("images exploded"),
+            ),
+            caplog.at_level(
+                logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+            ),
+        ):
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info=dict(self.GITLAB_INFO),
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=DiscoveredImages(tmp_path / "individual-images"),
+            )
+
+        assert statuses == _rows(trivy=True)
+        timings = tmp_path / "individual-gitlab" / "group_app" / "scan-timings.json"
+        assert not timings.exists(), "the completed scan was relabelled abandoned"
+        logged = [
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert any(
+            "group/app" in m and "RuntimeError: images exploded" in m for m in logged
+        ), logged
+
 
 class TestAReferenceNoToolIsGivenIsAFailedImageRow:
     """A reference the validator refuses never reaches a tool's command line:
@@ -1231,6 +1278,37 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         doc = self._timings(tmp_path)
         assert doc["outcome"] == "failed-before-tools"
         assert "disk on fire" in doc["error"], doc["error"]
+
+    def test_a_repository_scan_that_raises_still_records_a_row(self, tmp_path):
+        """The other side of the line the image step's own `except` draws: until
+        `scan_repository` has returned there are no results to keep, so a raise
+        out of it still abandons the target, with images to scan or not."""
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                side_effect=RuntimeError("scanner exploded"),
+            ),
+        ):
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info={**self.GITLAB_INFO, "token": "glpat-x"},
+                results_dir=tmp_path,
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=DiscoveredImages(tmp_path / "individual-images"),
+            )
+
+        assert statuses["trufflehog"].label == "failed:target not scanned"
+        assert statuses["trufflehog"].detail == "RuntimeError: scanner exploded"
+        doc = self._timings(tmp_path)
+        assert doc["outcome"] == "failed-before-tools"
+        assert doc["error"] == "RuntimeError: scanner exploded"
 
     def test_a_successful_scan_is_not_labelled_as_abandoned(self, tmp_path):
         """Negative control.
