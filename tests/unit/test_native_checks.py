@@ -1144,11 +1144,154 @@ class TestFirebaseRules:
         assert rc == 0, _triples(_results(out))
 
     def test_a_file_named_database_rules_is_not_read(self, tmp_path):
-        """Realtime Database rules are JSON (`database.rules.json`), which the
-        rules-language pattern can never match; no Firebase file is named
+        """Realtime Database rules are JSON, in `database.rules.json`
+        (`TestRealtimeDatabaseRules`); no Firebase file is named
         `database.rules`."""
         target = tmp_path / "t"
         _plant(target, "database.rules", b"allow read, write: if true;\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+
+_RTDB_PRETTY = (
+    b"{\n"
+    b'  "rules": {\n'
+    b'    ".read": true,\n'
+    b'    "public": { ".write": "true" },\n'
+    b'    "private": {\n'
+    b'      ".read": "auth != null",\n'
+    b'      ".write": false\n'
+    b"    },\n"
+    b'    "list": [{ ".read": true }]\n'
+    b"  }\n"
+    b"}\n"
+)
+
+
+class TestRealtimeDatabaseRules:
+    """`database.rules.json` is JSON, not the rules language: a `.read` or
+    `.write` key of `true` (or `"true"`), at any depth, is open."""
+
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_true_read_or_write_is_a_finding_at_its_own_line(self, tmp_path, eol):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", _RTDB_PRETTY.replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "database.rules.json", line)
+            for line in (3, 4, 9)
+        ]
+        first = _results(out)[0]
+        assert first["locations"][0]["physicalLocation"]["region"] == {
+            "startLine": 3,
+            "startColumn": 5,
+        }
+        assert '".read": true' in first["message"]["text"]
+
+    def test_a_nested_file_is_read_by_its_name(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "firebase/database.rules.json", b'{"rules": {".read": true}}')
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firebase/database.rules.json", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "rules",
+        [
+            b'{"rules": {".read": false, ".write": false}}',
+            b'{"rules": {".read": "auth != null"}}',
+            b'{"rules": {".write": "true && auth != null"}}',
+            b'{"rules": {".read": "false", ".write": null}}',
+            b'{"rules": {".read": 1}}',
+            # Other keys, and the word `true` anywhere else.
+            b'{"rules": {".validate": true, ".indexOn": "true", "read": true}}',
+            b'{"rules": {"x": ".read", "y": true}}',
+            # The key's text inside a string, or inside a longer key.
+            b'{"note": "see \\".read\\": true"}',
+            b'{"x\\".read": true}',
+            b"{}",
+            b"[]",
+        ],
+    )
+    def test_anything_else_is_not_a_finding(self, tmp_path, rules):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", rules)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize(
+        "rules",
+        [
+            b'{"rules": {".read": true,}}',
+            b'{"rules": {".read": true}',
+            b"",
+            b"allow read, write: if true;\n",
+            b"[" * 100000,
+        ],
+        ids=["trailing comma", "truncated", "empty", "not JSON", "deeply nested"],
+    )
+    def test_unparseable_json_is_no_finding_and_no_crash(self, tmp_path, rules):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", rules)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_a_byte_order_mark_does_not_hide_the_file(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "database.rules.json", b'\xef\xbb\xbf{"rules": {".read": true}}')
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+
+    def test_a_comment_is_not_part_of_the_rules(self, tmp_path):
+        """Firebase's tooling accepts `//` and `/* */` in this file; a
+        commented-out key grants nothing."""
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "database.rules.json",
+            b"{\n"
+            b'  "rules": {\n'
+            b'    // ".read": true,\n'
+            b'    /* ".write": true, */\n'
+            b'    ".read": "auth != null",\n'
+            b'    ".write": true // open\n'
+            b"  }\n"
+            b"}\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "database.rules.json", 6)
+        ]
+
+    def test_the_rules_language_files_are_not_read_as_json(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", b'{"rules": {".read": true}}\n')
+        _plant(target, "storage.rules", b'{"rules": {".write": "true"}}\n')
         out = tmp_path / "o.sarif"
 
         rc = _run(target, out)
