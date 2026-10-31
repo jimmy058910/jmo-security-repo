@@ -70,6 +70,7 @@ ever read.
 from __future__ import annotations
 
 import argparse
+import bisect
 import functools
 import json
 import os
@@ -210,8 +211,11 @@ _FIREBASE_VERB = r"(?:read|write|get|list|create|update|delete)"
 # A new line that starts another statement. The `;` is optional in the rules
 # language as far as this pack can tell, so a statement without one must end
 # here, or it would swallow the next and its condition would no longer read as
-# `if true`.
-_NEXT_STATEMENT = r"\n\s*(?:allow|match|function)\b"
+# `if true`. Only the line's own indent (`[^\S\n]`: any whitespace but a
+# newline, a CR included) is read after the newline, so a run of blank lines is
+# not rescanned at each of its newlines: a blank line ends at the next
+# newline's check, and the scan stays linear on crafted input.
+_NEXT_STATEMENT = r"\n[^\S\n]*(?:allow|match|function)\b"
 # One `allow` statement: from the keyword to its `;`, to the `}` closing its
 # block, to a new line that starts another `allow`, `match` or `function`, or
 # to the end of the text, across lines. `condition` is what follows the `:`,
@@ -568,19 +572,23 @@ def _has_server_only_import(code: str) -> bool:
     """Whether `code` (comment-stripped) holds an `import "server-only"`
     statement. A match counts only when it starts outside every string token
     (`_CODE_TOKENS`), since a template literal's line may start with the text.
-    Strings are not blanked first: that would blank the import's own
-    specifier."""
+    Strings are not blanked, which would blank the import's own specifier. The
+    string spans come in order and never overlap, so one `bisect` finds the
+    only span that could hold a match: linear-ish on a file full of decoys."""
     starts = [match.start() for match in SERVER_ONLY_IMPORT.finditer(code)]
     if not starts:
         return False
-    strings = [
-        (token.start(), token.end())
-        for token in _CODE_TOKENS.finditer(code)
-        if token.group(0)[0] in "'\"`"
-    ]
-    return any(
-        not any(begin <= start < end for begin, end in strings) for start in starts
-    )
+    begins: list[int] = []
+    ends: list[int] = []
+    for token in _CODE_TOKENS.finditer(code):
+        if token.group(0)[0] in "'\"`":
+            begins.append(token.start())
+            ends.append(token.end())
+    for start in starts:
+        held_by = bisect.bisect_right(begins, start) - 1
+        if held_by < 0 or start >= ends[held_by]:
+            return True
+    return False
 
 
 def _is_next_server_module(path: Path, rel: str, code: str) -> bool:
