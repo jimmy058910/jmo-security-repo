@@ -1,10 +1,11 @@
-"""Every prompt in ``jmo.py`` survives a closed stdin.
+"""Every stdin prompt guard survives a closed stdin.
 
 ``jmo ... <&-`` starts Python with ``sys.stdin`` set to None, and ``isatty()``
 raises on a closed file. Each prompt guard asked ``sys.stdin.isatty()`` bare, so
 a closed stdin crashed the command at the question instead of answering it the
 way every other "nobody is there" case is answered. A6 (#1506) fixed the Ko-fi
-reminder with ``_stream_is_tty``; these are the four sites it did not touch:
+reminder with ``stream_is_tty`` (then private to ``jmo.py``, now
+``scripts/cli/terminal.py``); these are the sites it did not touch:
 
 * the missing-tool prompt -- its own ``except Exception`` swallowed the error, so
   the scan ran but said "Tool check failed: 'NoneType' ..." and lost the list
@@ -12,27 +13,33 @@ reminder with ``_stream_is_tty``; these are the four sites it did not touch:
 * the first-run email prompt -- ``jmo scan <&-`` died with a traceback before
   scanning anything;
 * the resume prompt -- the same, once a resumable session existed;
-* the MCP install prompt -- the same, after announcing the missing SDK.
+* the MCP install prompt -- the same, after announcing the missing SDK;
+* the ``jmo tools install`` and ``jmo tools update`` confirmations -- the same,
+  before anything was installed.
 
 Each test closes a stream, stubs ``input`` to fail, and asserts the guard took
 the branch it takes for a pipe: the prompt was never shown. One control shows a
-terminal is still asked.
+terminal is still asked (the tools prompts have theirs in
+``test_tool_commands.py``).
 """
 
 from __future__ import annotations
 
+import argparse
 import io
 import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 
-from scripts.cli import jmo
+from scripts.cli import jmo, tool_commands
+from scripts.cli.installers.models import InstallProgress, InstallResult
 from scripts.cli.scan_session import ScanSession, compute_config_hash, save_session
+from scripts.cli.terminal import stream_is_tty
 from scripts.core.scan_timings import State, ToolRun
 
 
@@ -107,6 +114,93 @@ def test_mcp_server_says_how_to_install_instead_of_asking(closed_stdin, capsys):
     assert rc == 1
     assert "Not installing automatically" in err
     assert "pip install 'mcp[cli]>=1.0.0'" in err
+
+
+@pytest.fixture
+def run_tools_command(closed_stdin):
+    """Return ``run(command) -> (rc, installer)`` for ``jmo tools install|update``
+    without ``--yes``, against a stubbed ToolManager and ToolInstaller: nothing
+    is installed and nothing under the home is touched."""
+    status = MagicMock()
+    status.name = "trivy"
+    status.is_critical = False
+    status.installed_version = "0.50.0"
+    status.expected_version = "0.74.0"
+    result = InstallResult(
+        tool_name="trivy", success=True, method="binary", version_installed="0.74.0"
+    )
+    progress = InstallProgress(total=1)
+    progress.add_result(result)
+
+    manager = MagicMock()
+    manager.platform = "linux"
+    manager.get_missing_tools.return_value = [status]
+    manager.get_outdated_tools.return_value = [status]
+    # `update` asks whether osv-scanner is installed to decide on refreshing its
+    # offline databases; an unconfigured MagicMock's `.installed` is truthy and
+    # would fetch ~280 MB for real.
+    manager.check_tool.return_value = MagicMock(installed=False)
+    installer = MagicMock()
+    installer.install_tools_parallel.return_value = progress
+    installer.install_tool.return_value = result
+
+    def run(command) -> tuple[int, MagicMock]:
+        args = argparse.Namespace(
+            tools=None,
+            critical_only=False,
+            yes=False,
+            dry_run=False,
+            print_script=False,
+            sequential=False,
+            jobs=4,
+            force=False,
+        )
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=manager),
+            patch("scripts.cli.tool_installer.ToolInstaller", return_value=installer),
+        ):
+            return command(args), installer
+
+    return run
+
+
+def test_tools_install_goes_ahead_without_asking(run_tools_command):
+    rc, installer = run_tools_command(tool_commands.cmd_tools_install)
+
+    assert rc == 0
+    installer.install_tools_parallel.assert_called_once()
+
+
+def test_tools_update_goes_ahead_without_asking(run_tools_command):
+    rc, installer = run_tools_command(tool_commands.cmd_tools_update)
+
+    assert rc == 0
+    installer.install_tool.assert_called_once_with("trivy", force=True)
+
+
+@pytest.mark.parametrize(
+    "stream",
+    [
+        pytest.param(None, id="missing"),
+        pytest.param(io.StringIO(), id="not-a-terminal"),
+    ],
+)
+def test_a_stream_that_is_not_a_terminal_reads_as_one_that_is_not(stream):
+    assert stream_is_tty(stream) is False
+
+
+def test_a_closed_stream_reads_as_not_a_terminal():
+    """``isatty()`` raises ValueError on a closed file. ``<&-`` gives None, not
+    this, so the other tests in this file cannot reach this branch."""
+    closed = io.StringIO()
+    closed.close()
+
+    assert stream_is_tty(closed) is False
+
+
+def test_a_terminal_reads_as_one():
+    """The control: "never a terminal" would pass everything above."""
+    assert stream_is_tty(_Tty()) is True
 
 
 @pytest.fixture

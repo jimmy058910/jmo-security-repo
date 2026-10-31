@@ -31,6 +31,7 @@ from scripts.cli.scan_orchestrator import (
     summarize_target,
 )
 from scripts.cli.schedule_commands import cmd_schedule
+from scripts.cli.terminal import stream_is_tty
 from scripts.cli.trend_commands import cmd_trends
 from scripts.core.config import load_config
 from scripts.core.exceptions import (
@@ -2145,7 +2146,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         # below settles on. A scheduled scan should produce the findings it
         # can, not stop.
         if (
-            not _stream_is_tty(sys.stdin)
+            not stream_is_tty(sys.stdin)
             or os.environ.get("JMO_NON_INTERACTIVE")
             or os.environ.get("CI")
             or os.environ.get("DOCKER_CONTAINER") == "1"
@@ -2175,7 +2176,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
                 # non-tty, so it takes the same branch: proceed with what is
                 # available - which is also the default this prompt advertises.
                 #
-                # `sys.stdin.isatty()` above does not catch this: under Git Bash
+                # `stream_is_tty(sys.stdin)` above does not catch this: under Git Bash
                 # on Windows, and under any launcher that inherits a console but
                 # leaves stdin empty, it returns True while stdin is already at
                 # EOF. Returning `[]` here made a detached `jmo scan` cancel
@@ -2385,7 +2386,7 @@ def _update_jmo_config(config_path: Path, updates: dict[str, Any]) -> None:
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
     # Skip if not interactive (Docker, CI/CD, etc.)
-    if not _stream_is_tty(sys.stdin):
+    if not stream_is_tty(sys.stdin):
         return
 
     # Skip if running in Docker or CI environment
@@ -2502,20 +2503,6 @@ def _collect_email_opt_in(args) -> None:
         _update_jmo_config(config_path, {"onboarding_completed": True})
 
 
-def _stream_is_tty(stream) -> bool:
-    """Whether ``stream`` is a terminal; False for one that is missing or closed.
-
-    ``sys.stdin`` is None when the process started with stdin closed
-    (``jmo scan <&-``), and ``isatty()`` raises on a closed file. Every prompt
-    guard asks through this, so a closed stream reads as "nobody is there" and
-    the guard takes the branch it takes for a pipe, not a crash.
-    """
-    try:
-        return bool(stream.isatty())
-    except (AttributeError, ValueError):
-        return False
-
-
 def _show_kofi_reminder(args) -> None:
     """Show Ko-Fi support reminder every 3rd scan (non-intrusive).
 
@@ -2531,8 +2518,8 @@ def _show_kofi_reminder(args) -> None:
     real config from every test and routine that ran ``jmo scan``.
     """
     if (
-        not _stream_is_tty(sys.stdin)
-        or not _stream_is_tty(sys.stdout)
+        not stream_is_tty(sys.stdin)
+        or not stream_is_tty(sys.stdout)
         or os.environ.get("JMO_NON_INTERACTIVE")
         or os.environ.get("CI")
         or os.environ.get("DOCKER_CONTAINER") == "1"
@@ -3261,7 +3248,7 @@ def cmd_scan(args) -> int:
                 if explicit_resume:
                     _log(args, "INFO", f"Resuming: {summary}")
                     scan_session = existing
-                elif _stream_is_tty(sys.stdin) and _stream_is_tty(sys.stdout):
+                elif stream_is_tty(sys.stdin) and stream_is_tty(sys.stdout):
                     # Interactive: prompt user
                     _log(args, "INFO", summary)
                     try:
@@ -3846,7 +3833,7 @@ def _prompt_install_dependency(dep_type: str) -> bool:
     # resume prompt checks isatty on both streams. This one was the omission
     # against the file's own convention, not a missing convention.
     if (
-        not _stream_is_tty(sys.stdin)
+        not stream_is_tty(sys.stdin)
         or os.environ.get("JMO_NON_INTERACTIVE")
         or os.environ.get("CI")
     ):
