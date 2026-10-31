@@ -1511,7 +1511,7 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
     SCANNER = "scripts.cli.scan_jobs.gitlab_scanner"
     TOKEN = "glpat-self-hosted-secret"
 
-    def _scan(self, tmp_path, url, caplog=None):
+    def _scan(self, tmp_path, url):
         """Scan `group/app` at `url`. Returns (rows, the patched `git` run,
         the patched repository scan, whether each temporary directory held
         the askpass helper when it was removed)."""
@@ -1566,7 +1566,14 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
             ("https://gitlab.example.com", "https://gitlab.example.com/group/app.git"),
             ("https://gitlab.example.com/", "https://gitlab.example.com/group/app.git"),
             ("http://gitlab.internal", "http://gitlab.internal/group/app.git"),
-            ("HTTPS://Gitlab.Example.com", "HTTPS://Gitlab.Example.com/group/app.git"),
+            # git looks its remote helper up by the scheme as written, case-sensitively.
+            ("HTTPS://gitlab.example.com", "https://gitlab.example.com/group/app.git"),
+            ("HTTPS://Gitlab.Example.com", "https://Gitlab.Example.com/group/app.git"),
+            (
+                "https://gitlab.example.com:8443/sub/",
+                "https://gitlab.example.com:8443/sub/group/app.git",
+            ),
+            ("[::1]:8443", "https://[::1]:8443/group/app.git"),
             ("", "https://gitlab.com/group/app.git"),
             ("   ", "https://gitlab.com/group/app.git"),
             (None, "https://gitlab.com/group/app.git"),
@@ -1581,7 +1588,10 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
             "https",
             "https-trailing-slash",
             "http",
-            "uppercase-scheme-unchanged",
+            "uppercase-scheme-lowercased",
+            "uppercase-scheme-keeps-the-host-case",
+            "https-with-port-and-subpath",
+            "bare-ipv6-with-port",
             "empty-is-the-default",
             "blank-is-the-default",
             "none-is-the-default",
@@ -1601,21 +1611,69 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
         # asserting that it was not written can fail.
         assert askpass_written == [True]
 
-    @pytest.mark.parametrize(
-        ("url", "named"),
-        [
-            ("ssh://git@gitlab.example.com", "ssh://"),
-            ("ssh://git@gitlab.example.com/", "ssh://"),
-            ("git://gitlab.example.com", "git://"),
-            ("ftp://gitlab.example.com", "ftp://"),
-            ("file:///srv/git", "file://"),
-            ("SSH://gitlab.example.com", "ssh://"),
-            ("git@gitlab.example.com:group/app", "user@host:"),
-            ("https://", "no host"),
-            ("http:///", "no host"),
-        ],
-    )
-    def test_a_url_git_would_not_clone_over_http_is_abandoned_before_git_runs(
+    # (value, text its reason carries). What the reason never carries is the value.
+    ABANDONED = [
+        # A transport this scan does not clone over.
+        pytest.param("ssh://git@gitlab.example.com", "ssh://", id="ssh"),
+        pytest.param(
+            "ssh://git@gitlab.example.com/", "ssh://", id="ssh-trailing-slash"
+        ),
+        pytest.param("git://gitlab.example.com", "git://", id="git"),
+        pytest.param("ftp://gitlab.example.com", "ftp://", id="ftp"),
+        pytest.param("file:///srv/git", "file://", id="file"),
+        pytest.param("SSH://gitlab.example.com", "ssh://", id="uppercase-ssh"),
+        pytest.param("git@gitlab.example.com:group/app", "user@host:", id="scp-style"),
+        # No host: curl skips an empty authority and takes the first path segment,
+        # `group` here, as the host.
+        pytest.param("https://", "names no host", id="https-and-nothing"),
+        pytest.param("http:///", "names no host", id="http-and-slash"),
+        pytest.param("https:///sub", "names no host", id="https-empty-authority"),
+        pytest.param("HTTPS:///sub", "names no host", id="uppercase-empty-authority"),
+        pytest.param("/", "does not start with a host", id="slash"),
+        pytest.param("//", "does not start with a host", id="two-slashes"),
+        pytest.param("///", "does not start with a host", id="three-slashes"),
+        pytest.param(" / ", "does not start with a host", id="slash-with-whitespace"),
+        pytest.param("/sub", "does not start with a host", id="path-only"),
+        pytest.param("host:/x", "does not start with a host", id="colon-slash"),
+        # One slash after the scheme: the scheme was read as a host called `https`.
+        pytest.param(
+            "https:/gitlab.example.com",
+            "does not start with a host",
+            id="https-one-slash",
+        ),
+        pytest.param(
+            "http:/gitlab.example.com",
+            "does not start with a host",
+            id="http-one-slash",
+        ),
+        # git resolves a host written before an `@` to the part after it.
+        pytest.param(
+            "https://gitlab.example.com@evil.com/", "--gitlab-token", id="host-at-host"
+        ),
+        pytest.param(
+            "gitlab.example.com@evil.com", "--gitlab-token", id="bare-host-at-host"
+        ),
+        pytest.param(
+            "https://user:pw@gitlab.example.com", "--gitlab-token", id="userinfo"
+        ),
+        pytest.param("https://host\\@evil.com", "backslash", id="backslash-at-host"),
+        pytest.param(
+            "https://gitlab.example.com\\evil.com", "backslash", id="backslash"
+        ),
+        pytest.param("gitlab .example.com", "whitespace", id="inner-whitespace"),
+        pytest.param(
+            "https://gitlab.example.com/a b", "whitespace", id="whitespace-in-path"
+        ),
+        pytest.param("https://gitlab.example.com?@evil.com", "?", id="query"),
+        pytest.param("https://gitlab.example.com#x", "#", id="fragment"),
+        pytest.param(
+            "https://gitlab.example.com:99999", "not a valid URL", id="port-range"
+        ),
+        pytest.param("https://[::1", "not a valid URL", id="unclosed-ipv6"),
+    ]
+
+    @pytest.mark.parametrize(("url", "named"), ABANDONED)
+    def test_a_url_git_would_not_clone_from_the_host_it_names_is_abandoned_before_git_runs(
         self, tmp_path, caplog, url, named
     ):
         with caplog.at_level(logging.DEBUG):
@@ -1630,17 +1688,30 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
             assert rows[tool].label == "failed:target not scanned"
             assert named in (rows[tool].detail or "")
             assert self.TOKEN not in (rows[tool].detail or "")
+            assert url.strip() not in (rows[tool].detail or "")
         assert self.TOKEN not in caplog.text
 
+    @pytest.mark.parametrize(
+        ("url", "named"),
+        [
+            pytest.param(
+                "ssh://deploy:hunter2@gitlab.example.com/", "ssh://", id="ssh-userinfo"
+            ),
+            pytest.param(
+                "https://deploy:hunter2@gitlab.example.com/",
+                "--gitlab-token",
+                id="https-userinfo",
+            ),
+        ],
+    )
     def test_a_reason_does_not_repeat_credentials_typed_into_the_url(
-        self, tmp_path, caplog
+        self, tmp_path, caplog, url, named
     ):
         with caplog.at_level(logging.DEBUG):
-            rows, _run, _scan_repo, _askpass = self._scan(
-                tmp_path, "ssh://deploy:hunter2@gitlab.example.com/"
-            )
+            rows, run, _scan_repo, _askpass = self._scan(tmp_path, url)
 
-        assert "ssh://" in (rows["trufflehog"].detail or "")
+        assert not run.called
+        assert named in (rows["trufflehog"].detail or "")
         assert "hunter2" not in (rows["trufflehog"].detail or "")
         assert "hunter2" not in caplog.text
 

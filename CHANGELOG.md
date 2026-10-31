@@ -451,11 +451,16 @@ All notable changes to JMo Security will be documented in this file.
   `httpfoo.example.com` passed the same `startswith` test and went to git without a scheme.
   A value with no scheme is now a host name, cloned over `https://` (`gitlab.example.com`,
   with or without a trailing `/`, a port or a sub-path); an `http://` or `https://` URL is
-  cloned as written; an empty value is still gitlab.com, the documented default. Any other
-  form (`ssh://`, `git://`, `ftp://`, `file://`, `git@host:group/app`, or a URL with no
-  host) abandons the target with `failed:target not scanned`, before git starts and before
-  the credential helper that carries the token is written. Its reason names the scheme and
-  never repeats the value, which can hold a password typed into it.
+  cloned as written, its scheme in lower case; an empty value is still gitlab.com, the
+  documented default. Any other value abandons the target with `failed:target not scanned`,
+  before git starts and before the credential helper that carries the token is written: a
+  scheme other than those two (`ssh://`, `git://`, `ftp://`, `file://`),
+  `git@host:group/app`, a value that does not begin with a host (`/`, `/sub`, `https:/host`,
+  `https:///sub`: curl takes the first segment of the project path for the host there), an
+  `@` before the host (`https://user:pw@host`, `https://host@evil.com`: git resolves it to
+  the part after the `@`, and credentials belong in `--gitlab-token` or `GITLAB_TOKEN`), and
+  whitespace, a backslash, `?` or `#`. A reason names the problem and never repeats the
+  value, which can hold a password typed into it.
 - **A closed stdin (`jmo scan <&-`) no longer breaks the prompt guards that ask whether
   stdin is a terminal.** A process started with stdin closed has `sys.stdin` set to None,
   and those guards asked `sys.stdin.isatty()`, which raises. The first-run email prompt of
