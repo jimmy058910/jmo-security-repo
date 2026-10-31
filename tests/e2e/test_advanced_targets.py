@@ -7,6 +7,7 @@ These tests require specific infrastructure and are skipped if unavailable.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -27,19 +28,53 @@ class TestAdvancedTargets:
         not os.environ.get("GITLAB_TOKEN"),
         reason="GITLAB_TOKEN not set",
     )
+    # Clone, a default scan, and the images the repository names (pulled, then
+    # scanned). juice-shop took 93 s with warm caches; gitlab-runner is larger,
+    # and its images come over the network. The scan's own limit (1800 s) sits
+    # under this one, so a hang is reported by the scan, not by the plugin
+    # killing the test.
+    @pytest.mark.timeout(2100)
     def test_gitlab_repo_scan(self, jmo_scan_runner):
-        """A1: GitLab repository scan (requires GITLAB_TOKEN)."""
-        gitlab_repo = os.environ.get(
-            "TEST_GITLAB_REPO",
-            "https://gitlab.com/gitlab-org/gitlab-runner.git",
-        )
+        """A1: GitLab repository scan (requires GITLAB_TOKEN).
+
+        Runs JMo's GitLab target, ``--gitlab-repo <group>/<repo>`` on
+        ``TEST_GITLAB_URL``; ``--repo`` takes a path, so a URL there scans
+        nothing. The scanner clones the default branch and has no ref option, so
+        unlike U1 this test is not pinned to a commit. It scans the container
+        images the repository names as targets too.
+        """
+        # The failures below name the variable and the expected form, never the
+        # value read: an override can carry a credential (an old-form URL with
+        # a token in it) and pytest prints the failure. pytest.fail, not assert,
+        # because pytest's assertion rewriting prints the operands of a failed
+        # assert, which here are the override.
+        gitlab_url = os.environ.get("TEST_GITLAB_URL") or "https://gitlab.com"
+        if not gitlab_url.startswith(("https://", "http://")):
+            pytest.fail(
+                "TEST_GITLAB_URL must start with https:// or http:// (for example "
+                "https://gitlab.com); jmo clones from https://gitlab.com instead "
+                "of any value without a scheme, so the test would scan a "
+                "repository it did not name",
+                pytrace=False,
+            )
+        gitlab_repo = os.environ.get("TEST_GITLAB_REPO", "gitlab-org/gitlab-runner")
+        is_group_repo = re.fullmatch(r"[\w.-]+/[\w.-]+", gitlab_repo) is not None
+        if not is_group_repo or gitlab_repo.endswith(".git"):
+            pytest.fail(
+                "TEST_GITLAB_REPO must be <group>/<repo> (for example "
+                "gitlab-org/gitlab-runner), without a URL or a .git suffix",
+                pytrace=False,
+            )
         rc, stdout, stderr, results_dir = jmo_scan_runner(
             [
                 "ci",
-                "--repo",
+                "--gitlab-url",
+                gitlab_url,
+                "--gitlab-repo",
                 gitlab_repo,
                 "--allow-missing-tools",
-            ]
+            ],
+            timeout=1800,
         )
         assert rc in (0, 1), f"GitLab scan failed: {stderr[:500]}"
         validate_basic_scan(results_dir)

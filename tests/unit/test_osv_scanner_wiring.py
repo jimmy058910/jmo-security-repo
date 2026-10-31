@@ -1232,14 +1232,14 @@ def test_the_frozen_database_is_three_synthetic_advisories() -> None:
     }
 
 
-def _real_scan(tmp_path, monkeypatch, files: dict[str, bytes]):
-    """The real binary through the scan loop, against the frozen database,
+def _real_scan(tmp_path, monkeypatch, files: dict[str, bytes], *, db: Path = FROZEN_DB):
+    """The real binary through the scan loop, against the frozen database `db`,
     with every proxy pointed at a closed port: a network call is an error."""
     from scripts.core.tool_runner import ToolRunner
 
     if shutil.which("osv-scanner") is None:
         pytest.skip("osv-scanner is not on PATH")
-    monkeypatch.setattr(osv_database, "cache_dir", lambda: FROZEN_DB)
+    monkeypatch.setattr(osv_database, "cache_dir", lambda: db)
     for var in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy"):
         monkeypatch.setenv(var, "http://127.0.0.1:9")
     monkeypatch.setenv("NO_PROXY", "")

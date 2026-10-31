@@ -29,6 +29,16 @@
           "items": {"type": "string"},
           "description": "List of security tools that produced findings"
         },
+        "findings_per_tool": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 1},
+          "description": "Findings each tool reported when the baseline was derived (a clustered finding counts for every tool in detected_by); the test requires each listed tool to still report at least one"
+        },
+        "finding_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total findings in the scan the baseline was derived from"
+        },
         "notes": {
           "type": "string",
           "description": "Optional notes about this baseline"

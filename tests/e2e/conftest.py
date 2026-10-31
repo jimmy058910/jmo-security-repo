@@ -3,7 +3,7 @@
 Provides:
 - jmo_scan_runner: Execute jmo CLI scan commands and return (rc, stdout, stderr, results_dir)
 - e2e_fixtures_dir: Path to e2e test fixtures
-- validate_basic_scan: Helper to assert scan output files exist and are valid
+- validate_basic_scan: Helper to assert a scan scanned a target and wrote valid output
 - validate_multi_target: Helper to assert multi-target scan output
 - current_platform: Return current platform as linux/darwin/win32
 
@@ -77,22 +77,70 @@ def jmo_scan_runner(tmp_path):
 # ============================================================================
 
 
+def _read_summary(results_dir: Path) -> tuple[dict, list]:
+    """Return ``(meta, findings)`` from ``summaries/findings.json``.
+
+    The file is ``{"meta": {...}, "findings": [...]}``. Anything else is a
+    failure: a bare list carries no ``meta``, so it cannot say what was scanned.
+    """
+    findings_file = results_dir / "summaries" / "findings.json"
+    assert findings_file.exists(), f"findings.json not found in {findings_file.parent}"
+
+    data = json.loads(findings_file.read_bytes())
+    assert isinstance(data, dict) and isinstance(data.get("findings"), list), (
+        f"expected {findings_file} to be a JSON object with a 'findings' list, "
+        f"read {type(data).__name__}"
+    )
+    meta = data.get("meta")
+    assert isinstance(meta, dict), (
+        f"expected {findings_file} to carry a 'meta' object, read keys {sorted(data)}"
+    )
+    return meta, data["findings"]
+
+
+# Per-target directories whose entries are repository clones. ``--repo`` writes
+# to the first; ``--gitlab-repo`` clones the repository and writes to the second,
+# leaving ``individual-repos`` empty.
+REPOSITORY_TARGET_DIRS = ("individual-repos", "individual-gitlab")
+
+
 def validate_basic_scan(results_dir: Path) -> None:
-    """Validate basic scan output files exist and are valid JSON."""
+    """Validate that a scan scanned something and wrote its outputs.
+
+    ``jmo ci`` exits 1 and still writes well-formed, empty outputs when every
+    target it was given is rejected (a URL where ``--repo`` takes a path), so
+    files that exist prove nothing. This reads what the scan says it scanned:
+    ``meta.target_count`` must be at least 1, and a repository target (a
+    directory under ``individual-repos/`` or ``individual-gitlab/``) must have
+    produced findings.
+    """
+    findings_file = results_dir / "summaries" / "findings.json"
+    meta, findings = _read_summary(results_dir)
+
+    target_count = meta.get("target_count")
+    assert (
+        isinstance(target_count, int)
+        and not isinstance(target_count, bool)
+        and target_count >= 1
+    ), (
+        "expected meta.target_count >= 1 (the scan scanned at least one target), "
+        f"read {target_count!r} in {findings_file}"
+    )
+
+    repo_targets = [
+        f"{kind}/{p.name}"
+        for kind in REPOSITORY_TARGET_DIRS
+        if (results_dir / kind).is_dir()
+        for p in sorted((results_dir / kind).iterdir())
+        if p.is_dir()
+    ]
+    if repo_targets:
+        assert findings, (
+            f"expected findings from the repository target(s) {repo_targets}, "
+            f"read 0 findings in {findings_file}"
+        )
+
     summaries = results_dir / "summaries"
-    findings_file = summaries / "findings.json"
-    assert findings_file.exists(), f"findings.json not found in {summaries}"
-
-    data = json.loads(findings_file.read_text())
-    # v1.0.0: findings.json uses metadata wrapper {"meta": {...}, "findings": [...]}
-    if isinstance(data, dict) and "findings" in data:
-        findings = data["findings"]
-    elif isinstance(data, list):
-        findings = data
-    else:
-        raise AssertionError(f"findings.json has unexpected format: {type(data)}")
-    assert isinstance(findings, list), "findings must be a list"
-
     summary_file = summaries / "SUMMARY.md"
     assert summary_file.exists(), f"SUMMARY.md not found in {summaries}"
 
@@ -104,18 +152,7 @@ def validate_multi_target(results_dir: Path) -> None:
     """Validate multi-target scan output."""
     validate_basic_scan(results_dir)
 
-    summaries = results_dir / "summaries"
-    findings_file = summaries / "findings.json"
-    data = json.loads(findings_file.read_text())
-
-    # Handle both wrapped and raw formats (same logic as validate_basic_scan)
-    if isinstance(data, dict) and "findings" in data:
-        findings = data["findings"]
-    elif isinstance(data, list):
-        findings = data
-    else:
-        raise AssertionError(f"findings.json has unexpected format: {type(data)}")
-
+    _, findings = _read_summary(results_dir)
     if findings:
         fingerprints = [
             f.get("fingerprint_id") for f in findings if f.get("fingerprint_id")
