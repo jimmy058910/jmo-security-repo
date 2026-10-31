@@ -491,6 +491,27 @@ self-hosted instance's token to gitlab.com.
   another host.
 - [ ] **Step 3:** Commit `fix: a GitLab URL without a scheme clones from that host, never gitlab.com`.
 
+## Task A2e: Schedules and generated workflows keep a self-hosted GitLab URL (folded in, no issue)
+
+Found by A2d's review (2026-10-30); same class as A2d, folded into PR A on Jimmy's word.
+
+**Files:** `scripts/core/schedule_manager.py` (the GitLab target), `scripts/cli/schedule_commands.py`
+and `scripts/cli/jmo.py` (`jmo schedule create`'s flags), `scripts/core/cron_installer.py`,
+`scripts/core/workflow_generators/github_actions.py` and `gitlab_ci.py`,
+`scripts/cli/wizard_generators.py`, their tests.
+
+A schedule stores a GitLab target as a repository or group with no URL, and the cron line, the
+GitHub Actions workflow and the wizard's generated workflow emit `--gitlab-repo` or
+`--gitlab-group` and the token without `--gitlab-url`, so a self-hosted schedule clones
+gitlab.com with the self-hosted token.
+
+- [ ] **Step 1: Measure first:** every place a GitLab target becomes a stored spec or a command,
+  and which drop the URL.
+- [ ] **Step 2: Failing tests** per generator: a self-hosted URL in, `--gitlab-url` with that URL
+  out; no URL, no flag; a URL A2d would refuse is refused when the schedule is created.
+- [ ] **Step 3:** The spec gains the URL; every generator emits it; validation reuses A2d's.
+- [ ] **Step 4:** Commit `fix: schedules and generated workflows keep a self-hosted GitLab URL`.
+
 ## Task A3: Every finding names its target (#1309)
 
 **Files:** `scripts/core/normalize_and_report.py:221-310` (`_normalize_paths_and_ids`), `:59`
