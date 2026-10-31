@@ -553,7 +553,8 @@ All notable changes to JMo Security will be documented in this file.
   target's job writes (a repository, image, IaC file, URL, GitLab project or cluster), so
   those outputs are withheld too, and stay on disk (#1518). A results directory with no
   `scan-timings.json`, which `jmo scan` did not write, is read whole, as before, and so is
-  one JMo v1.x wrote (its rows name no `state`), with one warning naming its version.
+  one JMo v1.x wrote (its rows name no `state`), with one warning per target naming its
+  version.
 - **No field of a finding carries the scanning machine's path except `raw`, and the
   dashboard redacts that too.** osv-scanner, for one, names the directory it scanned, which
   is under the home directory of whoever ran the scan, and the path reached each finding's

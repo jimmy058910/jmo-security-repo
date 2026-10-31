@@ -126,6 +126,8 @@ Each target's `scan-timings.json` is at `schema_version` 4. It has one row for *
 
 Two outcomes changed with it. A repository with no files outside the excluded directories now fails every tool that reads it (`failed:no files to scan`), where v1.x graded the tools a success. So does a tool whose own output reports 0 files examined (`failed:examined 0 files`), except opengrep run with `--baseline-commit`, which has nothing to read when the commit changed no file it scans (`skipped:no changed file opengrep reads since the baseline commit`).
 
+`jmo report` reads a tool's output only when the target's `scan-timings.json` has a row for that tool that ran or kept findings, so a results directory reused from an earlier scan no longer reports that scan's findings. A target folder without that file (v1.0.x wrote none) is read whole, as before. So is one v1.1.x wrote, whose rows name no `state`, with a warning per target naming its version, unless it lists no tools at all: a scan that failed before its tools ran leaves nothing to read by, so that folder's outputs are withheld.
+
 ### One Docker image
 
 There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 15 scanners plus OPA.

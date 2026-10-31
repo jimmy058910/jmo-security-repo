@@ -558,14 +558,17 @@ def _scan_rows(target: Path, warn: Callable[..., None]) -> dict[str, ToolRun] | 
             timings.name,
         )
         return None
-    # v1.x wrote `schema_version` 2 (or none) with rows that name a `status`
-    # and no `state`. None of them parses, which would withhold every output
-    # as "a tool this scan did not run". Its scan had no accounting of this
-    # kind, so it is read whole, as for a folder with no document. With no row
-    # at all (`failed-before-tools`) there is nothing to read by: that stays
-    # withheld.
+    # v1.1.x wrote `schema_version` 2 (dev builds before v1.1.0 wrote 1; v1.0.x
+    # wrote no such file), with rows that name a `status` and no `state`. None
+    # of them parses, which would withhold every output as "a tool this scan
+    # did not run". Its scan had no accounting of this kind, so it is read
+    # whole, as for a folder with no document. No release left the version
+    # out; a document without one is read the same way. With no row at all
+    # (`failed-before-tools`) there is nothing to read by: that stays withheld.
+    # A bool is an int to Python (`True < 3`), and no JMo wrote one.
     version = document.get("schema_version")
-    if entries and (version is None or (isinstance(version, int) and version < 3)):
+    is_v1 = isinstance(version, int) and not isinstance(version, bool) and version < 3
+    if entries and (version is None or is_v1):
         warn(
             "%s/%s was written by JMo v1.x (%s); its rows name no state, so "
             "every tool output is reported",

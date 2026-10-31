@@ -511,7 +511,9 @@ class TestAResultsDirWrittenByV1x:
     def test_a_directory_with_no_schema_version_is_read_whole_too(
         self, tmp_path, caplog
     ):
-        """The first v1.x documents carried no version at all."""
+        """No release wrote one without a version (v1.0.x wrote no
+        `scan-timings.json`, v1.1.x wrote 2), but one that lacks it, edited by
+        hand, say, is read whole like v1.x's rather than withheld."""
         out = _scan_wrote(
             tmp_path, {}, {"shellcheck.json": _shellcheck(1)}, timings=False
         )
@@ -563,6 +565,41 @@ class TestAResultsDirWrittenByV1x:
         }
         document = json.loads(_v1_timings([row]))
         document["schema_version"] = 3
+        (out / "scan-timings.json").write_bytes(json.dumps(document).encode())
+
+        with caplog.at_level(logging.WARNING):
+            findings = nr.gather_results(tmp_path)
+
+        assert [f["tool"]["name"] for f in findings] == ["shellcheck"]
+        said = _withheld(caplog)
+        assert len(said) == 1 and "trivy" in said[0], said
+
+    @pytest.mark.parametrize("version", [True, False])
+    def test_a_bool_schema_version_is_not_taken_for_v1x(
+        self, tmp_path, caplog, version
+    ):
+        """No JMo wrote a bool version, but Python's `True < 3` (and `False < 3`)
+        holds, so it read as v1.x and the folder was read whole: the earlier
+        scan's trivy.json was reported again (#1371). A bool is read by its rows,
+        like any other version this reader does not recognise."""
+        out = _scan_wrote(
+            tmp_path,
+            {},
+            {"shellcheck.json": _shellcheck(1), "trivy.json": _trivy(2)},
+            timings=False,
+        )
+        row = {
+            "tool": "shellcheck",
+            "state": "ran",
+            "reason": None,
+            "seconds": 0.4,
+            "exit_code": 1,
+            "attempts": 1,
+            "invocations": 1,
+            "detail": None,
+        }
+        document = json.loads(_v1_timings([row]))
+        document["schema_version"] = version
         (out / "scan-timings.json").write_bytes(json.dumps(document).encode())
 
         with caplog.at_level(logging.WARNING):
