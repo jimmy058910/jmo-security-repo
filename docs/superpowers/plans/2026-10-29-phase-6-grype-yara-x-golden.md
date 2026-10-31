@@ -478,9 +478,11 @@ reporters that print a location (SARIF, CSV, HTML), `docs/schemas/` if a field i
 
 - [ ] **Step 1: Failing tests:** `--repos-dir` over two repositories with an identical
   `deploy.sh` → 8 findings, each naming its repository; two repositories each with a root
-  `package-lock.json` holding lodash 4.17.15, `--tools trivy osv-scanner` → one cluster per
-  repository (14 findings before clustering, as measured); a single-repository scan's ids and
-  paths are unchanged in shape apart from the new target key.
+  `package-lock.json` holding lodash 4.17.15, `--tools trivy osv-scanner` → clusters per
+  repository, never across them (as measured: 26 adapter outputs, 26 after fingerprint
+  dedup, 14 after cross-tool clustering, which is 7 per repository, and origin/dev gives 7
+  for one repository); a single-repository scan's ids and paths are unchanged in shape apart
+  from the new target key.
 - [ ] **Step 2:** Implement: the target joins the fingerprint's inputs, the dedup key and
   `dependency_key`; the target is carried on the finding (`location` or a top-level field)
   and printed by the location columns. Every stored id changes once; `UPGRADE.md` says so.

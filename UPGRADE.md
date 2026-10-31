@@ -164,7 +164,7 @@ The database also gains a `scan_tool_runs` table: one row per target and tool, w
 Each finding now carries `target`, the kind of target it was scanned from and the name of its results folder, which for a repository is the checkout's directory name: `"target": {"type": "repo", "name": "app-one"}`. A finding's id is derived from that target, so the same finding in two targets of one scan is two findings. Before, the second was dropped as a duplicate of the first, and two repositories' root `package-lock.json` were one dependency cluster.
 
 - **Every finding id changes, once.** A suppression in `jmo.suppress.yml` that names a finding by its id stops matching, and `jmo diff` against a scan stored before the upgrade reports every old finding as fixed and every one of them as new. Suppress by rule or path instead where you can.
-- **Ids now change when a checkout directory is renamed**, because the directory's name is part of the id. Keep a repository's directory name stable between scans you mean to compare.
+- **Ids now change when a checkout directory is renamed**, because the directory's name is part of the id. Keep a repository's directory name stable between scans you mean to compare. For an image the name is its reference with the tag (`nginx:1.27` is `nginx_1.27`), so two tags of one image are two targets and share no id: `jmo diff` between tags shows the image's findings as fixed and new.
 - `location.path` is unchanged: it is still relative to the target. The target is `properties.target` on a SARIF result, a `target` column in `findings.csv` (before `path`), and a column in the dashboard. A `csv.columns` list in `jmo.yml` is used as written, so add `target` to it.
 
 ### Schedules

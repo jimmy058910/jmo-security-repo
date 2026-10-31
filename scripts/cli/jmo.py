@@ -2514,8 +2514,8 @@ def _show_kofi_reminder(args) -> None:
     this file's usual "no one will answer" test (stdin not a terminal,
     ``JMO_NON_INTERACTIVE``, ``CI``, ``DOCKER_CONTAINER``) plus stdout, because
     the reminder is output and a scan redirected to a file from a terminal has
-    a live stdin and no reader. Counting those scans edited the maintainer's
-    real config from every test and routine that ran ``jmo scan``.
+    a live stdin and no reader. Counting those scans edited the real config of
+    whoever ran them.
     """
     if (
         not stream_is_tty(sys.stdin)

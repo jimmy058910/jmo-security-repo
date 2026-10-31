@@ -194,14 +194,17 @@ All notable changes to JMo Security will be documented in this file.
   `jmo.suppress.yml` that names a finding by its id stops matching, and `jmo diff` against a
   scan stored before the upgrade reports every old finding as fixed and every one as new, so
   suppress by rule or path where you can. **An id also changes when a checkout directory is
-  renamed**, because the directory's name is part of it. `location.path` is unchanged: it is
-  still relative to the target. The target is `properties.target` on each SARIF result (the
-  whole object), a `target` column in `findings.csv` (the name, before `path`), a sortable
-  Target column in the dashboard, whose search matches it, and an optional top-level
-  `target` in `docs/schemas/common_finding.v1.json`. A `csv.columns` list in `jmo.yml` is
-  used as written, so add `target` to it. `SUMMARY.md` and the dashboard's own export do
-  not carry it. [UPGRADE.md](UPGRADE.md#findings-name-their-target-and-every-id-changes)
-  has the migration.
+  renamed**, because the directory's name is part of it. For an image the name is its
+  reference with the tag (`nginx:1.27` is `nginx_1.27`), so two tags of one image are two
+  targets and share no id: `jmo diff` between tags shows the image's findings as fixed and
+  new. `location.path` is unchanged: it is still relative to the target. The target is
+  `properties.target` on each SARIF result (the whole object), a `target` column in
+  `findings.csv` (the name, before `path`), a sortable Target column in the dashboard, whose
+  search matches it, and an optional top-level `target` in
+  `docs/schemas/common_finding.v1.json`. A `csv.columns` list in `jmo.yml` is used as
+  written, so add `target` to it. `SUMMARY.md` and the dashboard's own export do not carry
+  it. [UPGRADE.md](UPGRADE.md#findings-name-their-target-and-every-id-changes) has the
+  migration.
 - **Breaking. opengrep replaces semgrep.** The code scanner is opengrep, a single static
   binary pinned in `versions.yaml` (v1.32.0), and it runs a rule bundle that ships with JMo
   instead of fetching rules from the Semgrep registry at scan time, so a scan makes no
@@ -439,25 +442,28 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
-- **A closed stdin (`jmo scan <&-`) no longer breaks a prompt.** A process started with
-  stdin closed has `sys.stdin` set to None, and the prompt guards asked
-  `sys.stdin.isatty()`, which raises. The first-run email prompt of `jmo scan` exited 1 with
-  a traceback before any scan work; the resume prompt (with either stream closed), the MCP
-  install prompt of `jmo mcp-server` without the MCP SDK, and the confirmation of
-  `jmo tools install` and `jmo tools update` without `--yes` crashed the same way. The
-  missing-tool prompt raised too, but its own handler swallowed the error: the scan ran,
-  printed `Tool check failed: 'NoneType' object has no attribute 'isatty'`, and dropped the
-  warning and the start-line note that name the requested tools that would not run. Every
-  one of them now reads a closed stream as nobody being there and takes the branch it takes
-  for a pipe.
+- **A closed stdin (`jmo scan <&-`) no longer breaks the prompt guards that ask whether
+  stdin is a terminal.** A process started with stdin closed has `sys.stdin` set to None,
+  and those guards asked `sys.stdin.isatty()`, which raises. The first-run email prompt of
+  `jmo scan` exited 1 with a traceback before any scan work; the resume prompt (with either
+  stream closed), the MCP install prompt of `jmo mcp-server` without the MCP SDK, and the
+  confirmation of `jmo tools install` and `jmo tools update` without `--yes` crashed the
+  same way. The missing-tool prompt raised too, but its own handler swallowed the error: the
+  scan ran, printed `Tool check failed: 'NoneType' object has no attribute 'isatty'`, and
+  dropped the warning and the start-line note that name the requested tools that would not
+  run. Each of those guards now reads a closed stream as nobody being there and takes the
+  branch it takes for a pipe. For `jmo tools install` and `jmo tools update` that branch is
+  to go ahead without asking, so with stdin closed, as with a pipe, they install and update
+  without the confirmation. A prompt that reads stdin without such a guard is unchanged and
+  still fails on a closed stdin: `jmo tools uninstall`, `jmo history prune`,
+  `jmo history repair`, `jmo schedule delete` and the wizard's prompts.
 - **A scan nobody is watching no longer rewrites `~/.jmo/config.yml`.** Every `jmo scan` and
   `jmo ci` created `~/.jmo`, read `config.yml`, bumped its `scan_count` and wrote it back,
   to decide whether to print the Ko-fi reminder shown every third scan, whether or not
   anyone could read it. A scan from CI, cron, a pipe or a redirect edited the user's real
-  config (#1506), and so did every test that spawned `jmo scan`. The count now returns
-  before it touches `~/.jmo` when stdin or stdout is not a terminal, when
-  `JMO_NON_INTERACTIVE` or `CI` is set, or when `DOCKER_CONTAINER=1`; an interactive scan
-  counts and reminds as before.
+  config (#1506). The count now returns before it touches `~/.jmo` when stdin or stdout is
+  not a terminal, when `JMO_NON_INTERACTIVE` or `CI` is set, or when `DOCKER_CONTAINER=1`;
+  an interactive scan counts and reminds as before.
 - **SBOM context on a trivy finding names the right package.** The report tagged a trivy
   finding with a syft package (`context.sbom` and a `pkg:` tag) from an index keyed by path
   and package name, with no target in it, and a path match took the first package listed
@@ -502,7 +508,8 @@ All notable changes to JMo Security will be documented in this file.
   writes a `failed-before-tools` one, carrying the scanner's error, into the folder the
   target's job writes (a repository, image, IaC file, URL, GitLab project or cluster), so
   those outputs are withheld too, and stay on disk (#1518). A results directory with no
-  `scan-timings.json`, which `jmo scan` did not write, is read whole, as before.
+  `scan-timings.json`, which `jmo scan` did not write, is read whole, as before, and so is
+  one JMo v1.x wrote (its rows name no `state`), with one warning naming its version.
 - **No field of a finding carries the scanning machine's path except `raw`, and the
   dashboard redacts that too.** osv-scanner, for one, names the directory it scanned, which
   is under the home directory of whoever ran the scan, and the path reached each finding's
@@ -512,11 +519,12 @@ All notable changes to JMo Security will be documented in this file.
   scanned directory, in its `/`, `\` and `\\` spellings, from every string of a finding
   except `raw`, and a finding whose path is the directory itself becomes `.`; an id hashed
   from a string that named the directory is recomputed from the rewritten text, so two
-  checkouts of one repository give one id. `raw` is each tool's verbatim output, so
-  `findings.json` and `findings.yaml` keep it as written and it can still hold the path;
-  `dashboard.html` and `dashboard-data.json` redact it too, on a copy. `findings.sarif` and
-  `findings.csv` carry none. The dashboard and the SARIF file are the ones made for sharing:
-  look at `raw` before publishing `findings.json` or `findings.yaml` from a personal machine
+  checkouts of one repository, in different places but under one directory name, give one
+  id. `raw` is each tool's verbatim output, so `findings.json` and `findings.yaml` keep it
+  as written and it can still hold the path; `dashboard.html` and `dashboard-data.json`
+  redact it too, on a copy. `findings.sarif` and `findings.csv` carry none. The dashboard
+  and the SARIF file are the ones made for sharing: look at `raw` before publishing
+  `findings.json` or `findings.yaml` from a personal machine
   ([Known limitations](docs/KNOWN_LIMITATIONS.md#raw-in-findingsjson-and-findingsyaml-can-hold-the-scanning-machines-paths)).
 - **The subscribe API answers a bad request body with 4xx, not 500.** Its catch-all
   error handler answered every error with 500, so malformed JSON, a body over the 100 KB

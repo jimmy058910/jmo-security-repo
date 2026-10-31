@@ -629,9 +629,14 @@ and the rest carry none, and from the whole of `dashboard.html` and
 `dashboard-data.json`, `raw` too
 ([#1007](https://github.com/jimmy058910/jmo-security-repo/issues/1007)).
 
-**What to do:** read `findings.json` and `findings.yaml` as the scan's own
-output, and do not publish them from a personal machine without looking at
-`raw`. The dashboard and the SARIF file are the ones made for sharing.
+The HTML and JSON outputs of `jmo diff` embed whole findings, `raw` included
+(read from `findings.json` or from the history database), so they can carry the
+scanned directory too.
+
+**What to do:** read `findings.json`, `findings.yaml` and the output of
+`jmo diff` as the scan's own output, and do not publish them from a personal
+machine without looking at `raw`. The dashboard and the SARIF file are the ones
+made for sharing.
 
 ---
 
