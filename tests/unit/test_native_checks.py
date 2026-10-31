@@ -1112,6 +1112,12 @@ _BROWSER_FRAMEWORKS = [
     "preact",
     "parcel",
     "webpack",
+    "esbuild",
+    "rollup",
+    "browserify",
+    "@rspack/core",
+    "@rsbuild/core",
+    "lit",
 ]
 
 
@@ -1262,6 +1268,65 @@ class TestSrcOfABackendOnlyRepository:
         rc = _run(target, out)
 
         assert rc == 1
+
+    @pytest.mark.parametrize(
+        "package",
+        [
+            # Express beside code bundled by esbuild, or by rollup around lit.
+            _package(dependencies={"express": "4"}, devDependencies={"esbuild": "0"}),
+            _package(
+                dependencies={"express": "4", "lit": "3"},
+                devDependencies={"rollup": "4"},
+            ),
+            # Express alone, serving static scripts.
+            _BACKEND,
+        ],
+        ids=["esbuild", "lit and rollup", "express only"],
+    )
+    @pytest.mark.parametrize(
+        "rel",
+        ["src/client/main.ts", "src/client/ui/app.js", "src/public/app.js"],
+    )
+    def test_the_browser_folders_of_src_stay_client_code(self, tmp_path, package, rel):
+        """A backend repository's `src/client/` and `src/public/` hold browser
+        code: the service-role key there is a leak whatever the root
+        `package.json` lists."""
+        target = tmp_path / "t"
+        _plant(target, "package.json", package)
+        _plant(target, rel, _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [(native_checks.RULE_SERVICE_ROLE, rel, 1)]
+
+    @pytest.mark.parametrize(
+        "rel",
+        [
+            "src/index.ts",
+            "src/routes/users.ts",
+            # `src/client` is a folder name, not a prefix of one.
+            "src/clientele/x.ts",
+            "src/public_api/x.ts",
+            "src/publicity.ts",
+            # Another folder's `client/` is not `src/client/`, and a root
+            # `client/` sits in no client directory at all.
+            "src/lib/client/x.ts",
+            "client/x.ts",
+            # A server marker below `src/client/` still wins.
+            "src/client/api/x.ts",
+        ],
+    )
+    def test_the_rest_of_a_backends_src_is_still_server_code(self, tmp_path, rel):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(target, rel, _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
 
     @pytest.mark.parametrize(
         "rel", ["app/a.ts", "lib/a.ts", "components/a.ts", "pages/a.ts"]

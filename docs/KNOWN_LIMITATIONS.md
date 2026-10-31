@@ -445,6 +445,10 @@ jmo-native decides what it reads by path from the scanned root
   (Express, Fastify, Hono, Koa, NestJS, hapi or restify) and no browser
   framework. A backend on any other framework keeps `src/` as client code, so a
   `service_role` reference there is reported though it never reaches a browser.
+  The other side hides a finding: browser code that a repository read as a backend
+  keeps in `src/` outside `src/client/` and `src/public/` (which stay client
+  code), built by a bundler the list does not name, reads as server code and is
+  not checked.
 - **Only `public`-schema tables are checked.** A table in another schema
   (`private.notes`) is skipped, since Supabase's API serves `public` by default. A
   schema exposed to the API by configuration is not checked.
