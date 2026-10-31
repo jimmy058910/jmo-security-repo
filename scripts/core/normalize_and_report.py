@@ -532,7 +532,9 @@ def _scan_rows(target: Path, warn: Callable[..., None]) -> dict[str, ToolRun] | 
     None when there are none to go by: the folder has no `scan-timings.json`
     (output `jmo scan` did not write), or it has one that cannot be read, which
     is said, since reading everything on its account is a guess. A row that
-    does not parse is left out and said: its tool then has no row.
+    does not parse is left out and said: its tool then has no row. A document
+    JMo v1.x wrote (`schema_version` below 3, rows without a `state`) is also
+    None, and said once, when it lists any tool.
     """
     timings = target / SCAN_TIMINGS_FILENAME
     try:
@@ -554,6 +556,22 @@ def _scan_rows(target: Path, warn: Callable[..., None]) -> dict[str, ToolRun] | 
             "%s/%s has no list of tool rows, so every tool output is reported",
             target.name,
             timings.name,
+        )
+        return None
+    # v1.x wrote `schema_version` 2 (or none) with rows that name a `status`
+    # and no `state`. None of them parses, which would withhold every output
+    # as "a tool this scan did not run". Its scan had no accounting of this
+    # kind, so it is read whole, as for a folder with no document. With no row
+    # at all (`failed-before-tools`) there is nothing to read by: that stays
+    # withheld.
+    version = document.get("schema_version")
+    if entries and (version is None or (isinstance(version, int) and version < 3)):
+        warn(
+            "%s/%s was written by JMo v1.x (%s); its rows name no state, so "
+            "every tool output is reported",
+            target.name,
+            timings.name,
+            "no schema_version" if version is None else f"schema_version {version}",
         )
         return None
     rows: dict[str, ToolRun] = {}
@@ -582,7 +600,7 @@ def _outputs_of_this_scan(target: Path, warn: Callable[..., None]) -> list[Path]
     it ran is `scan-timings.json`, so a tool's output is read when its row is
     `ran`, or when a run of it worked (`kept_findings` is a count, 0 included,
     #1369), and not when the tool has no row or its row is anything else. A
-    folder without rows is read whole.
+    folder without rows is read whole, and so is one JMo v1.x wrote.
 
     `warn` is told of an output left out that the reader would take for this
     scan's: a tool the scan did not run, and a row that failed. A `skipped`

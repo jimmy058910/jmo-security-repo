@@ -456,3 +456,118 @@ class TestDiagnosticsFilterTheSameWay:
 
         assert [d.tool for d in without_rows] == ["opengrep"], "negative control"
         assert with_rows == []
+
+
+def _v1_timings(tools: list[dict]) -> bytes:
+    """A `scan-timings.json` exactly as JMo v1.1.1 wrote it (`schema_version`
+    2): a row is `ToolResult.to_dict()`, with `status` and no `state`. Written
+    out literally, because `write_scan_timings` can only write today's shape."""
+    return json.dumps(
+        {
+            "schema_version": 2,
+            "target": "proj",
+            "target_type": "repo",
+            "wall_seconds": 2.4,
+            "outcome": "completed",
+            "error": None,
+            "tools": tools,
+        },
+        indent=2,
+    ).encode()
+
+
+_V1_SHELLCHECK_ROW = {
+    "tool": "shellcheck",
+    "status": "success",
+    "returncode": 1,
+    "attempts": 1,
+    "duration": 0.41,
+    "output_file": "results/individual-repos/proj/shellcheck.json",
+    "error_message": None,
+    "timed_out": False,
+}
+
+
+class TestAResultsDirWrittenByV1x:
+    """A row of v1.x names no `state`, so none parses (`KeyError: 'state'`).
+    Read as v4 rows they are all "a tool this scan did not run", and a report
+    over a v1.x directory said so for every tool and held 0 findings."""
+
+    def test_a_v1x_directory_is_read_whole_and_says_so_once(self, tmp_path, caplog):
+        out = _scan_wrote(
+            tmp_path, {}, {"shellcheck.json": _shellcheck(1)}, timings=False
+        )
+        (out / "scan-timings.json").write_bytes(_v1_timings([_V1_SHELLCHECK_ROW]))
+
+        with caplog.at_level(logging.WARNING):
+            findings = nr.gather_results(tmp_path)
+
+        assert [f["tool"]["name"] for f in findings] == ["shellcheck"]
+        said = _withheld(caplog)
+        assert len(said) == 1, said
+        assert "v1.x" in said[0], said[0]
+        assert "schema_version 2" in said[0], said[0]
+
+    def test_a_directory_with_no_schema_version_is_read_whole_too(
+        self, tmp_path, caplog
+    ):
+        """The first v1.x documents carried no version at all."""
+        out = _scan_wrote(
+            tmp_path, {}, {"shellcheck.json": _shellcheck(1)}, timings=False
+        )
+        document = json.loads(_v1_timings([_V1_SHELLCHECK_ROW]))
+        del document["schema_version"]
+        (out / "scan-timings.json").write_bytes(json.dumps(document).encode())
+
+        with caplog.at_level(logging.WARNING):
+            findings = nr.gather_results(tmp_path)
+
+        assert len(findings) == 1
+        assert len(_withheld(caplog)) == 1, _withheld(caplog)
+
+    def test_a_v1x_scan_that_ran_no_tool_withholds_everything(self, tmp_path, caplog):
+        """`failed-before-tools` wrote `tools: []`. It has no rows to read the
+        folder by, and a file in it is an earlier scan's, as for a v4 document."""
+        out = _scan_wrote(
+            tmp_path, {}, {"shellcheck.json": _shellcheck(1)}, timings=False
+        )
+        document = json.loads(_v1_timings([]))
+        document["outcome"] = "failed-before-tools"
+        (out / "scan-timings.json").write_bytes(json.dumps(document).encode())
+
+        with caplog.at_level(logging.WARNING):
+            findings = nr.gather_results(tmp_path)
+
+        assert findings == []
+        assert any("shellcheck" in m for m in _withheld(caplog)), _withheld(caplog)
+
+    def test_a_v3_document_is_still_read_by_its_rows(self, tmp_path, caplog):
+        """Version 3 is the first whose rows name a `state` (without v4's
+        `kept_findings`). It is read by its rows, as today's: only the output
+        of a tool it lists is reported."""
+        out = _scan_wrote(
+            tmp_path,
+            {},
+            {"shellcheck.json": _shellcheck(1), "trivy.json": _trivy(2)},
+            timings=False,
+        )
+        row = {
+            "tool": "shellcheck",
+            "state": "ran",
+            "reason": None,
+            "seconds": 0.4,
+            "exit_code": 1,
+            "attempts": 1,
+            "invocations": 1,
+            "detail": None,
+        }
+        document = json.loads(_v1_timings([row]))
+        document["schema_version"] = 3
+        (out / "scan-timings.json").write_bytes(json.dumps(document).encode())
+
+        with caplog.at_level(logging.WARNING):
+            findings = nr.gather_results(tmp_path)
+
+        assert [f["tool"]["name"] for f in findings] == ["shellcheck"]
+        said = _withheld(caplog)
+        assert len(said) == 1 and "trivy" in said[0], said
