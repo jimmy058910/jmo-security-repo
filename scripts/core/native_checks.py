@@ -126,9 +126,36 @@ CODE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs")
 # TODO(issue-#1381): root-relative, so a monorepo's nested app
 # (`apps/web/src/...`) is never client code.
 CLIENT_DIRS = ("app/", "src/", "components/", "pages/", "lib/")
-# A root `package.json` naming none of these builds no browser app, so its
-# `src/` is server code (an Express or Hono service).
-BROWSER_FRAMEWORKS = frozenset({"next", "vite", "react-scripts", "expo"})
+# `src/` is server code only on positive evidence: the root `package.json`
+# names a server framework and no browser framework (an Express or Hono
+# service). A repository naming neither, or an unlisted server framework,
+# keeps `src/` as client code.
+SERVER_FRAMEWORKS = frozenset(
+    {"express", "fastify", "hono", "koa", "@nestjs/core", "@hapi/hapi", "restify"}
+)
+BROWSER_FRAMEWORKS = frozenset(
+    {
+        "next",
+        "vite",
+        "react-scripts",
+        "expo",
+        "react",
+        "react-dom",
+        "vue",
+        "@vue/cli-service",
+        "nuxt",
+        "svelte",
+        "@sveltejs/kit",
+        "@angular/core",
+        "gatsby",
+        "astro",
+        "@remix-run/react",
+        "solid-js",
+        "preact",
+        "parcel",
+        "webpack",
+    }
+)
 SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functions/")
 # Server-only by Next.js's own rules, wherever they sit, so none
 # can hide a real client reference: an App Router route handler, the root's
@@ -483,11 +510,13 @@ def _lines(text: str) -> list[str]:
 
 @functools.lru_cache(maxsize=4)
 def _client_dirs(root: Path) -> tuple[str, ...]:
-    """`CLIENT_DIRS`, less `src/` when the root's `package.json` parses and
-    lists no browser framework in `dependencies` or `devDependencies`. Only
-    the root's: a nested app's `package.json` changes nothing (#1381). No
-    `package.json`, or one that does not parse, leaves `CLIENT_DIRS` whole.
-    Cached for the run (`_scan` clears it), not read per file."""
+    """`CLIENT_DIRS`, less `src/` when the root's `package.json` parses to an
+    object whose `dependencies` or `devDependencies` (each an object) name a
+    server framework and no browser framework. Only the root's: a nested
+    app's `package.json` changes nothing (#1381). Anything else -- no
+    `package.json`, one that does not parse, no server framework named --
+    leaves `CLIENT_DIRS` whole. Cached for the run (`_scan` clears it), not
+    read per file."""
     try:
         package = json.loads((root / "package.json").read_bytes())
     except (OSError, ValueError, RecursionError):
@@ -499,9 +528,9 @@ def _client_dirs(root: Path) -> tuple[str, ...]:
         deps = package.get(section)
         if isinstance(deps, dict):
             names.update(deps)
-    if names & BROWSER_FRAMEWORKS:
-        return CLIENT_DIRS
-    return tuple(d for d in CLIENT_DIRS if d != "src/")
+    if names & SERVER_FRAMEWORKS and not names & BROWSER_FRAMEWORKS:
+        return tuple(d for d in CLIENT_DIRS if d != "src/")
+    return CLIENT_DIRS
 
 
 def _is_route_handler(path: Path, rel: str) -> bool:
