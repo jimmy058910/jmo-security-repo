@@ -2145,7 +2145,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         # below settles on. A scheduled scan should produce the findings it
         # can, not stop.
         if (
-            not sys.stdin.isatty()
+            not _stream_is_tty(sys.stdin)
             or os.environ.get("JMO_NON_INTERACTIVE")
             or os.environ.get("CI")
             or os.environ.get("DOCKER_CONTAINER") == "1"
@@ -2385,7 +2385,7 @@ def _update_jmo_config(config_path: Path, updates: dict[str, Any]) -> None:
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
     # Skip if not interactive (Docker, CI/CD, etc.)
-    if not sys.stdin.isatty():
+    if not _stream_is_tty(sys.stdin):
         return
 
     # Skip if running in Docker or CI environment
@@ -2506,8 +2506,9 @@ def _stream_is_tty(stream) -> bool:
     """Whether ``stream`` is a terminal; False for one that is missing or closed.
 
     ``sys.stdin`` is None when the process started with stdin closed
-    (``jmo scan <&-``), and ``isatty()`` raises on a closed file. The reminder
-    runs after the scan, so asking must not take the scan down.
+    (``jmo scan <&-``), and ``isatty()`` raises on a closed file. Every prompt
+    guard asks through this, so a closed stream reads as "nobody is there" and
+    the guard takes the branch it takes for a pipe, not a crash.
     """
     try:
         return bool(stream.isatty())
@@ -3260,7 +3261,7 @@ def cmd_scan(args) -> int:
                 if explicit_resume:
                     _log(args, "INFO", f"Resuming: {summary}")
                     scan_session = existing
-                elif sys.stdin.isatty() and sys.stdout.isatty():
+                elif _stream_is_tty(sys.stdin) and _stream_is_tty(sys.stdout):
                     # Interactive: prompt user
                     _log(args, "INFO", summary)
                     try:
@@ -3845,7 +3846,7 @@ def _prompt_install_dependency(dep_type: str) -> bool:
     # resume prompt checks isatty on both streams. This one was the omission
     # against the file's own convention, not a missing convention.
     if (
-        not sys.stdin.isatty()
+        not _stream_is_tty(sys.stdin)
         or os.environ.get("JMO_NON_INTERACTIVE")
         or os.environ.get("CI")
     ):
