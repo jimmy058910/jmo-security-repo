@@ -468,6 +468,29 @@ failure after the repository's scan never comes there.
   and its rows read `ran`; the image failure is logged and recorded.
 - [ ] **Step 3:** Commit `fix: a GitLab repository keeps its findings when its image step fails`.
 
+## Task A2d: A GitLab URL without a scheme clones from that host, never gitlab.com (folded in, no issue)
+
+Found by PR T's review of its Task T5b (2026-10-30); a security defect, folded into PR A on
+Jimmy's word rather than filed.
+
+**Files:** `scripts/cli/scan_jobs/gitlab_scanner.py` (`scan_gitlab_repo`, the clone URL),
+its tests; `scan_orchestrator.py` (the `or "https://gitlab.com"` default) read, not changed
+unless the measurement needs it.
+
+`scan_gitlab_repo` replaces any `--gitlab-url` that does not start with `http` with
+`https://gitlab.com`, so `--gitlab-url gitlab.example.com` clones from gitlab.com; on a
+private or missing path gitlab.com answers 401, and git's credential helper sends the
+self-hosted instance's token to gitlab.com.
+
+- [ ] **Step 1: Failing tests** (the clone argument read from a patched `subprocess.run`, no
+  network): `gitlab.example.com` and `gitlab.example.com/` → `https://gitlab.example.com/<path>.git`;
+  `https://` and `http://` URLs unchanged; an empty URL → the gitlab.com default; any other
+  scheme (`ssh://`, `git@host:`, `ftp://`) → the target abandoned with a reason naming the
+  URL's scheme, no clone, and the token never handed to git.
+- [ ] **Step 2:** Implement in `scan_gitlab_repo`; no path from the user's URL leads to
+  another host.
+- [ ] **Step 3:** Commit `fix: a GitLab URL without a scheme clones from that host, never gitlab.com`.
+
 ## Task A3: Every finding names its target (#1309)
 
 **Files:** `scripts/core/normalize_and_report.py:221-310` (`_normalize_paths_and_ids`), `:59`
