@@ -847,6 +847,9 @@ class TestServerModules:
             ("src/lib/save.ts", b"// Server actions.\n\n'use server'\n"),
             ("src/lib/bom.ts", b'\xef\xbb\xbf"use server";\n'),
             ("src/middleware.ts", b""),
+            # Next.js 16 renamed `middleware` to `proxy`.
+            ("src/proxy.ts", b""),
+            ("src/proxy.js", b""),
         ],
     )
     def test_a_server_module_under_a_client_directory_is_not_client_code(
@@ -868,6 +871,8 @@ class TestServerModules:
             ("lib/admin.ts", b'import x from "y";\n"use server";\n'),
             ("lib/route.ts", b""),
             ("src/lib/middleware.ts", b""),
+            ("src/lib/proxy.ts", b""),
+            ("app/proxy.ts", b""),
         ],
     )
     def test_the_same_reference_elsewhere_is_still_client_code(
