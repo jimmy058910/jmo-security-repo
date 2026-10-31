@@ -129,7 +129,9 @@ CLIENT_DIRS = ("app/", "src/", "components/", "pages/", "lib/")
 # `src/` is server code only on positive evidence: the root `package.json`
 # names a server framework and no browser framework (an Express or Hono
 # service). A repository naming neither, or an unlisted server framework,
-# keeps `src/` as client code.
+# keeps `src/` as client code. Even then, these two folders hold browser code
+# (a backend's frontend, its static scripts), so they stay client code.
+SRC_BROWSER_DIRS = ("src/client/", "src/public/")
 SERVER_FRAMEWORKS = frozenset(
     {"express", "fastify", "hono", "koa", "@nestjs/core", "@hapi/hapi", "restify"}
 )
@@ -154,6 +156,12 @@ BROWSER_FRAMEWORKS = frozenset(
         "preact",
         "parcel",
         "webpack",
+        "esbuild",
+        "rollup",
+        "browserify",
+        "@rspack/core",
+        "@rsbuild/core",
+        "lit",
     }
 )
 SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functions/")
@@ -518,9 +526,10 @@ def _lines(text: str) -> list[str]:
 
 @functools.lru_cache(maxsize=4)
 def _client_dirs(root: Path) -> tuple[str, ...]:
-    """`CLIENT_DIRS`, less `src/` when the root's `package.json` parses to an
-    object whose `dependencies` or `devDependencies` (each an object) name a
-    server framework and no browser framework. Only the root's: a nested
+    """`CLIENT_DIRS`, less `src/` (but for `SRC_BROWSER_DIRS`) when the root's
+    `package.json` parses to an object whose `dependencies` or
+    `devDependencies` (each an object) name a server framework and no browser
+    framework. Only the root's: a nested
     app's `package.json` changes nothing (#1381). Anything else -- no
     `package.json`, one that does not parse, no server framework named --
     leaves `CLIENT_DIRS` whole. Cached for the run (`_scan` clears it), not
@@ -537,7 +546,7 @@ def _client_dirs(root: Path) -> tuple[str, ...]:
         if isinstance(deps, dict):
             names.update(deps)
     if names & SERVER_FRAMEWORKS and not names & BROWSER_FRAMEWORKS:
-        return tuple(d for d in CLIENT_DIRS if d != "src/")
+        return tuple(d for d in CLIENT_DIRS if d != "src/") + SRC_BROWSER_DIRS
     return CLIENT_DIRS
 
 
