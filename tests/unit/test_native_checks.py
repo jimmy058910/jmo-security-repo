@@ -897,6 +897,12 @@ class TestServerModules:
             # Next.js 16 renamed `middleware` to `proxy`.
             ("src/proxy.ts", b""),
             ("src/proxy.js", b""),
+            # An import on a later line, and on the first behind a BOM.
+            ("lib/a.ts", b'import x from "y";\nimport "server-only";\n'),
+            ("lib/bom.ts", b'\xef\xbb\xbfimport "server-only";\n'),
+            # Route groups and an underscore inside a name are still routes.
+            ("app/(shop)/checkout/route.ts", b""),
+            ("src/app/route_x/route.ts", b""),
         ],
     )
     def test_a_server_module_under_a_client_directory_is_not_client_code(
@@ -920,6 +926,13 @@ class TestServerModules:
             ("src/lib/middleware.ts", b""),
             ("src/lib/proxy.ts", b""),
             ("app/proxy.ts", b""),
+            # `import "server-only"` held in a string is not an import.
+            ("lib/a.ts", b"const msg = 'import \"server-only\"';\n"),
+            ("lib/a.ts", b"const msg = \"import 'server-only'\";\n"),
+            # Next.js private folders: `route.*` below one is not a route.
+            ("src/app/_private/route.ts", b""),
+            ("app/_lib/route.ts", b""),
+            ("app/shop/_internal/deep/route.js", b""),
         ],
     )
     def test_the_same_reference_elsewhere_is_still_client_code(
