@@ -127,16 +127,19 @@ CLIENT_DIRS = ("app/", "src/", "components/", "pages/", "lib/")
 SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functions/")
 # Server-only by Next.js's own rules, wherever they sit, so none
 # can hide a real client reference: an App Router route handler, the root's
-# or `src/`'s middleware, a module importing `server-only` (the build fails
-# if a client module does), and one whose first statement is "use server".
+# or `src/`'s middleware (`proxy` since Next.js 16), a module importing
+# `server-only` (the build fails if a client module does), and one whose
+# first statement is "use server".
 ROUTE_HANDLER_DIRS = ("app/", "src/app/")
-# TODO(issue-#1380): Next.js 16 renamed middleware to `proxy.ts`, which is
-# not here yet, so a service-role reference in `src/proxy.ts` reads as client.
 MIDDLEWARE_FILES = (
     "middleware.ts",
     "middleware.js",
     "src/middleware.ts",
     "src/middleware.js",
+    "proxy.ts",
+    "proxy.js",
+    "src/proxy.ts",
+    "src/proxy.js",
 )
 SERVER_ONLY_IMPORT = re.compile(r"""\bimport\s*(["'])server-only\1""")
 USE_SERVER_DIRECTIVE = re.compile(r"""\ufeff?\s*(["'])use server\1""")
