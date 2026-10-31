@@ -109,6 +109,59 @@ class TestValidateBasicScan:
         with pytest.raises(AssertionError, match=r"repository target.*juice-shop.*0"):
             validate_basic_scan(tmp_path)
 
+    def test_a_gitlab_target_with_no_findings_fails(self, tmp_path):
+        """A1's shape: ``--gitlab-repo`` leaves ``individual-repos`` empty and
+        writes the clone's outputs to ``individual-gitlab``."""
+        write_results(
+            tmp_path,
+            targets={
+                "individual-repos": [],
+                "individual-gitlab": ["juice-shop_juice-shop"],
+                "individual-images": ["alpine"],
+            },
+        )
+
+        with pytest.raises(
+            AssertionError,
+            match=r"repository target.*individual-gitlab/juice-shop_juice-shop.*0",
+        ):
+            validate_basic_scan(tmp_path)
+
+    def test_a_gitlab_target_with_findings_passes(self, tmp_path):
+        write_results(
+            tmp_path,
+            findings=[FINDING],
+            targets={
+                "individual-repos": [],
+                "individual-gitlab": ["juice-shop_juice-shop"],
+                "individual-images": ["alpine"],
+            },
+        )
+
+        validate_basic_scan(tmp_path)
+
+    def test_a_repository_target_is_named_with_its_directory(self, tmp_path):
+        write_results(
+            tmp_path,
+            targets={
+                "individual-repos": ["a"],
+                "individual-gitlab": ["b_c"],
+            },
+        )
+
+        with pytest.raises(AssertionError) as raised:
+            validate_basic_scan(tmp_path)
+
+        assert "individual-repos/a" in str(raised.value)
+        assert "individual-gitlab/b_c" in str(raised.value)
+
+    def test_a_stray_file_in_individual_gitlab_is_not_a_target(self, tmp_path):
+        write_results(tmp_path, targets={"individual-images": ["alpine"]})
+        (tmp_path / "individual-gitlab").mkdir()
+        (tmp_path / "individual-gitlab" / "notes.txt").write_text("x", encoding="utf-8")
+
+        validate_basic_scan(tmp_path)
+
     def test_a_scan_of_another_kind_may_find_nothing(self, tmp_path):
         write_results(tmp_path, targets={"individual-images": ["alpine"]})
 

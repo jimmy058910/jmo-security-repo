@@ -98,14 +98,21 @@ def _read_summary(results_dir: Path) -> tuple[dict, list]:
     return meta, data["findings"]
 
 
+# Per-target directories whose entries are repository clones. ``--repo`` writes
+# to the first; ``--gitlab-repo`` clones the repository and writes to the second,
+# leaving ``individual-repos`` empty.
+REPOSITORY_TARGET_DIRS = ("individual-repos", "individual-gitlab")
+
+
 def validate_basic_scan(results_dir: Path) -> None:
     """Validate that a scan scanned something and wrote its outputs.
 
     ``jmo ci`` exits 1 and still writes well-formed, empty outputs when every
     target it was given is rejected (a URL where ``--repo`` takes a path), so
     files that exist prove nothing. This reads what the scan says it scanned:
-    ``meta.target_count`` must be at least 1, and a repository target (an
-    ``individual-repos/<name>/`` directory) must have produced findings.
+    ``meta.target_count`` must be at least 1, and a repository target (a
+    directory under ``individual-repos/`` or ``individual-gitlab/``) must have
+    produced findings.
     """
     findings_file = results_dir / "summaries" / "findings.json"
     meta, findings = _read_summary(results_dir)
@@ -120,12 +127,13 @@ def validate_basic_scan(results_dir: Path) -> None:
         f"read {target_count!r} in {findings_file}"
     )
 
-    repos_dir = results_dir / "individual-repos"
-    repo_targets = (
-        sorted(p.name for p in repos_dir.iterdir() if p.is_dir())
-        if repos_dir.is_dir()
-        else []
-    )
+    repo_targets = [
+        f"{kind}/{p.name}"
+        for kind in REPOSITORY_TARGET_DIRS
+        if (results_dir / kind).is_dir()
+        for p in sorted((results_dir / kind).iterdir())
+        if p.is_dir()
+    ]
     if repo_targets:
         assert findings, (
             f"expected findings from the repository target(s) {repo_targets}, "
