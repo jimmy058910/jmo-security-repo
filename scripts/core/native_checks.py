@@ -414,9 +414,11 @@ def strip_code_comments(text: str) -> str:
 
 def strip_sql_comments(text: str) -> str:
     """Blank `--` and `/* */` comments in migration SQL, preserving every
-    line break. Not string-aware: no test in this pack needs a `--` or `/*`
-    protected inside a SQL string literal, so this stays the small scanner
-    the brief asks for rather than growing SQL-string handling nothing uses.
+    line break. Not string-aware: a `--` or `/*` inside a string literal
+    starts a comment here. The `drop table` check reads strings properly
+    (:func:`blank_sql_literals`); the `create table`, Row Level Security and
+    policy statements are still read from this function's output, so a
+    comment marker inside a string can hide one of them.
     """
     out: list[str] = []
     i, n = 0, len(text)
