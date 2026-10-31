@@ -70,6 +70,7 @@ ever read.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -125,6 +126,9 @@ CODE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs")
 # TODO(issue-#1381): root-relative, so a monorepo's nested app
 # (`apps/web/src/...`) is never client code.
 CLIENT_DIRS = ("app/", "src/", "components/", "pages/", "lib/")
+# A root `package.json` naming none of these builds no browser app, so its
+# `src/` is server code (an Express or Hono service).
+BROWSER_FRAMEWORKS = frozenset({"next", "vite", "react-scripts", "expo"})
 SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functions/")
 # Server-only by Next.js's own rules, wherever they sit, so none
 # can hide a real client reference: an App Router route handler, the root's
@@ -467,6 +471,29 @@ def _lines(text: str) -> list[str]:
     return [line.removesuffix("\r") for line in text.split("\n")]
 
 
+@functools.lru_cache(maxsize=4)
+def _client_dirs(root: Path) -> tuple[str, ...]:
+    """`CLIENT_DIRS`, less `src/` when the root's `package.json` parses and
+    lists no browser framework in `dependencies` or `devDependencies`. Only
+    the root's: a nested app's `package.json` changes nothing (#1381). No
+    `package.json`, or one that does not parse, leaves `CLIENT_DIRS` whole.
+    Cached for the run (`_scan` clears it), not read per file."""
+    try:
+        package = json.loads((root / "package.json").read_bytes())
+    except (OSError, ValueError, RecursionError):
+        return CLIENT_DIRS
+    if not isinstance(package, dict):
+        return CLIENT_DIRS
+    names: set[str] = set()
+    for section in ("dependencies", "devDependencies"):
+        deps = package.get(section)
+        if isinstance(deps, dict):
+            names.update(deps)
+    if names & BROWSER_FRAMEWORKS:
+        return CLIENT_DIRS
+    return tuple(d for d in CLIENT_DIRS if d != "src/")
+
+
 def _is_route_handler(path: Path, rel: str) -> bool:
     """An App Router `route.*`. A folder whose name starts with `_` is a
     private folder: Next.js routes nothing below it."""
@@ -535,7 +562,7 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
         body = text if is_env else strip_code_comments(text)
         is_client = (
             is_code
-            and rel.startswith(CLIENT_DIRS)
+            and rel.startswith(_client_dirs(root))
             and not any(marker in f"/{rel}" for marker in SERVER_MARKERS)
             and not _is_next_server_module(path, rel, body)
         )
@@ -852,6 +879,7 @@ def _scan(target: Path, out_path: Path, exclude_dirs: frozenset[str]) -> int:
         )
         return EXIT_ERROR
 
+    _client_dirs.cache_clear()
     findings: list[NativeFinding] = []
     for path in iter_target_files(target, exclude_dirs):
         findings.extend(scan_file(path, target))

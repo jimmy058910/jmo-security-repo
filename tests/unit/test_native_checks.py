@@ -1069,6 +1069,148 @@ class TestServerModules:
         assert _triples(_results(out)) == [(native_checks.RULE_SERVICE_ROLE, rel, line)]
 
 
+_BACKEND = b'{"dependencies": {"express": "4"}}'
+
+
+class TestSrcOfABackendOnlyRepository:
+    """`src/` is client code unless the root `package.json` shows the
+    repository ships no browser framework (Next.js, Vite, CRA, Expo): then it
+    is an Express or Hono service's server code."""
+
+    @pytest.mark.parametrize(
+        "package",
+        [
+            _BACKEND,
+            b"\xef\xbb\xbf" + _BACKEND,
+            b'{"devDependencies": {"typescript": "5"}}',
+            # Names no browser framework, since it names nothing.
+            b'{"name": "svc"}',
+            # Only `dependencies` and `devDependencies` count.
+            b'{"peerDependencies": {"next": "16"}}',
+        ],
+        ids=["express", "BOM", "devDependencies", "no dependencies", "peer"],
+    )
+    def test_src_is_server_code(self, tmp_path, package):
+        target = tmp_path / "t"
+        _plant(target, "package.json", package)
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize("section", ["dependencies", "devDependencies"])
+    @pytest.mark.parametrize("framework", ["next", "vite", "react-scripts", "expo"])
+    def test_a_browser_framework_keeps_src_client_code(
+        self, tmp_path, section, framework
+    ):
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "package.json",
+            json.dumps({section: {"express": "4", framework: "1"}}).encode(),
+        )
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "src/index.ts", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        "package",
+        [None, b"{", b"[]", b'"next"', b"\xff\xfe\x00"],
+        ids=["absent", "truncated", "a list", "a string", "not text"],
+    )
+    def test_without_a_usable_root_package_json_src_is_client_code(
+        self, tmp_path, package
+    ):
+        target = tmp_path / "t"
+        if package is not None:
+            _plant(target, "package.json", package)
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "src/index.ts", 1)
+        ]
+
+    def test_a_package_json_that_is_a_directory_is_no_package_json(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "package.json/x", b"")
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+
+    @pytest.mark.parametrize(
+        "rel", ["app/a.ts", "lib/a.ts", "components/a.ts", "pages/a.ts"]
+    )
+    def test_only_src_changes(self, tmp_path, rel):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(target, rel, _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [(native_checks.RULE_SERVICE_ROLE, rel, 1)]
+
+    def test_only_the_root_package_json_decides(self, tmp_path):
+        """A nested app's `package.json` changes nothing (#1381 tracks
+        monorepos): a backend-only one under a root without a `package.json`
+        leaves `src/` client code, and a Next.js one under a backend-only
+        root does not make it so."""
+        without_root = tmp_path / "a"
+        _plant(without_root, "apps/api/package.json", _BACKEND)
+        _plant(without_root, "src/index.ts", _SERVICE_ROLE_LINE)
+        backend_root = tmp_path / "b"
+        _plant(backend_root, "package.json", _BACKEND)
+        _plant(backend_root, "apps/web/package.json", b'{"dependencies":{"next":"16"}}')
+        _plant(backend_root, "src/index.ts", _SERVICE_ROLE_LINE)
+
+        assert _run(without_root, tmp_path / "a.sarif") == 1
+        assert _run(backend_root, tmp_path / "b.sarif") == 0
+
+    def test_the_other_checks_still_read_a_backend_only_src(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(
+            target,
+            "src/llm.ts",
+            b"const c = new OpenAI({ dangerouslyAllowBrowser: true });\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_BROWSER_LLM, "src/llm.ts", 1)
+        ]
+
+    def test_each_run_reads_the_package_json_afresh(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, "package.json", _BACKEND)
+        _plant(target, "src/index.ts", _SERVICE_ROLE_LINE)
+
+        before = _run(target, tmp_path / "before.sarif")
+        _plant(target, "package.json", b'{"dependencies": {"next": "16"}}')
+        after = _run(target, tmp_path / "after.sarif")
+
+        assert (before, after) == (0, 1)
+
+
 class TestLineNumbers:
     def test_only_a_newline_ends_a_line(self, tmp_path):
         """`str.splitlines()` also splits on a form feed and
