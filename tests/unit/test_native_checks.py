@@ -1477,6 +1477,79 @@ class TestFirebaseRules:
             (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 5),
         ]
 
+    @pytest.mark.parametrize(
+        ("rule", "findings"),
+        [
+            # A statement with no `;` ends where the next line starts another.
+            (b"allow read: if true\n      allow write: if request.auth != null", [5]),
+            (b"allow read: if true\n\n      // why\n      allow write: if false", [5]),
+            (b"allow read\n      allow write: if request.auth != null", [5]),
+            (b"allow read: if true\n      allow write: if true", [5, 6]),
+            (b"allow read: if request.auth != null\n      allow write: if true", [6]),
+            (b"allow read: if true\n      function ok() { return true; }", [5]),
+            (
+                b"allow read: if true\n      match /y/{id} { allow write: if false }",
+                [5],
+            ),
+            # The line after `if true` may still continue it.
+            (b"allow read: if true\n      allow write: if true\n      && false", [5]),
+        ],
+        ids=[
+            "allow after",
+            "comment between",
+            "bare allow",
+            "both open",
+            "second open",
+            "function after",
+            "match after",
+            "continued last",
+        ],
+    )
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_a_statement_without_a_semicolon_does_not_swallow_the_next(
+        self, tmp_path, rule, findings, eol
+    ):
+        """`allow read: if true` then `allow write: if request.auth != null`
+        read as one statement whose condition was not `if true`, so the open
+        read went unreported."""
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule).replace(b"\n", eol))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", line)
+            for line in findings
+        ]
+
+    @pytest.mark.parametrize("eol", [b"\n", b"\r\n"], ids=["LF", "CRLF"])
+    def test_storage_rules_with_a_function_after_an_open_read(self, tmp_path, eol):
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "storage.rules",
+            (
+                b"rules_version = '2';\n"
+                b"service firebase.storage {\n"
+                b"  match /b/{bucket}/o {\n"
+                b"    allow read: if true\n"
+                b"    function signedIn() { return request.auth != null; }\n"
+                b"    allow write: if signedIn();\n"
+                b"  }\n"
+                b"}\n"
+            ).replace(b"\n", eol),
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "storage.rules", 4)
+        ]
+
     def test_each_statement_is_judged_alone(self, tmp_path):
         rules = (
             b"allow read: if true;\n"
