@@ -424,8 +424,17 @@ def test_a_cached_file_with_another_hash_fails_and_does_not_skip(
     )
 
     # An altered file wins over a missing one: it is not a key to grade against.
-    with pytest.raises(pytest.fail.Exception, match="a.txt"):
+    # Not `pytest.raises(pytest.fail.Exception)`: a skip would pass straight
+    # through it and this test would itself report SKIPPED, so the regression it
+    # guards (the guard skipping) could never turn anything red.
+    try:
         _require_key(tmp_path)
+    except pytest.skip.Exception:
+        pytest.fail("a cached file with another hash skipped; it must fail")
+    except pytest.fail.Exception as failed:
+        assert "a.txt do not match" in str(failed)
+    else:
+        pytest.fail("a cached file with another hash was accepted")
 
 
 # --- the grade (needs the key) -------------------------------------------------
