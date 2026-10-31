@@ -442,6 +442,20 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A GitLab URL without a scheme clones from that host, never from gitlab.com, and a
+  self-hosted instance's token no longer reaches gitlab.com.** `scan_gitlab_repo` replaced
+  every `--gitlab-url` that did not start with `http` by `https://gitlab.com`, so
+  `--gitlab-url gitlab.example.com` requested the project from gitlab.com. gitlab.com
+  answers 401 for a private project or a path it does not serve, and git then offered it the
+  credential it had been given, the self-hosted instance's token. A host named
+  `httpfoo.example.com` passed the same `startswith` test and went to git without a scheme.
+  A value with no scheme is now a host name, cloned over `https://` (`gitlab.example.com`,
+  with or without a trailing `/`, a port or a sub-path); an `http://` or `https://` URL is
+  cloned as written; an empty value is still gitlab.com, the documented default. Any other
+  form (`ssh://`, `git://`, `ftp://`, `file://`, `git@host:group/app`, or a URL with no
+  host) abandons the target with `failed:target not scanned`, before git starts and before
+  the credential helper that carries the token is written. Its reason names the scheme and
+  never repeats the value, which can hold a password typed into it.
 - **A closed stdin (`jmo scan <&-`) no longer breaks the prompt guards that ask whether
   stdin is a terminal.** A process started with stdin closed has `sys.stdin` set to None,
   and those guards asked `sys.stdin.isatty()`, which raises. The first-run email prompt of

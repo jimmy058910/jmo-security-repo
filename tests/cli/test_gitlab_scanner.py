@@ -8,6 +8,7 @@ Updated to mock scan_repository() and subprocess.run() instead of ToolRunner.
 import json
 import logging
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.gitlab_scanner import DiscoveredImages, scan_gitlab_repo
 from scripts.core.scan_timings import Reason, State, ToolRun
+from scripts.core.secure_temp import secure_temp_dir
 
 
 def _rows(**ran: bool) -> dict[str, ToolRun]:
@@ -1494,6 +1496,153 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         """The gate's negative project, and today's two skips kept."""
         dockerfile = "FROM golang:alpine AS builder\nRUN go build\nFROM scratch\n"
         assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == set()
+
+
+class TestAGitlabUrlIsClonedFromTheHostItNames:
+    """`--gitlab-url gitlab.example.com` (no scheme) used to be replaced by
+    `https://gitlab.com`: the project was requested from gitlab.com, which
+    answers 401 for a path it does not serve publicly, and git then offered
+    the self-hosted instance's token to it. A value is a host, an http(s) URL,
+    or refused; it is never another host than the one the user typed.
+
+    No test touches the network: `subprocess.run` is patched and the clone
+    argument is read from the command it was given."""
+
+    SCANNER = "scripts.cli.scan_jobs.gitlab_scanner"
+    TOKEN = "glpat-self-hosted-secret"
+
+    def _scan(self, tmp_path, url, caplog=None):
+        """Scan `group/app` at `url`. Returns (rows, the patched `git` run,
+        the patched repository scan, whether each temporary directory held
+        the askpass helper when it was removed)."""
+        askpass_written: list[bool] = []
+
+        @contextmanager
+        def watched_temp_dir(*args, **kwargs):
+            with secure_temp_dir(*args, **kwargs) as temp_dir:
+                try:
+                    yield temp_dir
+                finally:
+                    askpass_written.append((temp_dir / "git-askpass.py").exists())
+
+        with (
+            patch(
+                f"{self.SCANNER}.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ) as run,
+            patch(
+                f"{self.SCANNER}.scan_repository",
+                return_value=("group_app", _rows(trufflehog=True)),
+            ) as scan_repo,
+            patch(f"{self.SCANNER}.secure_temp_dir", watched_temp_dir),
+        ):
+            _full_path, rows = scan_gitlab_repo(
+                gitlab_info={"full_path": "group/app", "url": url, "token": self.TOKEN},
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trufflehog", "opengrep"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+            )
+        return rows, run, scan_repo, askpass_written
+
+    @pytest.mark.parametrize(
+        ("url", "cloned"),
+        [
+            ("gitlab.example.com", "https://gitlab.example.com/group/app.git"),
+            ("gitlab.example.com/", "https://gitlab.example.com/group/app.git"),
+            ("  gitlab.example.com/  ", "https://gitlab.example.com/group/app.git"),
+            (
+                "gitlab.example.com:8443",
+                "https://gitlab.example.com:8443/group/app.git",
+            ),
+            (
+                "gitlab.example.com/gitlab",
+                "https://gitlab.example.com/gitlab/group/app.git",
+            ),
+            # `startswith("http")` read this as a URL and cloned a path with no host.
+            ("httpfoo.example.com", "https://httpfoo.example.com/group/app.git"),
+            ("https://gitlab.example.com", "https://gitlab.example.com/group/app.git"),
+            ("https://gitlab.example.com/", "https://gitlab.example.com/group/app.git"),
+            ("http://gitlab.internal", "http://gitlab.internal/group/app.git"),
+            ("HTTPS://Gitlab.Example.com", "HTTPS://Gitlab.Example.com/group/app.git"),
+            ("", "https://gitlab.com/group/app.git"),
+            ("   ", "https://gitlab.com/group/app.git"),
+            (None, "https://gitlab.com/group/app.git"),
+        ],
+        ids=[
+            "bare-host",
+            "bare-host-trailing-slash",
+            "bare-host-with-whitespace",
+            "bare-host-with-port",
+            "bare-host-with-subpath",
+            "host-starting-with-http",
+            "https",
+            "https-trailing-slash",
+            "http",
+            "uppercase-scheme-unchanged",
+            "empty-is-the-default",
+            "blank-is-the-default",
+            "none-is-the-default",
+        ],
+    )
+    def test_the_repository_is_cloned_from_the_host_the_url_names(
+        self, tmp_path, url, cloned
+    ):
+        rows, run, _scan_repo, askpass_written = self._scan(tmp_path, url)
+
+        clone_cmd = run.call_args.args[0]
+        assert clone_cmd[-2] == cloned
+        assert not any(self.TOKEN in str(arg) for arg in clone_cmd)
+        assert run.call_args.kwargs["env"]["GIT_ASKPASS_TOKEN"] == self.TOKEN
+        assert rows["trufflehog"].state is State.RAN
+        # The spy sees the helper being written, so the abandoned cases below
+        # asserting that it was not written can fail.
+        assert askpass_written == [True]
+
+    @pytest.mark.parametrize(
+        ("url", "named"),
+        [
+            ("ssh://git@gitlab.example.com", "ssh://"),
+            ("ssh://git@gitlab.example.com/", "ssh://"),
+            ("git://gitlab.example.com", "git://"),
+            ("ftp://gitlab.example.com", "ftp://"),
+            ("file:///srv/git", "file://"),
+            ("SSH://gitlab.example.com", "ssh://"),
+            ("git@gitlab.example.com:group/app", "user@host:"),
+            ("https://", "no host"),
+            ("http:///", "no host"),
+        ],
+    )
+    def test_a_url_git_would_not_clone_over_http_is_abandoned_before_git_runs(
+        self, tmp_path, caplog, url, named
+    ):
+        with caplog.at_level(logging.DEBUG):
+            rows, run, scan_repo, askpass_written = self._scan(tmp_path, url)
+
+        assert not run.called, "git was started for a URL this scan refuses"
+        assert not scan_repo.called
+        # The token reaches git through the helper and the environment of the
+        # clone, both built only for a URL that will be cloned.
+        assert askpass_written == [], "a credential helper was set up"
+        for tool in ("trufflehog", "opengrep"):
+            assert rows[tool].label == "failed:target not scanned"
+            assert named in (rows[tool].detail or "")
+            assert self.TOKEN not in (rows[tool].detail or "")
+        assert self.TOKEN not in caplog.text
+
+    def test_a_reason_does_not_repeat_credentials_typed_into_the_url(
+        self, tmp_path, caplog
+    ):
+        with caplog.at_level(logging.DEBUG):
+            rows, _run, _scan_repo, _askpass = self._scan(
+                tmp_path, "ssh://deploy:hunter2@gitlab.example.com/"
+            )
+
+        assert "ssh://" in (rows["trufflehog"].detail or "")
+        assert "hunter2" not in (rows["trufflehog"].detail or "")
+        assert "hunter2" not in caplog.text
 
 
 if __name__ == "__main__":

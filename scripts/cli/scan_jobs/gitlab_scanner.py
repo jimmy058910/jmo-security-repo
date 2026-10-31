@@ -581,6 +581,52 @@ def _scan_named_images(
                 )
 
 
+_GITLAB_DEFAULT_URL = "https://gitlab.com"
+_URL_SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*)://")
+# `git@host:group/project`: the address git's ssh transport takes, which is not
+# a URL and not a host name with a port (`host:8443` has no `@` before the colon).
+_SCP_ADDRESS = re.compile(r"[^/:@\s]+@[^/:\s]+:")
+
+
+def _gitlab_clone_base(raw: str | None) -> str:
+    """The URL a GitLab project is cloned from, as `<base>/<full_path>.git`.
+
+    Whatever the user typed is the host: nothing here substitutes another one.
+    A value with no scheme is a host name (`gitlab.example.com`, with a port or
+    a sub-path if the instance has one) and is cloned over https. Nothing or
+    whitespace is the documented default, gitlab.com. An `http://` or `https://`
+    URL is kept as it was written.
+
+    Raises:
+        ValueError: The value names a transport the scan does not clone over
+            (`ssh://`, `git@host:path`, `ftp://`, ...) or no host. The message
+            is the reason the target is abandoned. It names the scheme and
+            never repeats the value, which may carry credentials the user
+            typed into it; the token is passed by `--gitlab-token`, not here.
+    """
+    url = (raw or "").strip()
+    if not url:
+        return _GITLAB_DEFAULT_URL
+    if "://" in url:
+        scheme = _URL_SCHEME.match(url)
+        if scheme is None:
+            raise ValueError("GitLab URL has an unrecognisable scheme")
+        if scheme.group(1).lower() not in ("http", "https"):
+            raise ValueError(
+                f"unsupported GitLab URL scheme {scheme.group(1).lower()}:// "
+                "(use http://, https:// or a bare host name)"
+            )
+        if not url[scheme.end() :].strip("/"):
+            raise ValueError("GitLab URL has no host")
+        return url.rstrip("/")
+    if _SCP_ADDRESS.match(url):
+        raise ValueError(
+            "unsupported GitLab URL form user@host:path "
+            "(use http://, https:// or a bare host name)"
+        )
+    return f"https://{url.rstrip('/')}"
+
+
 def scan_gitlab_repo(
     gitlab_info: dict[str, str],
     results_dir: Path,
@@ -634,15 +680,22 @@ def scan_gitlab_repo(
         )
         return full_path, statuses
 
+    # Before the temporary directory and the credential helper below exist: a URL
+    # that is refused never gets the token anywhere near git.
+    try:
+        clone_url = _gitlab_clone_base(gitlab_url)
+    except ValueError as e:
+        logger.error(f"GitLab URL refused for {full_path}: {e}")
+        statuses = _record_abandoned_target(
+            results_dir, full_path, tools, started, str(e)
+        )
+        return full_path, statuses
+
     # Create secure temporary directory for clone (0o700 permissions, auto-cleanup)
     # The context manager ensures cleanup even on exceptions
     with secure_temp_dir(prefix="jmo-gitlab-") as temp_dir:
         try:
             # Construct clone URL WITHOUT embedded token (security: avoid token in process list)
-            clone_url = gitlab_url.rstrip("/")
-            if not clone_url.startswith("http"):
-                clone_url = "https://gitlab.com"
-
             repo_url = f"{clone_url}/{full_path}.git"
             clone_path = temp_dir / full_path.split("/")[-1]
 
