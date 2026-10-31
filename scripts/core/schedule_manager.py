@@ -103,7 +103,11 @@ class InvalidGitLabUrlError(ValueError):
     """A schedule names a GitLab URL that `jmo scan --gitlab-url` would refuse."""
 
 
-def gitlab_target_url(gitlab: dict[str, Any]) -> str | None:
+# The only keys of `targets["gitlab"]` that any consumer reads.
+GITLAB_TARGET_KEYS: tuple[str, ...] = ("repo", "group", "url", "token")
+
+
+def gitlab_target_url(gitlab: Any) -> str | None:
     """The `--gitlab-url` a schedule's `targets["gitlab"]` needs, or None.
 
     None when the target names no URL, which `jmo scan` reads as gitlab.com.
@@ -115,9 +119,32 @@ def gitlab_target_url(gitlab: dict[str, Any]) -> str | None:
     or stored, not when it first fires. The message never repeats the URL, which
     may carry credentials typed into it.
 
+    The target is checked whole, because a URL under another name never reaches
+    this check: `{"repo": ..., "gitlab_url": ...}` exported with no `--gitlab-url`
+    and the instance's token went to gitlab.com. So a key outside
+    `GITLAB_TARGET_KEYS` is refused (named: a key is not a secret, a value may
+    be), as is a target that is not a mapping, and a URL with no `repo` or
+    `group` to clone from it.
+
     Raises:
-        InvalidGitLabUrlError: `url` is not text, or the scan would refuse it.
+        InvalidGitLabUrlError: The target is not a mapping, has an unknown key,
+            or has a `url` that is not text, that the scan would refuse, or that
+            has nothing to clone.
     """
+    if not isinstance(gitlab, dict):
+        raise InvalidGitLabUrlError(
+            "targets.gitlab must be a mapping with the keys "
+            + ", ".join(GITLAB_TARGET_KEYS)
+        )
+    unknown = sorted(str(key) for key in gitlab if key not in GITLAB_TARGET_KEYS)
+    if unknown:
+        raise InvalidGitLabUrlError(
+            "targets.gitlab has the key "
+            + ", ".join(repr(key) for key in unknown)
+            + ", which nothing reads (a misspelt url key would clone from "
+            "gitlab.com with the instance's token); its keys are "
+            + ", ".join(GITLAB_TARGET_KEYS)
+        )
     raw = gitlab.get("url")
     if raw is None:
         return None
@@ -128,24 +155,31 @@ def gitlab_target_url(gitlab: dict[str, Any]) -> str | None:
     if not raw.strip():
         return None
     try:
-        return gitlab_clone_base(raw)
+        url = gitlab_clone_base(raw)
     except ValueError as exc:
         raise InvalidGitLabUrlError(
             f"gitlab.url is a URL `jmo scan --gitlab-url` would refuse: {exc}"
         ) from None
+    if not (gitlab.get("repo") or gitlab.get("group")):
+        raise InvalidGitLabUrlError(
+            "gitlab.url names an instance, and gitlab.repo or gitlab.group "
+            "names nothing to clone from it"
+        )
+    return url
 
 
-def _reject_unusable_gitlab_url(schedule: ScanSchedule) -> None:
-    """Raise if `schedule`'s GitLab target holds a URL the scan would refuse.
+def reject_unusable_gitlab_target(schedule: ScanSchedule) -> None:
+    """Raise if `schedule`'s GitLab target is one the generators would refuse.
 
     Called by the manager before it stores a schedule, so a schedule built any
     way (the factory, the CLI, a `ScanSchedule(...)` written out by hand) cannot
-    be stored with one. Not called when the file is read: one hand-edited
+    be stored with one, and by `jmo schedule validate`, so it says what `export`
+    and `install` say. Not called when the file is read: one hand-edited
     schedule must not take out `list`, and the generators check it again.
     """
-    gitlab = schedule.spec.jobTemplate.targets.get("gitlab")
-    if gitlab:
-        gitlab_target_url(gitlab)
+    targets = schedule.spec.jobTemplate.targets
+    if "gitlab" in targets:
+        gitlab_target_url(targets["gitlab"])
 
 
 @dataclass
@@ -324,13 +358,17 @@ class ScanSchedule:
             gitlab["repo"] = kwargs.pop("gitlab_repo")
         if "gitlab_group" in kwargs:
             gitlab["group"] = kwargs.pop("gitlab_group")
-        # A self-hosted instance's address. Stored as `jmo scan` clones from it,
-        # and refused here if the scan would refuse it; a blank one is the
-        # gitlab.com default and is not stored.
+        # A self-hosted instance's address. The target is checked whole, then
+        # stored as `jmo scan` clones from it; a blank one is the gitlab.com
+        # default and is not stored.
         if "gitlab_url" in kwargs:
-            url = gitlab_target_url({"url": kwargs.pop("gitlab_url")})
+            gitlab["url"] = kwargs.pop("gitlab_url")
+        if gitlab:
+            url = gitlab_target_url(gitlab)
             if url:
                 gitlab["url"] = url
+            else:
+                gitlab.pop("url", None)
         if gitlab:
             targets["gitlab"] = gitlab
 
@@ -434,7 +472,7 @@ class ScheduleManager:
         except ValueError as e:
             raise ValueError(f"Invalid cron syntax: {e}")
 
-        _reject_unusable_gitlab_url(schedule)
+        reject_unusable_gitlab_target(schedule)
 
         # Compute next run time
         now = datetime.now(UTC)
@@ -499,7 +537,7 @@ class ScheduleManager:
         Friday 02:00 for a Monday-05:30 schedule -- three days and three and a
         half hours out, on the wrong weekday, at rc 0 with a success message.
         """
-        _reject_unusable_gitlab_url(schedule)
+        reject_unusable_gitlab_target(schedule)
 
         manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
 

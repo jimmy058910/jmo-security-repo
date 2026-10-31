@@ -82,9 +82,13 @@ it the scan uses gitlab.com. Every backend passes it on as `--gitlab-url`.
 from it (a bare host becomes `https://<host>`), and a URL `jmo scan` would
 refuse (`ssh://`, a user or `@` before the host, a `%` escape, ...) is refused
 when the schedule is stored and again when it is exported or installed.
+`jmo schedule validate` makes the same checks. The GitLab target takes only the
+keys `repo`, `group`, `url` and `token`: any other (a misspelt `gitlab_url`,
+say) is refused, because a URL under another name would be dropped and the
+instance's token sent to gitlab.com. A `url` needs a `repo` or `group` to clone
+from it, and `targets.gitlab` must be a mapping.
 
-The GitLab CI generator currently emits only the first three; IaC, GitLab and
-Kubernetes targets reach the GitHub Actions and local-cron backends.
+GitHub Actions, GitLab CI and local cron each emit all six target types.
 
 ### Basic Weekly Scan (Python API)
 
