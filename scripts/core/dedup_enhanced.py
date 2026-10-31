@@ -133,14 +133,17 @@ _NAME_SEPARATORS = re.compile(r"[-_.]+")
 _VERSION_V = re.compile(r"^v(?=\d)")
 
 
-def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
-    """(lockfile, package name, installed version) of a dependency finding,
-    folded so two tools' spellings of one package are equal; ``None`` for a
-    finding without a `dependency` naming both a package and a version.
+def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str, str] | None:
+    """(target, lockfile, package name, installed version) of a dependency
+    finding, folded so two tools' spellings of one package are equal; ``None``
+    for a finding without a `dependency` naming both a package and a version.
 
     The lockfile is ``location.path`` as the report phase leaves it
     (repo-relative, one separator), so two lockfiles are two keys however
-    alike their packages are.
+    alike their packages are. That path is relative to the target, so two
+    repositories' root ``package-lock.json`` are one path: the target
+    (``type/name`` of the finding's `target`, empty for a finding built without
+    the report phase) keeps them two (#1309).
     """
     dependency = finding.get("dependency")
     if not isinstance(dependency, dict):
@@ -150,7 +153,11 @@ def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
         return None
     location = finding.get("location")
     path = location.get("path") if isinstance(location, dict) else None
+    target = finding.get("target")
     return (
+        f"{target.get('type')}/{target.get('name')}"
+        if isinstance(target, dict)
+        else "",
         str(path or "").replace("\\", "/").removeprefix("./"),
         _NAME_SEPARATORS.sub("-", name).casefold(),
         _VERSION_V.sub("", version),
@@ -507,10 +514,22 @@ class SimilarityCalculator:
     def calculate_similarity(self, finding1: dict, finding2: dict) -> float:
         """Calculate multi-dimensional similarity between two findings.
 
+        Findings of two different targets have no similarity (#1309). Their
+        locations are paths relative to their own target, so the location term
+        (half the score) cannot tell ``Dockerfile:1`` in one repository from
+        ``Dockerfile:1`` in another, and two tools' findings of one rule would
+        cluster across the two. Both algorithms cluster only pairs this scores
+        at the threshold, so none can join findings of two targets. A finding
+        built outside the report carries no ``target``; two such findings are
+        compared as before.
+
         Returns:
             Float 0.0-1.0 where 1.0 = identical, 0.0 = completely different
 
         """
+        if finding1.get("target") != finding2.get("target"):
+            return 0.0
+
         # Component similarities
         loc_sim = self.location_similarity(
             finding1.get("location", {}), finding2.get("location", {})
@@ -901,7 +920,7 @@ def cluster_dependency_findings(
 
     One vulnerability in one installed package version is one finding,
     whichever dependency scanners report it: two findings are one when their
-    `dependency_key` (lockfile, name, version) is equal and their
+    `dependency_key` (target, lockfile, name, version) is equal and their
     `advisory_ids` intersect -- one tool's id is the other's id or alias.
     Measured before this, on a real lockfile: trivy and osv-scanner reported
     the same 47 and the report held 85, clustered 0.
@@ -1547,13 +1566,23 @@ class LSHClusterer:
         if progress_callback:
             progress_callback(0, n, "Building LSH signatures...")
 
-        buckets: dict[str, list[int]] = {}
+        # Bucketed per target (#1309). A signature is built from a path and a
+        # line relative to the target, so it is the same string in every target
+        # that has the file, and one bucket would hold all of their findings.
+        # Past MAX_BUCKET_SIZE the bucket is skipped, which silently ended
+        # cross-tool clustering at 51 targets (a pair per target is 102
+        # entries). Findings of two targets are never compared anyway
+        # (`SimilarityCalculator.calculate_similarity`). A finding with no
+        # target is bucketed with the others that have none, as before.
+        buckets: dict[tuple[str, str], list[int]] = {}
         for idx, finding in enumerate(findings):
             signatures = self.lsh.generate_signatures(finding)
+            scope = _canonical(finding.get("target"))
             for sig in signatures:
-                if sig not in buckets:
-                    buckets[sig] = []
-                buckets[sig].append(idx)
+                key = (scope, sig)
+                if key not in buckets:
+                    buckets[key] = []
+                buckets[key].append(idx)
 
         # Phase 2: Identify candidate pairs from buckets
         if progress_callback:

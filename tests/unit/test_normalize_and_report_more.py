@@ -4,6 +4,7 @@ import types
 from pathlib import Path
 
 import scripts.core.normalize_and_report as nr
+from scripts.core.common_finding import target_id
 
 # ===== Memory-Efficient Deduplication Tests =====
 
@@ -250,8 +251,9 @@ def test_dedupe_keeps_single(tmp_path: Path, monkeypatch):
     # v0.9.0 uses _safe_load_plugin
     monkeypatch.setattr(nr, "_safe_load_plugin", dup)
     out = nr.gather_results(root)
-    # Deduped to a single element
-    assert len([f for f in out if f.get("id") == "DUP"]) == 1
+    # Deduped to a single element. Its id is the adapter's, scoped to the
+    # target (#1309), so it is no longer "DUP" itself.
+    assert [f["id"] for f in out] == [target_id("DUP", "repo", "r")]
 
 
 def test_enrich_trivy_with_syft_paths():

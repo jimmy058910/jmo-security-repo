@@ -11,7 +11,11 @@ from typing import Any
 
 import yaml
 
-from scripts.core.schedule_manager import ScanSchedule, reject_api_spec_without_url
+from scripts.core.schedule_manager import (
+    ScanSchedule,
+    gitlab_target_url,
+    reject_api_spec_without_url,
+)
 
 
 class GitHubActionsGenerator:
@@ -184,6 +188,11 @@ class GitHubActionsGenerator:
         # 5. GitLab Repos
         if "gitlab" in targets:
             gitlab = targets["gitlab"]
+            # Without it a self-hosted instance's project is cloned from
+            # gitlab.com, which is offered the instance's token.
+            gitlab_url = gitlab_target_url(gitlab)
+            if gitlab_url:
+                args.extend(["--gitlab-url", gitlab_url])
             if "repo" in gitlab:
                 args.extend(["--gitlab-repo", gitlab["repo"]])
             if "group" in gitlab:

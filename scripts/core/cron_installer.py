@@ -14,8 +14,10 @@ import shlex
 import subprocess
 
 from scripts.core.schedule_manager import (
+    InvalidGitLabUrlError,
     ScanSchedule,
     SpecWithoutTargetError,
+    gitlab_target_url,
     reject_api_spec_without_url,
 )
 from scripts.core.validation import (
@@ -357,6 +359,15 @@ class CronInstaller:
         # 5. GitLab Repos (requires token from environment)
         if "gitlab" in targets:
             gitlab = targets["gitlab"]
+            # Without it a self-hosted instance's project is cloned from
+            # gitlab.com, which is offered the instance's token. The message
+            # never repeats the URL, which may carry credentials.
+            try:
+                gitlab_url = gitlab_target_url(gitlab)
+            except InvalidGitLabUrlError as exc:
+                raise CronValidationError(str(exc)) from exc
+            if gitlab_url:
+                jmo_cmd += f" --gitlab-url {shlex.quote(gitlab_url)}"
             if "repo" in gitlab:
                 gitlab_repo = gitlab["repo"]
                 # GitLab repo format: group/project - validate no injection

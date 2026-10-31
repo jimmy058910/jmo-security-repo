@@ -32,12 +32,14 @@ from scripts.core.cron_installer import (
 )
 from scripts.core.schedule_manager import (
     BackendConfig,
+    InvalidGitLabUrlError,
     JobTemplateSpec,
     ScanSchedule,
     ScheduleManager,
     ScheduleMetadata,
     ScheduleSpec,
     ScheduleStatus,
+    reject_unusable_gitlab_target,
 )
 from scripts.core.unicode_utils import safe_print
 from scripts.core.validation import SCHEDULE_NAME_PATTERN
@@ -493,6 +495,13 @@ def _cmd_schedule_validate(args, manager: ScheduleManager) -> int:
     # Validate targets
     if not schedule.spec.jobTemplate.targets:
         _error("No targets configured")
+        return 1
+    # What `export` and `install` check, said here too: this reported a GitLab
+    # target "valid" that both of them refuse.
+    try:
+        reject_unusable_gitlab_target(schedule)
+    except InvalidGitLabUrlError as e:
+        _error(str(e))
         return 1
     _success(f"Targets configured: {list(schedule.spec.jobTemplate.targets.keys())}")
 

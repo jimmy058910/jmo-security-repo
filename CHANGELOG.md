@@ -181,6 +181,30 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **Breaking. A finding names its target, and the same finding in two repositories is two
+  findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
+  `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a
+  repository is the checkout's directory name. Its id is derived from the adapter's id and
+  that target. Before, the same finding in two targets of one scan had one id: the second
+  was dropped as a duplicate of the first, the survivor did not say which repository it
+  came from, and two repositories' root `package-lock.json` were one dependency cluster
+  (#1309); a package held by two images was one finding (#1408). Now each target reports
+  its own, and neither the similarity clusterer nor the dependency clusterer merges
+  findings of two targets. **Every finding id changes, once**: a suppression in
+  `jmo.suppress.yml` that names a finding by its id stops matching, and `jmo diff` against a
+  scan stored before the upgrade reports every old finding as fixed and every one as new, so
+  suppress by rule or path where you can. **An id also changes when a checkout directory is
+  renamed**, because the directory's name is part of it. For an image the name is its
+  reference with the tag (`nginx:1.27` is `nginx_1.27`), so two tags of one image are two
+  targets and share no id: `jmo diff` between tags shows the image's findings as fixed and
+  new. `location.path` is unchanged: it is still relative to the target. The target is
+  `properties.target` on each SARIF result (the whole object), a `target` column in
+  `findings.csv` (the name, before `path`), a sortable Target column in the dashboard, whose
+  search matches it, and an optional top-level `target` in
+  `docs/schemas/common_finding.v1.json`. A `csv.columns` list in `jmo.yml` is used as
+  written, so add `target` to it. `SUMMARY.md` and the dashboard's own export do not carry
+  it. [UPGRADE.md](UPGRADE.md#findings-name-their-target-and-every-id-changes) has the
+  migration.
 - **Breaking. opengrep replaces semgrep.** The code scanner is opengrep, a single static
   binary pinned in `versions.yaml` (v1.32.0), and it runs a rule bundle that ships with JMo
   instead of fetching rules from the Semgrep registry at scan time, so a scan makes no
@@ -418,6 +442,135 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A GitLab URL without a scheme clones from that host, never from gitlab.com, and a
+  self-hosted instance's token no longer reaches gitlab.com.** `scan_gitlab_repo` replaced
+  every `--gitlab-url` that did not start with `http` by `https://gitlab.com`, so
+  `--gitlab-url gitlab.example.com` requested the project from gitlab.com. gitlab.com
+  answers 401 for a private project or a path it does not serve, and git then offered it the
+  credential it had been given, the self-hosted instance's token. A host named
+  `httpfoo.example.com` passed the same `startswith` test and went to git without a scheme.
+  A value with no scheme is now a host name, cloned over `https://` (`gitlab.example.com`,
+  with or without a trailing `/`, a port or a sub-path); an `http://` or `https://` URL is
+  cloned as written, its scheme in lower case; an empty value is still gitlab.com, the
+  documented default. Either form is checked as the URL it becomes, and any other value
+  abandons the target with `failed:target not scanned`, before git starts and before the
+  credential helper that carries the token is written: a scheme other than those two
+  (`ssh://`, `git://`, `ftp://`, `file://`), `git@host:group/app`, a value with no host
+  (`/`, `/sub`, `https:///sub`: curl takes the first segment of the project path for the
+  host there), a host that is a scheme word (`https:/host`, `https//host`,
+  `https://https://host`, `https.//host`: git took `https` for the host and connected to
+  it), an `@` before the host (`https://user:pw@host`, `https://host@evil.com`: git resolves
+  it to the part after the `@`, and credentials belong in `--gitlab-token` or
+  `GITLAB_TOKEN`), a `%` escape in the host or port (`https://%67itlab.example.com`: no
+  GitLab host is written with one, and a client may decode it to another host), a `:` with
+  no port after it, and whitespace, a backslash, `?` or `#`. A reason names the problem and
+  never repeats the value, which can hold a password typed into it.
+- **A schedule, a cron job, a generated workflow and the wizard's native GitHub Actions
+  workflow keep a self-hosted GitLab URL, so they no longer clone gitlab.com with the
+  instance's token.** A schedule stored a GitLab target as a repository or a group and no
+  URL, and the cron line, the GitHub Actions workflow and the GitLab CI job emitted
+  `--gitlab-repo` or `--gitlab-group` without `--gitlab-url`, as did the wizard's native
+  workflow for the URL it had asked for (its Docker variant emits no GitLab target at all,
+  a separate defect). `jmo scan` then used `https://gitlab.com`, which was offered the
+  self-hosted instance's token. `targets.gitlab` gains an optional `url`
+  (`ScanSchedule.from_simple_args(gitlab_url=...)` stores it as `jmo scan` clones from
+  it; without one, gitlab.com is still the default) and each of those writes
+  `--gitlab-url <url>`, shell-quoted, when there is one; the wizard writes it when it is
+  not gitlab.com. They check it with the check `jmo scan` makes of `--gitlab-url`, now
+  `gitlab_clone_base` in `scripts/core/validation.py`, so a schedule cannot store a URL
+  the scan would refuse (`ScheduleManager.create` and `update` raise), and an exporter,
+  `jmo schedule install`, `jmo schedule validate` or the wizard refuses a hand-edited one
+  with a reason that never repeats it. The GitLab target is checked whole: a key other than
+  `repo`, `group`, `url` and `token` is refused by name (a URL written as `gitlab_url`,
+  `base_url`, `URL` or `host` was dropped without a word, and the instance's token went to
+  gitlab.com), as is a target that is not a mapping and a `url` with no `repo` or `group`
+  to clone from it. `jmo schedule create` has no GitLab flags, so a GitLab schedule is
+  still made through `from_simple_args` or `schedules.json`.
+- **A closed stdin (`jmo scan <&-`) no longer breaks the prompt guards that ask whether
+  stdin is a terminal.** A process started with stdin closed has `sys.stdin` set to None,
+  and those guards asked `sys.stdin.isatty()`, which raises. The first-run email prompt of
+  `jmo scan` exited 1 with a traceback before any scan work; the resume prompt (with either
+  stream closed), the MCP install prompt of `jmo mcp-server` without the MCP SDK, and the
+  confirmation of `jmo tools install` and `jmo tools update` without `--yes` crashed the
+  same way. The missing-tool prompt raised too, but its own handler swallowed the error: the
+  scan ran, printed `Tool check failed: 'NoneType' object has no attribute 'isatty'`, and
+  dropped the warning and the start-line note that name the requested tools that would not
+  run. Each of those guards now reads a closed stream as nobody being there and takes the
+  branch it takes for a pipe. For `jmo tools install` and `jmo tools update` that branch is
+  to go ahead without asking, so with stdin closed, as with a pipe, they install and update
+  without the confirmation. A prompt that reads stdin without such a guard is unchanged and
+  still fails on a closed stdin: `jmo tools uninstall`, `jmo history prune`,
+  `jmo history repair`, `jmo schedule delete` and the wizard's prompts.
+- **A scan nobody is watching no longer rewrites `~/.jmo/config.yml`.** Every `jmo scan` and
+  `jmo ci` created `~/.jmo`, read `config.yml`, bumped its `scan_count` and wrote it back,
+  to decide whether to print the Ko-fi reminder shown every third scan, whether or not
+  anyone could read it. A scan from CI, cron, a pipe or a redirect edited the user's real
+  config (#1506). The count now returns before it touches `~/.jmo` when stdin or stdout is
+  not a terminal, when `JMO_NON_INTERACTIVE` or `CI` is set, or when `DOCKER_CONTAINER=1`;
+  an interactive scan counts and reminds as before.
+- **SBOM context on a trivy finding names the right package.** The report tagged a trivy
+  finding with a syft package (`context.sbom` and a `pkg:` tag) from an index keyed by path
+  and package name, with no target in it, and a path match took the first package listed
+  there before it looked at the name. Measured through `jmo report`, trivy's openssl 3.0.0
+  finding in `nginx_1.27` was tagged with the openssl 3.1.0 of `alpine_3.19`, an image with
+  no syft document took a package from another image, and trivy's lodash finding in a
+  lockfile of many was tagged `pkg:axios@0.21.0` (#1408). The enrichment now builds one
+  index per target, so a finding takes a package from its own target's SBOM only, and a path
+  match also requires the package name, compared without case; a package the lockfile does
+  not list gets no SBOM context instead of another's. trivy names a Maven package
+  `group:artifact` where syft names it by the artifactId (`log4j-core`; the group is in its
+  package URL only), so on a path match the part after the last colon counts too, while the
+  lookup by name elsewhere keeps whole names. A finding with no package (a trivy secret in
+  `package-lock.json`) took the first package syft lists at that path; it now takes one only
+  when exactly one package is there. Where one package is listed at two versions, in a
+  lockfile with a nested copy or in two lockfiles of one target, the copy whose version is
+  the finding's `InstalledVersion` wins, not the first listed (lodash 4.17.21 was tagged
+  `pkg:lodash@4.17.15`); a package at the finding's own path is still taken over a version
+  listed elsewhere. This enrichment changes no finding id: the issue's other half, one
+  package in two images reported once, is the target-scoped ids under Changed.
+- **A GitLab repository that was scanned keeps its rows and findings when its image step
+  raises.** `--gitlab-repo` ran the repository scan and the scan of the images found in it
+  inside one `try`, so a raise out of the image step, which contains its own failures and
+  lets out only a fault in its error handling, rewrote the repository's `ran` rows and its
+  `scan-timings.json` as `failed:target not scanned`. Once the report reads a target's
+  outputs by its rows (the next entry), that would withhold the findings of a scan that
+  worked. The image step now has its own handler: a warning names the repository and the
+  error, and the repository's rows and outputs stand. A clone, timeout or pre-scan failure
+  still abandons the target.
+- **A reused results directory reports only what this scan's tools produced.** `jmo report`
+  read every `<tool>.json` in a target's folder, so a scan into a directory an earlier scan
+  had used reported that scan's findings for a tool this one did not run (#1371), and a tool
+  whose row was `failed` was reported as if it had worked: osv-scanner exiting 130 on a bad
+  TOML left four findings in `findings.json` (#1432). The report now reads a tool's output
+  only if the target's `scan-timings.json` has a row for the tool that `ran` or that kept
+  findings (`kept_findings` is a count, so 0 counts), and a warning names an earlier scan's
+  file or a failed tool's file that it withholds. A scan also deletes a tool's earlier
+  outputs (`<tool>.json`, `<tool>.git.json` and `<tool>.part<N>.json`) before it runs the
+  tool, so a tool that exits 0 and writes nothing is `failed:no output`, where the earlier
+  file used to pass for its result. A scanner that raised before its tools ran wrote no
+  `scan-timings.json`, which left the earlier scan's `ran` rows next to its outputs; it now
+  writes a `failed-before-tools` one, carrying the scanner's error, into the folder the
+  target's job writes (a repository, image, IaC file, URL, GitLab project or cluster), so
+  those outputs are withheld too, and stay on disk (#1518). A results directory with no
+  `scan-timings.json`, which `jmo scan` did not write, is read whole, as before, and so is
+  one JMo v1.x wrote (its rows name no `state`), with one warning per target naming its
+  version.
+- **No field of a finding carries the scanning machine's path except `raw`, and the
+  dashboard redacts that too.** osv-scanner, for one, names the directory it scanned, which
+  is under the home directory of whoever ran the scan, and the path reached each finding's
+  `remediation` text. On the osv-scanner golden fixture the scanned directory appeared 1,896
+  times in `findings.sarif`, 958 times outside `raw` in `findings.json` and in
+  `findings.yaml`, and 1,249 times in the dashboard (#1007). The report now removes the
+  scanned directory, in its `/`, `\` and `\\` spellings, from every string of a finding
+  except `raw`, and a finding whose path is the directory itself becomes `.`; an id hashed
+  from a string that named the directory is recomputed from the rewritten text, so two
+  checkouts of one repository, in different places but under one directory name, give one
+  id. `raw` is each tool's verbatim output, so `findings.json` and `findings.yaml` keep it
+  as written and it can still hold the path; `dashboard.html` and `dashboard-data.json`
+  redact it too, on a copy. `findings.sarif` and `findings.csv` carry none. The dashboard
+  and the SARIF file are the ones made for sharing: look at `raw` before publishing
+  `findings.json` or `findings.yaml` from a personal machine
+  ([Known limitations](docs/KNOWN_LIMITATIONS.md#raw-in-findingsjson-and-findingsyaml-can-hold-the-scanning-machines-paths)).
 - **The subscribe API answers a bad request body with 4xx, not 500.** Its catch-all
   error handler answered every error with 500, so malformed JSON, a body over the 100 KB
   limit and an unsupported charset, which the body parsers reject as 400, 413 and 415,

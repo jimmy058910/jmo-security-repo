@@ -46,6 +46,7 @@ from scripts.core.tool_descriptors import (
     is_dockerfile,
 )
 from scripts.core.validation import (
+    gitlab_clone_base,
     image_reference_problem,
     sanitize_subprocess_output,
 )
@@ -634,15 +635,22 @@ def scan_gitlab_repo(
         )
         return full_path, statuses
 
+    # Before the temporary directory and the credential helper below exist: a URL
+    # that is refused never gets the token anywhere near git.
+    try:
+        clone_url = gitlab_clone_base(gitlab_url)
+    except ValueError as e:
+        logger.error(f"GitLab URL refused for {full_path}: {e}")
+        statuses = _record_abandoned_target(
+            results_dir, full_path, tools, started, str(e)
+        )
+        return full_path, statuses
+
     # Create secure temporary directory for clone (0o700 permissions, auto-cleanup)
     # The context manager ensures cleanup even on exceptions
     with secure_temp_dir(prefix="jmo-gitlab-") as temp_dir:
         try:
             # Construct clone URL WITHOUT embedded token (security: avoid token in process list)
-            clone_url = gitlab_url.rstrip("/")
-            if not clone_url.startswith("http"):
-                clone_url = "https://gitlab.com"
-
             repo_url = f"{clone_url}/{full_path}.git"
             clone_path = temp_dir / full_path.split("/")[-1]
 
@@ -727,19 +735,35 @@ def scan_gitlab_repo(
             )
 
             if images is not None:
-                _scan_named_images(
-                    clone_path,
-                    full_path,
-                    safe_name,
-                    images,
-                    tools=tools,
-                    timeout=timeout,
-                    retries=retries,
-                    per_tool_config=per_tool_config,
-                    allow_missing_tools=allow_missing_tools,
-                    find_tool_func=find_tool_func,
-                    write_stub_func=write_stub_func,
-                )
+                try:
+                    _scan_named_images(
+                        clone_path,
+                        full_path,
+                        safe_name,
+                        images,
+                        tools=tools,
+                        timeout=timeout,
+                        retries=retries,
+                        per_tool_config=per_tool_config,
+                        allow_missing_tools=allow_missing_tools,
+                        find_tool_func=find_tool_func,
+                        write_stub_func=write_stub_func,
+                    )
+                except Exception as e:
+                    # The repository's scan returned, so its outputs are where
+                    # the report reads them and its rows stand. Falling through
+                    # to the generic `except` below would rewrite them as
+                    # `failed:target not scanned` and the report would withhold
+                    # its findings. The step contains its own failures, so
+                    # this is a fault in its handlers.
+                    logger.warning(
+                        "Image scan failed for %s after its repository was "
+                        "scanned, whose results stand: %s: %s",
+                        full_path,
+                        type(e).__name__,
+                        e,
+                        exc_info=True,
+                    )
             return full_path, statuses
 
         except subprocess.TimeoutExpired:

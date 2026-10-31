@@ -1961,7 +1961,7 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 - **Metadata Header**: Scan information in comment rows (lines starting with `#`)
 - **Standard CSV Format**: RFC 4180 compliant
 - **UTF-8 Encoding**: Full Unicode support for international characters
-- **Column Headers**: Priority, KEV, EPSS, Severity, RuleID, Path, Line, Message, Tool, Detected By, Triaged
+- **Column Headers**: Priority, KEV, EPSS, Severity, RuleID, Target, Path, Line, Message, Tool, Detected By, Triaged
 - **Triage Status**: Integrates with `jmo.suppress.yml` to show which findings have been reviewed
 
 **Columns Explained:**
@@ -1973,7 +1973,8 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 | `epss` | EPSS exploitation probability percentage |
 | `severity` | CRITICAL, HIGH, MEDIUM, LOW, INFO |
 | `ruleId` | Rule or CVE identifier |
-| `path` | File path |
+| `target` | The scan target the path is relative to (a repository's directory name) |
+| `path` | File path, relative to the target |
 | `line` | Line number |
 | `message` | Finding description |
 | `tool` | Primary detecting tool |
@@ -1983,10 +1984,10 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 **Example Output:**
 
 ```csv
-priority,kev,epss,severity,ruleId,path,line,message,tool,detected_by,triaged
-8.5,NO,,CRITICAL,github,config.py,15,GitHub Personal Access Token detected,trufflehog,trufflehog,NO
-7.2,YES,45.32%,HIGH,CVE-2024-1234,package.json,0,Vulnerability in lodash,trivy,"trivy, grype",YES
-3.5,NO,0.12%,MEDIUM,python.lang.security.audit.dangerous-code-exec,app.py,42,Use of exec() detected,semgrep,semgrep,NO
+priority,kev,epss,severity,ruleId,target,path,line,message,tool,detected_by,triaged
+8.5,NO,,CRITICAL,github,app-one,config.py,15,GitHub Personal Access Token detected,trufflehog,trufflehog,NO
+7.2,YES,45.32%,HIGH,CVE-2024-1234,app-one,package.json,0,Vulnerability in lodash,trivy,"trivy, grype",YES
+3.5,NO,0.12%,MEDIUM,python.lang.security.audit.dangerous-code-exec,app-two,app.py,42,Use of exec() detected,semgrep,semgrep,NO
 ```
 
 **Triage Status Integration:**

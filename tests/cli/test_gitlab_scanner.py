@@ -8,6 +8,7 @@ Updated to mock scan_repository() and subprocess.run() instead of ToolRunner.
 import json
 import logging
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.gitlab_scanner import DiscoveredImages, scan_gitlab_repo
 from scripts.core.scan_timings import Reason, State, ToolRun
+from scripts.core.secure_temp import secure_temp_dir
 
 
 def _rows(**ran: bool) -> dict[str, ToolRun]:
@@ -1018,6 +1020,53 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
         assert "folders failed" in (rows["trivy"].detail or "")
         assert not mock_scan_image.called
 
+    def test_a_raise_out_of_the_image_step_keeps_the_repositorys_rows(
+        self, tmp_path, caplog
+    ):
+        """`_scan_named_images` contains its own failures, but a fault in its
+        handlers can still escape it, and by then the repository's rows and
+        outputs are final: `_record_abandoned_target` says a failure past the
+        scan does not come to it. The repository's rows come back as they
+        were, no abandoned-target timings are written over them, and the
+        WARNING names the target and the error."""
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                return_value=("group_app", _rows(trivy=True)),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner._scan_named_images",
+                side_effect=RuntimeError("images exploded"),
+            ),
+            caplog.at_level(
+                logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+            ),
+        ):
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info=dict(self.GITLAB_INFO),
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=DiscoveredImages(tmp_path / "individual-images"),
+            )
+
+        assert statuses == _rows(trivy=True)
+        timings = tmp_path / "individual-gitlab" / "group_app" / "scan-timings.json"
+        assert not timings.exists(), "the completed scan was relabelled abandoned"
+        logged = [
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert any(
+            "group/app" in m and "RuntimeError: images exploded" in m for m in logged
+        ), logged
+
 
 class TestAReferenceNoToolIsGivenIsAFailedImageRow:
     """A reference the validator refuses never reaches a tool's command line:
@@ -1232,6 +1281,37 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         assert doc["outcome"] == "failed-before-tools"
         assert "disk on fire" in doc["error"], doc["error"]
 
+    def test_a_repository_scan_that_raises_still_records_a_row(self, tmp_path):
+        """The other side of the line the image step's own `except` draws: until
+        `scan_repository` has returned there are no results to keep, so a raise
+        out of it still abandons the target, with images to scan or not."""
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                side_effect=RuntimeError("scanner exploded"),
+            ),
+        ):
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info={**self.GITLAB_INFO, "token": "glpat-x"},
+                results_dir=tmp_path,
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=DiscoveredImages(tmp_path / "individual-images"),
+            )
+
+        assert statuses["trufflehog"].label == "failed:target not scanned"
+        assert statuses["trufflehog"].detail == "RuntimeError: scanner exploded"
+        doc = self._timings(tmp_path)
+        assert doc["outcome"] == "failed-before-tools"
+        assert doc["error"] == "RuntimeError: scanner exploded"
+
     def test_a_successful_scan_is_not_labelled_as_abandoned(self, tmp_path):
         """Negative control.
 
@@ -1416,6 +1496,271 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         """The gate's negative project, and today's two skips kept."""
         dockerfile = "FROM golang:alpine AS builder\nRUN go build\nFROM scratch\n"
         assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == set()
+
+
+class TestAGitlabUrlIsClonedFromTheHostItNames:
+    """`--gitlab-url gitlab.example.com` (no scheme) used to be replaced by
+    `https://gitlab.com`: the project was requested from gitlab.com, which
+    answers 401 for a path it does not serve publicly, and git then offered
+    the self-hosted instance's token to it. A value is a host, an http(s) URL,
+    or refused; it is never another host than the one the user typed.
+
+    No test touches the network: `subprocess.run` is patched and the clone
+    argument is read from the command it was given."""
+
+    SCANNER = "scripts.cli.scan_jobs.gitlab_scanner"
+    TOKEN = "glpat-self-hosted-secret"
+
+    def _scan(self, tmp_path, url):
+        """Scan `group/app` at `url`. Returns (rows, the patched `git` run,
+        the patched repository scan, whether each temporary directory held
+        the askpass helper when it was removed)."""
+        askpass_written: list[bool] = []
+
+        @contextmanager
+        def watched_temp_dir(*args, **kwargs):
+            with secure_temp_dir(*args, **kwargs) as temp_dir:
+                try:
+                    yield temp_dir
+                finally:
+                    askpass_written.append((temp_dir / "git-askpass.py").exists())
+
+        with (
+            patch(
+                f"{self.SCANNER}.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ) as run,
+            patch(
+                f"{self.SCANNER}.scan_repository",
+                return_value=("group_app", _rows(trufflehog=True)),
+            ) as scan_repo,
+            patch(f"{self.SCANNER}.secure_temp_dir", watched_temp_dir),
+        ):
+            _full_path, rows = scan_gitlab_repo(
+                gitlab_info={"full_path": "group/app", "url": url, "token": self.TOKEN},
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trufflehog", "opengrep"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+            )
+        return rows, run, scan_repo, askpass_written
+
+    @pytest.mark.parametrize(
+        ("url", "cloned"),
+        [
+            ("gitlab.example.com", "https://gitlab.example.com/group/app.git"),
+            ("gitlab.example.com/", "https://gitlab.example.com/group/app.git"),
+            ("  gitlab.example.com/  ", "https://gitlab.example.com/group/app.git"),
+            (
+                "gitlab.example.com:8443",
+                "https://gitlab.example.com:8443/group/app.git",
+            ),
+            (
+                "gitlab.example.com/gitlab",
+                "https://gitlab.example.com/gitlab/group/app.git",
+            ),
+            # `startswith("http")` read this as a URL and cloned a path with no host.
+            ("httpfoo.example.com", "https://httpfoo.example.com/group/app.git"),
+            ("https://gitlab.example.com", "https://gitlab.example.com/group/app.git"),
+            ("https://gitlab.example.com/", "https://gitlab.example.com/group/app.git"),
+            ("http://gitlab.internal", "http://gitlab.internal/group/app.git"),
+            # git looks its remote helper up by the scheme as written, case-sensitively.
+            ("HTTPS://gitlab.example.com", "https://gitlab.example.com/group/app.git"),
+            ("HTTPS://Gitlab.Example.com", "https://Gitlab.Example.com/group/app.git"),
+            (
+                "https://gitlab.example.com:8443/sub/",
+                "https://gitlab.example.com:8443/sub/group/app.git",
+            ),
+            ("[::1]:8443", "https://[::1]:8443/group/app.git"),
+            # A bare value is checked as the URL it becomes, so it takes every host
+            # the explicit form takes (docker network names, IDN, a rooted name).
+            ("gitlab_web", "https://gitlab_web/group/app.git"),
+            ("gitlab_web:8080", "https://gitlab_web:8080/group/app.git"),
+            ("https://gitlab_web:8080", "https://gitlab_web:8080/group/app.git"),
+            (
+                "gitlab.ex\u00e4mple.com",
+                "https://gitlab.ex\u00e4mple.com/group/app.git",
+            ),
+            ("gitlab.example.com.", "https://gitlab.example.com./group/app.git"),
+            # Only the authority is screened for `%`: a sub-path may carry one.
+            (
+                "https://gitlab.example.com/gl%2Fprefix",
+                "https://gitlab.example.com/gl%2Fprefix/group/app.git",
+            ),
+            ("", "https://gitlab.com/group/app.git"),
+            ("   ", "https://gitlab.com/group/app.git"),
+            (None, "https://gitlab.com/group/app.git"),
+        ],
+        ids=[
+            "bare-host",
+            "bare-host-trailing-slash",
+            "bare-host-with-whitespace",
+            "bare-host-with-port",
+            "bare-host-with-subpath",
+            "host-starting-with-http",
+            "https",
+            "https-trailing-slash",
+            "http",
+            "uppercase-scheme-lowercased",
+            "uppercase-scheme-keeps-the-host-case",
+            "https-with-port-and-subpath",
+            "bare-ipv6-with-port",
+            "bare-underscore-host",
+            "bare-underscore-host-with-port",
+            "https-underscore-host-with-port",
+            "bare-idn-host",
+            "bare-host-with-trailing-dot",
+            "percent-escape-in-the-path-is-kept",
+            "empty-is-the-default",
+            "blank-is-the-default",
+            "none-is-the-default",
+        ],
+    )
+    def test_the_repository_is_cloned_from_the_host_the_url_names(
+        self, tmp_path, url, cloned
+    ):
+        rows, run, _scan_repo, askpass_written = self._scan(tmp_path, url)
+
+        clone_cmd = run.call_args.args[0]
+        assert clone_cmd[-2] == cloned
+        assert not any(self.TOKEN in str(arg) for arg in clone_cmd)
+        assert run.call_args.kwargs["env"]["GIT_ASKPASS_TOKEN"] == self.TOKEN
+        assert rows["trufflehog"].state is State.RAN
+        # The spy sees the helper being written, so the abandoned cases below
+        # asserting that it was not written can fail.
+        assert askpass_written == [True]
+
+    # (value, text its reason carries). What the reason never carries is the value.
+    ABANDONED = [
+        # A transport this scan does not clone over.
+        pytest.param("ssh://git@gitlab.example.com", "ssh://", id="ssh"),
+        pytest.param(
+            "ssh://git@gitlab.example.com/", "ssh://", id="ssh-trailing-slash"
+        ),
+        pytest.param("git://gitlab.example.com", "git://", id="git"),
+        pytest.param("ftp://gitlab.example.com", "ftp://", id="ftp"),
+        pytest.param("file:///srv/git", "file://", id="file"),
+        pytest.param("SSH://gitlab.example.com", "ssh://", id="uppercase-ssh"),
+        pytest.param("git@gitlab.example.com:group/app", "user@host:", id="scp-style"),
+        # No host: curl skips an empty authority and takes the first path segment,
+        # `group` here, as the host.
+        pytest.param("https://", "names no host", id="https-and-nothing"),
+        pytest.param("http:///", "names no host", id="http-and-slash"),
+        pytest.param("https:///sub", "names no host", id="https-empty-authority"),
+        pytest.param("HTTPS:///sub", "names no host", id="uppercase-empty-authority"),
+        pytest.param("/", "does not start with a host", id="slash"),
+        pytest.param("//", "does not start with a host", id="two-slashes"),
+        pytest.param("///", "does not start with a host", id="three-slashes"),
+        pytest.param(" / ", "does not start with a host", id="slash-with-whitespace"),
+        pytest.param("/sub", "does not start with a host", id="path-only"),
+        pytest.param("host:/x", "no port", id="colon-slash"),
+        pytest.param("https://gitlab.example.com:/x", "no port", id="empty-port"),
+        # A mistyped scheme is read as a host called `https` or `http`: git took
+        # it for the host and CONNECTed to it.
+        pytest.param("https:/gitlab.example.com", "scheme word", id="https-one-slash"),
+        pytest.param("http:/gitlab.example.com", "scheme word", id="http-one-slash"),
+        pytest.param("https//gitlab.example.com", "scheme word", id="https-no-colon"),
+        pytest.param("http//gitlab.example.com", "scheme word", id="http-no-colon"),
+        pytest.param("https/gitlab.example.com", "scheme word", id="https-slash-only"),
+        pytest.param(
+            "https://https://evil.com", "scheme word", id="https-twice-with-slashes"
+        ),
+        pytest.param(
+            "https://https:/evil.com", "scheme word", id="https-twice-one-slash"
+        ),
+        pytest.param("HTTP://http/x", "scheme word", id="uppercase-http-host"),
+        # A DNS name ends in a root dot as well, so `https.` is the host `https`.
+        pytest.param(
+            "https.//gitlab.example.com", "scheme word", id="https-dot-slashes"
+        ),
+        pytest.param("https./gitlab.example.com", "scheme word", id="https-dot-slash"),
+        pytest.param("http.//gitlab.example.com", "scheme word", id="http-dot-slashes"),
+        pytest.param("https://https.//evil.com", "scheme word", id="https-twice-dot"),
+        pytest.param("HTTPS://HTTP../x", "scheme word", id="uppercase-two-dots"),
+        # No GitLab host is written with a percent escape, and a client may decode
+        # one to a host this check never saw: `%68ttps` is `https`.
+        pytest.param("%68ttps//gitlab.example.com", "% escape", id="percent-https"),
+        pytest.param(
+            "https://%67itlab.example.com", "% escape", id="percent-in-host-letter"
+        ),
+        pytest.param(
+            "https://gitlab.example.com%2eevil.com", "% escape", id="percent-dot"
+        ),
+        pytest.param("https://[fe80::1%25eth0]:8443", "% escape", id="percent-zone"),
+        # git resolves a host written before an `@` to the part after it.
+        pytest.param(
+            "https://gitlab.example.com@evil.com/", "--gitlab-token", id="host-at-host"
+        ),
+        pytest.param(
+            "gitlab.example.com@evil.com", "--gitlab-token", id="bare-host-at-host"
+        ),
+        # A value with no scheme is screened for `@` anywhere, before it is a URL.
+        pytest.param(
+            "gitlab.example.com/a@b", "--gitlab-token", id="bare-at-sign-in-path"
+        ),
+        pytest.param(
+            "https://user:pw@gitlab.example.com", "--gitlab-token", id="userinfo"
+        ),
+        pytest.param("https://host\\@evil.com", "backslash", id="backslash-at-host"),
+        pytest.param(
+            "https://gitlab.example.com\\evil.com", "backslash", id="backslash"
+        ),
+        pytest.param("gitlab .example.com", "whitespace", id="inner-whitespace"),
+        pytest.param(
+            "https://gitlab.example.com/a b", "whitespace", id="whitespace-in-path"
+        ),
+        pytest.param("https://gitlab.example.com?@evil.com", "?", id="query"),
+        pytest.param("https://gitlab.example.com#x", "#", id="fragment"),
+        pytest.param(
+            "https://gitlab.example.com:99999", "not a valid URL", id="port-range"
+        ),
+        pytest.param("https://[::1", "not a valid URL", id="unclosed-ipv6"),
+    ]
+
+    @pytest.mark.parametrize(("url", "named"), ABANDONED)
+    def test_a_url_git_would_not_clone_from_the_host_it_names_is_abandoned_before_git_runs(
+        self, tmp_path, caplog, url, named
+    ):
+        with caplog.at_level(logging.DEBUG):
+            rows, run, scan_repo, askpass_written = self._scan(tmp_path, url)
+
+        assert not run.called, "git was started for a URL this scan refuses"
+        assert not scan_repo.called
+        # The token reaches git through the helper and the environment of the
+        # clone, both built only for a URL that will be cloned.
+        assert askpass_written == [], "a credential helper was set up"
+        for tool in ("trufflehog", "opengrep"):
+            assert rows[tool].label == "failed:target not scanned"
+            assert named in (rows[tool].detail or "")
+            assert self.TOKEN not in (rows[tool].detail or "")
+            assert url.strip() not in (rows[tool].detail or "")
+        assert self.TOKEN not in caplog.text
+
+    @pytest.mark.parametrize(
+        ("url", "named"),
+        [
+            pytest.param(
+                "ssh://deploy:hunter2@gitlab.example.com/", "ssh://", id="ssh-userinfo"
+            ),
+            pytest.param(
+                "https://deploy:hunter2@gitlab.example.com/",
+                "--gitlab-token",
+                id="https-userinfo",
+            ),
+        ],
+    )
+    def test_a_reason_does_not_repeat_credentials_typed_into_the_url(
+        self, tmp_path, caplog, url, named
+    ):
+        with caplog.at_level(logging.DEBUG):
+            rows, run, _scan_repo, _askpass = self._scan(tmp_path, url)
+
+        assert not run.called
+        assert named in (rows["trufflehog"].detail or "")
+        assert "hunter2" not in (rows["trufflehog"].detail or "")
+        assert "hunter2" not in caplog.text
 
 
 if __name__ == "__main__":

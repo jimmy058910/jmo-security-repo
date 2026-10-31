@@ -191,6 +191,15 @@
         "aliases": { "type": "array", "items": { "type": "string" }, "description": "Other ids the tool gives the same advisory (e.g., the GHSA of a CVE). An adapter never lists the finding's own ruleId; a consensus finding holds the union of its members' aliases" }
       }
     },
+    "target": {
+      "type": "object",
+      "description": "The scan target the finding came from, set by the report phase and not by an adapter: the kind of target from its results folder (individual-repos is 'repo'), and the name of the folder it was scanned into. A finding's id is derived from the adapter's id and this, so the same finding in two targets of one scan is two findings, and renaming a checkout changes every id in it (#1309). location.path stays relative to the target.",
+      "required": ["type", "name"],
+      "properties": {
+        "type": { "type": "string", "enum": ["repo", "image", "iac", "url", "gitlab", "k8s"], "description": "Kind of target, as 'jmo scan' names it" },
+        "name": { "type": "string", "minLength": 1, "description": "Name of the target's results folder (e.g., the repository's directory name)" }
+      }
+    },
     "raw": { "type": "object" }
   },
   "additionalProperties": true

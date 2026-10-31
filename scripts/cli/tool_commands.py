@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from scripts.cli.terminal import stream_is_tty
 from scripts.cli.tool_manager import (
     ToolManager,
     ToolStatus,
@@ -566,7 +567,7 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     # EOF means nobody is there to answer, which is the same situation as a
     # non-tty, so it takes the same branch: proceed. (The uninstall prompt below
     # defaults the other way on purpose - it is destructive.)
-    if not yes and sys.stdin.isatty():
+    if not yes and stream_is_tty(sys.stdin):
         try:
             response = input("Proceed with installation? [Y/n] ").strip().lower()
         except EOFError:
@@ -727,7 +728,7 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
 
     # Interactive confirmation
     # See cmd_tools_install: isatty() can be True with stdin already at EOF.
-    if not yes and sys.stdin.isatty():
+    if not yes and stream_is_tty(sys.stdin):
         try:
             response = input("Proceed with updates? [Y/n] ").strip().lower()
         except EOFError:

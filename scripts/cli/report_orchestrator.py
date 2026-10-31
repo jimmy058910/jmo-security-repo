@@ -12,7 +12,11 @@ from pathlib import Path
 
 from scripts.core.config import load_config_with_env_overrides
 from scripts.core.exceptions import OPANotFoundException
-from scripts.core.normalize_and_report import collect_tool_diagnostics, gather_results
+from scripts.core.normalize_and_report import (
+    collect_tool_diagnostics,
+    gather_results,
+    scan_roots,
+)
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.reporters.compliance_reporter import (
     write_attack_navigator_json,
@@ -310,7 +314,9 @@ def cmd_report(args, _log_fn) -> int:
             )
             logger.debug("YAML reporter unavailable: %s", e)
     if "html" in cfg.outputs:
-        write_html(findings, out_dir / "dashboard.html")
+        # The dashboard is the artifact people publish, so it drops the scan
+        # root from what it embeds, `raw` included (#1007).
+        write_html(findings, out_dir / "dashboard.html", scan_roots(results_dir))
     if "simple-html" in cfg.outputs:
         write_simple_html(findings, out_dir / "simple-report.html")
     if "sarif" in cfg.outputs:

@@ -92,6 +92,7 @@ def test_github_actions_gitlab_native():
     )
     config.target.type = "gitlab"
     config.target.gitlab_repo = "group/repo"
+    config.target.gitlab_url = "https://gitlab.com"  # TargetConfig's default
 
     result = generate_github_actions(config)
 
@@ -567,6 +568,7 @@ def test_github_actions_gitlab_without_repo():
     )
     config.target.type = "gitlab"
     config.target.gitlab_repo = None
+    config.target.gitlab_url = "https://gitlab.com"  # TargetConfig's default
 
     result = generate_github_actions(config)
 

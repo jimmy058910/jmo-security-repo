@@ -114,6 +114,51 @@ describe('FindingsTable', () => {
     })
   })
 
+  describe('Target (#1309)', () => {
+    // The same file in two repositories of one scan: two findings, and the
+    // path alone does not say which is which.
+    const twoRepos = [
+      createFinding({
+        id: 'f1',
+        ruleId: 'SC2086',
+        location: { path: 'deploy.sh', startLine: 7 },
+        target: { type: 'repo', name: 'app-two' },
+      }),
+      createFinding({
+        id: 'f2',
+        ruleId: 'SC2086',
+        location: { path: 'deploy.sh', startLine: 7 },
+        target: { type: 'repo', name: 'app-one' },
+      }),
+    ]
+
+    it('should show the target each finding came from', () => {
+      render(<FindingsTable findings={twoRepos} />)
+
+      expect(screen.getByText(/Target/)).toBeInTheDocument()
+      expect(screen.getByText('app-one')).toBeInTheDocument()
+      expect(screen.getByText('app-two')).toBeInTheDocument()
+      // Both rows keep the path as the report wrote it
+      expect(screen.getAllByText('deploy.sh:7')).toHaveLength(2)
+    })
+
+    it('should sort by target when the target column is clicked', () => {
+      render(<FindingsTable findings={twoRepos} />)
+
+      fireEvent.click(screen.getByText(/Target/))
+
+      const rows = screen.getAllByRole('row')
+      expect(within(rows[1]).getByText('app-one')).toBeInTheDocument()
+      expect(within(rows[2]).getByText('app-two')).toBeInTheDocument()
+    })
+
+    it('should render a finding with no target', () => {
+      render(<FindingsTable findings={[createFinding({ id: 'f1' })]} />)
+
+      expect(screen.getByText('src/test.ts:10')).toBeInTheDocument()
+    })
+  })
+
   describe('Sorting', () => {
     const unsortedFindings = [
       createFinding({

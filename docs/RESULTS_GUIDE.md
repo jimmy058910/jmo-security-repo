@@ -520,10 +520,11 @@ All findings follow the **CommonFinding schema v1.2.0**. Here's how to query the
     "version": "2.12.0"
   },
   "location": {
-    "path": "/home/user/repo/Dockerfile.alpine",
+    "path": "Dockerfile.alpine",           // Relative to the target
     "startLine": 14,
     "endLine": 14
   },
+  "target": {"type": "repo", "name": "<folder>"},  // Kind of target, and its results folder's name
   "compliance": {
     "owaspTop10_2021": ["A05:2021"],
     "cweTop25_2024": [{"id": "CWE-1104", "rank": 23}],

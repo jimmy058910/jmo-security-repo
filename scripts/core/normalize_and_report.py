@@ -22,14 +22,18 @@ import json
 import logging
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from scripts.core.adapters.common import normalize_finding_path
-from scripts.core.common_finding import fingerprint, package_of
+from scripts.core.adapters.common import (
+    normalize_finding_path,
+    scan_root_pattern,
+    strip_scan_roots,
+)
+from scripts.core.common_finding import fingerprint, package_of, target_id
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.cwe_extraction import backfill_risk_cwe
 from scripts.core.exceptions import AdapterParseException
@@ -40,7 +44,12 @@ from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 # Priority calculation (v0.9.0 Feature #5: EPSS/KEV)
 from scripts.core.priority_calculator import PriorityCalculator
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
-from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME, read_scan_root
+from scripts.core.scan_timings import (
+    SCAN_TIMINGS_FILENAME,
+    State,
+    ToolRun,
+    read_scan_root,
+)
 from scripts.core.tool_diagnostics import (
     ToolDiagnostic,
     extract_tool_diagnostics,
@@ -54,6 +63,11 @@ PROFILE_TIMINGS: dict[str, Any] = {
     "jobs": [],  # list of {"tool": str, "path": str, "seconds": float, "count": int}
     "meta": {},  # miscellaneous metadata like max_workers
 }
+
+#: Keys whose values are a tool's own output, kept as it wrote them: a finding's
+#: `raw` may name the scanning machine's directories (J5, #1007). The dashboard
+#: redacts it on its way out; `findings.json` and `findings.yaml` keep it.
+_VERBATIM_KEYS = frozenset({"raw"})
 
 
 def deduplicate_findings_memory_efficient(
@@ -218,9 +232,17 @@ def scan_roots(results_dir: Path) -> tuple[str, ...]:
 def _normalize_paths_and_ids(
     findings: list[dict[str, Any]], roots: tuple[str, ...]
 ) -> tuple[int, int]:
-    """Normalize ``location.path`` in place and re-key path-derived ids (#861).
+    """Normalize ``location.path`` in place, drop the scan root from every other
+    string, and re-key the ids derived from either (#861, #1007).
 
     Returns ``(paths_changed, ids_rekeyed)``.
+
+    The root is dropped from **every string in a finding except** ``raw``, which
+    is the tool's own output and stays as the tool wrote it (J5; the dashboard
+    redacts it on its way out). A field list would be the next field's leak:
+    osv-scanner's ``remediation`` told the reader where to put an ignore rule,
+    ``C:\\Users\\...\\osv-scanner.toml``, and that reached ``findings.sarif``
+    1,896 times, as ``properties.remediation`` and as every rule's ``help``.
 
     **The id is only recomputed when the existing one can be shown to have come
     from the old path.** That check is not defensive padding -- it is load
@@ -239,31 +261,54 @@ def _normalize_paths_and_ids(
     exact failure class this campaign keeps finding. Deriving the answer from
     the data rather than from a hard-coded allowlist also means a new adapter
     with a custom key is safe on the day it lands, with nothing to remember.
+
+    The same holds for the other inputs of that formula, ``message`` and
+    ``ruleId``: an id is recognised from what the adapter hashed, and re-keyed
+    from what the finding says now, so it does not depend on which directory
+    was scanned. (No golden adapter's message names the root today; a tool's
+    would have made the id differ between two checkouts of one repository.)
     """
     paths_changed = 0
     ids_rekeyed = 0
+    pattern = scan_root_pattern(roots)
 
     for finding in findings:
         location = finding.get("location")
-        if not isinstance(location, dict):
-            continue
-        original = location.get("path")
-        if not isinstance(original, str) or not original:
-            continue
+        original = location.get("path") if isinstance(location, dict) else None
+        rule_id = finding.get("ruleId", "") or ""
+        message = finding.get("message", "") or ""
 
-        normalized = normalize_finding_path(original, roots)
-        if normalized == original:
-            continue
+        normalized = original
+        if isinstance(location, dict) and isinstance(original, str) and original:
+            # The root comes out of the path first. `normalize_finding_path`
+            # strips a leading `/`, and the pattern needs it to find a POSIX
+            # root, so a path equal to the root would come out as `home/u/app`;
+            # it also leaves alone a path equal to a Windows root, and a URL
+            # naming the root.
+            candidate = strip_scan_roots(original, pattern) if pattern else original
+            normalized = normalize_finding_path(candidate, roots)
+            location["path"] = normalized
+        if pattern:
+            # The same objects, so `target_of`, which keys on `id(finding)`,
+            # still finds this finding.
+            finding.update(strip_scan_roots(finding, pattern, verbatim=_VERBATIM_KEYS))
+            location = finding.get("location")
+        if normalized != original:
+            paths_changed += 1
 
-        location["path"] = normalized
-        paths_changed += 1
+        if not isinstance(location, dict) or not isinstance(original, str):
+            continue
+        if not original:
+            continue
+        new_rule_id = finding.get("ruleId", "") or ""
+        new_message = finding.get("message", "") or ""
+        if (normalized, new_rule_id, new_message) == (original, rule_id, message):
+            continue
 
         current = finding.get("id")
         if not isinstance(current, str) or not current:
             continue
         tool = (finding.get("tool") or {}).get("name", "")
-        rule_id = finding.get("ruleId", "") or ""
-        message = finding.get("message", "") or ""
         start_line = location.get("startLine")
 
         # Two shapes of the one formula: five components, or six when the
@@ -297,10 +342,10 @@ def _normalize_paths_and_ids(
             ):
                 finding["id"] = fingerprint(
                     tool,
-                    rule_id,
+                    new_rule_id,
                     normalized,
                     start_line,
-                    message,
+                    new_message,
                     start_column=col,
                     commit=c,
                     package=p,
@@ -309,6 +354,21 @@ def _normalize_paths_and_ids(
                 break
 
     return paths_changed, ids_rekeyed
+
+
+def _scope_ids_to_targets(findings: list[dict[str, Any]]) -> None:
+    """Replace each finding's id with `target_id` of it and its target (#1309).
+
+    Every finding, whatever its adapter hashed: the id is derived from the
+    adapter's own, so zap's and nuclei's URL-keyed ids are scoped the same as
+    a path-keyed one. A finding with no id keeps none, and deduplication says
+    so (#848).
+    """
+    for finding in findings:
+        current = finding.get("id")
+        target = finding.get("target")
+        if isinstance(current, str) and current and isinstance(target, dict):
+            finding["id"] = target_id(current, target["type"], target["name"])
 
 
 def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
@@ -333,9 +393,8 @@ def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
         if not target_dir.exists():
             continue
         for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-            for tool_output in target.glob("*.json"):
-                if tool_output.name == SCAN_TIMINGS_FILENAME:
-                    continue
+            # Debug: `gather_results` says what it leaves out, once.
+            for tool_output in _outputs_of_this_scan(target, logger.debug):
                 adapter_name = loader._tool_to_adapter_name(tool_of_output(tool_output))
                 out.extend(extract_tool_diagnostics(adapter_name, tool_output, roots))
     return out
@@ -444,6 +503,19 @@ def pair_history_with_tree(
     return [f for f in findings if id(f) not in dropped]
 
 
+# The six kinds of target a scan can have, as `scan_orchestrator` names them,
+# and the results folder each one's output lands in.
+TARGET_FOLDERS: dict[str, str] = {
+    "repo": "individual-repos",
+    "image": "individual-images",
+    "iac": "individual-iac",
+    "url": "individual-web",
+    "gitlab": "individual-gitlab",
+    "k8s": "individual-k8s",
+}
+_TARGET_TYPES = {folder: kind for kind, folder in TARGET_FOLDERS.items()}
+
+
 def _target_dirs(results_dir: Path) -> list[Path]:
     """The six target-type directories a scan can write.
 
@@ -451,14 +523,134 @@ def _target_dirs(results_dir: Path) -> list[Path]:
     walk the same set - a seventh target type added to one and not the other
     would go unreported in exactly the silent way #837 is about.
     """
-    return [
-        results_dir / "individual-repos",
-        results_dir / "individual-images",
-        results_dir / "individual-iac",
-        results_dir / "individual-web",
-        results_dir / "individual-gitlab",
-        results_dir / "individual-k8s",
-    ]
+    return [results_dir / folder for folder in TARGET_FOLDERS.values()]
+
+
+def _scan_rows(target: Path, warn: Callable[..., None]) -> dict[str, ToolRun] | None:
+    """The rows `jmo scan` recorded for one target, by tool.
+
+    None when there are none to go by: the folder has no `scan-timings.json`
+    (output `jmo scan` did not write), or it has one that cannot be read, which
+    is said, since reading everything on its account is a guess. A row that
+    does not parse is left out and said: its tool then has no row. A document
+    JMo v1.x wrote (`schema_version` below 3, rows without a `state`) is also
+    None, and said once, when it lists any tool.
+    """
+    timings = target / SCAN_TIMINGS_FILENAME
+    try:
+        document = json.loads(timings.read_bytes())
+    except FileNotFoundError:
+        return None
+    # `UnicodeDecodeError` is a `ValueError`, not a `JSONDecodeError`.
+    except (OSError, ValueError) as e:
+        warn(
+            "%s/%s cannot be read, so every tool output is reported: %s",
+            target.name,
+            timings.name,
+            e,
+        )
+        return None
+    entries = document.get("tools") if isinstance(document, dict) else None
+    if not isinstance(entries, list):
+        warn(
+            "%s/%s has no list of tool rows, so every tool output is reported",
+            target.name,
+            timings.name,
+        )
+        return None
+    # v1.1.x wrote `schema_version` 2 (dev builds before v1.1.0 wrote 1; v1.0.x
+    # wrote no such file), with rows that name a `status` and no `state`. None
+    # of them parses, which would withhold every output as "a tool this scan
+    # did not run". Its scan had no accounting of this kind, so it is read
+    # whole, as for a folder with no document. No release left the version
+    # out; a document without one is read the same way. With no row at all
+    # (`failed-before-tools`) there is nothing to read by: that stays withheld.
+    # A bool is an int to Python (`True < 3`), and no JMo wrote one.
+    version = document.get("schema_version")
+    is_v1 = isinstance(version, int) and not isinstance(version, bool) and version < 3
+    if entries and (version is None or is_v1):
+        warn(
+            "%s/%s was written by JMo v1.x (%s); its rows name no state, so "
+            "every tool output is reported",
+            target.name,
+            timings.name,
+            "no schema_version" if version is None else f"schema_version {version}",
+        )
+        return None
+    rows: dict[str, ToolRun] = {}
+    for entry in entries:
+        try:
+            row = ToolRun.from_dict(entry)
+        except (AttributeError, KeyError, TypeError, ValueError) as e:
+            warn(
+                "%s/%s: a tool row cannot be read and is ignored: %s",
+                target.name,
+                timings.name,
+                e,
+            )
+            continue
+        rows[row.tool] = row
+    return rows
+
+
+def _outputs_of_this_scan(target: Path, warn: Callable[..., None]) -> list[Path]:
+    """The tool outputs in one target's folder that this scan produced (#1371,
+    #1432). Shared by `gather_results` and `collect_tool_diagnostics`, which
+    must read the same files.
+
+    A folder holds an earlier scan's outputs too (a results directory reused),
+    and a failed tool may leave output behind. The scan's own account of what
+    it ran is `scan-timings.json`, so a tool's output is read when its row is
+    `ran`, or when a run of it worked (`kept_findings` is a count, 0 included,
+    #1369), and not when the tool has no row or its row is anything else. A
+    folder without rows is read whole, and so is one JMo v1.x wrote.
+
+    `warn` is told of an output left out that the reader would take for this
+    scan's: a tool the scan did not run, and a row that failed. A `skipped`
+    row's file is a stub the scan itself wrote, which would warn on every
+    report (#784).
+    """
+    rows = _scan_rows(target, warn)
+    outputs: list[Path] = []
+    for path in target.glob("*.json"):
+        # JMo's own scan-phase instrumentation, written by write_scan_timings
+        # into the same directory as the tool outputs. It is not a tool result,
+        # so no adapter exists for it and the registry lookup in the reader
+        # warned about it on *every* report run (#784). A warning that always
+        # fires teaches the reader to skip the whole class -- and "no adapter
+        # plugin found" is precisely the message that matters when a real
+        # adapter goes missing.
+        #
+        # Compared against the constant rather than the literal string so
+        # renaming the artifact cannot quietly resurrect the warning.
+        if path.name == SCAN_TIMINGS_FILENAME:
+            continue
+        if rows is not None:
+            tool = tool_of_output(path)
+            row = rows.get(tool)
+            if row is None:
+                warn(
+                    "%s/%s is not reported: this scan did not run %s (it has no "
+                    "row in %s), so the file is an earlier scan's",
+                    target.name,
+                    path.name,
+                    tool,
+                    SCAN_TIMINGS_FILENAME,
+                )
+                continue
+            if row.state is not State.RAN and row.kept_findings is None:
+                if row.state is State.FAILED:
+                    warn(
+                        "%s/%s is not reported: %s's row is %s and no run of it "
+                        "worked, so what it wrote is partial",
+                        target.name,
+                        path.name,
+                        tool,
+                        row.label,
+                    )
+                continue
+        outputs.append(path)
+    return outputs
 
 
 def gather_results(results_dir: Path) -> list[dict[str, Any]]:
@@ -469,8 +661,8 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     loader = get_plugin_loader()
 
     # Each load job, and the results folder it reads: the pairing keeps two
-    # targets' records apart (#1323).
-    jobs: dict[Future[list[dict[str, Any]]], str] = {}
+    # targets' records apart (#1323), and every finding names its target (#1309).
+    jobs: dict[Future[list[dict[str, Any]]], tuple[str, str]] = {}
     target_of: dict[int, str] = {}
     max_workers = 8
     try:
@@ -507,24 +699,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                 continue
 
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-                # Discover all tool outputs using plugin registry
-                # TODO(issue-#1432): a failed row's output still feeds findings.json
-                for tool_output in target.glob("*.json"):
-                    # JMo's own scan-phase instrumentation, written by
-                    # write_scan_timings into the same directory as the tool
-                    # outputs. It is not a tool result, so no adapter exists for
-                    # it and the registry lookup below warned about it on
-                    # *every* report run (#784). A warning that always fires
-                    # teaches the reader to skip the whole class -- and "no
-                    # adapter plugin found" is precisely the message that
-                    # matters when a real adapter goes missing.
-                    #
-                    # Compared against the constant rather than the literal
-                    # string so renaming the artifact cannot quietly resurrect
-                    # the warning.
-                    if tool_output.name == SCAN_TIMINGS_FILENAME:
-                        continue
-
+                # Discover the tool outputs this scan produced, through the
+                # plugin registry
+                for tool_output in _outputs_of_this_scan(target, logger.warning):
                     # e.g. "trivy", "osv-scanner"; "trufflehog" for
                     # trufflehog.git.json as well
                     tool_name = tool_of_output(tool_output)
@@ -544,12 +721,16 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                     future = ex.submit(
                         _safe_load_plugin, plugin_class, tool_output, profiling
                     )
-                    jobs[future] = f"{target_dir.name}/{target.name}"
+                    jobs[future] = (target_dir.name, target.name)
         for fut in as_completed(jobs):
             try:
                 loaded = fut.result()
+                folder, name = jobs[fut]
                 for finding in loaded:
-                    target_of[id(finding)] = jobs[fut]
+                    target_of[id(finding)] = f"{folder}/{name}"
+                    # From where `jmo scan` put the output, never from the
+                    # adapter or from `scan-timings.json`, which is optional.
+                    finding["target"] = {"type": _TARGET_TYPES[folder], "name": name}
                 findings.extend(loaded)
             except (
                 Exception
@@ -586,6 +767,12 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             paths_changed,
             ids_rekeyed,
         )
+
+    # Scope every id to its target (#1309), once the paths are normalised: the
+    # re-keying above recognises an id by recomputing it from the adapter's own
+    # inputs, so it has to see the adapter's id. Before dedup, which keys on
+    # `id`, so the same finding in two targets is two findings.
+    _scope_ids_to_targets(findings)
 
     # After the paths are normalised, since a tree record's absolute path and
     # a history record's relative one must compare equal; before dedup, which
@@ -792,7 +979,9 @@ def _build_syft_indexes(
     """Build indexes of Syft packages by file path and lowercase package name.
 
     Args:
-        findings: All findings from all tools
+        findings: All findings from all tools (of one target: the indexes have
+            no target in them, and `_enrich_trivy_with_syft` builds one set per
+            target)
 
     Returns:
         Tuple of (by_path, by_name) indexes where:
@@ -837,6 +1026,27 @@ def _find_sbom_match(
 ) -> dict[str, str] | None:
     """Find matching SBOM package for a Trivy finding.
 
+    The indexes are one target's (see `_enrich_trivy_with_syft`). The rule:
+
+    - A finding that names its package (`raw.PkgName`) matches the package of
+      that name at its path (`location.path`, or `raw.PkgPath`), else the first
+      package of that name anywhere in the target. A path alone does not say
+      which package a finding is of: a lockfile lists every package of a project
+      at one path (#1408). Names compare without case, and trivy's Maven
+      `group:artifact` also matches syft's bare artifactId (syft keeps the group
+      in the package URL only). The by-name lookup is NOT widened that way: a
+      bare artifactId alone names no group.
+    - Among several candidates of that name, the one whose version equals the
+      finding's `raw.InstalledVersion` wins (compared as text); with no such
+      version, or none named, the first. The candidates are those at the path
+      (npm lists a nested copy of a package beside the top-level one in one
+      lockfile) or, failing a path match, those anywhere in the target (the
+      package in two lockfiles). The version never overrides the path: a
+      package of that name at the finding's path is taken even when the
+      finding's version is listed elsewhere.
+    - A finding with no package name matches by path only when exactly one
+      package is at that path. With several, any pick is a guess.
+
     Args:
         trivy_finding: Trivy finding dict
         by_path: Index of packages by file path
@@ -850,28 +1060,31 @@ def _find_sbom_match(
     raw = trivy_finding.get("raw") or {}
     if not isinstance(raw, dict):
         raw = {}
-    pkg_name = str(raw.get("PkgName") or "").strip()
+    pkg_name = str(raw.get("PkgName") or "").strip().lower()
     pkg_path = str(raw.get("PkgPath") or "").strip()
+    installed = str(raw.get("InstalledVersion") or "").strip()
 
-    # Collect all candidates
-    candidates = []
-    if loc_path and loc_path in by_path:
-        candidates.extend(by_path.get(loc_path, []))
-    if pkg_path and pkg_path in by_path:
-        candidates.extend(by_path.get(pkg_path, []))
-    if pkg_name and pkg_name.lower() in by_name:
-        candidates.extend(by_name.get(pkg_name.lower(), []))
+    def of_installed_version(candidates: list[dict[str, str]]) -> dict[str, str]:
+        """The candidate at the version trivy found, else the first."""
+        return next(
+            (p for p in candidates if installed and p["version"] == installed),
+            candidates[0],
+        )
 
-    if not candidates:
-        return None
+    # `dict.fromkeys`: a finding whose location is its PkgPath asks once.
+    at_path = [
+        p for path in dict.fromkeys((loc_path, pkg_path)) for p in by_path.get(path, [])
+    ]
+    if not pkg_name:
+        return at_path[0] if len(at_path) == 1 else None
 
-    # Prefer exact path match, then first by name
-    if loc_path and loc_path in by_path:
-        return by_path[loc_path][0]
-    elif pkg_path and pkg_path in by_path:
-        return by_path[pkg_path][0]
-    else:
-        return candidates[0]
+    names = {pkg_name, pkg_name.rsplit(":", 1)[-1]}
+    at_path = [p for p in at_path if p["name"].lower() in names]
+    if at_path:
+        return of_installed_version(at_path)
+
+    named = by_name.get(pkg_name, [])
+    return of_installed_version(named) if named else None
 
 
 def _attach_sbom_context(finding: dict[str, Any], match: dict[str, str]) -> None:
@@ -900,25 +1113,41 @@ def _enrich_trivy_with_syft(findings: list[dict[str, Any]]) -> None:
     """Best-effort enrichment: attach SBOM package context from Syft to Trivy findings.
 
     Strategy:
-    - Build indexes of Syft packages by file path and by lowercase package name.
+    - Group the findings by target: a package belongs to the image or repository
+      syft catalogued, and a Trivy finding takes a package from its own target's
+      SBOM only. Two images hold an openssl at one path in the apk database, and
+      nothing but the target says whose is whose (#1408). Findings that carry no
+      `target` are one group of their own.
+    - Within a target, build indexes of Syft packages by file path and by
+      lowercase package name.
     - For each Trivy finding, try to match by location.path and/or raw.PkgName/PkgPath.
     - When matched, attach context.sbom = {name, version, path} and add a tag 'pkg:name@version'.
     """
-    # Build indexes from Syft package entries
-    by_path, by_name = _build_syft_indexes(findings)
-
-    # Enrich Trivy findings
+    by_target: dict[tuple[Any, Any] | None, list[dict[str, Any]]] = {}
     for f in findings:
         if not isinstance(f, dict):
             continue
-        tool_info = f.get("tool") or {}
-        tool = tool_info.get("name") if isinstance(tool_info, dict) else None
-        if tool != "trivy":
-            continue
+        target = f.get("target")
+        key = (
+            (target.get("type"), target.get("name"))
+            if isinstance(target, dict)
+            else None
+        )
+        by_target.setdefault(key, []).append(f)
 
-        match = _find_sbom_match(f, by_path, by_name)
-        if match:
-            _attach_sbom_context(f, match)
+    for group in by_target.values():
+        by_path, by_name = _build_syft_indexes(group)
+
+        # Enrich Trivy findings
+        for f in group:
+            tool_info = f.get("tool") or {}
+            tool = tool_info.get("name") if isinstance(tool_info, dict) else None
+            if tool != "trivy":
+                continue
+
+            match = _find_sbom_match(f, by_path, by_name)
+            if match:
+                _attach_sbom_context(f, match)
 
 
 def _enrich_with_priority(findings: list[dict[str, Any]]) -> None:

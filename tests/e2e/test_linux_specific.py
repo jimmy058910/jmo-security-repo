@@ -11,13 +11,32 @@ Usage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
-from tests.conftest import IS_LINUX, assert_no_jmo_traceback
+from tests.conftest import (
+    CHEAP_SCAN_TOOLS,
+    IS_LINUX,
+    assert_no_jmo_traceback,
+    scanner_installed,
+    scanner_states,
+)
 
 linux_only = pytest.mark.skipif(not IS_LINUX, reason="Linux-only test")
+
+# Every scan below names its tools, in one of two ways (#1517).
+#
+# A test of paths, permissions or arguments passes `*CHEAP_SCAN_TOOLS`: its
+# assertions are "no traceback" and "returncode in (0, 1)", which hold whichever
+# scanners run. Left unpinned the scan ran every eligible scanner, and with
+# `~/.jmo/bin` on PATH that was trivy and grype fetching 4.8 GB into each test's
+# home (24 GB over five tests).
+#
+# A test about what a scan reads names a scanner that lives in `~/.jmo/bin` and
+# nowhere else, is `requires_tools`, and asserts that scanner's row `ran`: a scan
+# that found nothing to run still exits 0 under `--allow-missing-tools`.
 
 
 @linux_only
@@ -53,28 +72,44 @@ class TestLinuxPathHandling:
 
         assert result.returncode in (0, 1)
 
+    @pytest.mark.requires_tools
+    @pytest.mark.skipif(
+        not scanner_installed("hadolint"), reason="hadolint is not installed"
+    )
     def test_symlink_paths(self, jmo_runner, tmp_path):
         """Verify symlinked paths are followed."""
         repo = tmp_path / "actual-repo"
         repo.mkdir()
-        (repo / "test.py").write_text("x = 1", encoding="utf-8")
+        (repo / "Dockerfile").write_bytes(b"FROM ubuntu:latest\n")
 
         # Create symlink
         link = tmp_path / "linked-repo"
         link.symlink_to(repo)
+        results = tmp_path / "results"
 
         result = jmo_runner(
             [
                 "scan",
+                "--tools",
+                "hadolint",
                 "--repo",
                 str(link),
-                "--allow-missing-tools",
+                "--results-dir",
+                str(results),
             ],
             timeout=120,
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
         assert_no_jmo_traceback(combined)
+        assert scanner_states(results) == {"hadolint": "ran"}
+        # The finding is in a file only reachable through the link.
+        findings = json.loads(
+            (results / "individual-repos" / link.name / "hadolint.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert any(f["file"].endswith("Dockerfile") for f in findings)
 
 
 @linux_only
@@ -90,6 +125,7 @@ class TestLinuxPermissions:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_SCAN_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -114,6 +150,7 @@ class TestLinuxPermissions:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_SCAN_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -160,6 +197,7 @@ class TestLinuxFilesystem:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_SCAN_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -171,6 +209,10 @@ class TestLinuxFilesystem:
         combined = result.stdout.lower() + result.stderr.lower()
         assert "/proc" not in combined or "skip" in combined
 
+    @pytest.mark.requires_tools
+    @pytest.mark.skipif(
+        not scanner_installed("gitleaks"), reason="gitleaks is not installed"
+    )
     def test_large_filesystem_handling(self, jmo_runner, tmp_path):
         """Verify handling of directories with many files."""
         repo = tmp_path / "test-repo"
@@ -179,19 +221,24 @@ class TestLinuxFilesystem:
         # Create many files
         for i in range(100):
             (repo / f"file_{i:03d}.py").write_text(f"x = {i}", encoding="utf-8")
+        results = tmp_path / "results"
 
         result = jmo_runner(
             [
                 "scan",
+                "--tools",
+                "gitleaks",
                 "--repo",
                 str(repo),
-                "--allow-missing-tools",
+                "--results-dir",
+                str(results),
             ],
             timeout=120,
         )
 
         # Should handle many files
         assert result.returncode in (0, 1)
+        assert scanner_states(results) == {"gitleaks": "ran"}
 
 
 @linux_only

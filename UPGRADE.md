@@ -126,6 +126,8 @@ Each target's `scan-timings.json` is at `schema_version` 4. It has one row for *
 
 Two outcomes changed with it. A repository with no files outside the excluded directories now fails every tool that reads it (`failed:no files to scan`), where v1.x graded the tools a success. So does a tool whose own output reports 0 files examined (`failed:examined 0 files`), except opengrep run with `--baseline-commit`, which has nothing to read when the commit changed no file it scans (`skipped:no changed file opengrep reads since the baseline commit`).
 
+`jmo report` reads a tool's output only when the target's `scan-timings.json` has a row for that tool that ran or kept findings, so a results directory reused from an earlier scan no longer reports that scan's findings. A target folder without that file (v1.0.x wrote none) is read whole, as before. So is one v1.1.x wrote, whose rows name no `state`, with a warning per target naming its version, unless it lists no tools at all: a scan that failed before its tools ran leaves nothing to read by, so that folder's outputs are withheld.
+
 ### One Docker image
 
 There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 15 scanners plus OPA.
@@ -158,6 +160,14 @@ Scans no longer record a profile, so the history database has no `profile` colum
 `findings.json` `meta`, attestations and diff output no longer carry a profile either.
 
 The database also gains a `scan_tool_runs` table: one row per target and tool, with its state, reason and seconds. `jmo history show <scan-id>` prints it. It is created the first time a scan stores into the database. Scans stored before then have no rows.
+
+### Findings name their target, and every id changes
+
+Each finding now carries `target`, the kind of target it was scanned from and the name of its results folder, which for a repository is the checkout's directory name: `"target": {"type": "repo", "name": "app-one"}`. A finding's id is derived from that target, so the same finding in two targets of one scan is two findings. Before, the second was dropped as a duplicate of the first, and two repositories' root `package-lock.json` were one dependency cluster.
+
+- **Every finding id changes, once.** A suppression in `jmo.suppress.yml` that names a finding by its id stops matching, and `jmo diff` against a scan stored before the upgrade reports every old finding as fixed and every one of them as new. Suppress by rule or path instead where you can.
+- **Ids now change when a checkout directory is renamed**, because the directory's name is part of the id. Keep a repository's directory name stable between scans you mean to compare. For an image the name is its reference with the tag (`nginx:1.27` is `nginx_1.27`), so two tags of one image are two targets and share no id: `jmo diff` between tags shows the image's findings as fixed and new.
+- `location.path` is unchanged: it is still relative to the target. The target is `properties.target` on a SARIF result, a `target` column in `findings.csv` (before `path`), and a column in the dashboard. A `csv.columns` list in `jmo.yml` is used as written, so add `target` to it.
 
 ### Schedules
 

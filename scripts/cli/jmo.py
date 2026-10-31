@@ -31,6 +31,7 @@ from scripts.cli.scan_orchestrator import (
     summarize_target,
 )
 from scripts.cli.schedule_commands import cmd_schedule
+from scripts.cli.terminal import stream_is_tty
 from scripts.cli.trend_commands import cmd_trends
 from scripts.core.config import load_config
 from scripts.core.exceptions import (
@@ -2145,7 +2146,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         # below settles on. A scheduled scan should produce the findings it
         # can, not stop.
         if (
-            not sys.stdin.isatty()
+            not stream_is_tty(sys.stdin)
             or os.environ.get("JMO_NON_INTERACTIVE")
             or os.environ.get("CI")
             or os.environ.get("DOCKER_CONTAINER") == "1"
@@ -2175,7 +2176,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
                 # non-tty, so it takes the same branch: proceed with what is
                 # available - which is also the default this prompt advertises.
                 #
-                # `sys.stdin.isatty()` above does not catch this: under Git Bash
+                # `stream_is_tty(sys.stdin)` above does not catch this: under Git Bash
                 # on Windows, and under any launcher that inherits a console but
                 # leaves stdin empty, it returns True while stdin is already at
                 # EOF. Returning `[]` here made a detached `jmo scan` cancel
@@ -2385,7 +2386,7 @@ def _update_jmo_config(config_path: Path, updates: dict[str, Any]) -> None:
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
     # Skip if not interactive (Docker, CI/CD, etc.)
-    if not sys.stdin.isatty():
+    if not stream_is_tty(sys.stdin):
         return
 
     # Skip if running in Docker or CI environment
@@ -2507,7 +2508,24 @@ def _show_kofi_reminder(args) -> None:
 
     Tracks scan count in ~/.jmo/config.yml and displays friendly reminder
     every 3 scans to support full-time development.
+
+    Returns before it creates ``~/.jmo`` or reads the config when nobody is
+    there to read the reminder (#1506): CI, cron, a pipe, a redirect. That is
+    this file's usual "no one will answer" test (stdin not a terminal,
+    ``JMO_NON_INTERACTIVE``, ``CI``, ``DOCKER_CONTAINER``) plus stdout, because
+    the reminder is output and a scan redirected to a file from a terminal has
+    a live stdin and no reader. Counting those scans edited the real config of
+    whoever ran them.
     """
+    if (
+        not stream_is_tty(sys.stdin)
+        or not stream_is_tty(sys.stdout)
+        or os.environ.get("JMO_NON_INTERACTIVE")
+        or os.environ.get("CI")
+        or os.environ.get("DOCKER_CONTAINER") == "1"
+    ):
+        return
+
     config_path = Path.home() / ".jmo" / "config.yml"
     config_path.parent.mkdir(exist_ok=True)
 
@@ -3230,7 +3248,7 @@ def cmd_scan(args) -> int:
                 if explicit_resume:
                     _log(args, "INFO", f"Resuming: {summary}")
                     scan_session = existing
-                elif sys.stdin.isatty() and sys.stdout.isatty():
+                elif stream_is_tty(sys.stdin) and stream_is_tty(sys.stdout):
                     # Interactive: prompt user
                     _log(args, "INFO", summary)
                     try:
@@ -3815,7 +3833,7 @@ def _prompt_install_dependency(dep_type: str) -> bool:
     # resume prompt checks isatty on both streams. This one was the omission
     # against the file's own convention, not a missing convention.
     if (
-        not sys.stdin.isatty()
+        not stream_is_tty(sys.stdin)
         or os.environ.get("JMO_NON_INTERACTIVE")
         or os.environ.get("CI")
     ):

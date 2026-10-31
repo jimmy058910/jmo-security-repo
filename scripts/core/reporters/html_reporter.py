@@ -4,8 +4,11 @@ from __future__ import annotations
 import html
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+from scripts.core.adapters.common import scan_root_pattern, strip_scan_roots
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +194,11 @@ def _insert_non_product_banner(doc: str, source: str) -> str:
     return banner + doc
 
 
-def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
+def write_html(
+    findings: list[dict[str, Any]],
+    out_path: str | Path,
+    roots: Sequence[str] = (),
+) -> None:
     """
     Write interactive React dashboard with dual-mode support.
 
@@ -206,6 +213,11 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     Args:
         findings: List of CommonFinding dicts
         out_path: Path to write dashboard.html
+        roots: The directories the scan visited. What the dashboard embeds, in
+            either mode, has them removed from every string, `raw` included:
+            `raw` is the tool's own output and names the scanning machine's
+            home directory, and the dashboard is the artifact people publish
+            (#1007). `findings` itself is not changed.
     """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -227,6 +239,12 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
         )
         _write_fallback_html(findings, p, TEMPLATE_FALLBACK)
         return
+
+    # One redaction for both modes below: the inline page and
+    # `dashboard-data.json` carry the same findings.
+    pattern = scan_root_pattern(roots)
+    if pattern:
+        findings = strip_scan_roots(findings, pattern)
 
     # Decide: Inline vs External mode
     if total <= INLINE_THRESHOLD:

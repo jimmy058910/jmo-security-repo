@@ -12,10 +12,12 @@ Functions:
 
 from __future__ import annotations
 
+import shlex
 from typing import TYPE_CHECKING, Any
 
 from scripts.cli.jmo import __version__
 from scripts.core.tool_registry import TOOL_MATRIX
+from scripts.core.validation import GITLAB_DEFAULT_URL, gitlab_clone_base
 
 if TYPE_CHECKING:
     pass
@@ -212,6 +214,26 @@ set -euo pipefail
 """
 
 
+def _gitlab_url_to_pass(raw: str | None) -> str | None:
+    """The `--gitlab-url` a workflow needs for the wizard's GitLab URL, or None.
+
+    None when it is gitlab.com, which `jmo scan` assumes. Otherwise the URL as
+    `scan_gitlab_repo` clones from it: without the flag a self-hosted instance's
+    project is cloned from gitlab.com, which is offered the instance's token.
+
+    Raises:
+        ValueError: The scan would refuse the URL. The message never repeats
+            it, which may carry credentials typed into it.
+    """
+    try:
+        url = gitlab_clone_base(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"gitlab_url is a URL `jmo scan --gitlab-url` would refuse: {exc}"
+        ) from None
+    return None if url == GITLAB_DEFAULT_URL else url
+
+
 def generate_github_actions(config: Any) -> str:
     """
     Generate a GitHub Actions workflow for security scanning.
@@ -353,6 +375,9 @@ jobs:
         elif config.target.type == "gitlab":
             if config.target.gitlab_repo:
                 scan_cmd_lines.insert(1, f"--gitlab-repo {config.target.gitlab_repo}")
+            gitlab_url = _gitlab_url_to_pass(config.target.gitlab_url)
+            if gitlab_url:
+                scan_cmd_lines.insert(1, f"--gitlab-url {shlex.quote(gitlab_url)}")
         elif config.target.type == "k8s":
             if config.target.k8s_context:
                 scan_cmd_lines.insert(1, f"--k8s-context {config.target.k8s_context}")
