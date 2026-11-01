@@ -37,12 +37,24 @@ from scripts.dev.phase_audit import (
     cmd_labels,
     cmd_unclaimed,
     cmd_verify,
+    fetch_packages,
     inert_closers,
     load_plan,
     parse_plan,
     phases_in_subjects,
     tracked_tools,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_packages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No work packages unless a test says so: `fetch_packages` calls GitHub.
+
+    The name imported above stays the real function, so the test of
+    `fetch_packages` itself calls it directly with a fake `_gh`.
+    """
+    monkeypatch.setattr(phase_audit, "fetch_packages", lambda: set())
+
 
 # The plan separates a summary row's phase number from its name with an EM DASH
 # (U+2014), and the row regex requires it. Spelled as an escape so this file
@@ -501,7 +513,9 @@ def test_a_fully_linked_pr_is_not_flagged() -> None:
 # --------------------------------------------------------------------------
 
 
-def _labels_world(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
+def _labels_world(
+    monkeypatch: pytest.MonkeyPatch, extra: dict[int, Issue] | None = None
+) -> list[tuple[str, ...]]:
     """One plan, five issues, and a `gh` that records instead of writing."""
     issues = {
         # scheduled in Phase 0, unlabelled: the add the command always did
@@ -515,6 +529,7 @@ def _labels_world(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
         # nothing to do, and a control that the sweep touches only phase labels
         777: Issue(number=777, state="CLOSED", labels={"bug"}),
     }
+    issues.update(extra or {})
     calls: list[tuple[str, ...]] = []
 
     def fake_gh(*args: str) -> str:
@@ -714,6 +729,105 @@ def test_an_issue_nothing_will_close_stays_unclaimed(
     assert cmd_unclaimed(plan) == 1
     assert cmd_verify(plan) == 1
     assert "#301" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# Work packages (GitHub-native issue planning, stage 1)
+#
+# A work package is a parent issue whose sub-issues one PR closes. The plan
+# does not roster it (its children are rostered), yet it carries `phase:N`.
+# Without an exemption, filing one turns `phase-audit` red twice over: an
+# unclaimed open issue, and a phase label the plan schedules nowhere.
+# --------------------------------------------------------------------------
+
+
+def test_a_work_package_is_exempt_from_unclaimed_and_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    package = Issue(number=400, state="OPEN", labels={"phase:6", "priority:p2"})
+    _unclaimed_world(monkeypatch, tmp_path, package)
+    monkeypatch.setattr(phase_audit, "fetch_packages", lambda: {400})
+    plan = parse_plan(BASE, phase_audit.REPO_ROOT / "plan.md")
+
+    assert cmd_unclaimed(plan) == 0
+    assert cmd_verify(plan) == 0
+    # Exempt is not invisible: the output names the package.
+    out = capsys.readouterr().out
+    assert "work package" in out
+    assert "#400" in out
+
+
+def test_a_closed_work_package_keeps_its_phase_label(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    package = Issue(number=401, state="CLOSED", labels={"phase:6"})
+    _unclaimed_world(monkeypatch, tmp_path, package)
+    monkeypatch.setattr(phase_audit, "fetch_packages", lambda: {401})
+    plan = parse_plan(BASE, phase_audit.REPO_ROOT / "plan.md")
+
+    assert cmd_verify(plan) == 0
+
+
+def test_an_unscheduled_phase_label_without_sub_issues_still_drifts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Negative control: the exemption keys on sub-issues, not on the label.
+    issue = Issue(number=402, state="OPEN", labels={"phase:6"})
+    _unclaimed_world(monkeypatch, tmp_path, issue)
+    plan = parse_plan(BASE, phase_audit.REPO_ROOT / "plan.md")
+
+    assert cmd_verify(plan) == 1
+    out = capsys.readouterr().out
+    assert "#402" in out
+    assert "schedules it nowhere" in out
+
+
+def test_labels_apply_leaves_a_work_package_phase_label_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _labels_world(
+        monkeypatch, extra={400: Issue(number=400, state="OPEN", labels={"phase:6"})}
+    )
+    monkeypatch.setattr(phase_audit, "fetch_packages", lambda: {400})
+    plan = parse_plan(BASE, Path("plan.md"))
+
+    assert cmd_labels(plan, apply=True) == 0
+
+    assert not any(c[:3] == ("issue", "edit", "400") for c in calls)
+    # Control: the sweep still strips an unscheduled label from a non-package.
+    assert ("issue", "edit", "900", "--remove-label", "phase:9") in calls
+
+
+def test_fetch_packages_searches_issues_with_sub_issues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_gh(*args: str) -> str:
+        calls.append(args)
+        if args[:2] == ("repo", "view"):
+            return "o/r\n"
+        # (number, sub_issues_summary.total). #56 has none: a hit GitHub returns
+        # when it ignores `has:sub-issue`, which plain REST search does.
+        return "12 3\n34 1\n56 0\n"
+
+    monkeypatch.setattr(phase_audit, "_gh", fake_gh)
+
+    assert fetch_packages() == {12, 34}
+
+    (search,) = [c for c in calls if c[:1] == ("api",)]
+    assert "search/issues" in search
+    query = next(a for a in search if a.startswith("q="))
+    assert "repo:o/r" in query
+    assert "is:issue" in query
+    assert "has:sub-issue" in query
+    # Without this GitHub ignores the qualifier and returns every issue
+    # (measured 2026-11-01: 778 of 778 on this repo).
+    assert "advanced_search=true" in search
 
 
 # --------------------------------------------------------------------------
