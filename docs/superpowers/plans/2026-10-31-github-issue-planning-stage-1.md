@@ -22,6 +22,22 @@ maintainer-local session skills follow once the code is on `dev` and `main`.
 label strips it from every issue, including the 47 closed issues that carry it as history.
 This plan retires it instead (Task 5).
 
+**Amendments, approved 2026-11-01 (measured that day, before Task 1):**
+1. REST `search/issues` **ignores** `has:sub-issue` unless the call passes
+   `advanced_search=true`: without it, cli/cli returned 6657 of 6657 issues and this repo
+   778 of 778; with it, cli/cli returned 8, each with sub-issues, and this repo 0. Legacy
+   GraphQL `search(type: ISSUE)` ignores it too; `ISSUE_ADVANCED` honours it. Task 1 passes
+   the flag **and** keeps only hits whose `sub_issues_summary.total > 0`.
+2. Task 2 Step 5 expects about 102 untriaged: 105 open, less 2 `tracking` and #1492
+   (`dependencies`).
+3. Task 2's test rows use the JSON shapes `gh` 2.103 returns (captured 2026-11-01):
+   `parent` is `null` or `{id, number, state, title, url}`; `blockedBy` and `blocking` are
+   `{nodes: [{id, number, state, title, url}], totalCount}`; `subIssuesSummary` is
+   `{completed, percentCompleted, total}`.
+4. Task 3: `LabelUpdateInput.rationale` is capped at 280 characters by the schema, and
+   `confidence` is `IssueEventConfidenceLevel` (`LOW`, `MEDIUM`, `HIGH`). `suggest` rejects a
+   longer rationale before calling GitHub.
+
 ## Global Constraints
 
 - Branch: rename `docs/issue-planning-design` to `feature/issue-planning-stage-1`; no upstream
@@ -106,10 +122,12 @@ def test_labels_apply_leaves_a_work_package_phase_label_alone(...):
     assert ("issue", "edit", "900", "--remove-label", "phase:9") in calls  # control
 
 def test_fetch_packages_searches_issues_with_sub_issues(...):
-    # fake _gh: ("repo", "view", ...) -> "o/r\n"; ("api", ...) -> "12\n34\n"
+    # fake _gh: ("repo", "view", ...) -> "o/r\n"; ("api", ...) -> "12 3\n34 1\n56 0\n"
+    # (number, sub_issues_summary.total), so #56 is a hit the qualifier let through
     assert fetch_packages() == {12, 34}
-    # the api call is a REST search: "search/issues" in args, and its q= value
-    # contains "repo:o/r", "is:issue" and "has:sub-issue"
+    # the api call is a REST search: "search/issues" in args, its q= value
+    # contains "repo:o/r", "is:issue" and "has:sub-issue", and
+    # "advanced_search=true" is passed (without it GitHub ignores has:sub-issue)
 ```
 
 `_labels_world` gains an `extra: dict[int, Issue] | None = None` parameter merged into its
@@ -124,8 +142,9 @@ Expected: FAIL (`fetch_packages` does not exist).
 
 `fetch_packages()`: `_gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")`,
 then `_gh("api", "-X", "GET", "search/issues", "--paginate", "-f",
-f"q=repo:{repo} is:issue has:sub-issue", "--jq", ".items[].number")`; parse one int per
-non-empty line. `cmd_unclaimed`, `cmd_verify` and `cmd_labels` call it once. `_unclaimed`
+f"q=repo:{repo} is:issue has:sub-issue", "-f", "advanced_search=true", "--jq",
+'.items[] | "\(.number) \(.sub_issues_summary.total)"')`; parse `number total` per
+non-empty line and keep numbers whose total is above 0 (amendment 1). `cmd_unclaimed`, `cmd_verify` and `cmd_labels` call it once. `_unclaimed`
 removes packages from the absent set before the version check. A new `_report_packages()`
 prints `exempt: N work package(s) (issues with sub-issues): #...` when non-empty. Both
 "scheduled nowhere" loops skip numbers in `packages`. Add one paragraph to the module
@@ -194,7 +213,13 @@ Close candidates = open issues with `sub_total > 0` and `sub_open == 0`.
 A helper `row(n, *, labels=(), created="2026-10-01T00:00:00Z", assignees=(), parent=None,
 sub=(0, 0), blocked_by=(), blocking=())` builds `gh issue list --json` rows, where
 `blocked_by` and `blocking` hold `(number, "OPEN" | "CLOSED")` pairs and `sub` is
-`(total, completed)`. Tests and their key assertions:
+`(total, completed)`. The helper emits the shapes of amendment 3 in full (every field,
+not only the ones the parser reads). Tests and their key assertions:
+
+- `test_parse_items_reads_the_recorded_gh_shapes`: one JSON document written out in the
+  test module in amendment 3's shapes (a child with an open parent, an issue blocked by one
+  open and one closed issue, a package with `total 4, completed 1`) parses to
+  `parent == <n>`, `open_blockers == (<open one>,)`, `sub_open == 3`.
 
 - `test_p1_ranks_above_p2_whatever_the_phase`: p1 `phase:9` before p2 `phase:6`.
 - `test_within_a_priority_lower_phase_then_more_blocked_then_older`: three p2 rows ordered
@@ -252,7 +277,7 @@ Expected: all pass.
 
 Run: `uv run python scripts/dev/backlog.py next`
 Expected: exit 0. With no priority labels yet, `Top 3 ready` is empty and
-`Untriaged:` is about 104 (105 open, less #1492 with `dependencies`). Paste the counts line
+`Untriaged:` is about 102 (105 open, less 2 `tracking` and #1492 with `dependencies`). Paste the counts line
 into the task notes for the PR.
 
 - [ ] **Step 6: Commit**
@@ -296,6 +321,8 @@ GraphQL shapes, measured 2026-10-31 (spec §3):
   carry `suggest: True`, the rationale, and `confidence: "HIGH"`.
 - `test_suggest_rejects_a_label_outside_priority_and_needs`: `suggest 12 bug` exits 2,
   because only `priority:*` and `needs:*` are suggestable.
+- `test_suggest_rejects_a_rationale_over_280_characters`: exits 2 with no `_gh` call
+  (amendment 4).
 - `test_pending_suggestions_parses_label_suggestions_only`: a fixture with one
   `PendingLabelSuggestion` and one `PendingFieldSuggestion` returns `{12: ["priority:p2"]}`.
 - `test_accept_applies_each_pending_label_by_id`: the mutation has `kind: "LABEL"` and the
