@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Rank what to work on next from GitHub issue state.
 
-    python scripts/dev/backlog.py next [--json] [--top N]
+    python scripts/dev/backlog.py next [--json] [--top N]        (read-only)
+    python scripts/dev/backlog.py suggest N LABEL --rationale TEXT [--confidence C]
+    python scripts/dev/backlog.py accept N [N ...]
+
+`suggest` and `accept` WRITE to GitHub: `suggest` files a pending label
+suggestion (a priority or needs label, applied only when accepted), and
+`accept` applies the viewer's own pending priority/needs suggestions.
 
 Design: docs/superpowers/specs/2026-10-31-github-issue-planning-design.md (§5).
 GitHub Issues are the single source: priority, phase and `needs:*` are labels,
@@ -20,8 +26,9 @@ never-ranked labels, no open blocker, and no assignee (assigned = in progress).
 Ready units sort by priority, then lowest `phase:N` (none sorts last), then how
 many open issues they unblock, then age.
 
-Read-only, stdlib-only, and refuses gh older than 2.94 (the first with the
-`parent`, `subIssuesSummary`, `blockedBy` and `blocking` JSON fields).
+Stdlib-only. `next` refuses gh older than 2.94 (the first with the `parent`,
+`subIssuesSummary`, `blockedBy` and `blocking` JSON fields); `suggest` and
+`accept` use only `gh api graphql`, which any gh has.
 """
 
 from __future__ import annotations
@@ -108,7 +115,7 @@ class Report:
     needs_info: int
     parked_p3: int
     open_p1: int
-    pending_suggestions: int
+    pending_suggestions: int | None  # None: the read failed; the ranking stands
     truncated: bool
     top_n: int
     blocks: dict[int, int]
@@ -199,7 +206,7 @@ def rank(items: dict[int, Item]) -> list[Item]:
 def build_report(
     items: dict[int, Item],
     now: datetime,
-    pending: int,
+    pending: int | None,
     top_n: int = 3,
     truncated: bool = False,
 ) -> Report:
@@ -288,7 +295,8 @@ def render_text(report: Report) -> str:
     lines.append(
         f"Untriaged: {len(report.untriaged)} | needs:info: {report.needs_info} | "
         f"p3 parked: {report.parked_p3} | pending suggestions: "
-        f"{report.pending_suggestions} | open p1: {report.open_p1}/{P1_SOFT_CAP}"
+        f"{'?' if report.pending_suggestions is None else report.pending_suggestions}"
+        f" | open p1: {report.open_p1}/{P1_SOFT_CAP}"
     )
     return "\n".join(lines)
 
@@ -385,9 +393,10 @@ def fetch_items() -> tuple[dict[int, Item], bool]:
 #
 # A suggestion is stored on the issue as pending, with its rationale, and the
 # label is applied only when accepted (in the GitHub UI or by `accept`). Shapes
-# are from the live schema, 2026-11-01. `updateIssue(labels:)` takes the same
-# input, but its list semantics were tested only on an unlabelled issue, so a
-# suggestion is always an add.
+# are from the live schema, 2026-11-01. A suggestion is always an add, so
+# `suggest` refuses a priority when the issue already carries, or has pending,
+# a different one: accepting would leave two (spec §8: suggestions must not add
+# a second priority). The maintainer re-prioritises by a direct label edit.
 
 _PENDING_QUERY = """
 query($owner: String!, $name: String!, $cursor: String) {
@@ -408,7 +417,14 @@ query($owner: String!, $name: String!, $cursor: String) {
 _IDS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $label: String!) {
   repository(owner: $owner, name: $name) {
-    issue(number: $number) { id }
+    issue(number: $number) {
+      id
+      labels(first: 100) { nodes { name } }
+      pendingSuggestions {
+        __typename
+        ... on PendingLabelSuggestion { label { name } }
+      }
+    }
     label(name: $label) { id }
   }
 }"""
@@ -422,13 +438,14 @@ mutation($id: ID!, $labels: [LabelUpdateInput!]!) {
 
 _ISSUE_PENDING_QUERY = """
 query($owner: String!, $name: String!, $number: Int!) {
+  viewer { id }
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
       id
       pendingSuggestions {
         __typename
         ... on PendingLabelSuggestion {
-          actor { ... on Node { id } }
+          actor { login ... on Node { id } }
           label { name id }
         }
       }
@@ -512,6 +529,23 @@ def suggest_label(number: int, label: str, rationale: str, confidence: str) -> N
         raise BacklogError(f"#{number} does not exist in {owner}/{name}")
     if repo.get("label") is None:
         raise BacklogError(f"label {label} does not exist in {owner}/{name}")
+    if label in PRIORITIES:
+        issue = repo["issue"]
+        names = {n["name"] for n in issue["labels"]["nodes"]}
+        carried = sorted((names & set(PRIORITIES)) - {label})
+        if carried:
+            raise BacklogError(
+                f"#{number} already carries {carried[0]}; a suggestion would add a "
+                f"second priority. Once agreed, run: gh issue edit {number} "
+                f"--remove-label {carried[0]} --add-label {label}"
+            )
+        suggested = {s["label"]["name"] for s in _label_suggestions(issue)}
+        pending = sorted((suggested & set(PRIORITIES)) - {label})
+        if pending:
+            raise BacklogError(
+                f"#{number} already has a pending {pending[0]} suggestion; accept "
+                "or reject it first"
+            )
     _graphql(
         _SUGGEST,
         {
@@ -528,34 +562,46 @@ def suggest_label(number: int, label: str, rationale: str, confidence: str) -> N
     )
 
 
-def accept_suggestions(numbers: list[int]) -> list[str]:
-    """Apply every pending label suggestion on each issue; return `#N label`."""
+def accept_suggestions(numbers: list[int]) -> tuple[list[str], list[str]]:
+    """Apply the viewer's own pending priority/needs label suggestions.
+
+    "accept" answers the proposals the agent showed, which it filed as the
+    viewer (it uses the maintainer's token). A suggestion from any other
+    actor, or for any other label, was never in that table, so it is left
+    pending and named. Returns (`#N label` applied, `#N label (by x)` left).
+    """
     owner, name = _repo()
     applied: list[str] = []
+    left: list[str] = []
     for number in numbers:
-        issue = _graphql(
+        data = _graphql(
             _ISSUE_PENDING_QUERY, {"owner": owner, "name": name, "number": number}
-        )["repository"]["issue"]
+        )
+        issue = data["repository"]["issue"]
         if issue is None:
             raise BacklogError(f"#{number} does not exist in {owner}/{name}")
-        # `actorId` is the actor whose suggestions to apply (schema description).
-        by_actor: dict[str, list[tuple[str, str]]] = {}
+        viewer = data["viewer"]["id"]
+        mine: list[tuple[str, str]] = []
         for s in _label_suggestions(issue):
-            actor = (s.get("actor") or {}).get("id")
-            if actor:
-                label = s["label"]
-                by_actor.setdefault(actor, []).append((label["id"], label["name"]))
-        for actor, labels in by_actor.items():
+            actor = s.get("actor") or {}
+            label = s["label"]
+            if actor.get("id") == viewer and label["name"] in SUGGESTABLE:
+                mine.append((label["id"], label["name"]))
+            else:
+                by = actor.get("login") or "unknown"
+                left.append(f"#{number} {label['name']} (by {by})")
+        if mine:
+            # `actorId` is "the actor whose suggestions to apply" (schema).
             _graphql(
                 _APPLY,
                 {
                     "issueId": issue["id"],
-                    "actorId": actor,
-                    "suggestions": [{"kind": "LABEL", "labelId": i} for i, _ in labels],
+                    "actorId": viewer,
+                    "suggestions": [{"kind": "LABEL", "labelId": i} for i, _ in mine],
                 },
             )
-            applied.extend(f"#{number} {label_name}" for _, label_name in labels)
-    return applied
+            applied.extend(f"#{number} {label_name}" for _, label_name in mine)
+    return applied, left
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -585,20 +631,34 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         if args.command == "accept":
-            applied = accept_suggestions(args.numbers)
+            applied, left = accept_suggestions(args.numbers)
             for line in applied:
                 print(f"applied {line}")
+            for line in left:
+                print(f"left pending: {line}")
             for number in args.numbers:
                 if not any(line.startswith(f"#{number} ") for line in applied):
-                    print(f"#{number}: nothing pending")
+                    print(f"#{number}: nothing pending of yours to apply")
             return 0
         require_gh(_gh("--version"))
         items, truncated = fetch_items()
-        pending = sum(len(v) for v in pending_suggestions().values())
+        pending: int | None
+        try:
+            pending = sum(len(v) for v in pending_suggestions().values())
+        except (RuntimeError, subprocess.SubprocessError) as exc:
+            # Only a count here; spec §8 plans for suggestions not working.
+            pending = None
+            print(
+                f"backlog: pending suggestions unavailable: {' '.join(str(exc).split())}",
+                file=sys.stderr,
+            )
     except BacklogError as exc:
         print(f"backlog: {exc}", file=sys.stderr)
         return 2
-    except (RuntimeError, OSError) as exc:
+    except json.JSONDecodeError as exc:
+        print(f"backlog: gh failed: output was not JSON ({exc})", file=sys.stderr)
+        return 2
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
         print(f"backlog: gh failed: {' '.join(str(exc).split())}", file=sys.stderr)
         return 2
 

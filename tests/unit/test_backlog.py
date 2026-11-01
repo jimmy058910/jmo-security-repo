@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import sys
 from datetime import UTC, datetime
 from typing import Any
@@ -456,7 +457,7 @@ def _issues_page(nodes: list[dict[str, Any]]) -> dict[str, Any]:
 def _label_suggestion(name: str, actor: str = "U_maint") -> dict[str, Any]:
     return {
         "__typename": "PendingLabelSuggestion",
-        "actor": {"id": actor},
+        "actor": {"id": actor, "login": actor.removeprefix("U_")},
         "label": {"name": name, "id": f"LA_{name}"},
     }
 
@@ -511,8 +512,9 @@ def test_fetch_items_passes_list_args_and_flags_truncation(
         RuntimeError(
             "gh issue list failed (rc=4):\nTo get started, run: gh auth login"
         ),
+        subprocess.TimeoutExpired(["gh", "issue", "list"], 120),
     ],
-    ids=["gh-missing", "unauthenticated"],
+    ids=["gh-missing", "unauthenticated", "timeout"],
 )
 def test_gh_failure_exits_2_with_one_line_on_stderr(
     monkeypatch: pytest.MonkeyPatch,
@@ -532,6 +534,44 @@ def test_gh_failure_exits_2_with_one_line_on_stderr(
     assert "Traceback" not in err
 
 
+def test_gh_output_that_is_not_json_exits_2_with_one_line_on_stderr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def garbled(*args: str, stdin: str | None = None) -> str:
+        if args == ("--version",):
+            return "gh version 2.103.0 (2026-10-21)\n"
+        return "<html>502 Bad Gateway</html>"
+
+    monkeypatch.setattr(backlog, "_gh", garbled)
+
+    assert main(["next"]) == 2
+
+    err = capsys.readouterr().err
+    assert err.startswith("backlog: gh failed")
+    assert err.count("\n") == 1
+
+
+def test_next_still_ranks_when_the_pending_read_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Suggestions are a newer GitHub feature and only a count in this report;
+    # losing them must not lose the ranking.
+    fake = _fake_gh([row(1, labels=(P1,))])
+
+    def no_suggestions(*args: str, stdin: str | None = None) -> str:
+        if args[:2] == ("api", "graphql"):
+            raise RuntimeError("GraphQL: Field 'pendingSuggestions' doesn't exist")
+        return fake(*args, stdin=stdin)
+
+    monkeypatch.setattr(backlog, "_gh", no_suggestions)
+
+    assert main(["next"]) == 0
+
+    out = capsys.readouterr().out
+    assert "1. #1 p1" in out
+    assert "pending suggestions: ?" in out
+
+
 # --- label suggestions (Task 3) ---------------------------------------------
 #
 # The agent never applies a priority on its own judgement: it files a GitHub
@@ -539,11 +579,23 @@ def test_gh_failure_exits_2_with_one_line_on_stderr(
 # maintainer accepts it. Mutation shapes are from the live schema (2026-11-01).
 
 
-class FakeGitHub:
-    """Records every `gh` call; answers lookups, pending reads and mutations."""
+VIEWER = "U_maint"
 
-    def __init__(self, pending: dict[int, list[dict[str, Any]]] | None = None):
+
+class FakeGitHub:
+    """Records every `gh` call; answers lookups, pending reads and mutations.
+
+    The viewer (the token's user, so the agent and the maintainer alike) is
+    `VIEWER`; `labels` are an issue's current labels.
+    """
+
+    def __init__(
+        self,
+        pending: dict[int, list[dict[str, Any]]] | None = None,
+        labels: dict[int, list[str]] | None = None,
+    ):
         self.pending = pending or {}
+        self.labels = labels or {}
         self.calls: list[tuple[tuple[str, ...], dict[str, Any] | None]] = []
 
     def mutations(self) -> list[dict[str, Any]]:
@@ -565,30 +617,26 @@ class FakeGitHub:
         query, variables = body["query"], body["variables"]
         if query.lstrip().startswith("mutation"):
             return json.dumps({"data": {}})
+        number = variables.get("number")
+        issue = {
+            "id": f"I_{number}",
+            "labels": {"nodes": [{"name": n} for n in self.labels.get(number, [])]},
+            "pendingSuggestions": self.pending.get(number, []),
+        }
         if "label(name:" in query:
             return json.dumps(
                 {
                     "data": {
                         "repository": {
-                            "issue": {"id": f"I_{variables['number']}"},
+                            "issue": issue,
                             "label": {"id": f"LA_{variables['label']}"},
                         }
                     }
                 }
             )
         if "issue(number:" in query:
-            number = variables["number"]
             return json.dumps(
-                {
-                    "data": {
-                        "repository": {
-                            "issue": {
-                                "id": f"I_{number}",
-                                "pendingSuggestions": self.pending.get(number, []),
-                            }
-                        }
-                    }
-                }
+                {"data": {"viewer": {"id": VIEWER}, "repository": {"issue": issue}}}
             )
         raise AssertionError(f"unexpected query: {query}")
 
@@ -691,11 +739,7 @@ def test_next_counts_pending_suggestions(
 def test_accept_applies_each_pending_label_by_id(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    gh = FakeGitHub(
-        pending={
-            12: [_label_suggestion("priority:p2", actor="U_agent"), FIELD_SUGGESTION]
-        }
-    )
+    gh = FakeGitHub(pending={12: [_label_suggestion("priority:p2"), FIELD_SUGGESTION]})
     monkeypatch.setattr(backlog, "_gh", gh)
 
     assert main(["accept", "12"]) == 0
@@ -704,11 +748,69 @@ def test_accept_applies_each_pending_label_by_id(
     assert "applyPendingIssueSuggestions" in mutation["query"]
     assert mutation["variables"] == {
         "issueId": "I_12",
-        # The actor whose suggestion it is, which is what the schema asks for.
-        "actorId": "U_agent",
+        "actorId": VIEWER,
         "suggestions": [{"kind": "LABEL", "labelId": "LA_priority:p2"}],
     }
     assert "#12 priority:p2" in capsys.readouterr().out
+
+
+def test_accept_applies_only_the_viewers_own_priority_and_needs_suggestions(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # "accept batch" answers the table the agent showed in chat. A suggestion
+    # someone else filed, or one outside priority/needs, was never in it.
+    gh = FakeGitHub(
+        pending={
+            12: [
+                _label_suggestion("priority:p2"),
+                _label_suggestion("priority:p1", actor="U_bot"),
+                _label_suggestion("bug"),
+            ]
+        }
+    )
+    monkeypatch.setattr(backlog, "_gh", gh)
+
+    assert main(["accept", "12"]) == 0
+
+    (mutation,) = gh.mutations()
+    assert mutation["variables"]["actorId"] == VIEWER
+    assert mutation["variables"]["suggestions"] == [
+        {"kind": "LABEL", "labelId": "LA_priority:p2"}
+    ]
+    out = capsys.readouterr().out
+    assert "left pending: #12 priority:p1 (by bot)" in out
+    assert "left pending: #12 bug (by maint)" in out
+
+
+@pytest.mark.parametrize(
+    ("labels", "pending", "hint"),
+    [
+        (["priority:p1"], [], "--remove-label priority:p1 --add-label priority:p2"),
+        ([], [_label_suggestion("priority:p1")], "pending priority:p1"),
+    ],
+    ids=["carries-p1", "p1-pending"],
+)
+def test_suggest_refuses_a_second_priority(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    labels: list[str],
+    pending: list[dict[str, Any]],
+    hint: str,
+) -> None:
+    # Accepting would leave two priority labels, and the ranking takes the
+    # highest, so a demotion from p1 to p2 would silently not happen.
+    gh = FakeGitHub(labels={12: labels}, pending={12: pending})
+    monkeypatch.setattr(backlog, "_gh", gh)
+
+    assert main(["suggest", "12", "priority:p2", "--rationale", "demote"]) == 2
+
+    assert gh.mutations() == []
+    err = capsys.readouterr().err
+    assert hint in err
+    assert err.count("\n") == 1
+    # Control: a needs:* label sits beside a priority, so it is still suggested.
+    assert main(["suggest", "12", "needs:info", "--rationale", "measure"]) == 0
+    assert len(gh.mutations()) == 1
 
 
 def test_accept_with_nothing_pending_writes_nothing(
