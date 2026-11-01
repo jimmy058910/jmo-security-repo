@@ -12,6 +12,44 @@ Be respectful and constructive. We expect contributors to follow a standard code
 - Browse open issues: <https://github.com/jimmy058910/jmo-security-repo/issues>
 - Ask questions by opening a discussion or issue.
 
+### Issue labels
+
+Each issue states how much it matters, what it waits on, and where it sits in
+the program with these labels. Every label's GitHub description repeats its
+definition.
+
+| Label | Meaning |
+|---|---|
+| `priority:p1` | Someone would notice in the release: user-facing defect, security/data flaw, red gate. Cap ~7 open. |
+| `priority:p2` | Planned and wanted; waiting harms nobody. The normal state of phase work. |
+| `priority:p3` | Parked on purpose; never ranked. Close as not planned if still p3 after two phases close. |
+| `needs:decision` | Waiting on the maintainer. Body has Question, Options, Recommendation, Default if no answer. |
+| `needs:info` | Waiting on evidence: a measurement, a reproduction, a platform run, or a third party. |
+| `phase:N` | The program phase the issue belongs to. |
+
+An issue with no `priority:*` label is untriaged. The maintainer sets
+priorities; a suggested one waits on the issue until accepted.
+
+- **Work packages.** A parent issue titled `Phase <N> PR <letter>: <scope>`
+  holds as sub-issues the issues one PR closes. The PR's squash commit message
+  closes the parent and every sub-issue.
+- **Blockers.** Ordering between issues or packages is a native "blocked by"
+  link, not a label. It clears itself when the blocker closes.
+- **Decisions.** A decision about one issue is `needs:decision` on that issue.
+  A decision that gates several issues is its own issue, titled
+  `Decide: <question>` and labelled `needs:decision`, and the gated issues are
+  "blocked by" it. The body carries this block:
+
+```markdown
+## Decision needed
+**Question:** <one sentence>
+**Options:**
+1. <option> — <consequence>
+2. <option> — <consequence>
+**Recommendation:** <option and why, one line>
+**Default if no answer:** <what happens if the maintainer stays silent>
+```
+
 ## Development setup
 
 - Python 3.12+ (CI validates on 3.12 across Ubuntu and macOS)
