@@ -417,7 +417,13 @@ def test_next_json_carries_the_ranking(
 # --- gh boundary ------------------------------------------------------------
 
 
-def _fake_gh(rows: list[dict[str, Any]], calls: list[tuple[str, ...]] | None = None):
+def _fake_gh(
+    rows: list[dict[str, Any]],
+    calls: list[tuple[str, ...]] | None = None,
+    pending_nodes: list[dict[str, Any]] | None = None,
+):
+    """A `gh` that answers `next`: version, issue list, and the pending read."""
+
     def fake(*args: str, stdin: str | None = None) -> str:
         if calls is not None:
             calls.append(args)
@@ -425,9 +431,37 @@ def _fake_gh(rows: list[dict[str, Any]], calls: list[tuple[str, ...]] | None = N
             return "gh version 2.103.0 (2026-10-21)\nhttps://github.com/cli/cli\n"
         if args[:2] == ("issue", "list"):
             return json.dumps(rows)
+        if args[:2] == ("repo", "view"):
+            return "o/r\n"
+        if args[:2] == ("api", "graphql") and "pendingSuggestions" in (stdin or ""):
+            return json.dumps(_issues_page(pending_nodes or []))
         raise AssertionError(f"unexpected gh call: {args}")
 
     return fake
+
+
+def _issues_page(nodes: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "data": {
+            "repository": {
+                "issues": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": nodes,
+                }
+            }
+        }
+    }
+
+
+def _label_suggestion(name: str, actor: str = "U_maint") -> dict[str, Any]:
+    return {
+        "__typename": "PendingLabelSuggestion",
+        "actor": {"id": actor},
+        "label": {"name": name, "id": f"LA_{name}"},
+    }
+
+
+FIELD_SUGGESTION = {"__typename": "PendingFieldSuggestion"}
 
 
 @pytest.mark.parametrize(
@@ -496,3 +530,194 @@ def test_gh_failure_exits_2_with_one_line_on_stderr(
     assert err.startswith("backlog: gh failed")
     assert err.count("\n") == 1
     assert "Traceback" not in err
+
+
+# --- label suggestions (Task 3) ---------------------------------------------
+#
+# The agent never applies a priority on its own judgement: it files a GitHub
+# label suggestion with a rationale, and the label is applied only when the
+# maintainer accepts it. Mutation shapes are from the live schema (2026-11-01).
+
+
+class FakeGitHub:
+    """Records every `gh` call; answers lookups, pending reads and mutations."""
+
+    def __init__(self, pending: dict[int, list[dict[str, Any]]] | None = None):
+        self.pending = pending or {}
+        self.calls: list[tuple[tuple[str, ...], dict[str, Any] | None]] = []
+
+    def mutations(self) -> list[dict[str, Any]]:
+        return [
+            body
+            for _, body in self.calls
+            if body is not None and body["query"].lstrip().startswith("mutation")
+        ]
+
+    def __call__(self, *args: str, stdin: str | None = None) -> str:
+        body = json.loads(stdin) if stdin else None
+        self.calls.append((args, body))
+        if args == ("--version",):
+            return "gh version 2.103.0 (2026-10-21)\n"
+        if args[:2] == ("repo", "view"):
+            return "o/r\n"
+        assert args == ("api", "graphql", "--input", "-"), args
+        assert body is not None
+        query, variables = body["query"], body["variables"]
+        if query.lstrip().startswith("mutation"):
+            return json.dumps({"data": {}})
+        if "label(name:" in query:
+            return json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "issue": {"id": f"I_{variables['number']}"},
+                            "label": {"id": f"LA_{variables['label']}"},
+                        }
+                    }
+                }
+            )
+        if "issue(number:" in query:
+            number = variables["number"]
+            return json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "issue": {
+                                "id": f"I_{number}",
+                                "pendingSuggestions": self.pending.get(number, []),
+                            }
+                        }
+                    }
+                }
+            )
+        raise AssertionError(f"unexpected query: {query}")
+
+
+def test_suggest_builds_an_add_labels_mutation_with_suggest_true(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gh = FakeGitHub()
+    monkeypatch.setattr(backlog, "_gh", gh)
+
+    rc = main(
+        [
+            "suggest",
+            "12",
+            "priority:p2",
+            "--rationale",
+            "Phase 6 work",
+            "--confidence",
+            "HIGH",
+        ]
+    )
+
+    assert rc == 0
+    (mutation,) = gh.mutations()
+    assert "addLabelsToLabelable" in mutation["query"]
+    assert "updateIssue" not in mutation["query"]
+    assert mutation["variables"]["id"] == "I_12"
+    assert mutation["variables"]["labels"] == [
+        {
+            "labelId": "LA_priority:p2",
+            "suggest": True,
+            "rationale": "Phase 6 work",
+            "confidence": "HIGH",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("label", "rationale"),
+    [("bug", "why"), ("phase:6", "why"), ("priority:p2", "x" * 281)],
+    ids=["not-suggestable", "phase-is-a-fact", "rationale-over-280"],
+)
+def test_suggest_rejects_a_label_outside_priority_and_needs(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    label: str,
+    rationale: str,
+) -> None:
+    gh = FakeGitHub()
+    monkeypatch.setattr(backlog, "_gh", gh)
+
+    assert main(["suggest", "12", label, "--rationale", rationale]) == 2
+
+    assert gh.calls == []
+    assert capsys.readouterr().err.startswith("backlog: ")
+
+
+def test_suggest_rejects_a_rationale_over_280_characters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gh = FakeGitHub()
+    monkeypatch.setattr(backlog, "_gh", gh)
+
+    # 280 is GitHub's own limit (LabelUpdateInput.rationale): exactly 280 passes.
+    assert main(["suggest", "12", "needs:info", "--rationale", "y" * 280]) == 0
+    assert main(["suggest", "12", "needs:info", "--rationale", "y" * 281]) == 2
+    assert len(gh.mutations()) == 1
+
+
+def test_pending_suggestions_parses_label_suggestions_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nodes = [
+        {"number": 12, "pendingSuggestions": [_label_suggestion("priority:p2")]},
+        {"number": 13, "pendingSuggestions": [FIELD_SUGGESTION]},
+        {"number": 14, "pendingSuggestions": []},
+    ]
+    monkeypatch.setattr(backlog, "_gh", _fake_gh([], pending_nodes=nodes))
+
+    assert backlog.pending_suggestions() == {12: ["priority:p2"]}
+
+
+def test_next_counts_pending_suggestions(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    nodes = [
+        {"number": 12, "pendingSuggestions": [_label_suggestion("priority:p2")]},
+        {
+            "number": 13,
+            "pendingSuggestions": [_label_suggestion("priority:p1"), FIELD_SUGGESTION],
+        },
+    ]
+    monkeypatch.setattr(backlog, "_gh", _fake_gh([], pending_nodes=nodes))
+
+    assert main(["next"]) == 0
+
+    assert "pending suggestions: 2" in capsys.readouterr().out
+
+
+def test_accept_applies_each_pending_label_by_id(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub(
+        pending={
+            12: [_label_suggestion("priority:p2", actor="U_agent"), FIELD_SUGGESTION]
+        }
+    )
+    monkeypatch.setattr(backlog, "_gh", gh)
+
+    assert main(["accept", "12"]) == 0
+
+    (mutation,) = gh.mutations()
+    assert "applyPendingIssueSuggestions" in mutation["query"]
+    assert mutation["variables"] == {
+        "issueId": "I_12",
+        # The actor whose suggestion it is, which is what the schema asks for.
+        "actorId": "U_agent",
+        "suggestions": [{"kind": "LABEL", "labelId": "LA_priority:p2"}],
+    }
+    assert "#12 priority:p2" in capsys.readouterr().out
+
+
+def test_accept_with_nothing_pending_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub(pending={12: [FIELD_SUGGESTION]})
+    monkeypatch.setattr(backlog, "_gh", gh)
+
+    assert main(["accept", "12", "13"]) == 0
+
+    assert gh.mutations() == []
+    assert "nothing pending" in capsys.readouterr().out

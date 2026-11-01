@@ -57,6 +57,12 @@ GH_FIELDS = (
 SUBPROCESS_TIMEOUT = 120
 NO_PHASE = 10**6
 
+# Suggestions record judgement, so only priority and needs labels go through
+# them; phase labels and links record facts and are set directly.
+SUGGESTABLE = (*PRIORITIES, *NEEDS)
+CONFIDENCES = ("LOW", "MEDIUM", "HIGH")  # IssueEventConfidenceLevel
+RATIONALE_MAX = 280  # LabelUpdateInput.rationale, per the schema (2026-11-01)
+
 _PHASE = re.compile(r"phase:(\d+)")
 _GH_VERSION = re.compile(r"gh version (\d+)\.(\d+)\.(\d+)")
 
@@ -375,6 +381,183 @@ def fetch_items() -> tuple[dict[int, Item], bool]:
     return parse_items(rows), len(rows) >= FETCH_LIMIT
 
 
+# --- label suggestions --------------------------------------------------------
+#
+# A suggestion is stored on the issue as pending, with its rationale, and the
+# label is applied only when accepted (in the GitHub UI or by `accept`). Shapes
+# are from the live schema, 2026-11-01. `updateIssue(labels:)` takes the same
+# input, but its list semantics were tested only on an unlabelled issue, so a
+# suggestion is always an add.
+
+_PENDING_QUERY = """
+query($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    issues(states: OPEN, first: 100, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        pendingSuggestions {
+          __typename
+          ... on PendingLabelSuggestion { label { name id } }
+        }
+      }
+    }
+  }
+}"""
+
+_IDS_QUERY = """
+query($owner: String!, $name: String!, $number: Int!, $label: String!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) { id }
+    label(name: $label) { id }
+  }
+}"""
+
+_SUGGEST = """
+mutation($id: ID!, $labels: [LabelUpdateInput!]!) {
+  addLabelsToLabelable(input: {labelableId: $id, labels: $labels}) {
+    clientMutationId
+  }
+}"""
+
+_ISSUE_PENDING_QUERY = """
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      id
+      pendingSuggestions {
+        __typename
+        ... on PendingLabelSuggestion {
+          actor { ... on Node { id } }
+          label { name id }
+        }
+      }
+    }
+  }
+}"""
+
+_APPLY = """
+mutation($issueId: ID!, $actorId: ID!, $suggestions: [PendingIssueSuggestionRef!]!) {
+  applyPendingIssueSuggestions(
+    input: {issueId: $issueId, actorId: $actorId, suggestions: $suggestions}
+  ) { clientMutationId }
+}"""
+
+
+class BacklogError(Exception):
+    """A request this script refuses: printed as one line, exit 2."""
+
+
+def _graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps({"query": query, "variables": variables})
+    out = json.loads(_gh("api", "graphql", "--input", "-", stdin=body))
+    if out.get("errors"):
+        messages = "; ".join(e.get("message", "?") for e in out["errors"])
+        raise RuntimeError(f"GraphQL: {messages}")
+    data: dict[str, Any] = out["data"]
+    return data
+
+
+def _repo() -> tuple[str, str]:
+    owner, _, name = (
+        _gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+        .strip()
+        .partition("/")
+    )
+    return owner, name
+
+
+def _label_suggestions(issue: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        s
+        for s in issue.get("pendingSuggestions") or []
+        if s.get("__typename") == "PendingLabelSuggestion" and s.get("label")
+    ]
+
+
+def pending_suggestions() -> dict[int, list[str]]:
+    """Open issue number -> label names suggested and not yet accepted."""
+    owner, name = _repo()
+    found: dict[int, list[str]] = {}
+    cursor: str | None = None
+    while True:
+        page = _graphql(
+            _PENDING_QUERY, {"owner": owner, "name": name, "cursor": cursor}
+        )["repository"]["issues"]
+        for node in page["nodes"]:
+            labels = [s["label"]["name"] for s in _label_suggestions(node)]
+            if labels:
+                found[node["number"]] = labels
+        if not page["pageInfo"]["hasNextPage"]:
+            return found
+        cursor = page["pageInfo"]["endCursor"]
+
+
+def suggest_label(number: int, label: str, rationale: str, confidence: str) -> None:
+    if label not in SUGGESTABLE:
+        raise BacklogError(
+            f"only {', '.join(SUGGESTABLE)} are suggested; set {label} directly"
+        )
+    if len(rationale) > RATIONALE_MAX:
+        raise BacklogError(
+            f"rationale is {len(rationale)} characters; GitHub takes {RATIONALE_MAX}"
+        )
+    if confidence not in CONFIDENCES:
+        raise BacklogError(f"confidence must be one of {', '.join(CONFIDENCES)}")
+    owner, name = _repo()
+    repo = _graphql(
+        _IDS_QUERY, {"owner": owner, "name": name, "number": number, "label": label}
+    )["repository"]
+    if repo.get("issue") is None:
+        raise BacklogError(f"#{number} does not exist in {owner}/{name}")
+    if repo.get("label") is None:
+        raise BacklogError(f"label {label} does not exist in {owner}/{name}")
+    _graphql(
+        _SUGGEST,
+        {
+            "id": repo["issue"]["id"],
+            "labels": [
+                {
+                    "labelId": repo["label"]["id"],
+                    "suggest": True,
+                    "rationale": rationale,
+                    "confidence": confidence,
+                }
+            ],
+        },
+    )
+
+
+def accept_suggestions(numbers: list[int]) -> list[str]:
+    """Apply every pending label suggestion on each issue; return `#N label`."""
+    owner, name = _repo()
+    applied: list[str] = []
+    for number in numbers:
+        issue = _graphql(
+            _ISSUE_PENDING_QUERY, {"owner": owner, "name": name, "number": number}
+        )["repository"]["issue"]
+        if issue is None:
+            raise BacklogError(f"#{number} does not exist in {owner}/{name}")
+        # `actorId` is the actor whose suggestions to apply (schema description).
+        by_actor: dict[str, list[tuple[str, str]]] = {}
+        for s in _label_suggestions(issue):
+            actor = (s.get("actor") or {}).get("id")
+            if actor:
+                label = s["label"]
+                by_actor.setdefault(actor, []).append((label["id"], label["name"]))
+        for actor, labels in by_actor.items():
+            _graphql(
+                _APPLY,
+                {
+                    "issueId": issue["id"],
+                    "actorId": actor,
+                    "suggestions": [{"kind": "LABEL", "labelId": i} for i, _ in labels],
+                },
+            )
+            applied.extend(f"#{number} {label_name}" for _, label_name in labels)
+    return applied
+
+
 def main(argv: list[str] | None = None) -> int:
     harden_console_streams()
     parser = argparse.ArgumentParser(prog="backlog.py", description=__doc__)
@@ -382,11 +565,39 @@ def main(argv: list[str] | None = None) -> int:
     p_next = sub.add_parser("next", help="print the top ready items")
     p_next.add_argument("--json", action="store_true", dest="as_json")
     p_next.add_argument("--top", type=int, default=3)
+    p_suggest = sub.add_parser(
+        "suggest", help="file a label suggestion, applied only when accepted"
+    )
+    p_suggest.add_argument("number", type=int)
+    p_suggest.add_argument("label", help=", ".join(SUGGESTABLE))
+    p_suggest.add_argument("--rationale", required=True)
+    p_suggest.add_argument("--confidence", choices=CONFIDENCES, default="MEDIUM")
+    p_accept = sub.add_parser("accept", help="apply the pending label suggestions")
+    p_accept.add_argument("numbers", type=int, nargs="+")
     args = parser.parse_args(argv)
 
     try:
+        if args.command == "suggest":
+            suggest_label(args.number, args.label, args.rationale, args.confidence)
+            print(
+                f"suggested {args.label} on #{args.number} ({args.confidence}); "
+                "applied only when accepted"
+            )
+            return 0
+        if args.command == "accept":
+            applied = accept_suggestions(args.numbers)
+            for line in applied:
+                print(f"applied {line}")
+            for number in args.numbers:
+                if not any(line.startswith(f"#{number} ") for line in applied):
+                    print(f"#{number}: nothing pending")
+            return 0
         require_gh(_gh("--version"))
         items, truncated = fetch_items()
+        pending = sum(len(v) for v in pending_suggestions().values())
+    except BacklogError as exc:
+        print(f"backlog: {exc}", file=sys.stderr)
+        return 2
     except (RuntimeError, OSError) as exc:
         print(f"backlog: gh failed: {' '.join(str(exc).split())}", file=sys.stderr)
         return 2
@@ -394,7 +605,7 @@ def main(argv: list[str] | None = None) -> int:
     report = build_report(
         items,
         now=datetime.now(UTC),
-        pending=0,
+        pending=pending,
         top_n=args.top,
         truncated=truncated,
     )
