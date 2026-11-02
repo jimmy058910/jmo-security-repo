@@ -44,6 +44,9 @@ class TestCIGating:
             capture_output=True,
             text=True,
             timeout=900,
+            # `jmo ci` stores the scan in the cwd-relative .jmo/history.db, so
+            # run it here, not in the checkout (#1546).
+            cwd=str(tmp_path),
         )
 
         # Should exit 1 (findings above threshold) or 0 (no HIGH findings)
@@ -90,6 +93,7 @@ class TestCIGating:
             capture_output=True,
             text=True,
             timeout=900,
+            cwd=str(tmp_path),  # as above: keep history out of the checkout
         )
 
         # With --fail-on CRITICAL, only CRITICAL findings cause exit 1

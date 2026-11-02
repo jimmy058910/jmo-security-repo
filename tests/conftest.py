@@ -437,7 +437,6 @@ def _keep_opengrep_log_out_of_the_home(tmp_path_factory):
     patch.undo()
 
 
-# TODO(issue-#1425): fires on subprocess e2e U4 with zap and no ZAP home
 @pytest.fixture(autouse=True)
 def _guard_real_zap_home(request):
     """Fail the test that created the real `~/.jmo/zap-home`.
@@ -446,7 +445,9 @@ def _guard_real_zap_home(request):
     directory and removes the `config.xml` an earlier run left there
     (`write_zap_plan`). A test that drives zap through the loop without
     redirecting `Path.home()` does both to the developer's real home. Armed
-    where the home does not exist yet, as on CI and a fresh clone.
+    where the home does not exist yet, as on CI and a fresh clone. A
+    subprocess test redirects it by running through `jmo_runner`, as the e2e
+    `jmo_scan_runner` does (#1425).
     """
     from pathlib import Path
 
