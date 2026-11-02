@@ -72,7 +72,7 @@ jobs:
         # Only for `uv lock` in the relock step below. Nothing here installs the
         # project, so there is no uv cache worth saving (and Python is already
         # set up above).
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           enable-cache: false
@@ -614,7 +614,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
