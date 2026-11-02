@@ -15,7 +15,6 @@ Note: ``jmo_scan_runner`` is intentionally named differently from the root-level
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -32,12 +31,17 @@ def e2e_fixtures_dir() -> Path:
 
 
 @pytest.fixture
-def jmo_scan_runner(tmp_path):
+def jmo_scan_runner(tmp_path, jmo_runner):
     """Execute jmo CLI and return (rc, stdout, stderr, results_dir).
 
     This e2e-specific fixture automatically creates a results directory under
     ``tmp_path`` and appends ``--results-dir`` to every invocation.  The caller
     only needs to supply the meaningful command arguments.
+
+    It runs through ``jmo_runner``: a home of the test's own, with the
+    developer's installed scanners linked in, and ``tmp_path`` as the working
+    directory. With the real home, U4's zap run created the real
+    ``~/.jmo/zap-home`` and failed the guard at teardown (#1425).
 
     Usage::
 
@@ -50,22 +54,7 @@ def jmo_scan_runner(tmp_path):
         results_dir = tmp_path / "results"
         results_dir.mkdir(exist_ok=True)
 
-        full_args = [
-            sys.executable,
-            "-m",
-            "scripts.cli.jmo",
-            *args,
-            "--results-dir",
-            str(results_dir),
-        ]
-
-        result = subprocess.run(
-            full_args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(tmp_path),
-        )
+        result = jmo_runner([*args, "--results-dir", str(results_dir)], timeout=timeout)
 
         return result.returncode, result.stdout, result.stderr, results_dir
 
