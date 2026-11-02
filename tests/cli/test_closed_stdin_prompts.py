@@ -207,7 +207,12 @@ def test_a_terminal_reads_as_one():
 def resumable_scan(tmp_path: Path, home: Path, monkeypatch):
     """Return ``run() -> (rc, scanned)`` for ``jmo scan`` with a session on disk
     that has one completed target, ``proj``: ``scanned`` is how many times
-    ``proj`` was scanned, so 1 is a fresh scan and 0 is a resume."""
+    ``proj`` was scanned, so 1 is a fresh scan and 0 is a resume.
+
+    ``_warn_critical_updates`` version-checks trufflehog through
+    ``ToolManager._find_binary`` on the real PATH before the prompt, so that
+    resolves nothing: only the nightly has trufflehog on PATH, and there each
+    test ran its ``--version`` (#1540, as #1237 was for ``scan_env``)."""
     (home / ".jmo").mkdir()
     (home / ".jmo" / "config.yml").write_text(
         "onboarding_completed: true\nscan_count: 0\n", encoding="utf-8"
@@ -237,6 +242,9 @@ def resumable_scan(tmp_path: Path, home: Path, monkeypatch):
     save_session(session, tmp_path / ".jmo" / "scan-session.json")
 
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
+    monkeypatch.setattr(
+        "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
+    )
     argv = [
         "jmo",
         "scan",
