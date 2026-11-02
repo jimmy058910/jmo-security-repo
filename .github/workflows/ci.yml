@@ -104,7 +104,7 @@ jobs:
           python-version: '3.12'
 
       - name: Validate GitHub workflows (actionlint)
-        uses: reviewdog/action-actionlint@v1.80.4
+        uses: reviewdog/action-actionlint@v1.80.6
         with:
           actionlint_flags: -color
           level: error
@@ -122,7 +122,7 @@ jobs:
           failure-threshold: warning
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -372,7 +372,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -512,7 +512,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -939,7 +939,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -1084,7 +1084,7 @@ jobs:
               - '.gitattributes'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'
@@ -1241,7 +1241,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -1322,7 +1322,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'
@@ -1448,7 +1448,7 @@ jobs:
 
       - name: Set up uv
         if: steps.changes.outputs.docker == 'true'
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'
@@ -1560,7 +1560,7 @@ jobs:
 
       - name: Set up uv
         if: steps.changes.outputs.versions == 'true'
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -1779,7 +1779,7 @@ jobs:
 
       - name: Set up uv
         if: steps.changes.outputs.bundle == 'true'
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'
@@ -1915,7 +1915,7 @@ jobs:
 
       - name: Set up uv
         if: steps.changes.outputs.opengrep == 'true'
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.13.1"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
