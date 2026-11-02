@@ -774,9 +774,11 @@ class TestAGitLabTargetScansTheImagesItNames:
         """`.scan_metadata.json` counted the targets asked for, before any
         image was found, while the report counts the folders it reads: the
         two disagreed for every GitLab scan that names an image. A reference
-        no tool is given (a registry with a port, which the validator has no
-        pattern for) is a target too, failed, never on a command line."""
-        refused = "registry.corp:5000/team/app:1"
+        no tool is given (`--file=<path>` is a syft flag) is a target too,
+        failed, never on a command line. Discovery keeps only what Docker's
+        grammar accepts, which the validator accepts too, so discovery is
+        patched to name it."""
+        refused = "--file=/tmp/owned.json"
         commands: list[list[str]] = []
 
         class _Recording(_WritingRunner):
@@ -789,12 +791,11 @@ class TestAGitLabTargetScansTheImagesItNames:
         )
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
-            _clone_holding(
-                {
-                    "Dockerfile": b"FROM alpine:3.19\n",
-                    "web.Dockerfile": f"FROM {refused}\n".encode(),
-                }
-            ),
+            _clone_holding({"README.md": b"# app\n"}),
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images",
+            lambda *args, **kwargs: {"alpine:3.19", refused},
         )
 
         # 1: the refused reference is a target that produced nothing.
@@ -802,8 +803,8 @@ class TestAGitLabTargetScansTheImagesItNames:
 
         assert _tool_runs(env.results) == [
             ("gitlab", "group/app", "trivy"),
-            ("image", "alpine:3.19", "trivy"),
             ("image", refused, "trivy"),
+            ("image", "alpine:3.19", "trivy"),
         ]
         assert not [c for c in commands if any(refused in part for part in c)]
         meta = json.loads((env.results / ".scan_metadata.json").read_bytes())
@@ -1005,6 +1006,22 @@ class TestOnlyAnImageReferenceBecomesAnImageTarget:
                 id="heredoc",
             ),
             pytest.param(
+                {
+                    "Dockerfile": b"FROM python:3.12\nONBUILD RUN <<EOF\n"
+                    b"python -c 'import os'\nfrom os import path\nEOF\n"
+                },
+                ["python:3.12"],
+                id="onbuild-heredoc",
+            ),
+            pytest.param(
+                {
+                    "Dockerfile": b"FROM python:3.12\nRUN cat << EOF > /app/main.py\n"
+                    b"from os import path\nEOF\n"
+                },
+                ["python:3.12"],
+                id="heredoc-with-a-space-after-the-operator",
+            ),
+            pytest.param(
                 {"Dockerfile.j2": b"FROM {{ base_image }}\nRUN echo hi\n"},
                 [],
                 id="template",
@@ -1072,14 +1089,19 @@ class TestOnlyAnImageReferenceBecomesAnImageTarget:
     def test_a_reference_the_validator_refuses_is_a_failed_target_and_no_error(
         self, env, monkeypatch, caplog
     ):
-        """A registry with a port is an image reference, which JMo does not
-        pass to a scanner: a failed image row, as before, and only the job's
-        WARNING says so. The validator's own ERROR beside it read as a
-        failure of something else."""
-        refused = "registry.corp:5000/team/app:1"
+        """A reference JMo does not pass to a scanner (`--file=<path>` is a
+        syft flag) is a failed image row, and only the job's WARNING says so.
+        The validator's own ERROR beside it read as a failure of something
+        else. Discovery keeps only what Docker's grammar accepts, which the
+        validator accepts too, so discovery is patched to name it."""
+        refused = "--file=/tmp/owned.json"
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
-            _clone_holding({"Dockerfile": f"FROM {refused}\n".encode()}),
+            _clone_holding({"README.md": b"# app\n"}),
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images",
+            lambda *args, **kwargs: {refused},
         )
 
         with caplog.at_level(logging.INFO):

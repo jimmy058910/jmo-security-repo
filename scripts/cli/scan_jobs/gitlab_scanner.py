@@ -11,8 +11,10 @@ own (#1311).
    scanned with its own output (#1364).
 2. Run scan_repository() with every requested tool.
 3. When a requested tool reads an image, discover the images its Dockerfiles
-   (`FROM`), `docker-compose*.yml` files and `*.k8s.yaml` Pods (`image:`)
-   name.
+   (`FROM`), compose files (`docker-compose*` and `compose*`, `.yml` or
+   `.yaml`) and Kubernetes manifests (any YAML document with an `apiVersion`
+   and a `kind`: the `containers` and `initContainers` of a Pod, or of a
+   workload's pod template) name (`image:`).
 4. Scan each with scan_image(), with every requested tool as `--image` would,
    into `individual-images/<group>_<repo>__<image>/`. Its rows go back to the
    orchestrator, which records it as an image target beside this one.
@@ -28,6 +30,8 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
+from fnmatch import fnmatchcase
+from functools import partial
 from pathlib import Path
 
 import yaml
@@ -46,6 +50,7 @@ from scripts.core.tool_descriptors import (
     is_dockerfile,
 )
 from scripts.core.validation import (
+    IMAGE_REFERENCE_PATTERN,
     gitlab_clone_base,
     image_reference_problem,
     sanitize_subprocess_output,
@@ -69,31 +74,65 @@ _FROM_LINE = re.compile(
 # a directive Docker knows: an unknown one is a comment, and ends them.
 _DIRECTIVE = re.compile(r"\s*#\s*([a-zA-Z][a-zA-Z0-9]*)\s*=\s*(.+?)\s*$")
 _DIRECTIVES = frozenset({"syntax", "escape", "check"})
-# A heredoc's opening word (`<<EOF`, `<<-EOF`, `<<"EOF"`), as a word of its
-# own: `<<<` is a here-string. Its body runs to the line holding the word
-# alone, leading tabs stripped first for `<<-`.
-# TODO(issue-#1416): a `<<EOF` inside a quoted string matches too, and the
-# unterminated "body" then swallows every later FROM silently.
-_HEREDOC = re.compile(r"(?:^|\s)\d*<<(-?)([\"']?)([^\s\"'<]+)\2(?=\s|$)")
-# TODO(issue-#1415): `ONBUILD RUN <<EOF` starts with ONBUILD, so its body is
-# read as instructions.
+# A heredoc's opening word, as BuildKit reads it: `<<`, then whitespace if any
+# (`<< EOF`: BuildKit folds space, tab and CR after `<<` into the word, and
+# nothing else), or `<<-` (chomp) with the marker right after it. A dash after
+# whitespace belongs to the marker (`<< -EOF`), and `<<- EOF` opens nothing:
+# the `<<-` is a word of its own with no marker. The marker is plain
+# characters, escaped characters and quoted spans, none of them `<` (`<<EOF`,
+# `<<\EOF`, `<<EO"F"`, `<<'a b'`; `_unquoted` names it); `<<<` is a here-string.
+# The body runs to the line holding the marker alone, leading tabs stripped
+# first for `<<-`. What shell reads as one unit is matched too, to be stepped
+# over, and has no marker group: a quoted span (`echo "cat <<EOF here"`) and a
+# backslash with the character it escapes, whitespace included (`don\'t` opens
+# no span; `a\ <<EOF` is one word and no heredoc; inside double quotes `\"`
+# does not close a span; inside single quotes a backslash is a plain
+# character). The scan runs left to right, so the quote that opens the marker
+# itself (`<<"EOF"`) is part of it: the match starts at the space before `<<`.
+# The alternatives start on different characters (the opener on whitespace, a
+# digit or `<`, the rest on a backslash or a quote), so their order does not
+# matter.
+_MARKER_WORD = r"""(?:[^\s"'\\<]|\\[^<]|"(?:[^"\\<]|\\[^<])*"|'[^'<]*')+"""
+_HEREDOC = re.compile(
+    rf"(?:^|\s)\d*<<(?:(-)|(?!-)[ \t\r]*)({_MARKER_WORD})(?=\s|$)"
+    r"""|\\.|"(?:[^"\\]|\\.)*"|'[^']*'"""
+)
+# What `_unquoted` removes from a marker word: an escaped character, a
+# double-quoted span, a single-quoted span (groups 1, 2 and 3).
+_QUOTING = re.compile(r"""\\(.)|"((?:[^"\\]|\\.)*)"|'([^']*)'""")
 _HEREDOC_INSTRUCTIONS = frozenset({"run", "copy", "add"})
 
-# Docker's own grammar for an image reference (distribution's `reference`
-# package): what a `FROM` or an `image:` must be for Docker to pull it. A
-# registry with a port is one; `{{`, `\` and `debian:%%SUITE%%` are not.
-_PATH_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
-_DOMAIN_COMPONENT = r"(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])"
-_REFERENCE = re.compile(
-    rf"(?:{_DOMAIN_COMPONENT}(?:\.{_DOMAIN_COMPONENT})*(?::[0-9]+)?/)?"
-    rf"{_PATH_COMPONENT}(?:/{_PATH_COMPONENT})*"
-    r"(?::\w[\w.-]{0,127})?"
-    r"(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?",
-    re.ASCII,
+# The Compose specification's file names, `compose.yaml` first, and the
+# `docker-compose` ones it superseded. A file with one of these names is read
+# as compose; every YAML file is read for manifests, whatever it is called.
+_COMPOSE_NAMES = ("docker-compose*.y*ml", "compose*.y*ml")
+_YAML_PATTERNS = ("**/*.yaml", "**/*.yml")
+# Where a manifest keeps a pod spec: a Pod's `spec`, a Deployment's,
+# StatefulSet's, DaemonSet's or Job's template, and a CronJob's job template.
+_POD_SPEC_PATHS = (
+    ("spec",),
+    ("spec", "template", "spec"),
+    ("spec", "jobTemplate", "spec", "template", "spec"),
 )
 
 
-def _instructions(text: str) -> Iterator[tuple[int, str]]:
+def _unquoted(word: str) -> str:
+    """A heredoc marker as BuildKit names it: the word with its quotes and
+    backslash escapes removed, so `E\\OF`, `EO"F"` and `'EOF'` all name `EOF`.
+    Inside double quotes a backslash escapes only `"`, `$` and `\\`."""
+
+    def piece(quoted: re.Match[str]) -> str:
+        escaped, double, single = quoted.groups()
+        if double is not None:
+            return re.sub(r'\\(["$\\])', r"\1", double)
+        return escaped if escaped is not None else single
+
+    return _QUOTING.sub(piece, word)
+
+
+def _instructions(
+    text: str, where: Callable[[int], str] | None = None
+) -> Iterator[tuple[int, str]]:
     """Each instruction of a Dockerfile, with the line it starts on, read as
     Docker reads one.
 
@@ -102,7 +141,9 @@ def _instructions(text: str) -> Iterator[tuple[int, str]]:
     Python in a BuildKit heredoc (`COPY <<EOF app.py`) or in a continued
     `RUN python -c` gave `flask` and `os` (measured). So continuations are
     joined, with the escape character a `# escape=` directive sets, a comment
-    or blank line inside one is dropped, and a heredoc's body is skipped.
+    or blank line inside one is dropped, and a heredoc's body is skipped, also
+    behind `ONBUILD`. A body no line closes runs to the end of the file, as
+    BuildKit reads it, and `where(line)` names where it opened in a WARNING.
     """
     lines = text.splitlines()
     escape = "\\"
@@ -131,13 +172,32 @@ def _instructions(text: str) -> Iterator[tuple[int, str]]:
             line += lines[at]
             at += 1
         yield start, line
-        if line.split(None, 1)[0].lower() in _HEREDOC_INSTRUCTIONS:
-            for chomp, _quote, word in _HEREDOC.findall(line):
+        words = line.split(None, 2)
+        if words[0].lower() == "onbuild" and len(words) > 1:
+            words = words[1:]
+        if words[0].lower() in _HEREDOC_INSTRUCTIONS:
+            for opening in _HEREDOC.finditer(line):
+                chomp, word = opening.group(1), opening.group(2)
+                if word is None:  # a quoted span or an escaped character
+                    continue
+                word = _unquoted(word)
+                if not word:  # `<<""` names no marker
+                    continue
                 while at < len(lines):
                     body = lines[at].lstrip("\t") if chomp else lines[at]
                     at += 1
                     if body == word:
                         break
+                else:
+                    if where:
+                        logger.warning(
+                            "%s opens the heredoc %r, which is never closed: "
+                            "the rest of the file is its body, so no later "
+                            "FROM is read",
+                            where(start),
+                            word,
+                        )
+                    return
 
 
 class _Located(str):
@@ -287,7 +347,7 @@ def _scannable(image: str, where: str) -> bool:
             image,
         )
         return False
-    if not _REFERENCE.fullmatch(image):
+    if not IMAGE_REFERENCE_PATTERN.fullmatch(image):
         logger.warning(
             "%s names %r, which is not an image reference: not scanned", where, image
         )
@@ -311,16 +371,36 @@ def _image_value(
     return str(value), _where(source, repo_path, line, label)
 
 
+def _pod_images(manifest: dict) -> Iterator[object]:
+    """The `image:` of each container a manifest's pod specs hold. An
+    ephemeral container is added to a running Pod, never written in a file."""
+    for path in _POD_SPEC_PATHS:
+        node: object = manifest
+        for key in path:
+            node = node.get(key) if isinstance(node, dict) else None
+        if not isinstance(node, dict):
+            continue
+        for field in ("containers", "initContainers"):
+            containers = node.get(field)
+            if isinstance(containers, list):
+                for container in containers:
+                    if isinstance(container, dict) and "image" in container:
+                        yield container["image"]
+
+
 def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     """
     Discover container images referenced in repository files.
 
     Reads:
     - each Dockerfile's FROM instructions (`is_dockerfile`)
-    - each `docker-compose*.yml`/`.yaml` service's `image:`, unless the service
-      has `build:`
-    - each `*.k8s.yaml`/`*.k8s.yml` document's `spec.containers` images (a
-      Pod's; not `initContainers`, nor a Deployment's template)
+    - each compose file's (`docker-compose*` or `compose*`, `.yml`/`.yaml`)
+      service `image:`, unless the service has `build:`
+    - each Kubernetes manifest's `containers` and `initContainers` images: a
+      manifest is any YAML document, in a file of any name, with a string
+      `apiVersion` and `kind`,
+      and its pod spec is a Pod's `spec`, a workload's `spec.template.spec`
+      or a CronJob's `spec.jobTemplate.spec.template.spec`
 
     Args:
         repo_path: Path to cloned repository
@@ -329,8 +409,7 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     Returns:
         Set of discovered image references (e.g., 'nginx:latest',
         'python:3.11-slim'), as the repository spells them. Each is an image
-        reference in Docker's grammar; the job still refuses one JMo does not
-        pass to a scanner (a registry with a port) before any tool sees it.
+        reference in Docker's grammar (`IMAGE_REFERENCE_PATTERN`).
     """
     images: set[str] = set()
 
@@ -341,10 +420,16 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     # through the same walk: `*Dockerfile*` read `pkg/dockerfile_utils.py`
     # (`from os import path`) and a `Dockerfile.md` ("From the root..."), and
     # each named an image to pull from Docker Hub (measured: `os`, `the`), and
-    # a vendored tree's Dockerfile too.
+    # a vendored tree's Dockerfile too. No cap: it is for a tool's command
+    # line, and nothing here is put on one.
+    # TODO(issue-#1410): misses `Containerfile`, `Dockerfile-dev`,
+    # `Dockerfile_prod` and `prod-Dockerfile`: neither `is_dockerfile` nor
+    # `DOCKERFILE_PATTERNS` knows them.
     dockerfiles = [
         Path(found)
-        for found in collect_files(repo_path, DOCKERFILE_PATTERNS, "image discovery")
+        for found in collect_files(
+            repo_path, DOCKERFILE_PATTERNS, "image discovery", max_files=None
+        )
         if is_dockerfile(Path(found).name)
     ]
     for dockerfile in dockerfiles:
@@ -352,7 +437,8 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
             # `utf-8-sig`: a byte-order mark hid the first FROM (measured).
             content = dockerfile.read_text(encoding="utf-8-sig", errors="ignore")
             stages: set[str] = set()
-            for line, instruction in _instructions(content):
+            opened_at = partial(_where, dockerfile, repo_path, label=label)
+            for line, instruction in _instructions(content, opened_at):
                 match = _FROM_LINE.match(instruction)
                 if not match:
                     continue
@@ -373,13 +459,27 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
             )
             continue  # Skip files that can't be read
 
-    # Pattern 2: docker-compose.yml images
+    # Patterns 2 and 3 read the YAML files of one walk, the Dockerfiles' (a
+    # vendored tree is skipped): a compose file by its name, every file as
+    # manifests, since a name says nothing of what a file holds (a Deployment
+    # in `compose-prod.yaml`). Pattern 3 parses a file only if its text names
+    # `apiVersion` and `kind`, which a real compose file seldom does. A name is
+    # matched with its case (`fnmatchcase`): the glob ignores it on Windows.
+    compose_files: list[Path] = []
+    manifest_files: list[Path] = []
+    for found in collect_files(
+        repo_path, _YAML_PATTERNS, "image discovery", max_files=None
+    ):
+        yaml_file = Path(found)
+        manifest_files.append(yaml_file)
+        if any(fnmatchcase(yaml_file.name, name) for name in _COMPOSE_NAMES):
+            compose_files.append(yaml_file)
+
+    # Pattern 2: compose images
     # services:
     #   web:
     #     image: nginx:latest
-    # TODO(issue-#1410): misses `compose.yaml`, `Containerfile`, `Dockerfile-dev`
-    # and k8s workloads other than a Pod's `spec.containers`.
-    for compose_file in repo_path.rglob("docker-compose*.y*ml"):
+    for compose_file in compose_files:
         try:
             with open(compose_file, encoding="utf-8") as f:
                 data = yaml.load(f, Loader=_LineLoader)  # nosec B506 - a SafeLoader subclass
@@ -408,34 +508,35 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
             continue  # Skip files that can't be parsed
 
     # Pattern 3: Kubernetes manifests
+    # apiVersion: apps/v1
+    # kind: Deployment
     # spec:
-    #   containers:
-    #   - image: nginx:latest
-    for k8s_file in list(repo_path.rglob("*.k8s.yaml")) + list(
-        repo_path.rglob("*.k8s.yml")
-    ):
+    #   template:
+    #     spec:
+    #       containers:
+    #       - image: nginx:latest
+    for manifest_file in manifest_files:
         try:
-            with open(k8s_file, encoding="utf-8") as f:
-                # K8s manifests can contain multiple documents
-                docs = yaml.load_all(f, Loader=_LineLoader)  # nosec B506 - a SafeLoader subclass
-                for doc in docs:
-                    if not isinstance(doc, dict):
-                        continue
-                    # Look for containers in pod specs
-                    spec = doc.get("spec", {})
-                    if isinstance(spec, dict):
-                        containers = spec.get("containers", [])
-                        if isinstance(containers, list):
-                            for container in containers:
-                                if isinstance(container, dict) and "image" in container:
-                                    image, where = _image_value(
-                                        container["image"], k8s_file, repo_path, label
-                                    )
-                                    if _scannable(image, where):
-                                        images.add(image)
+            text = manifest_file.read_text(encoding="utf-8")
+            # Lockfiles and CI files are YAML too, and the pure-Python loader
+            # takes seconds on a large one: parse only a file that names both.
+            if "apiVersion" not in text or "kind" not in text:
+                continue
+            # A manifest file can contain multiple documents
+            for doc in yaml.load_all(text, Loader=_LineLoader):  # nosec B506 - a SafeLoader subclass
+                if not (
+                    isinstance(doc, dict)
+                    and isinstance(doc.get("apiVersion"), str)
+                    and isinstance(doc.get("kind"), str)
+                ):
+                    continue
+                for value in _pod_images(doc):
+                    image, where = _image_value(value, manifest_file, repo_path, label)
+                    if _scannable(image, where):
+                        images.add(image)
         except Exception as e:
             logger.debug(
-                f"Skipping Kubernetes manifest {k8s_file}: failed to parse - {type(e).__name__}: {e}"
+                f"Skipping Kubernetes manifest {manifest_file}: failed to parse - {type(e).__name__}: {e}"
             )
             continue  # Skip files that can't be parsed
 
@@ -507,10 +608,9 @@ def _scan_named_images(
             # the validator would add an ERROR for an outcome that is not one.
             problem = image_reference_problem(image)
             if problem is not None:
-                # An image reference (discovery keeps no other) that never
-                # reaches a tool's command line, where it would be their first
-                # argument, and it is not dropped: a private registry with a
-                # port lands here.
+                # A guard: discovery and the validator share one grammar, so
+                # only a reference over 255 characters lands here. It never
+                # reaches a tool's command line, and it is not dropped.
                 logger.warning(
                     "%s names an image reference JMo does not pass to a "
                     "scanner (%s): recorded as a failed image target",

@@ -1070,23 +1070,17 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
 
 class TestAReferenceNoToolIsGivenIsAFailedImageRow:
     """A reference the validator refuses never reaches a tool's command line:
-    `--file=<path>` is a syft flag, and `registry.corp:5000/...` is a private
-    registry the validator has no port for. Either is still an image the
-    repository names, so it is a failed image target, not a silent skip."""
+    `--file=<path>` is a syft flag. Discovery keeps only what Docker's grammar
+    accepts and the validator accepts the same grammar, so a file can name one
+    only by length: the validator also refuses a reference over 255
+    characters, which discovery does not check. The job's refusal is otherwise
+    a guard, and these tests reach it through a patched discovery. It is still
+    an image the repository names, so it is a failed image target, not a
+    silent skip."""
 
-    @pytest.mark.parametrize(
-        ("image", "folder"),
-        [
-            (
-                "registry.corp:5000/team/app:1",
-                "group_app__registry.corp_5000_team_app_1",
-            ),
-            ("--file=/tmp/owned.json", "group_app__--file=_tmp_owned.json"),
-        ],
-    )
-    def test_it_is_failed_and_recorded_where_the_report_reads(
-        self, tmp_path, image, folder
-    ):
+    def test_it_is_failed_and_recorded_where_the_report_reads(self, tmp_path):
+        image = "--file=/tmp/owned.json"
+        folder = "group_app__--file=_tmp_owned.json"
         images = DiscoveredImages(tmp_path / "individual-images")
         with (
             patch(
@@ -1125,6 +1119,58 @@ class TestAReferenceNoToolIsGivenIsAFailedImageRow:
         )
         assert (doc["target_type"], doc["target"]) == ("image", image)
         assert doc["outcome"] == "failed-before-tools"
+
+
+class TestAnImageOnARegistryWithAPortIsScanned:
+    """#1405: `registry.corp:5000/team/app:1` is a normal Docker reference. The
+    validator refused it, so the job recorded a failed image target for an
+    image no pull was ever attempted for."""
+
+    @pytest.mark.parametrize(
+        "image",
+        [
+            "registry.corp:5000/team/app:1",
+            "localhost:5000/app",
+            "registry.corp:5000/team/app@sha256:" + "a" * 64,
+        ],
+    )
+    def test_it_reaches_scan_image_and_is_no_failed_row(self, tmp_path, image):
+        images = DiscoveredImages(tmp_path / "individual-images")
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                return_value=("group_app", _rows(trivy=True)),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images",
+                return_value={image},
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_image",
+                side_effect=lambda **kw: (kw["image"], _rows(trivy=True)),
+            ) as mock_scan_image,
+        ):
+            scan_gitlab_repo(
+                gitlab_info={"full_path": "group/app", "url": "", "token": "t"},
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trivy", "hadolint"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=images,
+            )
+
+        (call,) = mock_scan_image.call_args_list
+        assert call.kwargs["image"] == image
+        ((named, rows),) = images.found_in("group/app")
+        assert named == image
+        assert "failed:target not scanned" not in {row.label for row in rows.values()}
+        assert rows["trivy"].state is State.RAN
 
 
 class TestAbandonedGitlabTargetsStillGetTimings:
@@ -1394,12 +1440,29 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         ]
 
     def test_a_registry_with_a_port_is_an_image_reference(self, tmp_path):
-        """Docker pulls it, so discovery keeps it; the job decides whether
-        JMo passes it to a scanner."""
+        """Docker pulls it, so discovery keeps it, and the job scans it (#1405)."""
         images = self._discover(
             tmp_path, {"Dockerfile": "FROM registry.corp:5000/team/app:1\n"}
         )
         assert images == {"registry.corp:5000/team/app:1"}
+
+    @pytest.mark.parametrize("image", ["Org/app", "registry.corp/App:1"])
+    def test_an_upper_case_repository_is_no_image_reference(
+        self, tmp_path, caplog, image
+    ):
+        """A repository path is lower case, and a first component is a
+        registry only when it holds `.` or `:` or is `localhost` (#1405): so
+        `Org/app` is named and dropped, not a target that fails."""
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"Dockerfile": f"FROM {image}\n"})
+
+        assert images == set()
+        assert caplog.messages == [
+            f"Dockerfile:1 names {image!r}, which is not an image reference: "
+            "not scanned"
+        ]
 
     @pytest.mark.parametrize(
         ("dockerfile", "images"),
@@ -1437,12 +1500,285 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
                 {"python:3.12"},
                 id="syntax-directive-and-lower-case",
             ),
+            # A guard: the word read past ONBUILD is not a heredoc instruction.
+            pytest.param(
+                "FROM alpine:3.19\nONBUILD ENV X=1\nFROM nginx:1.27\n",
+                {"alpine:3.19", "nginx:1.27"},
+                id="guard-onbuild-with-a-non-heredoc-instruction",
+            ),
         ],
     )
     def test_instructions_are_read_as_docker_reads_them(
         self, tmp_path, dockerfile, images
     ):
         assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == images
+
+    @pytest.mark.parametrize(
+        "dockerfile",
+        [
+            pytest.param(
+                "FROM python:3.12\nONBUILD RUN <<EOF\npython -c 'import os'\n"
+                "from os import path\nEOF\n",
+                id="onbuild-run",
+            ),
+            pytest.param(
+                "FROM python:3.12\nonbuild copy <<EOF /app/main.py\n"
+                "from flask import Flask\nEOF\n",
+                id="lower-case-onbuild-copy",
+            ),
+        ],
+    )
+    def test_an_onbuild_heredoc_body_is_not_read_as_instructions(
+        self, tmp_path, dockerfile
+    ):
+        """#1415: `ONBUILD RUN <<EOF` starts with ONBUILD, so its body was read
+        as Dockerfile lines and `from os import path` named the image `os`,
+        which failed as an image target and made the scan exit 1."""
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {"python:3.12"}
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            pytest.param('RUN echo "usage: cat <<EOF here"', id="double-quoted"),
+            pytest.param("RUN echo 'a <<EOF b'", id="single-quoted"),
+            # An escaped quote does not end a double-quoted span (this failed).
+            pytest.param(r'RUN echo "a \" <<EOF b"', id="escaped-quote-inside-double"),
+            # The last two already passed: the regex wants whitespace before
+            # `<<`, and a quote is not whitespace. They guard the fix, which
+            # must not make a quote after the word read differently.
+            pytest.param('RUN echo "<<EOF"', id="guard-no-space-before-marker"),
+            pytest.param('RUN echo " <<EOF"', id="guard-quote-right-after-the-word"),
+        ],
+    )
+    def test_a_marker_inside_quotes_does_not_open_a_heredoc(self, tmp_path, line):
+        """#1416: `<<EOF` in a quoted string was taken as a heredoc, and the
+        body that never ended swallowed every later FROM, silently."""
+        dockerfile = f"FROM alpine:3.19\n{line}\nFROM nginx:1.27\n"
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {
+            "alpine:3.19",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # The first three failed: in shell an escaped quote opens no
+            # quoted span, but the scan took it for one, and the span
+            # swallowed the real marker after it.
+            pytest.param(
+                r"RUN echo don\'t && cat <<'EOF' > /x", id="escaped-apostrophe-1"
+            ),
+            pytest.param(
+                r"RUN echo can\'t; cat <<EOF > 'out file'", id="escaped-apostrophe-2"
+            ),
+            pytest.param(
+                r'RUN printf \"x && cat <<EOF > "/y"', id="escaped-double-quote"
+            ),
+            # The rest passed before the fix (found by probe). They guard it:
+            # a quote that closes and one that never does read as shell reads
+            # them, and an escaped backslash escapes no space after it.
+            pytest.param(
+                'RUN echo "x y" && cat <<EOF > /x', id="guard-closed-quoted-span"
+            ),
+            pytest.param("RUN echo it's <<EOF", id="guard-unbalanced-apostrophe"),
+            pytest.param(
+                r"RUN echo a\\ <<EOF", id="guard-escaped-backslash-then-space"
+            ),
+        ],
+    )
+    def test_an_escaped_quote_does_not_hide_a_heredoc_marker(self, tmp_path, line):
+        """#1415 again, by another road: a quote after a backslash opens no
+        quoted span in shell, so `don\\'t && cat <<'EOF'` still opens a heredoc.
+        The scan took `'t && cat <<'` for a span, never saw the marker, and read
+        the heredoc body as Dockerfile lines: `from os import path` named the
+        image `os`, which failed as an image target and made the scan exit 1."""
+        dockerfile = (
+            f"FROM alpine:3.19\n{line}\nfrom os import path\nEOF\nFROM nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {
+            "alpine:3.19",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            pytest.param(r"RUN echo a\ <<EOF", id="escaped-space-before-the-marker"),
+            pytest.param("RUN echo a\\\t<<EOF", id="escaped-tab-before-the-marker"),
+        ],
+    )
+    def test_an_escaped_whitespace_before_the_operator_opens_no_heredoc(
+        self, tmp_path, caplog, line
+    ):
+        """A backslash escapes the next character, whitespace too, so `a\\ <<EOF`
+        is one word and not a heredoc, as BuildKit reads it: the Dockerfile
+        builds, and the FROM after it is read. Taking the space for a word
+        break opened a heredoc that swallowed every later FROM."""
+        dockerfile = f"FROM alpine:3.19\n{line}\nFROM nginx:1.27\n"
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"Dockerfile": dockerfile})
+
+        assert images == {"alpine:3.19", "nginx:1.27"}
+        assert caplog.messages == []
+
+    @pytest.mark.parametrize(
+        ("line", "marker", "indent"),
+        [
+            # Whitespace between `<<` and the word: BuildKit folds it into the
+            # word, so each of these opens a heredoc (all failed).
+            pytest.param("RUN cat << EOF > /x", "EOF", "", id="space"),
+            pytest.param("RUN cat <<  EOF > /x", "EOF", "", id="two-spaces"),
+            pytest.param("RUN cat <<\tEOF > /x", "EOF", "", id="tab"),
+            pytest.param('RUN cat << "EOF" > /x', "EOF", "", id="space-then-quoted"),
+            pytest.param("COPY << EOF /x", "EOF", "", id="copy"),
+            # The dash after the whitespace is part of the word, not chomp.
+            pytest.param("RUN cat << -EOF", "-EOF", "", id="space-then-dash-word"),
+            # A marker with quotes or backslashes is named without them (all
+            # failed): `\EOF` was the marker `\EOF`, and nothing closed it.
+            pytest.param(r"RUN cat <<\EOF > /x", "EOF", "", id="backslash-first"),
+            pytest.param(r"RUN cat <<-\EOF > /x", "EOF", "\t", id="chomp-backslash"),
+            pytest.param(r"RUN cat <<E\OF > /x", "EOF", "", id="backslash-inside"),
+            pytest.param('RUN cat <<EO"F" > /x', "EOF", "", id="quoted-part"),
+            pytest.param("RUN cat <<'one two' > /x", "one two", "", id="quoted-spaced"),
+            pytest.param(
+                r'RUN cat <<"E\"F" > /x', 'E"F', "", id="escaped-quote-in-quotes"
+            ),
+            # Inside double quotes a backslash escapes only `"`, `$` and `\`
+            # (this passed before the change, as did the control below it).
+            pytest.param(
+                r'RUN cat <<"E\xF" > /x', r"E\xF", "", id="guard-other-escape-kept"
+            ),
+            # `<<-` is chomp only when the word goes on: the first dash of
+            # `<<--EOF` is chomp and the marker is `-EOF`.
+            pytest.param(
+                "RUN cat <<--EOF > /x", "-EOF", "\t", id="guard-double-dash-is-chomp"
+            ),
+            pytest.param("RUN cat <<EOF > /x", "EOF", "", id="guard-no-whitespace"),
+        ],
+    )
+    def test_a_heredoc_word_is_read_as_buildkit_reads_it(
+        self, tmp_path, line, marker, indent
+    ):
+        """A heredoc not recognised leaves its body to be read as Dockerfile
+        lines: `from os import path` named the image `os`, which failed as an
+        image target and made the scan exit 1. An opening word that is read
+        wrongly (`<<- EOF` gave the marker `-`) swallows every later FROM."""
+        dockerfile = (
+            f"FROM alpine:3.19\n{line}\n{indent}from os import path\n"
+            f"{indent}{marker}\nFROM nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == {
+            "alpine:3.19",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # A word that is only `<<` or `<<-` names no marker (`<<-` was
+            # read as the marker `-`, which no line closed). The `guard-` ones
+            # passed before the change and must keep passing.
+            pytest.param("RUN cat <<", id="guard-lone-operator"),
+            pytest.param("RUN cat <<-", id="lone-chomp-operator"),
+            # BuildKit folds whitespace only directly after `<<`, so after
+            # `<<-` the marker is a word of its own and the `<<-` has none.
+            pytest.param("RUN cat <<- EOF", id="chomp-then-space"),
+            pytest.param("RUN cat <<-  EOF", id="chomp-then-two-spaces"),
+            pytest.param("RUN cat <<-\tEOF", id="chomp-then-tab"),
+            pytest.param('RUN cat <<- "EOF"', id="chomp-then-quoted"),
+            # Only space, tab and CR are folded, not every Unicode space.
+            pytest.param("RUN cat <<\u00a0EOF", id="no-break-space-is-not-folded"),
+            # BuildKit's marker is `[^<]*`: a `<` anywhere in the word, in
+            # quotes or escaped too, makes the word no heredoc.
+            pytest.param("RUN cat <<'a<b'", id="lt-in-single-quotes"),
+            pytest.param("RUN cat <<\\<", id="escaped-lt"),
+            pytest.param('RUN cat <<EOF"cat <<EOF"', id="lt-in-a-quoted-part"),
+            pytest.param('RUN cat <<"E\\<"', id="escaped-lt-in-double-quotes"),
+            pytest.param('RUN cat <<""', id="guard-empty-quoted-word"),
+            pytest.param("RUN cat <<<word", id="guard-here-string"),
+            pytest.param("RUN cat <<< word", id="guard-here-string-with-a-space"),
+            pytest.param('RUN "<<EOF"', id="guard-whole-word-quoted"),
+        ],
+    )
+    def test_a_word_that_names_no_marker_opens_no_heredoc(self, tmp_path, caplog, line):
+        """BuildKit reads no heredoc here, so what follows is read, and no
+        WARNING says the rest of the file is a body."""
+        dockerfile = f"FROM alpine:3.19\n{line}\nFROM nginx:1.27\n"
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            images = self._discover(tmp_path, {"Dockerfile": dockerfile})
+
+        assert images == {"alpine:3.19", "nginx:1.27"}
+        assert caplog.messages == []
+
+    @pytest.mark.parametrize(
+        ("dockerfile", "images", "messages"),
+        [
+            pytest.param(
+                "FROM alpine:3.19\nRUN <<\\EOF\nfrom os import path\nFROM nginx:1.27\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'EOF', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="escaped-marker-is-named-without-the-backslash",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nCOPY << 'A B' /dest/\nbody\nFROM nginx:1.27\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'A B', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="spaced-quoted-marker-is-named-without-the-quotes",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nRUN <<EOF\nfrom os import path\nFROM nginx:1.27\n"
+                "FROM busybox:1\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'EOF', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="body-runs-to-the-end-of-the-file",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nCOPY <<A <<B /dest/\nbody\nA\nbody\n",
+                {"alpine:3.19"},
+                [
+                    "build/Dockerfile:2 opens the heredoc 'B', which is never "
+                    "closed: the rest of the file is its body, so no later FROM "
+                    "is read"
+                ],
+                id="second-of-two-heredocs",
+            ),
+            pytest.param(
+                "FROM alpine:3.19\nRUN <<EOF\nFROM nginx:1.27\nEOF\nFROM busybox:1\n",
+                {"alpine:3.19", "busybox:1"},
+                [],
+                id="closed-heredoc-says-nothing",
+            ),
+        ],
+    )
+    def test_a_heredoc_left_open_at_the_end_of_the_file_is_named(
+        self, tmp_path, caplog, dockerfile, images, messages
+    ):
+        """#1416: BuildKit reads the rest of the file as the body, so what
+        follows is not read. That was silent: now one WARNING names the file,
+        the line and the marker."""
+        with caplog.at_level(
+            logging.WARNING, logger="scripts.cli.scan_jobs.gitlab_scanner"
+        ):
+            found = self._discover(tmp_path, {"build/Dockerfile": dockerfile})
+
+        assert found == images
+        assert caplog.messages == messages
 
     def test_a_compose_service_that_builds_its_image_names_none_to_pull(self, tmp_path):
         """With `build:`, `image:` is the tag compose gives its own build."""
@@ -1496,6 +1832,286 @@ class TestDiscoveryNamesOnlyImagesJmoCanPull:
         """The gate's negative project, and today's two skips kept."""
         dockerfile = "FROM golang:alpine AS builder\nRUN go build\nFROM scratch\n"
         assert self._discover(tmp_path, {"Dockerfile": dockerfile}) == set()
+
+    # --- #1410: compose.yaml and workload manifests -------------------------
+
+    @pytest.mark.parametrize(
+        "name",
+        ["compose.yaml", "compose.yml", "compose.override.yaml", "deploy/compose.yaml"],
+    )
+    def test_the_compose_specifications_own_file_names_are_read(self, tmp_path, name):
+        """`compose.yaml` and `compose.yml` are the names the Compose
+        specification gives a project, and only `docker-compose*` was read:
+        a project on the current names had no image scanned (measured)."""
+        compose = (
+            "services:\n"
+            "  web:\n    image: nginx:1.27\n"
+            "  app:\n    build: .\n    image: example-local/app:dev\n"
+        )
+        assert self._discover(tmp_path, {name: compose}) == {"nginx:1.27"}
+
+    def test_a_compose_file_in_a_vendored_tree_is_not_read(self, tmp_path):
+        """The one walk skips `node_modules`, `vendor`, `.venv`, `venv` and
+        `.git` for compose files as it does for Dockerfiles: a dependency's
+        example compose file names images the repository does not use."""
+        images = self._discover(
+            tmp_path,
+            {
+                "docker-compose.yml": "services:\n  web:\n    image: nginx:1.27\n",
+                "node_modules/dep/docker-compose.yml": (
+                    "services:\n  web:\n    image: alpine:3.14\n"
+                ),
+            },
+        )
+        assert images == {"nginx:1.27"}
+
+    @pytest.mark.parametrize("name", ["compose-prod.yaml", "docker-compose.prod.yml"])
+    def test_a_manifest_in_a_compose_named_file_is_read(self, tmp_path, name):
+        """A file is a manifest by its content, not its name: the name only
+        says which reader a file goes to first. A Deployment kept in
+        `compose-prod.yaml` named no image, though a manifest is read
+        "whatever the file is called"."""
+        deployment = (
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: d\nspec:\n"
+            "  template:\n    spec:\n      containers:\n"
+            "      - name: web\n        image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {name: deployment}) == {"nginx:1.27"}
+
+    def test_a_pods_init_containers_are_images_to_scan(self, tmp_path):
+        """An init container's image runs in the cluster as the app's does."""
+        pod = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  initContainers:\n  - name: wait\n    image: busybox:1.36\n"
+            "  containers:\n  - name: app\n    image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"pod.k8s.yaml": pod}) == {
+            "busybox:1.36",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        ("api_version", "kind"),
+        [
+            ("apps/v1", "Deployment"),
+            ("apps/v1", "StatefulSet"),
+            ("apps/v1", "DaemonSet"),
+            ("batch/v1", "Job"),
+        ],
+    )
+    def test_a_workloads_pod_template_is_read(self, tmp_path, api_version, kind):
+        """A Deployment names its images under `spec.template.spec`, not
+        `spec`: only a bare Pod's `spec.containers` was read, so the usual
+        workload kinds named no image at all."""
+        workload = (
+            f"apiVersion: {api_version}\nkind: {kind}\nmetadata:\n  name: w\n"
+            "spec:\n  template:\n    spec:\n"
+            "      initContainers:\n      - name: wait\n        image: busybox:1.36\n"
+            "      containers:\n      - name: app\n        image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"k8s/workload.yaml": workload}) == {
+            "busybox:1.36",
+            "nginx:1.27",
+        }
+
+    def test_a_cron_jobs_job_template_is_read(self, tmp_path):
+        """A CronJob's pod template is one level deeper:
+        `spec.jobTemplate.spec.template.spec`."""
+        cron = (
+            "apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: nightly\n"
+            "spec:\n  schedule: '0 * * * *'\n  jobTemplate:\n    spec:\n"
+            "      template:\n        spec:\n"
+            "          initContainers:\n          - name: wait\n"
+            "            image: busybox:1.36\n"
+            "          containers:\n          - name: job\n"
+            "            image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"k8s/cron.yaml": cron}) == {
+            "busybox:1.36",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize("name", ["deploy/app.yaml", "deploy/app.yml"])
+    def test_a_manifest_is_found_by_its_content_not_a_k8s_file_name(
+        self, tmp_path, name
+    ):
+        """Almost no repository names a manifest `*.k8s.yaml`: it has an
+        `apiVersion` and a `kind`, and that is what makes it one."""
+        pod = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  containers:\n  - name: app\n    image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {name: pod}) == {"nginx:1.27"}
+
+    def test_every_document_of_a_multi_document_file_is_read(self, tmp_path):
+        """One file holds a ConfigMap, a Pod, an empty document and a
+        Deployment: the ConfigMap names nothing, the others each name images."""
+        manifests = (
+            "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cfg\n"
+            "data:\n  image: not-an-image-here\n"
+            "---\n"
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  initContainers:\n  - name: wait\n    image: busybox:1.36\n"
+            "  containers:\n  - name: app\n    image: redis:7\n"
+            "---\n"
+            "---\n"
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: d\nspec:\n"
+            "  template:\n    spec:\n      containers:\n"
+            "      - name: web\n        image: nginx:1.27\n"
+        )
+        assert self._discover(tmp_path, {"deploy/all.yaml": manifests}) == {
+            "busybox:1.36",
+            "redis:7",
+            "nginx:1.27",
+        }
+
+    @pytest.mark.parametrize(
+        ("name", "body"),
+        [
+            pytest.param(
+                ".gitlab-ci.yml",
+                "image: alpine:3.15\nstages:\n  - build\nbuild:\n"
+                "  image: python:3.12\n  script:\n    - make\n",
+                id="gitlab-ci",
+            ),
+            pytest.param(
+                "deploy/app.yaml",
+                "kind: Pod\nspec:\n  containers:\n  - name: app\n"
+                "    image: nginx:1.27\n",
+                id="kind-without-apiversion",
+            ),
+            pytest.param(
+                "deploy/app.yaml",
+                "apiVersion: 1\nkind: Pod\nspec:\n  containers:\n  - name: app\n"
+                "    image: nginx:1.27\n",
+                id="apiversion-not-a-string",
+            ),
+        ],
+    )
+    def test_a_yaml_file_that_is_not_a_manifest_names_no_image(
+        self, tmp_path, name, body
+    ):
+        """Only a document with a string `apiVersion` and `kind` is a
+        manifest. A CI file's `image:` is the job's runner image, not one the
+        repository ships, and the pipeline file is no Kubernetes object."""
+        assert self._discover(tmp_path, {name: body}) == set()
+
+    def test_a_yaml_file_naming_neither_apiversion_nor_kind_is_not_parsed(
+        self, tmp_path, monkeypatch
+    ):
+        """Lockfiles and CI files are YAML, and the pure-Python loader takes
+        seconds on a large one (0.37 s on a real 430 KB `pnpm-lock.yaml`), so
+        a file is parsed for manifests only when its text holds both words."""
+        from scripts.cli.scan_jobs import gitlab_scanner
+
+        parsed: list[object] = []
+        real_load_all = gitlab_scanner.yaml.load_all
+
+        def spy(stream, Loader):
+            parsed.append(stream)
+            return real_load_all(stream, Loader=Loader)
+
+        monkeypatch.setattr(gitlab_scanner.yaml, "load_all", spy)
+        pod = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n"
+            "  containers:\n  - name: app\n    image: nginx:1.27\n"
+        )
+        images = self._discover(
+            tmp_path,
+            {
+                "pnpm-lock.yaml": "lockfileVersion: '9.0'\npackages:\n  a@1: {}\n",
+                ".gitlab-ci.yml": "image: alpine:3.15\nscript:\n  - make\n",
+                "deploy/app.yaml": pod,
+            },
+        )
+        assert images == {"nginx:1.27"}
+        assert len(parsed) == 1
+
+    def test_a_manifest_that_does_not_parse_is_skipped_and_the_walk_goes_on(
+        self, tmp_path
+    ):
+        """Parsing is per file: one broken manifest must not stop the others
+        being read. (The pre-existing malformed-file test names no `kind`, so
+        it no longer reaches the parser; this one does.)"""
+        images = self._discover(
+            tmp_path,
+            {
+                "a-broken.yaml": "apiVersion: v1\nkind: Pod\nspec: [unclosed\n",
+                "b-good.yaml": (
+                    "apiVersion: v1\nkind: Pod\nspec:\n  containers:\n"
+                    "  - name: app\n    image: nginx:1.27\n"
+                ),
+            },
+        )
+        assert images == {"nginx:1.27"}
+
+    @pytest.mark.parametrize(
+        ("name", "body", "images"),
+        [
+            pytest.param(
+                "list.k8s.yaml",
+                "apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n"
+                "  kind: Pod\n  spec:\n    containers:\n    - name: app\n"
+                "      image: nginx:1.27\n",
+                set(),
+                id="kind-list",
+            ),
+            pytest.param(
+                "pod.k8s.yaml",
+                "apiVersion: v1\nkind: Pod\nspec:\n  containers:\n"
+                "  - name: app\n    image: nginx:1.27\n"
+                "  ephemeralContainers:\n  - name: debugger\n"
+                "    image: busybox:1.36\n",
+                {"nginx:1.27"},
+                id="ephemeral-containers",
+            ),
+        ],
+    )
+    def test_what_a_cluster_adds_or_wraps_is_not_read(
+        self, tmp_path, name, body, images
+    ):
+        """Guards for the limits of the reading, which the manifest rule does
+        not widen: an ephemeral container is added to a running Pod by a
+        debugger, and a `List` only wraps objects that are files of their own
+        elsewhere. Neither is an image the repository names to run."""
+        assert self._discover(tmp_path, {name: body}) == images
+
+    @pytest.mark.parametrize(
+        ("filler", "body", "last", "last_body"),
+        [
+            pytest.param(
+                "a/f{:03d}.yaml",
+                "x: 1\n",
+                "z/compose.yaml",
+                "services:\n  web:\n    image: nginx:1.27\n",
+                id="yaml",
+            ),
+            pytest.param(
+                "a{:03d}/Dockerfile",
+                "FROM scratch\n",
+                "z/Dockerfile",
+                "FROM nginx:1.27\n",
+                id="dockerfile",
+            ),
+        ],
+    )
+    def test_discovery_reads_every_file_not_the_first_300(
+        self, tmp_path, caplog, filler, body, last, last_body
+    ):
+        """The walk's 300-file cut is for a tool's command line, and discovery
+        puts nothing on one: past it, a repository with many YAML files or
+        Dockerfiles lost the files that sort last, under a WARNING that blamed
+        a command-line limit (measured: 350 YAML files and a `z/compose.yaml`
+        gave 300, without the compose file)."""
+        from scripts.cli.scan_jobs.tool_loop import MAX_FILE_ARGS
+
+        files = {filler.format(i): body for i in range(MAX_FILE_ARGS + 1)}
+        files[last] = last_body
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            images = self._discover(tmp_path, files)
+
+        assert images == {"nginx:1.27"}
+        assert "command-line length limit" not in caplog.text, caplog.text
 
 
 class TestAGitlabUrlIsClonedFromTheHostItNames:
