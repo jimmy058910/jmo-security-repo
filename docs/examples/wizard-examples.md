@@ -1871,7 +1871,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-results
-          path: results/
+          path: results/summaries/
 
       - name: Upload SARIF
         if: always()
@@ -1918,7 +1918,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-results
-          path: results/
+          path: results/summaries/
 
       - name: Upload SARIF
         if: always()

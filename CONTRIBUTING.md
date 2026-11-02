@@ -20,7 +20,7 @@ definition.
 
 | Label | Meaning |
 |---|---|
-| `priority:p1` | Someone would notice in the release: user-facing defect, security/data flaw, red gate. Cap ~7 open. |
+| `priority:p1` | Noticeable in a release (defect, security/data flaw, red gate) or active-phase exit work. Cap ~7. |
 | `priority:p2` | Planned and wanted; waiting harms nobody. The normal state of phase work. |
 | `priority:p3` | Parked on purpose; never ranked. Close as not planned if still p3 after two phases close. |
 | `needs:decision` | Waiting on the maintainer. Body has Question, Options, Recommendation, Default if no answer. |

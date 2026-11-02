@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 from scripts.cli.wizard import (
     WizardConfig,
@@ -261,6 +262,30 @@ def test_generate_github_actions_docker():
     assert "upload-sarif@v3" in workflow
     # Should NOT have setup-python in Docker mode
     assert "actions/setup-python" not in workflow
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+def test_generated_workflow_uploads_only_the_summaries(use_docker):
+    """The artifact a generated workflow uploads must hold no secret (#1329).
+
+    `results/individual-*/` keeps the raw trufflehog and gitleaks outputs, which
+    carry every secret found in plaintext; an artifact is readable by anyone who
+    can read the run. `results/summaries/` holds the report, which never does.
+    """
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.target.type = "repo"
+    config.target.repo_mode = "repo"
+    config.target.repo_path = "."
+
+    steps = yaml.safe_load(generate_github_actions(config))["jobs"]["security-scan"][
+        "steps"
+    ]
+    uploads = [
+        s["with"]["path"] for s in steps if "upload-artifact" in s.get("uses", "")
+    ]
+
+    assert uploads == ["results/summaries/"]
 
 
 @patch("scripts.cli.wizard.subprocess.run")

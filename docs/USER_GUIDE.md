@@ -2539,7 +2539,7 @@ security:scan:
   artifacts:
     when: always
     paths:
-      - results/
+      - results/summaries/
     reports:
       sast: results/summaries/findings.sarif
     expire_in: 30 days
@@ -2585,7 +2585,7 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: 'results/**/*', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'results/summaries/**/*', allowEmptyArchive: true
             publishHTML([
                 reportDir: 'results/summaries',
                 reportFiles: 'dashboard.html',

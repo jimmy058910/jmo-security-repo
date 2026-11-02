@@ -21,7 +21,7 @@ stages:
   artifacts:
     when: always
     paths:
-      - results/
+      - results/summaries/
     reports:
       sast: results/summaries/findings.sarif
     expire_in: 30 days
