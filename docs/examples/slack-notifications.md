@@ -52,7 +52,7 @@ jmo-security-scan:
     - jmo report ./results
   artifacts:
     paths:
-      - results/
+      - results/summaries/
   after_script:
     - |
       if [ "$CI_JOB_STATUS" == "success" ]; then
@@ -165,7 +165,7 @@ jmo-security-scan:
     - jmo report ./results --fail-on HIGH
   artifacts:
     paths:
-      - results/
+      - results/summaries/
     when: always
 
 notify-success:

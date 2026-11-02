@@ -437,7 +437,7 @@ jmo-security-scan:
     - jmo report /results
   artifacts:
     paths:
-      - results/
+      - results/summaries/
     reports:
       sast: results/summaries/findings.sarif
   rules:
@@ -668,7 +668,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-results
-          path: results/
+          path: results/summaries/
 
       - name: Notify Slack on success
         if: success()

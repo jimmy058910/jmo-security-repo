@@ -849,6 +849,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: docker-merge
     if: always() && needs.docker-merge.result == 'success' && !inputs.dry_run
+    # Only what the scan uses: a third-party action runs here, so it gets no
+    # packages: write and no id-token from the workflow-level block.
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -872,7 +878,7 @@ jobs:
           fi
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${{ steps.tag.outputs.value }}
           format: 'sarif'

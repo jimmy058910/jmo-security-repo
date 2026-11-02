@@ -880,6 +880,17 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Security
 
+- **The workflow `jmo wizard` generates uploads `results/summaries/`, not all of
+  `results/` (#1329).** The raw trufflehog and gitleaks outputs under `results/individual-*/`
+  hold every secret found in plaintext, and a CI artifact is readable by anyone who can read
+  the run. Both GitHub Actions templates, and the 22 CI examples in the docs (GitHub Actions,
+  GitLab and Jenkins), now upload the summaries, which never hold a secret. The raw outputs
+  are still written in plaintext; #1329 stays open for that.
+- **The release's image scan runs a pinned `aquasecurity/trivy-action` (#1294).** It was
+  `@master`, a branch that moves on every upstream push, of an action whose tags were
+  hijacked on 2026-03-19; it is now v0.36.0 by commit SHA, which installs trivy v0.70.0. The
+  `docker-scan` job also gets its own `permissions:` (`contents: read`, `packages: read`,
+  `security-events: write`) in place of the workflow's `packages: write` and `id-token: write`.
 - **On Windows, a path or URL holding `&` no longer runs the rest of it as a command
   (#1403).** checkov runs as `checkov.cmd` and zap ran as `zap.bat`, and Windows starts a
   `.bat`/`.cmd` through `cmd.exe`, which reads `& | ^ < > %` in every argument as its own,

@@ -393,7 +393,7 @@ security-scan:
         scan --repo /scan --results-dir /scan/results
   artifacts:
     paths:
-      - results/
+      - results/summaries/
     expire_in: 30 days
 
 trend-analysis:

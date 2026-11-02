@@ -55,6 +55,17 @@ is the only condition under which the checker looks at it again. So a PR that
 removes a tool un-exempts that tool's open issue and cannot go green until it
 closes it. Nightly-failure issues are never exempt: nothing closes them.
 
+The second kind is a work package: an issue with at least one sub-issue, filed
+for one PR, whose sub-issues are the rostered issues that PR closes. It carries
+`phase:N` so the ranking can sort it, but the plan rosters its children, not
+it. So `unclaimed` and `verify` exempt it, and `labels --apply` leaves its
+phase label alone, open or closed. The sub-issue link is the key, not the
+label: a `phase:N` label on an issue with no sub-issues still drifts.
+`fetch_packages` asks REST search with `advanced_search=true`; without that
+flag GitHub ignores `has:sub-issue` and returns every issue (measured
+2026-11-01: 778 of 778), so it also keeps only hits whose sub-issue count is
+above zero.
+
 Exit codes: 0 = agreement, 1 = a real disagreement, 2 = the plan could not be
 parsed (which is itself a failure, never a skip).
 """
@@ -409,6 +420,37 @@ def fetch_issues(state: str = "all", limit: int = 1000) -> dict[int, Issue]:
     return out
 
 
+def fetch_packages() -> set[int]:
+    """Every issue, open or closed, with at least one sub-issue: a work package.
+
+    REST search rather than `gh issue list --json subIssuesSummary`, because
+    that field needs gh 2.94+ and this script runs on whatever gh the CI
+    runner has.
+    """
+    repo = _gh(
+        "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"
+    ).strip()
+    raw = _gh(
+        "api",
+        "-X",
+        "GET",
+        "search/issues",
+        "--paginate",
+        "-f",
+        f"q=repo:{repo} is:issue has:sub-issue",
+        "-f",
+        "advanced_search=true",
+        "--jq",
+        r'.items[] | "\(.number) \(.sub_issues_summary.total // 0)"',
+    )
+    packages: set[int] = set()
+    for line in raw.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and int(parts[1]) > 0:
+            packages.add(int(parts[0]))
+    return packages
+
+
 @dataclass
 class MergedPR:
     """A merged PR and the two disagreeing views of what it closed.
@@ -526,15 +568,17 @@ def self_closing(issue: Issue, tracked: set[str]) -> bool:
 
 
 def _unclaimed(
-    plan: PlanIndex, issues: dict[int, Issue]
-) -> tuple[list[int], list[int]]:
-    """Open issues the plan does not mention, split into (unclaimed, exempt)."""
+    plan: PlanIndex, issues: dict[int, Issue], packages: set[int]
+) -> tuple[list[int], list[int], list[int]]:
+    """Open issues the plan does not mention: (unclaimed, version-exempt, packages)."""
     tracked = tracked_tools(VERSIONS_YAML.read_text(encoding="utf-8"))
     absent = sorted(
         n for n, i in issues.items() if i.state == "OPEN" and n not in plan.all_known
     )
+    package_exempt = [n for n in absent if n in packages]
+    absent = [n for n in absent if n not in packages]
     exempt = [n for n in absent if self_closing(issues[n], tracked)]
-    return [n for n in absent if n not in exempt], exempt
+    return [n for n in absent if n not in exempt], exempt, package_exempt
 
 
 def _report_exempt(exempt: list[int]) -> None:
@@ -542,6 +586,14 @@ def _report_exempt(exempt: list[int]) -> None:
         print(
             f"exempt: {len(exempt)} version-checker issue(s) the checker closes "
             f"itself: {_fmt(exempt)}"
+        )
+
+
+def _report_packages(packages: list[int]) -> None:
+    if packages:
+        print(
+            f"exempt: {len(packages)} work package(s) (issues with sub-issues): "
+            f"{_fmt(packages)}"
         )
 
 
@@ -735,8 +787,10 @@ def cmd_labels(plan: PlanIndex, apply: bool) -> int:
     # label of the previous program in place with nothing that can clear it.
     # Measured 2026-09-12 while seating the v2.0.0 plan: 137 such labels, all
     # on closed v1.1.0 issues, and the loop above proposed 0 removals.
+    # A work package's phase label is its own, not the plan's to remove.
+    packages = fetch_packages()
     for number, issue in sorted(issues.items()):
-        if number in plan.scheduled:
+        if number in plan.scheduled or number in packages:
             continue
         for name in sorted(_phase_labels(issue)):
             removes += 1
@@ -768,8 +822,9 @@ def _shown(path: Path) -> str:
 
 def cmd_unclaimed(plan: PlanIndex) -> int:
     issues = fetch_issues(state="open")
-    survivors, exempt = _unclaimed(plan, issues)
+    survivors, exempt, packages = _unclaimed(plan, issues, fetch_packages())
     _report_exempt(exempt)
+    _report_packages(packages)
     if not survivors:
         print(f"unclaimed: 0 of {len(issues)} open issues are absent from the plan")
         return 0
@@ -793,8 +848,10 @@ def cmd_verify(plan: PlanIndex) -> int:
     rc = 0
 
     open_numbers = {n for n, i in issues.items() if i.state == "OPEN"}
-    survivors, exempt = _unclaimed(plan, issues)
+    packages = fetch_packages()
+    survivors, exempt, open_packages = _unclaimed(plan, issues, packages)
     _report_exempt(exempt)
+    _report_packages(open_packages)
     if survivors:
         rc = 1
         print(f"::error::unclaimed open issues ({len(survivors)}):")
@@ -822,7 +879,7 @@ def cmd_verify(plan: PlanIndex) -> int:
         for name in sorted(have - {want}):
             extra.append(f"#{number} carries {name} but the plan puts it in {want}")
     for number, issue in sorted(issues.items()):
-        if number in plan.scheduled:
+        if number in plan.scheduled or number in packages:
             continue
         for name in sorted(_phase_labels(issue)):
             extra.append(f"#{number} carries {name} but the plan schedules it nowhere")

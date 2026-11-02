@@ -85,7 +85,7 @@ nothing ever closed it:
 
 | Kind of thing | Goes to | Why there |
 |---|---|---|
-| Anything with a plausible fix | **GitHub issue** (`technical-debt` / `enhancement`) + `# TODO(issue-#):` at the site | It can be closed, assigned, and searched. A file can only be edited. |
+| Anything with a plausible fix | **GitHub issue** (`technical-debt` / `enhancement`, with a `priority:*` label proposed by the agent and confirmed by the maintainer) + `# TODO(issue-#):` at the site | It can be closed, assigned, and searched. A file can only be edited. |
 | Behaviour a *user* can hit and we intend to keep | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Ships in the repo, so users find it without reading the tracker. |
 | A trap that only bites *developers* | the matching [`.claude/rules/*.md`](.claude/rules/) | Loads automatically when Claude touches those paths. |
 

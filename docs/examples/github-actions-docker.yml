@@ -33,7 +33,7 @@ jobs:
         if: always()
         with:
           name: security-results
-          path: results/
+          path: results/summaries/
           retention-days: 30
 
       - name: Upload dashboard
@@ -71,7 +71,7 @@ jobs:
         if: failure()
         with:
           name: security-failures
-          path: results/
+          path: results/summaries/
 
 ---
 # Example 3: SARIF upload to GitHub Security tab
@@ -119,7 +119,7 @@ jobs:
         if: always()
         with:
           name: security-results
-          path: results/
+          path: results/summaries/
 
 ---
 # Example 4: Scan multiple repositories
@@ -162,7 +162,7 @@ jobs:
         if: always()
         with:
           name: multi-repo-security-results
-          path: results/
+          path: results/summaries/
 
 ---
 # Example 5: PR comment with findings summary
@@ -246,7 +246,7 @@ jobs:
         if: always()
         with:
           name: weekly-scan
-          path: results/
+          path: results/summaries/
 
       - name: Create issue on failures
         if: failure()
