@@ -244,6 +244,9 @@ def test_scan_workflow(
         f"Test {test_id} ({desc}) failed with exit code {rc}.\nstderr: {stderr[:500]}"
     )
 
+    # pytest shows this only if the validator fails: a scan that scanned nothing
+    # says why in its log's tail, such as a tool it could not find (#1546).
+    print(stderr[-4000:])
     validator(results_dir)
 
 

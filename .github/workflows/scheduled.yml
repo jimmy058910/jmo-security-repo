@@ -742,6 +742,13 @@ jobs:
       - tool-smoke-tests
       - lint-full
       - integration-tests
+      # The E2E and Docker E2E tasks too: until #1546 none was listed, so their
+      # failures filed nothing. failure() looks at every ancestor, so
+      # e2e-summary brings in the five E2E jobs it needs, and validation-summary
+      # brings in validate-image.
+      - e2e-summary
+      - docker-e2e-suite
+      - validation-summary
     if: failure()
     steps:
       - name: Create issue on failure
@@ -850,6 +857,34 @@ jobs:
         run: |
           make tools || echo "Some tools failed to install, continuing..."
 
+      # U4 in tests/e2e/test_scan_workflows.py scans a URL with zap. `make tools`
+      # installs zap as the `zaproxy` snap, which jmo does not look for, so U4
+      # scanned nothing (#1546). Install it the way jmo finds it, in
+      # ~/.jmo/bin/zap/, and run it on the runner's JDK 17 (jmo's own Linux
+      # remediation for zap's Java is openjdk-17).
+      - name: Install zap where jmo finds it
+        run: |
+          : "${JAVA_HOME_17_X64:?the runner image has no JDK 17}"
+          export PATH="$JAVA_HOME_17_X64/bin:$PATH"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+          java -version
+          # A 232 MiB download from github.com, and the installer does not
+          # retry; a deterministic failure (a 404) fails all three tries.
+          installed=false
+          for attempt in 1 2 3; do
+            if jmo tools install zap --yes && [[ -x "$HOME/.jmo/bin/zap/zap.sh" ]]; then
+              installed=true
+              break
+            fi
+            echo "::warning::zap install attempt $attempt failed; retrying in 10s"
+            sleep 10
+          done
+          if [[ "$installed" != true ]]; then
+            echo "::error::jmo tools install zap did not put ~/.jmo/bin/zap/zap.sh in place"
+            exit 1
+          fi
+
       - name: Pre-pull BuildKit image (best-effort retry; mitigates Docker Hub timeouts)
         continue-on-error: true
         run: |
@@ -909,9 +944,12 @@ jobs:
           RESULTS_DIR="/tmp/jmo-e2e-results-${{ github.run_id }}"
           if [[ -f "$RESULTS_DIR/pytest-report.json" ]]; then
             REPORT="$RESULTS_DIR/pytest-report.json"
-            FAILED_TESTS=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary'].get('failed',0))")
-            if [[ $FAILED_TESTS -gt 0 ]]; then
-              echo "$FAILED_TESTS tests failed"
+            # Errors too: a setup or teardown error, such as a tests/conftest.py
+            # guard, is not a pass, and this check counted failures only (#1546).
+            read -r FAILED_TESTS ERROR_TESTS < <(python3 -c \
+              "import json; s=json.load(open('$REPORT'))['summary']; print(s.get('failed',0), s.get('error',0))")
+            if [[ $FAILED_TESTS -gt 0 || $ERROR_TESTS -gt 0 ]]; then
+              echo "$FAILED_TESTS tests failed, $ERROR_TESTS errored"
               exit 1
             else
               echo "All tests passed"
@@ -1405,6 +1443,7 @@ jobs:
 
           reports=0
           total_failed=0
+          total_errors=0
           seen=""
 
           for report_file in test-results/*/pytest-report.json; do
@@ -1417,14 +1456,17 @@ jobs:
               total=$(get_field "$report_file" total)
               passed=$(get_field "$report_file" passed)
               failed=$(get_field "$report_file" failed)
+              errors=$(get_field "$report_file" error)
               skipped=$(get_field "$report_file" skipped)
               total_failed=$((total_failed + failed))
+              total_errors=$((total_errors + errors))
 
               {
                 echo "### $job Results"
                 echo "- Total: $total"
                 echo "- Passed: $passed"
                 echo "- Failed: $failed"
+                echo "- Errors: $errors"
                 echo "- Skipped: $skipped"
                 echo ""
               } >> summary.md
@@ -1434,13 +1476,14 @@ jobs:
           cat summary.md
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
 
-          # Grouped rather than three separate redirects: shellcheck's SC2129,
+          # Grouped rather than separate redirects: shellcheck's SC2129,
           # which actionlint surfaces. It only fires where shellcheck is on
           # PATH, so it is invisible locally and red in the nightly's
           # `--all-files` lint. Same idiom as the `> summary.md` block above.
           {
             echo "E2E_REPORTS=$reports"
             echo "E2E_TOTAL_FAILED=$total_failed"
+            echo "E2E_TOTAL_ERRORS=$total_errors"
             echo "E2E_SEEN_SUITES=${seen}"
           } >> "$GITHUB_ENV"
 
@@ -1487,7 +1530,7 @@ jobs:
           # unwatched exactly as #769's did.
           EXPECTED_E2E_SUITES: "ubuntu macos"
         run: |
-          echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED}"
+          echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED} | errored: ${E2E_TOTAL_ERRORS}"
           echo "suites reporting:${E2E_SEEN_SUITES:- <none>}"
 
           if [[ "${E2E_REPORTS}" -eq 0 ]]; then
@@ -1521,7 +1564,16 @@ jobs:
             exit 1
           fi
 
-          echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures:" \
+          # An errored test never reached a verdict. This gate counted failures
+          # only, so the history-database guard's two teardown errors in
+          # test_ci_gating, on Ubuntu and macOS alike, passed it for days (#1546).
+          if [[ "${E2E_TOTAL_ERRORS}" -gt 0 ]]; then
+            echo "::error::${E2E_TOTAL_ERRORS} e2e test(s) errored." \
+              "See the job summary above for the per-suite breakdown."
+            exit 1
+          fi
+
+          echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures and zero errors:" \
             "${E2E_SEEN_SUITES# }."
 
 # ==============================================================================
