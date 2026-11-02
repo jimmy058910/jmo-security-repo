@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-results-${{ github.sha }}
-          path: results/
+          path: results/summaries/
           retention-days: 30
 ```
 
@@ -254,7 +254,7 @@ security-scan:
         --sign
   artifacts:
     paths:
-      - results/
+      - results/summaries/
     expire_in: 30 days
 
 attestation-verify:

@@ -371,7 +371,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-results
-          path: results/
+          path: results/summaries/
 
       - name: Upload SARIF to GitHub Security
         if: always()
@@ -406,7 +406,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weekly-audit-results
-          path: results/
+          path: results/summaries/
 ```
 
 #### Matrix Scanning (Multiple Repos)
@@ -447,7 +447,7 @@ security-scan:
       sast: results/summaries/findings.sarif
     paths:
 
-      - results/
+      - results/summaries/
     when: always
     expire_in: 30 days
 ```
@@ -470,7 +470,7 @@ pipeline {
         }
         stage('Archive Results') {
             steps {
-                archiveArtifacts artifacts: 'results/**/*', allowEmptyArchive: false
+                archiveArtifacts artifacts: 'results/summaries/**/*', allowEmptyArchive: false
             }
         }
     }

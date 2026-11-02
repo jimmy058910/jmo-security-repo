@@ -758,7 +758,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: jmo-results
-          path: results/
+          path: results/summaries/
 
       - name: AI Analysis (Optional)
         run: |
