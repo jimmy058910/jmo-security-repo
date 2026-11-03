@@ -2192,7 +2192,13 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             invocations={"repo": _yara_repo},
             version_probe=VersionProbe(
                 re.compile(r"v?(\d+\.\d+\.\d+)"),
-                command=[sys.executable, "-c", "import yara; print(yara.YARA_VERSION)"],
+                # yara-x, a dependency of JMo: import it, then read its version
+                # from the installed distribution (the module carries none).
+                command=[
+                    sys.executable,
+                    "-c",
+                    "import yara_x, importlib.metadata as m; print(m.version('yara-x'))",
+                ],
             ),
             # JMo's own runner: it prunes VENDORED_DIRS itself and takes the
             # results directory as --exclude-dir.

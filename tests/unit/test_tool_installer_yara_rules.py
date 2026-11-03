@@ -13,6 +13,7 @@ here touches the network.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import sys
 import tarfile
@@ -21,6 +22,7 @@ from unittest.mock import MagicMock, patch
 
 from scripts.cli.installers.models import InstallResult
 from scripts.cli.tool_installer import ToolInstaller
+from scripts.cli.tool_manager import ToolStatus
 
 DRL = "Detection Rule License 1.1 https://github.com/Neo23x0/signature-base/blob/master/LICENSE"
 CC_BY_NC = "https://creativecommons.org/licenses/by-nc/4.0/"
@@ -119,3 +121,43 @@ def test_an_unreviewed_rule_file_fails_and_keeps_the_installed_rules(
     assert not result.success
     assert "gpl.yar" in result.message
     assert (rules_dir / "old.yar").is_file()
+
+
+# Task Y2: the engine is a dependency of JMo, so `install` provides the rules.
+
+
+def _routed(tmp_path: Path, *, pinned: bool, force: bool = False) -> tuple:
+    installer = ToolInstaller(manager=MagicMock())
+    # Never "already installed" by the manager: only the pinned rules may skip.
+    installer.manager.check_tool.return_value = ToolStatus(name="yara", installed=False)
+    fetched = InstallResult(tool_name="yara", success=True, method="dependency")
+    with (
+        patch("scripts.cli.tool_installer.pinned_rules_installed", return_value=pinned),
+        patch.object(installer, "_install_yara_rules", return_value=fetched) as fetch,
+    ):
+        result = installer.install_tool("yara", force=force)
+    return result, fetch
+
+
+def test_yara_installs_its_rules_with_no_versions_yaml_row(tmp_path: Path) -> None:
+    result, fetch = _routed(tmp_path, pinned=False)
+
+    assert result.success, result.message
+    fetch.assert_called_once()
+    engine = fetch.call_args.args[0]
+    assert engine.method == "dependency"
+    assert engine.version_installed == importlib.metadata.version("yara-x")
+
+
+def test_a_second_install_at_the_pin_fetches_nothing(tmp_path: Path) -> None:
+    result, fetch = _routed(tmp_path, pinned=True)
+
+    assert result.success
+    assert result.method == "existing"
+    fetch.assert_not_called()
+
+
+def test_force_fetches_the_rules_again(tmp_path: Path) -> None:
+    _, fetch = _routed(tmp_path, pinned=True, force=True)
+
+    fetch.assert_called_once()

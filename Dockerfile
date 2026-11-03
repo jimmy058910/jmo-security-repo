@@ -167,7 +167,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     jq \
-    yara \
     openjdk-17-jre-headless \
     curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -205,9 +204,6 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.3
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.17.2 && \
     echo "✓ ruff installed"
-
-RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.4 && \
-    echo "✓ yara-python installed"
 
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev \
@@ -279,7 +275,7 @@ RUN echo "=== Verifying tools ===" && \
     hadolint --version && \
     zap -version && \
     nuclei -version && \
-    yara --version && \
+    python3 -c "import yara_x" && \
     shellcheck --version && \
     shfmt --version && \
     opa version && \

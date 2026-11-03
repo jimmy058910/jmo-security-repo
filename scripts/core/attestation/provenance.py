@@ -14,6 +14,7 @@ Usage:
 """
 
 import hashlib
+import importlib.metadata
 import logging
 import os
 import re
@@ -165,7 +166,11 @@ class ProvenanceGenerator:
 
         try:
             # Lazy load the tool registry
-            from scripts.core.tool_registry import BUILTIN_TOOLS, ToolRegistry
+            from scripts.core.tool_registry import (
+                BUILTIN_TOOLS,
+                DEPENDENCY_TOOLS,
+                ToolRegistry,
+            )
 
             if self._tool_registry is None:
                 self._tool_registry = ToolRegistry()
@@ -179,6 +184,21 @@ class ProvenanceGenerator:
                             "name": tool_name,
                             "uri": f"urn:jmo:tool:{tool_name}",
                             "annotations": {"version": self.jmo_version},
+                        }
+                    )
+                    continue
+                if tool_name in DEPENDENCY_TOOLS:
+                    # Its engine is a dependency of JMo, pinned in pyproject.toml,
+                    # so it has no registry entry: its version is the installed
+                    # distribution's.
+                    dist = DEPENDENCY_TOOLS[tool_name]
+                    resolved_deps.append(
+                        {
+                            "name": tool_name,
+                            "uri": f"https://pypi.org/project/{dist}/",
+                            "annotations": {
+                                "version": importlib.metadata.version(dist)
+                            },
                         }
                     )
                     continue

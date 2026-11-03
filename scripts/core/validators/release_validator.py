@@ -20,7 +20,12 @@ from typing import Any
 
 import yaml
 
-from scripts.core.tool_registry import BUILTIN_TOOLS, POLICY_ENGINE, TOOL_MATRIX
+from scripts.core.tool_registry import (
+    BUILTIN_TOOLS,
+    DEPENDENCY_TOOLS,
+    POLICY_ENGINE,
+    TOOL_MATRIX,
+)
 from scripts.core.validators import (
     CategoryResult,
     CheckResult,
@@ -380,7 +385,10 @@ def _check_matrix_versions() -> CheckResult:
     missing = [
         tool
         for tool in (*TOOL_MATRIX, POLICY_ENGINE)
-        if tool not in BUILTIN_TOOLS and normalize(tool) not in normalized_versions
+        # A dependency tool's engine is pinned in pyproject.toml instead.
+        if tool not in BUILTIN_TOOLS
+        and tool not in DEPENDENCY_TOOLS
+        and normalize(tool) not in normalized_versions
     ]
 
     if missing:

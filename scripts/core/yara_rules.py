@@ -18,6 +18,7 @@ Apache-2.0, CC BY-NC, GPL and others). This reads a fetched rule tree in place:
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -189,3 +190,17 @@ def filter_rules(rules_dir: Path, reviewed: Mapping[str, Review]) -> FilterResul
         result.kept_files += 1
         result.kept_rules += len(rules) - len(gone)
     return result
+
+
+def pinned_rules_installed(rules_dir: Path, ref: str) -> bool:
+    """Whether `rules_dir` holds the bundle fetched at `ref`.
+
+    Read from the manifest the fetch writes beside the rules, so a tree from an
+    older pin, or v1's ReversingLabs bundle (which has none), reads as absent
+    and `jmo tools install` fetches the pinned one.
+    """
+    try:
+        manifest = json.loads((rules_dir / "manifest.json").read_bytes())
+    except (OSError, ValueError):
+        return False
+    return isinstance(manifest, dict) and manifest.get("ref") == ref

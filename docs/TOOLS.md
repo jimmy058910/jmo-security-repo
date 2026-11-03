@@ -24,7 +24,7 @@ To narrow the list:
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
 | zizmor | GitHub Actions flaws: template injection, unpinned actions, dangerous triggers, credential persistence | Repository, GitLab | Workflows, composite actions or a Dependabot config are present | Release binary |
 | jmo-native | Next.js, Supabase and Firebase mistakes: a server secret behind a public env prefix, the Supabase `service_role` key or an LLM key in browser code, tables without Row Level Security, open Firebase rules ([details](#jmo-native)) | Repository, GitLab | JS/TS source, `.env` files, Firebase rules or Supabase migrations are present | Nothing: it is part of JMo |
-| YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-python` via pip, plus a rule bundle |
+| YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-x`, a dependency of JMo, plus a rule bundle |
 | OSV-Scanner | Vulnerable dependencies, read from lockfiles against an offline OSV database | Repository, GitLab | A lockfile is present | Release binary |
 | ZAP | Web application vulnerabilities (DAST) | URL | Never: URL targets only | Extracted application, needs Java 17+ |
 | Nuclei | Template-based vulnerability probes (DAST) | URL | Never: URL targets only | Release binary |
@@ -152,7 +152,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 | TruffleHog, Gitleaks, Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
 | Syft, Trivy | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
 | Checkov | Pinned PyPI package in a virtual environment of its own, so its dependencies cannot conflict with JMo's | `~/.jmo/tools/venvs/<tool>/` |
-| YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (signature-base, only its rules under the Detection Rule License 1.1; `manifest.json` beside them lists every rule left out and why) | rules in `~/.jmo/yara-rules/` |
+| YARA | `yara-x`, a dependency of JMo pinned in `pyproject.toml`, plus a pinned rule bundle (signature-base, only its rules under the Detection Rule License 1.1; `manifest.json` beside them lists every rule left out and why) | rules in `~/.jmo/yara-rules/` |
 | ZAP | Pinned cross-platform release archive, extracted | `~/.jmo/bin/zap/` |
 | jmo-native | Nothing to install: it is part of JMo and runs on JMo's own Python. `jmo tools check` lists it at JMo's version; `jmo tools install jmo-native` and `jmo tools update jmo-native` say it is built in | inside JMo |
 | OPA | Pinned release binary | `~/.jmo/bin/` |

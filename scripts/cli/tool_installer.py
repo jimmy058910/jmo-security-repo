@@ -11,6 +11,7 @@ version string and tool name validation to prevent URL/path injection.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import logging
 import os
@@ -68,6 +69,7 @@ from scripts.core.paths import (
 from scripts.core.secure_temp import remove_tree, secure_temp_dir
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
+    DEPENDENCY_TOOLS,
     ToolInfo,
     ToolRegistry,
     detect_platform,
@@ -78,7 +80,7 @@ from scripts.core.validation import (
     validate_tool_name,
     validate_version,
 )
-from scripts.core.yara_rules import filter_rules
+from scripts.core.yara_rules import filter_rules, pinned_rules_installed
 
 logger = logging.getLogger(__name__)
 
@@ -411,6 +413,28 @@ class ToolInstaller:
                 method="builtin",
                 message="Built into JMo, nothing to install",
             )
+
+        # yara's engine, yara-x, is a dependency of JMo (Phase 6, J2): nothing to
+        # download and no versions.yaml row. What install provides is the pinned
+        # rule bundle, so it is checked here, before "already installed", which
+        # the engine always is.
+        if tool_name == "yara":
+            engine = InstallResult(
+                tool_name="yara",
+                success=True,
+                method="dependency",
+                message="engine ships with JMo",
+                version_installed=importlib.metadata.version(DEPENDENCY_TOOLS["yara"]),
+            )
+            if not force and pinned_rules_installed(
+                get_yara_rules_dir(), YARA_RULES_BUNDLE["ref"]
+            ):
+                return replace(
+                    engine,
+                    method="existing",
+                    message="Already installed (pinned rules)",
+                )
+            return self._post_install(tool_name, engine)
 
         # Check if already installed
         if not force:

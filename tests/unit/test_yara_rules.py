@@ -16,7 +16,12 @@ from pathlib import Path
 
 import pytest
 
-from scripts.core.yara_rules import Dropped, UnreviewedRuleFile, filter_rules
+from scripts.core.yara_rules import (
+    Dropped,
+    UnreviewedRuleFile,
+    filter_rules,
+    pinned_rules_installed,
+)
 
 DRL = (
     "Detection Rule License 1.1 "
@@ -215,3 +220,21 @@ def test_a_mixed_file_kept_on_review_drops_only_the_labelled_rule(
 
     assert "rule Unlabelled" in _read(path)
     assert [d.rule for d in result.dropped] == ["Theirs"]
+
+
+@pytest.mark.parametrize(
+    ("manifest", "expected"),
+    [
+        (None, False),  # v1's ReversingLabs tree carries no manifest
+        (b'{"ref": "an-older-pin"}', False),
+        (b'{"ref": "the-pin"}', True),
+        (b"not json", False),
+    ],
+)
+def test_the_pinned_rules_are_known_by_their_manifest(
+    tmp_path: Path, manifest: bytes | None, expected: bool
+) -> None:
+    if manifest is not None:
+        (tmp_path / "manifest.json").write_bytes(manifest)
+
+    assert pinned_rules_installed(tmp_path, "the-pin") is expected

@@ -100,7 +100,12 @@ OLD_VERSION_COMMANDS = {
     "opa": ["opa", "version"],
     "nuclei": ["nuclei", "-version"],
     "zap": {"windows": ["zap.bat", "-version"], "default": ["zap.sh", "-version"]},
-    "yara": [sys.executable, "-c", "import yara; print(yara.YARA_VERSION)"],
+    # Phase 6, PR Y: the engine is yara-x, a dependency of JMo.
+    "yara": [
+        sys.executable,
+        "-c",
+        "import yara_x, importlib.metadata as m; print(m.version('yara-x'))",
+    ],
 }
 OLD_VERSION_TIMEOUTS = {"zap": 30, "checkov": 30}
 

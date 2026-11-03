@@ -355,7 +355,7 @@ jmo tools uninstall --yes
 **What gets removed with `--all`:**
 
 - `~/.jmo/` directory (config, cache, history.db, bin/)
-- pip-installed tools (checkov, yara-python, etc.)
+- pip-installed tools (checkov, etc.)
 - npm-installed tools (retire.js, etc.)
 - Binary tools in `~/.jmo/bin/`
 

@@ -188,9 +188,10 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
     },
     "yara": {
         "install": {
-            "linux": "pip install yara-python",
-            "macos": "pip install yara-python",
-            "windows": "pip install yara-python",
+            # The engine (yara-x) ships with JMo; this fetches its rules.
+            "linux": "jmo tools install yara",
+            "macos": "jmo tools install yara",
+            "windows": "jmo tools install yara",
         },
         "jmo_install": "jmo tools install yara",
     },
@@ -342,6 +343,17 @@ class ToolStatus:
     def expected_version_display(self) -> str:
         """`expected_version` as a human should read it: a dash when unknown."""
         return self.expected_version or "-"
+
+
+# A missing dependency that `jmo tools install <tool>` itself provides: yara's
+# pinned rule bundle. Its engine ships with JMo, so it is always installed, and
+# only this puts it on an install list.
+INSTALLED_BY_JMO = "yara-rules"
+
+
+def needs_install(status: ToolStatus) -> bool:
+    """Whether `jmo tools install` has something to do for this tool."""
+    return not status.installed or INSTALLED_BY_JMO in (status.missing_deps or [])
 
 
 @dataclass
@@ -605,7 +617,7 @@ class ToolManager:
             List of ToolStatus for missing tools
         """
         statuses = self.check_matrix(tools)
-        return [s for s in statuses.values() if not s.installed]
+        return [s for s in statuses.values() if needs_install(s)]
 
     def get_outdated_tools(
         self,
@@ -850,13 +862,13 @@ class ToolManager:
                 if zap_path.exists():
                     return str(zap_path)
 
-        # yara-python is a Python library, not a CLI binary
-        # Check if the module is importable instead of looking for a binary
+        # yara's engine is yara-x, a Python library and a dependency of JMo
+        # (Phase 6, J2), not a CLI binary: check that it imports.
         if binary_name == "yara":
             try:
                 import importlib.util
 
-                spec = importlib.util.find_spec("yara")
+                spec = importlib.util.find_spec("yara_x")
                 if spec is not None and spec.origin:
                     # Return the module path so we know it's "installed"
                     return spec.origin
@@ -1284,19 +1296,21 @@ class ToolManager:
         # visible here, which is why this downgrades execution readiness rather
         # than claiming the tool is absent; the runner re-checks the configured
         # path at scan time and fails loudly there if it is empty.
+        # The pinned bundle, known by the manifest its fetch writes: a tree from
+        # an older pin, or v1's ReversingLabs bundle, is not it.
         if tool_name == "yara":
+            from scripts.core.install_config import YARA_RULES_BUNDLE
             from scripts.core.paths import get_yara_rules_dir
+            from scripts.core.yara_rules import pinned_rules_installed
 
-            rules_dir = get_yara_rules_dir()
-            has_rules = rules_dir.is_dir() and any(
-                rules_dir.rglob(pattern) for pattern in ("*.yar", "*.yara")
-            )
-            if not has_rules:
+            if not pinned_rules_installed(
+                get_yara_rules_dir(), YARA_RULES_BUNDLE["ref"]
+            ):
                 return (
                     False,
-                    "No YARA rules installed - yara would report every scan "
-                    "clean. Run: jmo tools install yara --force",
-                    ["yara-rules"],
+                    "The pinned YARA rules are not installed - yara would report "
+                    "every scan clean. Run: jmo tools install yara",
+                    [INSTALLED_BY_JMO],
                 )
 
         return True, None, []
