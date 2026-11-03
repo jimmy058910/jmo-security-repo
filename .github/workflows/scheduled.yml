@@ -482,7 +482,6 @@ jobs:
           # Pinned, which avoids the upstream install.sh GitHub-API "latest"
           # lookups that have flaked in CI (see PR #350 + release.rules.md).
           TRIVY_VERSION: ${{ steps.pins.outputs.TRIVY_VERSION }}
-          GRYPE_VERSION: ${{ steps.pins.outputs.GRYPE_VERSION }}
           SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
           TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
           HADOLINT_VERSION: ${{ steps.pins.outputs.HADOLINT_VERSION }}
@@ -506,14 +505,6 @@ jobs:
             -o /tmp/trivy.tar.gz
           gzip -t /tmp/trivy.tar.gz
           tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
-
-          # Grype - SCA
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
-            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz" \
-            -o /tmp/grype.tar.gz
-          gzip -t /tmp/grype.tar.gz
-          tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype
-          chmod +x /usr/local/bin/grype
 
           # Syft - SBOM
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
@@ -544,7 +535,6 @@ jobs:
           echo "Installed tools:"
           opengrep --version || echo "opengrep not available"
           trivy --version || echo "trivy not available"
-          grype version || echo "grype not available"
           syft version || echo "syft not available"
           trufflehog --version || echo "trufflehog not available"
           hadolint --version || echo "hadolint not available"
@@ -1234,7 +1224,6 @@ jobs:
           TRIVY_VERSION: ${{ steps.pins.outputs.TRIVY_VERSION }}
           TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
           HADOLINT_VERSION: ${{ steps.pins.outputs.HADOLINT_VERSION }}
-          GRYPE_VERSION: ${{ steps.pins.outputs.GRYPE_VERSION }}
           SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
           GITLEAKS_VERSION: ${{ steps.pins.outputs.GITLEAKS_VERSION }}
           ZIZMOR_VERSION: ${{ steps.pins.outputs.ZIZMOR_VERSION }}
@@ -1308,16 +1297,12 @@ jobs:
           # Checkov - IaC scanner
           pip install "checkov==${CHECKOV_VERSION}"
 
-          # Grype and Syft: their contracts had no install line, so neither
-          # had ever run in CI (#1073).
-          for t in grype syft; do
-            case "$t" in grype) ver="$GRYPE_VERSION" ;; syft) ver="$SYFT_VERSION" ;; esac
-            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
-              "https://github.com/anchore/${t}/releases/download/v${ver}/${t}_${ver}_linux_amd64.tar.gz" \
-              -o "/tmp/${t}.tar.gz"
-            gzip -t "/tmp/${t}.tar.gz"
-          done
-          tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype
+          # Syft: its contract had no install line, so it had never run in
+          # CI (#1073).
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
+            -o /tmp/syft.tar.gz
+          gzip -t /tmp/syft.tar.gz
           tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
           # ShellCheck - shell script linter
           sudo apt-get update && sudo apt-get install -y shellcheck
@@ -1333,7 +1318,6 @@ jobs:
           osv-scanner --version || echo "osv-scanner not available"
           checkov --version || echo "checkov not available"
           shellcheck --version || echo "shellcheck not available"
-          grype version || echo "grype not available"
           syft version || echo "syft not available"
 
       - name: Fetch the rule-bundle fixture

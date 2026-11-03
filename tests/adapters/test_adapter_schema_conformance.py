@@ -42,43 +42,42 @@ pytestmark = pytest.mark.skipif(
 # faithful -- the point is to exercise the adapter's own mapping code.
 # --------------------------------------------------------------------------
 
-GRYPE_RAW: dict[str, Any] = {
-    "matches": [
+TRIVY_RAW: dict[str, Any] = {
+    "Results": [
         {
-            "vulnerability": {
-                "id": "CVE-2024-1234",
-                "severity": "High",
-                "description": "Example vulnerability in a pinned dependency",
-                "cvss": [
-                    {
-                        "version": "3.1",
-                        "vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-                        "metrics": {"baseScore": 9.8},
-                    }
-                ],
-                "fix": {"versions": ["1.2.3"], "state": "fixed"},
-            },
-            "artifact": {
-                "name": "libexample",
-                "version": "1.0.0",
-                "type": "python",
-                "purl": "pkg:pypi/libexample@1.0.0",
-                "locations": [{"path": "/app/requirements.txt"}],
-            },
+            "Target": "requirements.txt",
+            "Class": "lang-pkgs",
+            "Type": "pip",
+            "Vulnerabilities": [
+                {
+                    "VulnerabilityID": "CVE-2024-1234",
+                    "PkgName": "libexample",
+                    "InstalledVersion": "1.0.0",
+                    "FixedVersion": "1.2.3",
+                    "Severity": "HIGH",
+                    "Title": "Example vulnerability in a pinned dependency",
+                    "CVSS": {
+                        "nvd": {
+                            "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                            "V3Score": 9.8,
+                        }
+                    },
+                }
+            ],
         }
     ]
 }
 
 
-def _parse_grype(path: Path) -> list[dict[str, Any]]:
-    from scripts.core.adapters.grype_adapter import _load_grype_internal
+def _parse_trivy(path: Path) -> list[dict[str, Any]]:
+    from scripts.core.adapters.trivy_adapter import TrivyAdapter
 
-    return _load_grype_internal(path)
+    return [f.to_dict() for f in TrivyAdapter().parse(path)]
 
 
 # (label, raw payload, parse function) -- the adapters that emit a cvss vector.
 CVSS_PRODUCERS = [
-    ("grype", GRYPE_RAW, _parse_grype),
+    ("trivy", TRIVY_RAW, _parse_trivy),
 ]
 
 
@@ -143,7 +142,7 @@ def test_schema_rejects_a_bare_number_cvss() -> None:
         "id": "0123456789abcdef",
         "ruleId": "CVE-2024-1234",
         "severity": "HIGH",
-        "tool": {"name": "grype", "version": "0.100.0"},
+        "tool": {"name": "trivy", "version": "0.74.0"},
         "location": {"path": "/app/requirements.txt", "startLine": 0},
         "message": "Example",
         "cvss": 9.8,
@@ -161,7 +160,7 @@ def test_schema_requires_a_score_when_cvss_is_present() -> None:
         "id": "0123456789abcdef",
         "ruleId": "CVE-2024-1234",
         "severity": "HIGH",
-        "tool": {"name": "grype", "version": "0.100.0"},
+        "tool": {"name": "trivy", "version": "0.74.0"},
         "location": {"path": "/app/requirements.txt", "startLine": 0},
         "message": "Example",
         "cvss": {"version": "3.x", "vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},

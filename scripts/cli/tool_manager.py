@@ -154,14 +154,6 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
         },
         "jmo_install": "jmo tools install trufflehog",
     },
-    "grype": {
-        "install": {
-            "linux": "curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin",
-            "macos": "brew install grype",
-            "windows": "choco install grype -y",
-        },
-        "jmo_install": "jmo tools install grype",
-    },
     "syft": {
         "install": {
             "linux": "curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin",

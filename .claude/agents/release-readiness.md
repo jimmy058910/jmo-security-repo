@@ -165,7 +165,7 @@ pytest tests/adapters/ -v
 
 **Failures:**
 
-1. `test_grype_adapter.py::test_grype_adapter_cvss_v2_fallback` - AssertionError
+1. `test_trivy_adapter.py::TestTrivyCvss::test_nvd_v3_wins` - AssertionError
 2. `test_zap_adapter.py::TestZapSeverityMapping::test_informational_severity` - KeyError
 
 **Action:** Fix failing tests before release
@@ -361,7 +361,7 @@ docker run --rm jmo-security:0.7.0 scan --help
 
 1. ❌ **pyproject.toml version not updated** (0.6.1 → 0.7.0)
 2. ❌ **CHANGELOG.md missing v0.7.0 entry**
-3. ❌ **2 failing tests** (grype, zap)
+3. ❌ **2 failing tests** (trivy, zap)
 4. ❌ **Coverage below 85%** (84%)
 
 ### Important Issues (SHOULD FIX)
@@ -376,7 +376,7 @@ docker run --rm jmo-security:0.7.0 scan --help
 1. **Fix failing tests** (30 min)
 
    ```bash
-   pytest tests/adapters/test_grype_adapter.py::test_grype_adapter_cvss_v2_fallback -vv
+   pytest tests/adapters/test_trivy_adapter.py::TestTrivyCvss::test_nvd_v3_wins -vv
    pytest tests/adapters/test_zap_adapter.py::TestZapSeverityMapping::test_informational_severity -vv
    # Debug and fix issues
    ```

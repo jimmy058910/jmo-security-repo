@@ -140,11 +140,6 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "windows": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_windows-{trivy_arch}.zip",
         "default": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_{os}-{trivy_arch}.tar.gz",
     },
-    # Anchore grype: Windows uses .zip, Linux uses .tar.gz
-    "grype": {
-        "windows": "https://github.com/anchore/grype/releases/download/v{version}/grype_{version}_windows_{arch_amd}.zip",
-        "default": "https://github.com/anchore/grype/releases/download/v{version}/grype_{version}_{os_lower}_{arch_amd}.tar.gz",
-    },
     # Anchore syft: Windows uses .zip, Linux uses .tar.gz
     "syft": {
         "windows": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_windows_{arch_amd}.zip",
@@ -216,7 +211,6 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
 
 INSTALL_SCRIPTS: dict[str, str] = {
     "trivy": "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh",
-    "grype": "https://raw.githubusercontent.com/anchore/grype/main/install.sh",
     "syft": "https://raw.githubusercontent.com/anchore/syft/main/install.sh",
 }
 

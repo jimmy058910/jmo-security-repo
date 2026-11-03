@@ -106,7 +106,8 @@ def test_the_shipped_jmo_yml_has_no_unrecognised_keys(jmo_yml_path, caplog):
 
     A `profiles:` or `default_profile:` block left in the file after v2.0.0
     would load, warn, and do nothing -- the default config telling every user
-    that its own settings are ignored.
+    that its own settings are ignored. So would a `per_tool` entry for a
+    removed tool (grype's, left behind when grype left the matrix).
     """
     import logging
 
@@ -115,10 +116,12 @@ def test_the_shipped_jmo_yml_has_no_unrecognised_keys(jmo_yml_path, caplog):
     with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
         load_config(str(jmo_yml_path))
 
-    unrecognised = [
-        r.getMessage() for r in caplog.records if "unrecognised" in r.getMessage()
+    ignored = [
+        r.getMessage()
+        for r in caplog.records
+        if "unrecognised" in r.getMessage() or "removed in v2.0.0" in r.getMessage()
     ]
-    assert not unrecognised, unrecognised
+    assert not ignored, ignored
 
 
 # ========== COVERAGE TARGET: ≥90% ====================

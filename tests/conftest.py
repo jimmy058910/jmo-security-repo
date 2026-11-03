@@ -153,14 +153,14 @@ def _link_installed_scanners(
 
 
 def _share_scanner_caches(real_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Point trivy and grype at the developer's own databases.
+    """Point trivy at the developer's own database.
 
-    Both look under the home for them, so a home of the test's own made each
-    scan fetch trivy's 1.6 GB and grype's 3.2 GB afresh (24 GB over the five
-    Linux scan tests, #1517). Two scans on one cache do not fail: 4 in parallel
-    on a warm cache, and 2 on an empty one, all returned 0 with the same findings
-    (measured, trivy 0.74.0 and grype 0.118.0). A variable the developer set
-    themselves is left alone.
+    It looks under the home for it, so a home of the test's own made each scan
+    fetch trivy's 1.6 GB afresh (24 GB over the five Linux scan tests with
+    grype's 3.2 GB, while grype was in the matrix, #1517). Two scans on one
+    cache do not fail: 4 in parallel on a warm cache, and 2 on an empty one, all
+    returned 0 with the same findings (measured, trivy 0.74.0 and grype
+    0.118.0). A variable the developer set themselves is left alone.
     """
     if IS_WINDOWS:
         local = os.environ.get("LOCALAPPDATA")
@@ -170,12 +170,8 @@ def _share_scanner_caches(real_home: Path, monkeypatch: pytest.MonkeyPatch) -> N
     else:
         xdg = os.environ.get("XDG_CACHE_HOME")
         base = Path(xdg) if xdg else real_home / ".cache"
-    for var, cache in (
-        ("TRIVY_CACHE_DIR", base / "trivy"),
-        ("GRYPE_DB_CACHE_DIR", base / "grype" / "db"),
-    ):
-        if var not in os.environ:
-            monkeypatch.setenv(var, str(cache))
+    if "TRIVY_CACHE_DIR" not in os.environ:
+        monkeypatch.setenv("TRIVY_CACHE_DIR", str(base / "trivy"))
 
 
 @pytest.fixture
@@ -220,8 +216,8 @@ def jmo_runner(monkeypatch, tmp_path, real_home):
       installed. They are the real directories: a command that installs,
       updates or uninstalls tools through this fixture would change the
       developer's install. None of the current callers do.
-    - trivy and grype read the developer's own caches (`TRIVY_CACHE_DIR`,
-      `GRYPE_DB_CACHE_DIR`), the same for every test in the run.
+    - trivy reads the developer's own cache (`TRIVY_CACHE_DIR`), the same for
+      every test in the run.
 
     A scan that only checks a path or an argument should still name its tools
     (`CHEAP_SCAN_TOOLS`); every eligible scanner is minutes, not seconds.
@@ -317,8 +313,9 @@ def assert_no_jmo_traceback(output: str) -> None:
 # A scan that only checks a path, an argument or a permission names its tools
 # with this (`jmo scan ... *CHEAP_SCAN_TOOLS`) instead of running every eligible
 # scanner. shellcheck is offline and finishes in milliseconds. Left unpinned, a
-# scan through `jmo_runner` runs trivy and grype, and grype alone measured 92 s
-# on the first scan after its database moved on (#1517); `test_windows_specific`
+# scan through `jmo_runner` runs every eligible scanner, trivy among them (grype,
+# while it was in the matrix, measured 92 s on the first scan after its
+# database moved on, #1517); `test_windows_specific`
 # pins its own `CHEAP_TOOLS` the same way (#833).
 CHEAP_SCAN_TOOLS = ["--tools", "shellcheck"]
 

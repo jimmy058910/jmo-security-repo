@@ -17,8 +17,8 @@ outputs:
 - suppressions
 fail_on: ''
 # Scan defaults. There are no profiles (v2.0.0); these are the settings the
-# former default profile (balanced) used, plus the yara and grype entries only
-# the former deep profile carried.
+# former default profile (balanced) used, plus the yara entry only the former
+# deep profile carried.
 threads: 4
 timeout: 600
 per_tool:
@@ -45,8 +45,6 @@ per_tool:
     # have been rejected on an unknown option had it ever got far enough to
     # run. Set `rules_path` here to point at your own rule set; otherwise
     # the bundle installed by `jmo tools install yara` is used.
-  grype:
-    timeout: 900
 profiling:
   min_threads: 2
   max_threads: 8

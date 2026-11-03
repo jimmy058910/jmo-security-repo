@@ -383,8 +383,8 @@ class TestAdapterOutputCompliance:
             "message": "Complete finding with all fields",
             "description": "Detailed description of the finding",
             "severity": "HIGH",
-            # Matches what adapters actually emit -- grype_adapter.py:63-67 and
-            # dependency_check_adapter.py:178-190 both build this shape, and
+            # Matches what adapters actually emit -- trivy_adapter.py's
+            # `_best_vulnerability_cvss` builds this shape, and
             # history_db.py:1088 reads `.get("score")` off it. This fixture
             # previously said `7.5`, which no adapter has ever produced (#757).
             "cvss": {

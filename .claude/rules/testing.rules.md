@@ -93,6 +93,14 @@ pytest tests/adapters/ -v               # Adapter tests only
 pytest tests/cli/ -v                    # CLI tests only
 ```
 
+**A worktree runs its own venv.** The main checkout's `.venv` holds an editable
+install of the main checkout, so with that interpreter, `python -m scripts.cli.jmo`
+spawned from a tmp cwd (every e2e and subprocess test) imports the main
+checkout's `scripts/`, not the worktree's: the test exercises code the branch does
+not contain, and passes or fails for the wrong reason (measured, #1548's E2E
+work). In a worktree, run `uv sync --frozen --group dev` once and use its own
+`.venv/bin/python -m pytest`.
+
 ## Test Markers
 
 Use pytest markers to categorize and filter tests:
@@ -433,11 +441,12 @@ bare fake HOME costs two things (#1517):
   the four real directories in (`bin` is 1.1 GB; they are links, not copies).
   `osv-db` is not optional: without it osv-scanner's row reads `failed`, "offline
   database missing".
-- **It moves their caches.** trivy and grype put their databases under the home:
-  with `~/.jmo/bin` on PATH, `test_linux_specific.py` fetched 1.6 GB + 3.2 GB
-  into each of five scan tests: **24 GB in 6 min 57 s**, against 5.0 MB in 11 s
-  when no scanner was found. The fixture sets `TRIVY_CACHE_DIR` and
-  `GRYPE_DB_CACHE_DIR` to the developer's own caches for the whole run. Two scans
+- **It moves their caches.** trivy puts its database under the home: with
+  `~/.jmo/bin` on PATH, `test_linux_specific.py` fetched trivy's 1.6 GB (and
+  grype's 3.2 GB, while grype was in the matrix) into each of five scan tests:
+  **24 GB in 6 min 57 s**, against 5.0 MB in 11 s when no scanner was found.
+  The fixture sets `TRIVY_CACHE_DIR` to the developer's own cache for the
+  whole run. Two scans
   on one cache do not fail (4 in parallel on a warm cache, 2 on an empty one,
   measured), so there is no xdist group.
 
@@ -448,8 +457,9 @@ Rules that follow:
   reads names a scanner that lives only in `~/.jmo/bin`, is `requires_tools`, and
   asserts `scanner_states(results_dir)[tool] == "ran"`. A return code cannot
   tell a scan that ran from one that found no scanner.
-- Left unpinned, one scan is minutes, not seconds: grype alone took 92 s on the
-  first scan after its database moved on, inside a 120 s budget, and the
+- Left unpinned, one scan is minutes, not seconds: grype alone (while it was
+  in the matrix) took 92 s on the first scan after its database moved on,
+  inside a 120 s budget, and the
   refresh lands in the developer's cache, not in `--basetemp`.
 - The links are the real directories. A `jmo tools install`, `update` or
   `uninstall` through `jmo_runner` would change the developer's install; no test

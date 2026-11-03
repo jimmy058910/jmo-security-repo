@@ -7,13 +7,14 @@ EPSS and KEV caches land in the test's `tmp_path` and not in the developer's
 
 - the scanners (`~/.jmo/bin`), their venvs, the yara rules and the OSV
   database, so a scan "passed" having run nothing, and
-- the scanners' own caches. trivy and grype look under the home for their
-  vulnerability databases, so with `~/.jmo/bin` on PATH each of five scan tests
-  fetched trivy's 1.6 GB and grype's 3.2 GB into its own home: 24 GB in 6 min
-  57 s, against 5.0 MB in 11 s when no scanner was found at all.
+- the scanners' own caches. trivy looks under the home for its vulnerability
+  database, so with `~/.jmo/bin` on PATH each of five scan tests fetched
+  trivy's 1.6 GB (and grype's 3.2 GB, while grype was in the matrix) into its
+  own home: 24 GB in 6 min 57 s, against 5.0 MB in 11 s when no scanner was
+  found at all.
 
 The fixture now links the real tool directories into the test's home and points
-both databases at the developer's own cache. These tests pin that. The class
+trivy's database at the developer's own cache. These tests pin that. The class
 runs everywhere, against a pretend developer home; the two functions after it
 run real scanners and are `requires_tools`.
 """
@@ -33,7 +34,7 @@ from tests.conftest import (
 )
 
 SCANNER_DIRS = ("bin", "tools", "yara-rules", "osv-db")
-CACHE_VARIABLES = ("TRIVY_CACHE_DIR", "GRYPE_DB_CACHE_DIR", "XDG_CACHE_HOME")
+CACHE_VARIABLES = ("TRIVY_CACHE_DIR", "XDG_CACHE_HOME")
 
 
 def skip_without_symlinks(tmp_path: Path) -> None:
@@ -118,17 +119,14 @@ class TestAgainstAPretendDeveloperHome:
     def test_scanner_caches_are_the_developers_not_a_fresh_one(
         self, no_cache_settings, jmo_runner, real_home, tmp_path
     ):
-        """trivy and grype read their databases from one place for the whole run."""
+        """trivy reads its database from one place for the whole run."""
         trivy = Path(os.environ["TRIVY_CACHE_DIR"])
-        grype = Path(os.environ["GRYPE_DB_CACHE_DIR"])
 
-        for cache in (trivy, grype):
-            assert not cache.is_relative_to(tmp_path / "home"), (
-                f"{cache} is inside the test's home, so each test would fetch its own"
-            )
+        assert not trivy.is_relative_to(tmp_path / "home"), (
+            f"{trivy} is inside the test's home, so each test would fetch its own"
+        )
         if IS_LINUX:
             assert trivy == real_home / ".cache" / "trivy"
-            assert grype == real_home / ".cache" / "grype" / "db"
 
     def test_a_cache_the_developer_configured_is_kept(
         self, configured_trivy_cache, jmo_runner
@@ -173,14 +171,14 @@ def test_a_scan_runs_the_scanners_the_developer_installed(jmo_runner, tmp_path):
 @pytest.mark.requires_tools
 @pytest.mark.timeout(900)
 @pytest.mark.skipif(
-    not (IS_LINUX and scanner_installed("trivy") and scanner_installed("grype")),
-    reason="Linux with trivy and grype installed",
+    not (IS_LINUX and scanner_installed("trivy")),
+    reason="Linux with trivy installed",
 )
-def test_trivy_and_grype_use_the_developers_databases(jmo_runner, tmp_path):
-    """Neither scanner unpacks a database of its own under the test's home.
+def test_trivy_uses_the_developers_database(jmo_runner, tmp_path):
+    """trivy unpacks no database of its own under the test's home.
 
     A database that moved on since the last scan is fetched into the developer's
-    cache, once, which is what their own `jmo scan` does; grype's took 92 s.
+    cache, once, which is what their own `jmo scan` does.
     """
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -192,7 +190,6 @@ def test_trivy_and_grype_use_the_developers_databases(jmo_runner, tmp_path):
             "scan",
             "--tools",
             "trivy",
-            "grype",
             "--repo",
             str(repo),
             "--results-dir",
@@ -202,7 +199,6 @@ def test_trivy_and_grype_use_the_developers_databases(jmo_runner, tmp_path):
     )
 
     assert result.returncode in (0, 1), result.stderr[-2000:]
-    assert scanner_states(results) == {"trivy": "ran", "grype": "ran"}
+    assert scanner_states(results) == {"trivy": "ran"}
     cache = tmp_path / "home" / ".cache"
     assert not (cache / "trivy").exists(), "trivy fetched its database into the test"
-    assert not (cache / "grype").exists(), "grype fetched its database into the test"

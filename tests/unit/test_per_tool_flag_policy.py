@@ -13,8 +13,8 @@ scanner, and only `repository_scanner`'s `get_tool_timeout` applied the
 slow-tool floor. Consolidating them is what makes a single guard possible.
 
 Third (#1335): which spellings of a flag reach a tool is its own parser's
-grammar, not one shared list. A shared set refused real flags (grype's `-f` is
-`--fail-on`) and missed short flags chained in a cluster (`-qftable`).
+grammar, not one shared list. A shared set refused real flags (shellcheck's
+`-o` is `--enable`) and missed short flags chained in a cluster (`-qftable`).
 """
 
 from __future__ import annotations
@@ -138,18 +138,18 @@ class TestReservedFlagsAreRefused:
 
 # --- each tool's own grammar (#1335) -------------------------------------------
 #
-# Each spelling was run against the tool itself (trivy 0.74.0, grype
-# 0.118.0, syft 1.51.1, gitleaks 8.30.1, trufflehog 3.97.1, semgrep 1.175.0,
+# Each spelling was run against the tool itself (trivy 0.74.0,
+# syft 1.51.1, gitleaks 8.30.1, trufflehog 3.97.1, semgrep 1.175.0,
 # checkov 3.3.16, hadolint 2.15.1, shellcheck 0.11.0, zizmor 1.30.1,
 # osv-scanner 2.6.0, nuclei 3.11.1) and judged by what it did, except the
 # flags taken from the tool's own help: osv-scanner's `--serve`, zap's
 # `-quickout`, semgrep's `--gitlab-*`, and the exit-code flags. A refused
 # spelling lost the findings or moved the report (trivy `-ftable` took 42
-# findings to 0 with rc 0, grype `-otable` 7 to 0, gitleaks `-vr<path>` wrote
+# findings to 0 with rc 0, gitleaks `-vr<path>` wrote
 # its unredacted report into the scanned repository), repeats a flag JMo
 # passes to a parser that refuses a repeat (zizmor `-o` is its `--offline`:
 # rc 2, "cannot be used multiple times"), or sets an exit code the row does
-# not accept (grype `-f high`: rc 2 on a HIGH match). A kept one is a real flag
+# not accept (trivy's `--exit-code`). A kept one is a real flag
 # of that tool (semgrep's `-f` is `--config`, shellcheck's `-o` is
 # `--enable`), or a spelling the tool itself rejects out loud (osv-scanner
 # `-ftable`: "flag provided but not defined").
@@ -179,24 +179,8 @@ REFUSED = [
     ("trivy", "-format=table"),
     ("trivy", "--exit-code 1"),
     ("trivy", "--exit-code=5"),
-    # grype and syft: `-o` appends an output, so even `-ojson` breaks them;
+    # syft: `-o` appends an output, so even `-ojson` breaks it;
     # `--file` redirects it and leaves stdout empty.
-    ("grype", "-ojson"),
-    ("grype", "-otable"),
-    ("grype", "-o table"),
-    ("grype", "-o=table"),
-    ("grype", "--output=table"),
-    ("grype", "-otemplate"),
-    ("grype", "-qotable"),
-    ("grype", "-votable"),
-    ("grype", "-qo table"),
-    ("grype", "--file x.json"),
-    ("grype", "--file=x.json"),
-    # Exit code: rc 2 on a match at that severity, which the row does not accept.
-    ("grype", "-f high"),
-    ("grype", "-fhigh"),
-    ("grype", "--fail-on high"),
-    ("grype", "-qf high"),
     ("syft", "-ojson"),
     ("syft", "-otable"),
     ("syft", "-o table"),
@@ -367,10 +351,6 @@ KEPT = [
     ("trivy", "-cconfig.yaml"),
     ("trivy", "-ttpl.tpl"),
     ("trivy", "-q"),
-    ("grype", "-cconfig.yaml"),
-    ("grype", "-sall-layers"),
-    ("grype", "-ttpl.tmpl"),
-    ("grype", "-vv"),
     ("syft", "-cconfig.yaml"),
     ("gitleaks", "-linfo"),
     ("gitleaks", "-lwarn"),
@@ -453,7 +433,6 @@ class TestEachToolsOwnGrammar:
             "zizmor": FlagGrammar.CLAP,
             "jmo-native": FlagGrammar.ARGPARSE,
             "yara": FlagGrammar.ARGPARSE,
-            "grype": FlagGrammar.PFLAG,
             "osv-scanner": FlagGrammar.GO_FLAG,
             "zap": FlagGrammar.ZAP,
             "nuclei": FlagGrammar.GO_FLAG,
@@ -602,7 +581,7 @@ class TestEachRefusalSaysWhy:
         [
             ("trivy", "-ftable", "where the tool writes"),
             ("zizmor", "-o", "JMo already passes it"),
-            ("grype", "-f high", "--fail-on"),
+            ("trivy", "--exit-code 1", "--fail-on"),
             ("yara", "--target elsewhere", "another target"),
             ("trufflehog", "--no-verification", "per_tool.trufflehog.verify: true"),
             ("osv-scanner", "--download-offline-databases", "jmo tools update"),
@@ -621,7 +600,7 @@ class TestEachRefusalSaysWhy:
             ("checkov", "--soft-fail"),
             ("hadolint", "--no-fail"),
             ("opengrep", "--error"),
-            ("grype", "--fail-on"),
+            ("trivy", "--exit-code"),
         ],
     )
     def test_the_exit_code_reason_is_true_of_every_flag_it_covers(

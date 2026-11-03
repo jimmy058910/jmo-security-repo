@@ -277,7 +277,7 @@ container_vulnerabilities contains finding if {
     finding.severity in ["CRITICAL", "HIGH"]
 
     # Filter container scanning tools
-    finding.tool.name in ["trivy", "grype", "syft"]
+    finding.tool.name in ["trivy", "syft"]
 }
 
 violations contains violation if {

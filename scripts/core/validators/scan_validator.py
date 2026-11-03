@@ -26,14 +26,13 @@ from scripts.core.validators import (
 logger = logging.getLogger(__name__)
 
 # Every adapter module under scripts/core/adapters/, by stem: one per matrix
-# scanner, the 15. `opa` is the report-phase policy engine and emits no tool
+# scanner, the 14. `opa` is the report-phase policy engine and emits no tool
 # output, so it has none.
 # tests/core/test_scan_validator.py holds this equal to the files on disk.
 EXPECTED_ADAPTERS = sorted(
     [
         "checkov",
         "gitleaks",
-        "grype",
         "hadolint",
         "jmo_native",
         "nuclei",
@@ -2019,7 +2018,7 @@ def _check_full_real_scan_available() -> CheckResult:
         from scripts.core.tool_utils import tool_exists
 
         tools_available = []
-        for tool in ["trivy", "opengrep", "grype"]:
+        for tool in ["trivy", "opengrep"]:
             if tool_exists(tool, warn=False):
                 tools_available.append(tool)
 

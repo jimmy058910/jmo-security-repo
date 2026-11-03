@@ -187,7 +187,7 @@ class TestConstants:
         assert {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"} == STANDARD_SEVERITIES
 
     def test_known_adapters_in_list(self):
-        for adapter in ["osv_scanner", "trivy", "opengrep", "grype", "zap"]:
+        for adapter in ["osv_scanner", "trivy", "opengrep", "zap"]:
             assert adapter in EXPECTED_ADAPTERS
 
 

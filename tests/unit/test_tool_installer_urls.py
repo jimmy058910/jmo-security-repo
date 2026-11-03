@@ -77,22 +77,6 @@ class TestBinaryURLPatterns:
             "trivy_0.58.0_Linux-ARM64.tar.gz"
         )
 
-    def test_grype_url_x86_64(self):
-        """Test grype URL for x86_64 Linux."""
-        url = BINARY_URLS["grype"]["default"].format(
-            version="0.87.0",
-            os="Linux",
-            os_lower="linux",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-        )
-        assert url == (
-            "https://github.com/anchore/grype/releases/download/v0.87.0/"
-            "grype_0.87.0_linux_amd64.tar.gz"
-        )
-
     def test_syft_url_x86_64(self):
         """Test syft URL for x86_64 Linux."""
         url = BINARY_URLS["syft"]["default"].format(

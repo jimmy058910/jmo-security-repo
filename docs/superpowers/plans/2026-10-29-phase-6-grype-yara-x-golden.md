@@ -889,7 +889,10 @@ the pack is built in)
 - [ ] **Step 1:** KNOWN_LIMITATIONS: known-vulnerable GitHub Actions (a compromised
   action's version) are not reported offline; zizmor reports the same `uses:` as
   `unpinned-uses`; pinning to a sha closes the class; the measured numbers above.
-- [ ] **Step 2:** UPGRADE: grype removed; no other finding's id changes.
+- [ ] **Step 2:** UPGRADE: grype removed; no other finding's id changes. **Measured false
+  (2026-11-02):** a consensus finding takes its lead's id, and at equal severity the lead
+  is the first tool name alphabetically, so grype led every dependency finding it was part
+  of; those ids change once, to OSV-Scanner's or Trivy's. UPGRADE.md says so.
 - [ ] **Step 3:** Commit `docs: what leaving grype costs, measured`.
 
 ## Task G3: Gates, then PR G

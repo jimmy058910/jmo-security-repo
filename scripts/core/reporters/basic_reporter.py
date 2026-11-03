@@ -254,7 +254,7 @@ def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
 
             if tool == "trufflehog" or "secret" in rule or "key" in rule:
                 categories["🔑 Secrets"] += 1
-            elif tool in ["trivy", "grype"] or "cve" in rule:
+            elif tool == "trivy" or "cve" in rule:
                 categories["🛡️ Vulnerabilities"] += 1
             elif (
                 tool in ["hadolint", "checkov"]

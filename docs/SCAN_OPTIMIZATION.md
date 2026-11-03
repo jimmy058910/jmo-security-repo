@@ -56,7 +56,6 @@ Several tools download vulnerability databases on first run. Pre-caching elimina
 | Tool | Cache Location | Size | Update Command |
 |------|---------------|------|----------------|
 | trivy | `~/.cache/trivy/` | ~900 MB | `trivy image --download-db-only` |
-| grype | `~/.cache/grype/` | ~3.8 GB | `grype db update` |
 | nuclei | `~/.nuclei-templates/` | ~200 MB | `nuclei -update-templates` |
 
 **Pre-warm script:**
@@ -68,15 +67,11 @@ Several tools download vulnerability databases on first run. Pre-caching elimina
 echo "Pre-warming security tool caches..."
 
 # Trivy vulnerability database
-echo "[1/3] Updating Trivy database..."
+echo "[1/2] Updating Trivy database..."
 trivy image --download-db-only 2>/dev/null
 
-# Grype vulnerability database
-echo "[2/3] Updating Grype database..."
-grype db update 2>/dev/null
-
 # Nuclei templates
-echo "[3/3] Updating Nuclei templates..."
+echo "[2/2] Updating Nuclei templates..."
 nuclei -update-templates -silent 2>/dev/null
 
 echo "Cache pre-warming complete!"
@@ -368,7 +363,6 @@ Large caches can slow down scans. Manage them periodically:
 
 ```bash
 du -sh ~/.cache/trivy/
-du -sh ~/.cache/grype/
 du -sh ~/.nuclei-templates/
 ```
 
@@ -377,10 +371,6 @@ du -sh ~/.nuclei-templates/
 ```bash
 # Remove old Trivy cache (keeps latest)
 trivy clean --all
-
-# Grype - remove and re-download
-rm -rf ~/.cache/grype/
-grype db update
 
 # Nuclei - update templates
 nuclei -update-templates
@@ -391,7 +381,6 @@ nuclei -update-templates
 | Cache | Refresh Frequency | Command |
 |-------|------------------|---------|
 | Trivy DB | Weekly | `trivy image --download-db-only` |
-| Grype DB | Weekly | `grype db update` |
 | Nuclei templates | Weekly | `nuclei -update-templates` |
 
 ## Performance Monitoring
@@ -468,7 +457,6 @@ Persist caches between Docker runs:
 docker run \
   -v $PWD:/scan \
   -v jmo-trivy-cache:/root/.cache/trivy \
-  -v jmo-grype-cache:/root/.cache/grype \
   -v jmo-nuclei-templates:/root/.nuclei-templates \
   ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```

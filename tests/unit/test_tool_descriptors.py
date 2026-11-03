@@ -45,7 +45,6 @@ OLD_REPO_TOOLS = {
     "hadolint",
     "shellcheck",
     "yara",
-    "grype",
     "zap",
 }
 OLD_TOOL_SCAN_TYPES = {
@@ -73,7 +72,6 @@ OLD_STUBS = {
     "opengrep": {"results": []},
     "syft": {"artifacts": []},
     "trivy": {"Results": []},
-    "grype": {"matches": []},
     "hadolint": [],
     "checkov": {"results": {"failed_checks": []}},
     "zap": {"site": []},
@@ -82,7 +80,6 @@ OLD_STUBS = {
 OLD_VERSION_PATTERNS = {
     "default": (r"v?(\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?)", 0),
     "trivy": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
-    "grype": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
     "syft": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
     "nuclei": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
     "trufflehog": (r"trufflehog\s+v?(\d+\.\d+\.\d+)", 0),
@@ -99,7 +96,6 @@ OLD_VERSION_PATTERNS = {
     "opa": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
 }
 OLD_VERSION_COMMANDS = {
-    "grype": ["grype", "version"],
     "syft": ["syft", "version"],
     "opa": ["opa", "version"],
     "nuclei": ["nuclei", "-version"],
@@ -137,17 +133,18 @@ def test_zizmor_joined_beside_the_other_walk_fed_linters() -> None:
 
 
 def test_osv_scanner_joined_beside_the_other_dependency_scanner() -> None:
-    """Phase 4, PR O: osv-scanner reads lockfiles offline, so the matrix is
-    15. Listed after grype, the other scanner of dependencies only."""
+    """Phase 4, PR O: osv-scanner reads lockfiles offline. It was listed after
+    grype, the other scanner of dependencies only, which Phase 6's PR G removed;
+    yara is its neighbour now."""
     names = list(DESCRIPTORS)
-    assert names[names.index("grype") + 1] == "osv-scanner"
+    assert names[names.index("yara") + 1] == "osv-scanner"
 
 
 def test_jmo_native_joined_before_yara() -> None:
     """Phase 4, PR N: jmo-native, JMo's own check pack. Listed before yara, the
     other runner JMo drives on its own interpreter. PR G removed gosec (#1310),
-    so the matrix is 15."""
-    assert len(DESCRIPTORS) == 15
+    and Phase 6's PR G removed grype (#1372), so the matrix is 14."""
+    assert len(DESCRIPTORS) == 14
     names = list(DESCRIPTORS)
     assert names[names.index("jmo-native") + 1] == "yara"
 
@@ -237,22 +234,21 @@ def test_the_gitleaks_probe_reads_what_gitleaks_version_prints() -> None:
 
 
 def test_exclusions_old_flags_survive_and_the_new_tools_gain_one() -> None:
-    """#1235: syft and grype had no exclusion at all. trivy's style keeps
-    its old name; syft and grype share it, measured (bare names are fatal)."""
+    """#1235: syft had no exclusion at all. trivy's style keeps its old name;
+    syft shares it, measured (bare names are fatal)."""
     assert {
         k: v
         for k, v in scan_utils.TOOL_EXCLUSION_FLAG.items()
         if k in OLD_TOOL_EXCLUSION_FLAG
     } == OLD_TOOL_EXCLUSION_FLAG
     assert scan_utils.TOOL_EXCLUSION_FLAG["syft"] == ("--exclude", "separate")
-    assert scan_utils.TOOL_EXCLUSION_FLAG["grype"] == ("--exclude", "separate")
 
 
 def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> None:
     """Phase 3: the secret scanner joins the tier (trufflehog on a Next.js app,
     295.8 s and 222 of 253 findings in node_modules, measured), and so do the
-    tools whose walk already skipped VENDORED_DIRS. syft and grype stay out
-    (#1205): a vendored tree is their subject."""
+    tools whose walk already skipped VENDORED_DIRS. syft stays out (#1205): a
+    vendored tree is its subject."""
     assert (
         OLD_VENDOR_NOISE_TOOLS
         | {
@@ -274,7 +270,6 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
         == scan_utils.VENDOR_NOISE_TOOLS
     )
     assert DESCRIPTORS["syft"].excluded_vendored == ()
-    assert DESCRIPTORS["grype"].excluded_vendored == (".venv", "venv")
 
 
 def test_every_descriptor_declares_an_exclusion_style() -> None:
@@ -319,10 +314,10 @@ class TestToolNames:
             "syft",
             "opengrep",
         ]
-        assert parse_tool_names(["trivy, syft ,", " grype "]) == [
+        assert parse_tool_names(["trivy, syft ,", " zizmor "]) == [
             "trivy",
             "syft",
-            "grype",
+            "zizmor",
         ]
 
     def test_duplicates_collapse_in_order(self) -> None:
@@ -341,12 +336,14 @@ class TestToolNames:
         assert f"{name}" in str(exc.value)
         assert "removed in v2.0.0" in str(exc.value)
 
-    def test_eighteen_were_removed(self) -> None:
-        """docs/TOOLS.md "Removed in v2.0.0" lists seventeen, and semgrep, which
-        opengrep replaced, is the eighteenth; falco's companion falcoctl is
-        accepted as a spelling of the same removal."""
-        assert len(REMOVED_TOOLS - {"falcoctl"}) == 18
+    def test_nineteen_were_removed(self) -> None:
+        """docs/TOOLS.md "Removed in v2.0.0" lists seventeen; semgrep, which
+        opengrep replaced, is the eighteenth, and grype, whose findings
+        osv-scanner and trivy report (Phase 6), the nineteenth. falco's
+        companion falcoctl is accepted as a spelling of the same removal."""
+        assert len(REMOVED_TOOLS - {"falcoctl"}) == 19
         assert "semgrep" in REMOVED_TOOLS
+        assert "grype" in REMOVED_TOOLS
         assert not REMOVED_TOOLS & set(DESCRIPTORS)
 
 

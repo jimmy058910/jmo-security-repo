@@ -182,7 +182,7 @@
     },
     "dependency": {
       "type": "object",
-      "description": "Dependency scanners (trivy, osv-scanner, grype): the vulnerable installed package. With the lockfile (location.path) and the advisory (ruleId plus aliases) it is the finding's identity: one vulnerability in one installed package version is one finding, whichever and however many tools report it (#1346).",
+      "description": "Dependency scanners (trivy, osv-scanner): the vulnerable installed package. With the lockfile (location.path) and the advisory (ruleId plus aliases) it is the finding's identity: one vulnerability in one installed package version is one finding, whichever and however many tools report it (#1346).",
       "required": ["name", "version"],
       "properties": {
         "name": { "type": "string", "minLength": 1, "description": "Package name as the tool spells it (e.g., 'lodash', '@scope/pkg', 'Flask_Cors')" },

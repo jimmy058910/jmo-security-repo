@@ -87,15 +87,6 @@ RUN NUCLEI_VERSION="3.11.1" && \
     rm /tmp/nuclei.zip && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
-# Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.118.0" && \
-    GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
-    -o /tmp/grype.tar.gz && \
-    gzip -t /tmp/grype.tar.gz && \
-    tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype && \
-    chmod +x /usr/local/bin/grype
-
 # Download OPA (Policy-as-Code engine)
 RUN OPA_VERSION="1.21.4" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
@@ -232,7 +223,6 @@ COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/shfmt /usr/local/bin/shfmt
-COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
 COPY --from=builder /usr/local/bin/zizmor /usr/local/bin/zizmor
@@ -246,7 +236,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/trivy \
     /usr/local/bin/hadolint \
     /usr/local/bin/nuclei \
-    /usr/local/bin/grype \
     /usr/local/bin/opa \
     2>/dev/null || true
 
@@ -255,7 +244,7 @@ RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
     chmod +x /usr/local/bin/zap
 
 # Mark cache directories as volumes for persistence
-VOLUME ["/root/.cache/trivy", "/root/.cache/grype"]
+VOLUME ["/root/.cache/trivy"]
 
 # Create working directory
 WORKDIR /scan
@@ -293,7 +282,6 @@ RUN echo "=== Verifying tools ===" && \
     yara --version && \
     shellcheck --version && \
     shfmt --version && \
-    grype version && \
     opa version && \
     echo "=== All tools verified ==="
 
@@ -339,7 +327,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trends` work.
 #
 # CI mode with caching (30s faster on subsequent runs):
-# docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy -v grype-cache:/root/.cache/grype \
+# docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy \
 #   ghcr.io/jimmy058910/jmo-security:latest ci --repo /scan --fail-on HIGH
 #
 # Size optimizations:

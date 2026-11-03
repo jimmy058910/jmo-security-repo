@@ -286,7 +286,7 @@ def report_tool_failure(
 # jobs' helpers and the tests read them.
 
 # Tools for which VENDORED_DIRS is noise: the source readers and the secret
-# scanner. **Not every tool**: syft and grype exist to inventory exactly those
+# scanner. **Not every tool**: syft exists to inventory exactly those
 # trees (#1205) - #1080 measured 282 of syft's 878 artifacts inside `.venv/`.
 VENDOR_NOISE_TOOLS: frozenset[str] = frozenset(
     name
@@ -889,8 +889,8 @@ def excluded_dirs_for(
     """Directory names ``tool`` should be told to skip.
 
     The VENDORED_DIRS entries its descriptor declares - all of them for the
-    tools that read the repository's own code, none for syft, a virtualenv only
-    for grype - plus the results directory when it resolves inside the tree
+    tools that read the repository's own code, none for syft - plus the
+    results directory when it resolves inside the tree
     being scanned, which is JMo's own output and belongs to no tool (#1156).
 
     Order is stable and duplicates are dropped, so a name appearing in both
@@ -927,7 +927,7 @@ def tool_exclusion_flags(
         # either way - it is dropped silently.
         return [arg for d in dirs for arg in (flag, checkov_skip_path_pattern(d))]
     # SEPARATE: the `**/` is what makes a nested directory match at all, and
-    # syft and grype reject a bare name outright.
+    # syft rejects a bare name outright.
     return [arg for d in dirs for arg in (flag, f"**/{d}")]
 
 

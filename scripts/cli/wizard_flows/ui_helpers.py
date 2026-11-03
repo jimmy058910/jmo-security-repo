@@ -52,7 +52,6 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     "osv-scanner": 15,
     # Medium tools (30s - 2min)
     "trivy": 45,
-    "grype": 40,
     "syft": 30,
     "checkov": 60,
     "nuclei": 90,

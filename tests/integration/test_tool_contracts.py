@@ -223,15 +223,6 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         "findings": _gitleaks_findings,
         "description": "Secrets scanner with SARIF output",
     },
-    "grype": {
-        "required_keys": ["matches"],
-        "result_item_keys": ["vulnerability", "artifact"],
-        "vuln_keys": ["id", "severity"],
-        "sample_target": "python-vulnerable",
-        "command": ["grype", "dir:{target}", "-o", "json"],
-        "ok_return_codes": (0,),
-        "description": "Vulnerability scanner with matches array",
-    },
     "syft": {
         "required_keys": ["artifacts"],
         "result_item_keys": ["name", "version", "type"],
@@ -634,8 +625,8 @@ class TestContractInfrastructure:
     def test_every_contract_tool_is_installed_by_the_ci_job(self, workflow):
         """A contract whose tool CI never installs is skipped there, forever.
 
-        grype and syft had contracts and no install line in either job, so
-        neither contract had ever run in CI. Derived from TOOL_CONTRACTS, so a
+        syft (and grype, since removed) had contracts and no install line in
+        either job, so neither contract had ever run in CI. Derived from TOOL_CONTRACTS, so a
         new contract fails here until both jobs install its tool.
         """
         import re
@@ -751,7 +742,7 @@ class TestSanityCheckBites:
         assert check_run("hadolint", contract, output, returncode) == []
 
     def test_an_empty_report_is_a_violation_unless_the_contract_allows_it(self):
-        assert check_run("grype", TOOL_CONTRACTS["grype"], {"matches": []}, 0)
+        assert check_run("syft", TOOL_CONTRACTS["syft"], {"artifacts": []}, 0)
         assert TOOL_CONTRACTS["trufflehog"].get("may_be_empty")
         assert check_run("trufflehog", TOOL_CONTRACTS["trufflehog"], [], 0) == []
 

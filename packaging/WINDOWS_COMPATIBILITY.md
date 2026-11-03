@@ -21,7 +21,6 @@ JMo Security orchestrates **15 scanners**. Every one of them runs natively on Wi
 | **zizmor** | GitHub Actions Auditing | Full support | Rust binary, the x86_64 build (no Windows arm64 build upstream); runs only when workflows are present |
 | **jmo-native** | Next.js, Supabase and Firebase checks | Full support | Part of JMo, runs on its own Python, nothing to install; runs only when JS/TS source, `.env` files, Firebase rules or Supabase migrations are present |
 | **YARA** | Malware Pattern Matching | Full support | `yara-python` wheel; rules are fetched at install time |
-| **Grype** | Vulnerability Scanning | Full support | Go binary |
 | **OSV-Scanner** | Dependency Scanning | Full support | Go binary (amd64 and arm64 builds); runs only when lockfiles are present |
 | **OWASP ZAP** | DAST Web Scanning | Needs a Java runtime | Docker recommended; runs only on `--url` targets |
 | **Nuclei** | Vulnerability Scanner | Full support | Go binary, 4000+ templates; runs only on `--url` targets |

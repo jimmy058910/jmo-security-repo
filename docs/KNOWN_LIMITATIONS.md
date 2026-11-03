@@ -314,6 +314,25 @@ GitHub, `ref-confusion` among them, do not run, whether or not a token is set.
 
 **What to do:** for those audits, run zizmor yourself with a token.
 
+### A known-vulnerable GitHub Action is not reported offline
+
+An action version with a published advisory (a compromised `tj-actions/changed-files`
+release, for example) is not reported as vulnerable. grype, which left the scanner set in
+v2.0.0, reported these from its GitHub Actions cataloger. OSV-Scanner finds no package in
+a workflow file, and zizmor's known-vulnerable-actions audit is one of the online audits
+a scan does not run (see the entry above). Measured on github-actions-goat (2026-10-29):
+grype reported 71 findings in 14 workflow files, 7 distinct (action, advisory) pairs;
+OSV-Scanner 2.7.0 reported none ("No package sources found"), and zizmor `--offline`
+flagged the same three `tj-actions/changed-files` uses as `unpinned-uses`, not as
+vulnerable.
+
+**What to do:** pin each action to a full commit sha, which zizmor's `unpinned-uses`
+already asks for. That closes the class where a tag is moved to a malicious commit, as
+happened to `tj-actions/changed-files`; it does not tell you that the commit you pinned
+has an advisory. For that, run zizmor yourself with a token, or turn on Dependabot's
+alerts for GitHub Actions. An offline check against OSV's GitHub Actions database is
+tracked in #1507.
+
 ### OSV-Scanner reads pom.xml and requirements.txt for direct dependencies only
 
 JMo runs OSV-Scanner with `--no-resolve`. Without it, OSV-Scanner resolves a
@@ -494,7 +513,7 @@ scored by `SimilarityCalculator.calculate_similarity`: 0.793 with hadolint
 No findings are lost — anything not clustered is reported separately.
 
 **Dependency findings are matched on identity, not similarity** (#1346). A
-trivy, osv-scanner or grype vulnerability has no line, so location similarity
+trivy or osv-scanner vulnerability has no line, so location similarity
 never let two of them cluster: on one real lockfile trivy and osv-scanner
 reported the same 47 vulnerabilities and the report held 85. Each is now one
 finding per lockfile, package, installed version and advisory, whichever of
@@ -503,7 +522,7 @@ other's id or alias (a CVE and its GHSA), and every two reports folded into one
 finding name a common id. `similarity_threshold` does not apply to them. The
 same package in two lockfiles is two findings. osv-scanner files some
 advisories other tools keep apart under one rule (NodeGoat's lodash
-CVE-2021-23337 lists CVE-2026-4800, which trivy and grype report separately);
+CVE-2021-23337 lists CVE-2026-4800, which trivy reports separately);
 that rule joins the finding with its own id, and the other advisory stays a
 finding of its own. A tool that names an advisory only by an id the other
 tools' reports do not carry (a GHSA with no CVE beside one that has only the

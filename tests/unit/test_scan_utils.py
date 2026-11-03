@@ -143,21 +143,6 @@ def test_write_stub_zap(tmp_path):
     assert content == {"site": []}
 
 
-def test_write_stub_grype(tmp_path):
-    """Test write_stub creates correct empty stub for grype.
-
-    Bug #2 fix: grype was missing from stub dictionary, causing
-    grype failures to produce {} instead of {"matches": []}.
-    """
-    out_path = tmp_path / "grype.json"
-
-    write_stub("grype", out_path)
-
-    assert out_path.exists()
-    content = json.loads(out_path.read_text())
-    assert content == {"matches": []}
-
-
 # ========== Category 3: write_stub() Tests - NDJSON Tools ==========
 
 
@@ -395,32 +380,22 @@ class TestToolExclusionFlags:
             f"a bare value only matches at trivy's scan root: {values}"
         )
 
-    def test_an_sca_tool_is_not_told_to_skip_its_own_subject_matter(self):
-        """grype inventories vendored trees; that IS its job.
+    def test_the_sbom_tool_is_not_told_to_skip_its_own_subject_matter(self):
+        """syft inventories vendored trees; that IS its job.
 
         #1080 measured 282 of syft's 878 artifacts inside `.venv/` and called
         them "arguably correct for an SBOM", which is why the vendored-directory
-        list is per-tool rather than global. Handing an SCA tool
-        `node_modules` to skip would gut it while still exiting 0 - the
-        silently-inert-scanner shape this project has been bitten by before.
-
-        grype keeps every vendored tree but a virtualenv: on this repository
-        its `.venv` findings were the dev machine's CPython (104 of them,
-        decided 2026-09-11). The results directory is JMo's own output, and
-        reaches both.
+        list is per-tool rather than global. Handing it `node_modules` to skip
+        would gut it while still exiting 0 - the silently-inert-scanner shape
+        this project has been bitten by before. The results directory is JMo's
+        own output, and reaches it.
         """
         from scripts.cli.scan_utils import excluded_dirs_for
 
         assert excluded_dirs_for("syft") == ()
         assert excluded_dirs_for("syft", results_dir_name="results") == ("results",)
-        assert excluded_dirs_for("grype") == (".venv", "venv")
-        assert excluded_dirs_for("grype", results_dir_name="results") == (
-            ".venv",
-            "venv",
-            "results",
-        )
 
-    def test_the_vendored_list_reaches_a_sast_tool_but_not_an_sca_one(self):
+    def test_the_vendored_list_reaches_a_sast_tool_but_not_the_sbom_one(self):
         """The carve-out is the point, so assert the difference directly.
 
         Spelled as a concrete directory rather than by iterating
@@ -431,10 +406,8 @@ class TestToolExclusionFlags:
 
         sast = excluded_dirs_for("opengrep")
         sbom = excluded_dirs_for("syft")
-        sca = excluded_dirs_for("grype")
 
         assert "node_modules" in sast
-        assert "node_modules" not in sca
         assert "node_modules" not in sbom
         assert ".venv" in sast
         assert ".venv" not in sbom

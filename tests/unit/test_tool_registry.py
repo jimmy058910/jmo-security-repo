@@ -31,7 +31,7 @@ V2_PHASE_2_MATRIX = {
     "hadolint",
     "shellcheck",
     "yara",
-    "grype",
+    # Phase 6, PR G: grype left; osv-scanner and trivy report its findings.
     "zap",
     "nuclei",
     # Phase 3, PR C: wired for G1 (git history), decided 2026-09-24.
@@ -47,7 +47,8 @@ V2_PHASE_2_MATRIX = {
 
 def test_tool_matrix_is_the_phase_2_set():
     """TOOL_MATRIX is the v2.0.0 Phase 2 scanner set plus Phase 3's gitleaks
-    and Phase 4's zizmor, osv-scanner and jmo-native, with no duplicates."""
+    and Phase 4's zizmor, osv-scanner and jmo-native, less Phase 6's grype,
+    with no duplicates."""
     assert set(TOOL_MATRIX) == V2_PHASE_2_MATRIX
     assert len(TOOL_MATRIX) == len(set(TOOL_MATRIX))
 

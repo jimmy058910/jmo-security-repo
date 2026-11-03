@@ -91,17 +91,6 @@ binary_tools:
     critical: false
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
-  grype:
-    version: 0.118.0
-    github_repo: anchore/grype
-    description: Vulnerability scanner for containers/filesystems
-    release_pattern: grype_{version}_linux_{arch}.tar.gz
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/anchore/grype/releases/latest
-    critical: false
-    notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
   zizmor:
     version: 1.31.1
     github_repo: zizmorcore/zizmor
@@ -215,7 +204,6 @@ update_policies:
     - hadolint
     - shfmt
     - nuclei
-    - grype
     - yara
     description: Non-critical tools can be updated monthly
   automated_check_schedule: Weekly (Sunday 00:00 UTC)

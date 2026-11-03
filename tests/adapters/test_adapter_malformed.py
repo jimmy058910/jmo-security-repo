@@ -19,7 +19,6 @@ import pytest
 
 # Import all adapters for comprehensive testing
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
-from scripts.core.adapters.grype_adapter import GrypeAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
 from scripts.core.adapters.nuclei_adapter import NucleiAdapter
 from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
@@ -36,7 +35,6 @@ from scripts.core.adapters.zap_adapter import ZapAdapter
 
 ALL_ADAPTERS = [
     ("checkov", CheckovAdapter),
-    ("grype", GrypeAdapter),
     ("hadolint", HadolintAdapter),
     ("nuclei", NucleiAdapter),
     ("opengrep", OpengrepAdapter),
@@ -472,21 +470,6 @@ class TestTrufflehogMalformed:
         test_file.write_text(content, encoding="utf-8")
 
         adapter = TruffleHogAdapter()
-        result = adapter.parse(test_file)
-
-        assert isinstance(result, list)
-
-
-class TestGrypeMalformed:
-    """Grype-specific malformed input tests."""
-
-    def test_grype_missing_matches(self, tmp_path: Path):
-        """Grype should handle missing matches array."""
-        content = '{"source": {}, "distro": {}}'
-        test_file = tmp_path / "grype.json"
-        test_file.write_text(content, encoding="utf-8")
-
-        adapter = GrypeAdapter()
         result = adapter.parse(test_file)
 
         assert isinstance(result, list)

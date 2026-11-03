@@ -59,7 +59,7 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 
 1. **Tool waiting on a prompt:** Some tools (older versions) prompt for input. Run the failing tool manually with `-v` to see if it's asking something. Report via Issues if so.
 2. **Docker daemon unreachable:** Tools that use Docker (e.g., Trivy with image scans) may hang if Docker isn't running. `docker info` to check.
-3. **Large network downloads:** Trivy/Grype fetch vulnerability DBs on first run (~50–100 MB). Wait it out once; subsequent runs are cached.
+3. **Large network downloads:** Trivy fetches its vulnerability DB on first run (~50–100 MB). Wait it out once; subsequent runs are cached.
 
 Set a per-scan timeout:
 

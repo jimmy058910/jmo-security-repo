@@ -9,9 +9,11 @@ versions of one package with one advisory were one finding: its 47 were 38.
 
 The identity is (lockfile, package, installed version, advisory), the advisory
 matched on an id or an alias. These tests drive the real adapters over tool
-documents shaped as trivy 0.74.0, osv-scanner 2.6.0 and grype 0.115.0 wrote
-them on NodeGoat (public; ids and packages are NodeGoat's), through the report
-phase's own `gather_results`.
+documents shaped as trivy 0.74.0 and osv-scanner 2.6.0 wrote them on NodeGoat
+(public; ids and packages are NodeGoat's), through the report phase's own
+`gather_results`. grype, the third, left the matrix in Phase 6; the clusterer
+tests below keep its findings as a reporter that leads with the GHSA, which a
+SARIF import can still be.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from scripts.core.dedup_enhanced import (
 )
 from scripts.core.normalize_and_report import gather_results
 
-TOOLS = ("grype", "osv-scanner", "trivy")
+TOOLS = ("osv-scanner", "trivy")
 
 
 # --- tool documents, in each tool's own shape -----------------------------------
@@ -116,22 +118,6 @@ def osv_doc(
     }
 
 
-def grype_match(
-    vid: str, name: str, version: str, related=(), lockfile="package-lock.json"
-):
-    return {
-        "vulnerability": {"id": vid, "severity": "High", "description": "advisory"},
-        "relatedVulnerabilities": [{"id": r, "namespace": "nvd:cpe"} for r in related],
-        "artifact": {
-            "name": name,
-            "version": version,
-            "type": "npm",
-            "purl": f"pkg:npm/{name}@{version}",
-            "locations": [{"path": f"/{lockfile}"}],
-        },
-    }
-
-
 def report(tmp_path: Path, monkeypatch, docs: dict[str, Any]) -> list[dict[str, Any]]:
     """The report phase over these raw tool outputs, as `jmo scan` leaves them."""
     # EPSS/KEV lookups would reach the network; priority is not under test.
@@ -184,11 +170,6 @@ def docs_for(repo: Path, tools: tuple[str, ...]) -> dict[str, Any]:
             repo,
             [("package-lock.json", f"{n}@{v}", c, [c, g]) for n, v, c, g in PACKAGES],
         )
-    if "grype" in tools:
-        # grype names the GHSA and relates the CVE (measured, 0.115.0)
-        docs["grype"] = {
-            "matches": [grype_match(g, n, v, [c]) for n, v, c, g in PACKAGES]
-        }
     return docs
 
 
@@ -205,7 +186,7 @@ def test_one_vulnerability_in_one_installed_version_is_one_finding(
     tmp_path, monkeypatch, tools
 ):
     """The gate's shape in miniature: three (package, version, advisory), so
-    three findings from any one tool, from any two and from all three, each
+    three findings from either tool and from both, each
     detected by every tool that ran -- never 2 (trivy's versions collapsed)
     and never 3 per tool (dependency scanners never clustering)."""
     findings = report(tmp_path, monkeypatch, docs_for(repo_dir(tmp_path), tools))
@@ -323,14 +304,6 @@ def test_an_alias_is_enough(tmp_path, monkeypatch):
                 )
             ],
         ),
-        # grype names only the GHSA, and relates the CVE: an alias both ways
-        "grype": {
-            "matches": [
-                grype_match(
-                    "GHSA-r5fr-rjxr-66jc", "lodash", "4.13.1", ["CVE-2026-4800"]
-                )
-            ]
-        },
     }
     findings = report(tmp_path, monkeypatch, docs)
 

@@ -47,7 +47,7 @@ pytestmark = [
 def generate_finding(index: int) -> dict[str, Any]:
     """Generate a realistic finding for stress testing."""
     severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
-    tools = ["opengrep", "trivy", "bandit", "checkov", "hadolint", "grype"]
+    tools = ["opengrep", "trivy", "bandit", "checkov", "hadolint", "shellcheck"]
     rules = [f"CWE-{random.randint(1, 1000)}", f"CVE-2024-{random.randint(1000, 9999)}"]
 
     return {
@@ -141,7 +141,7 @@ class TestExtremeLoad:
 
         # Generate findings for multiple tools
         findings_per_tool = 20000  # 20k per tool, 5 tools = 100k
-        tools = ["opengrep", "trivy", "hadolint", "grype", "checkov"]
+        tools = ["opengrep", "trivy", "hadolint", "shellcheck", "checkov"]
 
         for tool in tools:
             tool_findings = []
@@ -186,20 +186,18 @@ class TestExtremeLoad:
                     }
                     for i in range(findings_per_tool)
                 ]
-            elif tool == "grype":
-                content = {
-                    "matches": [
-                        {
-                            "vulnerability": {
-                                "id": f"CVE-{i}",
-                                "severity": "Low",
-                                "description": f"Vuln {i}",
-                            },
-                            "artifact": {"name": f"pkg-{i}"},
-                        }
-                        for i in range(findings_per_tool)
-                    ]
-                }
+            elif tool == "shellcheck":
+                content = [
+                    {
+                        "file": f"script_{i}.sh",
+                        "line": i,
+                        "column": 1,
+                        "level": "info",
+                        "code": 2086,
+                        "message": f"Issue {i}",
+                    }
+                    for i in range(findings_per_tool)
+                ]
             else:  # checkov
                 content = {
                     "results": {
