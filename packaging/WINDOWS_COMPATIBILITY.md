@@ -6,7 +6,7 @@
 
 ## Windows Tool Compatibility Matrix
 
-JMo Security orchestrates **15 scanners**. Every one of them runs natively on Windows: jmo-native is part of JMo, and `jmo tools install` sets up the rest; one carries a caveat (ZAP).
+JMo Security orchestrates **14 scanners**. Every one of them runs natively on Windows: jmo-native is part of JMo, and `jmo tools install` sets up the rest; one carries a caveat (ZAP).
 
 | Tool | Category | Native Windows Support | Notes |
 |------|----------|------------------------|-------|
@@ -31,7 +31,7 @@ OPA, the policy engine behind `jmo policy` and `jmo report --policy`, is not a s
 
 ## Choosing What Runs
 
-There are no scan profiles. `jmo scan` considers all 15 scanners, and the target's content decides which of them run. Narrow the list when a tool is not set up yet:
+There are no scan profiles. `jmo scan` considers all 14 scanners, and the target's content decides which of them run. Narrow the list when a tool is not set up yet:
 
 ```powershell
 # Everything that applies to the target
@@ -53,10 +53,10 @@ A top-level `tools:` list in `jmo.yml` narrows the list for every scan.
 
 ## 🎯 Recommended Installation Paths for Windows
 
-### Path 1: WSL2 + Docker Desktop (BEST - All 15 Tools) ⭐
+### Path 1: WSL2 + Docker Desktop (BEST - All 14 Tools) ⭐
 
 **Setup time:** 10 minutes (one-time)
-**Tool coverage:** 100% (all 15 tools)
+**Tool coverage:** 100% (all 14 tools)
 
 **Steps:**
 
@@ -98,7 +98,7 @@ A top-level `tools:` list in `jmo.yml` narrows the list for every scan.
 
 **Why this is best:**
 
-- ✅ All 15 security tools available
+- ✅ All 14 security tools available
 - ✅ Consistent with Linux/macOS experience
 - ✅ Native Windows CLI with Docker backend
 - ✅ Best performance and reliability
@@ -108,7 +108,7 @@ A top-level `tools:` list in `jmo.yml` narrows the list for every scan.
 ### Path 2: Native Windows
 
 **Setup time:** a few minutes
-**Tool coverage:** all 15 scanners once `jmo tools install` has run (ZAP also needs Java)
+**Tool coverage:** all 14 scanners once `jmo tools install` has run (ZAP also needs Java)
 
 **Steps:**
 
@@ -217,7 +217,7 @@ jmo tools check
 
 ### Q: Why do some tools need extra setup on Windows?
 
-**A:** All 15 scanners run natively on Windows, but one needs more than the binary:
+**A:** All 14 scanners run natively on Windows, but one needs more than the binary:
 
 - **OWASP ZAP** needs a Java runtime
 
@@ -227,18 +227,18 @@ Windows is a secondary platform for most security tools, so Docker/WSL2 remains 
 
 **A:** ❌ No. WSL1 lacks kernel features required by some tools. **Use WSL2 only.**
 
-### Q: Does Winget install all 15 tools?
+### Q: Does Winget install all 14 tools?
 
 **A:** ❌ No. Winget installs **only the JMo Security CLI**. You must:
 
 - Install the scanners with `jmo tools install`, OR
-- Use Docker mode (all 15 tools included)
+- Use Docker mode (all 14 tools included)
 
 **Docker mode is recommended.**
 
 ### Q: Which tools should I run on native Windows?
 
-**A:** All of them. There are no scan profiles: `jmo scan` runs whichever of the 15 scanners apply to the target. Add `--allow-missing-tools` while some are not installed yet:
+**A:** All of them. There are no scan profiles: `jmo scan` runs whichever of the 14 scanners apply to the target. Add `--allow-missing-tools` while some are not installed yet:
 
 ```powershell
 jmo scan --repos-dir C:\Projects --allow-missing-tools

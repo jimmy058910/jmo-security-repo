@@ -8,7 +8,7 @@ v2.0.0 removes scan profiles, 17 tools and all but one Docker image, and replace
 
 ### Scan profiles are removed
 
-`jmo scan` and `jmo ci` consider one tool list, the 15 scanners in [docs/TOOLS.md](docs/TOOLS.md), and the target's content decides which of them run. To narrow the list:
+`jmo scan` and `jmo ci` consider one tool list, the 14 scanners in [docs/TOOLS.md](docs/TOOLS.md), and the target's content decides which of them run. To narrow the list:
 
 - `--tools trivy opengrep` or `--skip-tools zap` on the command line
 - a top-level `tools:` list in `jmo.yml`
@@ -133,7 +133,7 @@ Two outcomes changed with it. A repository with no files outside the excluded di
 
 ### One Docker image
 
-There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 15 scanners plus OPA.
+There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 14 scanners plus OPA.
 
 The `:fast`, `:slim`, `:balanced`, `:deep` and `:full` tags, and the tags with a variant suffix, are no longer built. Existing tags are not deleted, but they will never receive another update. Switch to `:latest` or a version tag.
 
