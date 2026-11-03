@@ -86,21 +86,36 @@ def test_validation_passes_on_the_shipped_versions_yaml(
     assert failed == [], f"versions.yaml still fails validation for {failed}"
 
 
-def test_yara_is_checked_against_pypi_not_github(
-    stub_registries: dict[str, list[str]],
+def test_a_special_tool_on_pypi_is_checked_against_pypi_not_github(
+    stub_registries: dict[str, list[str]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The registry a tool is checked against must follow its package, not its section.
 
-    `yara` lives in `special_tools`, a section whose other entries are GitHub
-    releases; it is published on PyPI as `yara-python`. Dispatching on the
-    section is what once sent a package to a registry it was never on.
+    `special_tools` is a section whose entries are mostly GitHub releases; an
+    entry there published on PyPI must still be checked on PyPI. Dispatching on
+    the section is what once sent a package to a registry it was never on. yara
+    was that entry until its engine became a dependency of JMo (Phase 6), so the
+    case is built here rather than read from versions.yaml.
     """
+    import scripts.dev.update_versions as uv
+
+    monkeypatch.setattr(
+        uv,
+        "load_versions",
+        lambda: {
+            "special_tools": {
+                "onpypi": {"version": "1.0.0", "pypi_package": "onpypi-python"}
+            }
+        },
+    )
+
     passed, _failed = validate_all_versions()
 
-    assert "yara-python" in stub_registries["pypi"], (
-        f"yara was never checked against PyPI; PyPI calls were {stub_registries['pypi']}"
+    assert "onpypi-python" in stub_registries["pypi"], (
+        f"never checked against PyPI; PyPI calls were {stub_registries['pypi']}"
     )
-    assert "yara" in passed
+    assert stub_registries["github"] == []
+    assert "onpypi" in passed
 
 
 def test_a_0_0_0_version_fails_validation(

@@ -186,13 +186,14 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
         },
         "jmo_install": "jmo tools install nuclei",
     },
-    "yara": {
+    "yara-x": {
         "install": {
-            "linux": "pip install yara-python",
-            "macos": "pip install yara-python",
-            "windows": "pip install yara-python",
+            # The engine ships with JMo; this fetches its rules.
+            "linux": "jmo tools install yara-x",
+            "macos": "jmo tools install yara-x",
+            "windows": "jmo tools install yara-x",
         },
-        "jmo_install": "jmo tools install yara",
+        "jmo_install": "jmo tools install yara-x",
     },
 }
 
@@ -342,6 +343,17 @@ class ToolStatus:
     def expected_version_display(self) -> str:
         """`expected_version` as a human should read it: a dash when unknown."""
         return self.expected_version or "-"
+
+
+# A missing dependency that `jmo tools install <tool>` itself provides: yara-x's
+# pinned rule bundle. Its engine ships with JMo, so it is always installed, and
+# only this puts it on an install list.
+INSTALLED_BY_JMO = "yara-rules"
+
+
+def needs_install(status: ToolStatus) -> bool:
+    """Whether `jmo tools install` has something to do for this tool."""
+    return not status.installed or INSTALLED_BY_JMO in (status.missing_deps or [])
 
 
 @dataclass
@@ -605,7 +617,7 @@ class ToolManager:
             List of ToolStatus for missing tools
         """
         statuses = self.check_matrix(tools)
-        return [s for s in statuses.values() if not s.installed]
+        return [s for s in statuses.values() if needs_install(s)]
 
     def get_outdated_tools(
         self,
@@ -850,13 +862,13 @@ class ToolManager:
                 if zap_path.exists():
                     return str(zap_path)
 
-        # yara-python is a Python library, not a CLI binary
-        # Check if the module is importable instead of looking for a binary
-        if binary_name == "yara":
+        # yara-x's engine is a Python library and a dependency of JMo
+        # (Phase 6, J2), not a CLI binary: check that it imports.
+        if binary_name == "yara-x":
             try:
                 import importlib.util
 
-                spec = importlib.util.find_spec("yara")
+                spec = importlib.util.find_spec("yara_x")
                 if spec is not None and spec.origin:
                     # Return the module path so we know it's "installed"
                     return spec.origin
@@ -967,7 +979,7 @@ class ToolManager:
                 cmd = list(version_cmd_config)  # Copy to avoid mutation
 
             # Replace first element (the binary) with full path
-            # EXCEPT for Python module tools (yara, etc.) where cmd[0] is sys.executable
+            # EXCEPT for Python module tools (yara-x, etc.) where cmd[0] is sys.executable
             # These tools use 'python -c "import X"' patterns, not binaries
             if cmd[0] != sys.executable and binary_path:
                 cmd[0] = binary_path
@@ -1273,30 +1285,33 @@ class ToolManager:
         if missing:
             return False, f"Missing: {', '.join(missing)}", missing
 
-        # yara ships an engine and no detection content. Without rules it
+        # yara-x ships an engine and no detection content. Without rules it
         # examines every file, matches nothing, and returns a result that is
         # byte-for-byte identical to a genuinely clean repository - so "the
-        # library imports" is not the same question as "yara can detect
+        # library imports" is not the same question as "yara-x can detect
         # anything", and only the second one is worth reporting.
         #
-        # Checked against the bundle directory `jmo tools install yara` fills.
-        # A user pointing per_tool.yara.rules_path at their own set is not
+        # Checked against the rules a scan reads by default (get_yara_rules_dir:
+        # what `jmo tools install yara-x` fills, else the Docker image's).
+        # A user pointing per_tool.yara-x.rules_path at their own set is not
         # visible here, which is why this downgrades execution readiness rather
         # than claiming the tool is absent; the runner re-checks the configured
         # path at scan time and fails loudly there if it is empty.
-        if tool_name == "yara":
+        # The pinned bundle, known by the manifest its fetch writes: a tree from
+        # an older pin, or v1's ReversingLabs bundle, is not it.
+        if tool_name == "yara-x":
+            from scripts.core.install_config import YARA_RULES_BUNDLE
             from scripts.core.paths import get_yara_rules_dir
+            from scripts.core.yara_rules import pinned_rules_installed
 
-            rules_dir = get_yara_rules_dir()
-            has_rules = rules_dir.is_dir() and any(
-                rules_dir.rglob(pattern) for pattern in ("*.yar", "*.yara")
-            )
-            if not has_rules:
+            if not pinned_rules_installed(
+                get_yara_rules_dir(), YARA_RULES_BUNDLE["ref"]
+            ):
                 return (
                     False,
-                    "No YARA rules installed - yara would report every scan "
-                    "clean. Run: jmo tools install yara --force",
-                    ["yara-rules"],
+                    "The pinned YARA rules are not installed - yara-x would report "
+                    "every scan clean. Run: jmo tools install yara-x",
+                    [INSTALLED_BY_JMO],
                 )
 
         return True, None, []
@@ -1380,7 +1395,7 @@ def print_tool_status_table(
         elif not status.execution_ready:
             # Installed, and still unable to run. `check_tool` has always
             # computed this - `_verify_execution` checks Java for zap and rules
-            # for yara - and this table threw the answer away, so a box with no
+            # for yara-x - and this table threw the answer away, so a box with no
             # `java` printed
             # `dependency-check  OK  -  12.1.0` and exit 0 while every scan
             # exited 1 with no output. The dash in the Installed column was the

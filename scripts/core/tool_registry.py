@@ -51,6 +51,13 @@ BUILTIN_TOOLS: frozenset[str] = frozenset(
     name for name, d in DESCRIPTORS.items() if d.builtin
 )
 
+#: Tools whose engine is a Python dependency of JMo, pinned in pyproject.toml,
+#: mapped to its distribution (v2.0.0 Phase 6, J2). versions.yaml has no row for
+#: them, which would pin the engine twice; their version is the installed
+#: distribution's. `jmo tools install` still has work for one: yara-x's engine
+#: carries no rules.
+DEPENDENCY_TOOLS: dict[str, str] = {"yara-x": "yara-x"}
+
 #: Tool name -> the commands that must exist for it to execute (a launcher
 #: script and the runtime it starts, for zap).
 TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {

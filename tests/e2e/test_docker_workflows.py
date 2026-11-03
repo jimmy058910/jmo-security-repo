@@ -50,14 +50,9 @@ PULL_TIMEOUT = 600
 
 # Scanners the image carries but cannot run yet, each with the issue that fixes
 # it. test_docker_image_tools fails on any OTHER not-ready tool, and fails on a
-# listed one once it can run, so an entry cannot outlive its fix.
-KNOWN_NOT_READY = {
-    # The Dockerfile installs yara-python but never fetches a rule bundle, so
-    # `tools check` reports yara installed and not execution_ready: a scan would
-    # report every file clean. v1's image was the same; its test asserted only
-    # `installed`. Phase 6 replaces yara with yara-x + signature-base.
-    "yara": "no rules in the image, TODO(issue-#1282)",
-}
+# listed one once it can run, so an entry cannot outlive its fix. Empty since
+# Phase 6's Y4 put yara-x's rules in the image (#1282).
+KNOWN_NOT_READY: dict[str, str] = {}
 
 
 def _docker(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
@@ -299,17 +294,20 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
     return matrix, engine
 
 
-# The image's built-in tools (jmo-native): they ship inside JMo and run as
-# `python3 -m ...`, so they have no command of their own on PATH. An image
-# built before they existed has no BUILTIN_TOOLS and so none.
-_BUILTIN_PROBE = (
+# The image's tools that ship inside JMo, so have no command of their own on
+# PATH: the built-ins (jmo-native) run as `python3 -m ...`, and a dependency
+# tool's engine (yara-x) is a library JMo imports. An image built before
+# either existed has no BUILTIN_TOOLS or DEPENDENCY_TOOLS, and so none.
+_NO_COMMAND_PROBE = (
     "import json, scripts.core.tool_registry as r; "
-    "print(json.dumps(sorted(getattr(r, 'BUILTIN_TOOLS', ()))))"
+    "print(json.dumps(sorted({*getattr(r, 'BUILTIN_TOOLS', ()), "
+    "*getattr(r, 'DEPENDENCY_TOOLS', {})})))"
 )
 
 
-def image_builtin_tools(image: str) -> set[str]:
-    """The BUILTIN_TOOLS the IMAGE was built with (see image_tool_matrix)."""
+def image_tools_without_a_command(image: str) -> set[str]:
+    """The BUILTIN_TOOLS and DEPENDENCY_TOOLS the IMAGE was built with (see
+    image_tool_matrix)."""
     result = _docker(
         "run",
         "--rm",
@@ -317,13 +315,13 @@ def image_builtin_tools(image: str) -> set[str]:
         "python3",
         image,
         "-c",
-        _BUILTIN_PROBE,
+        _NO_COMMAND_PROBE,
         timeout=120,
     )
     if result.returncode != 0:
         pytest.fail(
-            f"could not read BUILTIN_TOOLS from {image} (rc={result.returncode}): "
-            f"{result.stderr.strip()[:500]}"
+            f"could not read BUILTIN_TOOLS and DEPENDENCY_TOOLS from {image} "
+            f"(rc={result.returncode}): {result.stderr.strip()[:500]}"
         )
     return set(json.loads(result.stdout))
 
@@ -971,6 +969,50 @@ class TestDockerNonRootExecution:
         )
         assert result.stdout.strip() == "jmo", result.stdout
 
+    def test_yara_x_is_ready_with_an_empty_dir_mounted_on_the_jmo_home(
+        self, tmp_path: Path
+    ):
+        """`~/.jmo` is the documented persistence mount, and a mount hides
+        whatever the image put beneath it: rules baked there would leave
+        yara-x installed and never ready, every scan reporting clean (#1282).
+        The image keeps its rules outside `~/.jmo`, so an empty mount must
+        leave yara-x `execution_ready`."""
+        image = f"{DOCKER_REGISTRY}:latest"
+
+        ensure_image(image)
+        v2_tool_registry(image, "yara-x's rules outside /home/jmo/.jmo")
+
+        jmo_home = tmp_path / "jmo-home"
+        jmo_home.mkdir()
+        # CI's runner is uid 1001 and the image's jmo user 1000: without this
+        # the container cannot read its own home.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(jmo_home), 0o777)
+
+        result = _docker(
+            "run",
+            "--rm",
+            "-v",
+            f"{jmo_home}:/home/jmo/.jmo",
+            image,
+            "tools",
+            "check",
+            "--json",
+            "yara-x",
+            timeout=300,
+        )
+
+        try:
+            status = json.loads(result.stdout)["tools"]["yara-x"]
+        except (json.JSONDecodeError, KeyError):
+            pytest.fail(
+                f"tools check --json yara-x printed no yara-x entry "
+                f"(rc={result.returncode}): stdout={result.stdout[:500]} "
+                f"stderr={result.stderr.strip()[:500]}"
+            )
+        assert status.get("installed") and status.get("execution_ready"), status
+        assert result.returncode == 0, result.stderr.strip()[:500]
+
     @skip_on_windows
     def test_run_with_uid_mapping(self, tmp_path: Path):
         """Container should work with UID/GID mapping."""
@@ -1411,18 +1453,18 @@ class TestDockerNamedToolPresence:
         image_tool_matrix for why not the checkout's), so a tool entering or
         leaving the matrix changes what this checks with no edit here. Each
         tool's name is also its command in the image; zap's is the
-        /usr/local/bin/zap symlink to /opt/zaproxy/zap.sh. The one exception
-        is a built-in (jmo-native), which has no command: test_docker_image_tools
-        checks that it runs.
+        /usr/local/bin/zap symlink to /opt/zaproxy/zap.sh. The exceptions ship
+        inside JMo and have no command, a built-in (jmo-native) and a
+        dependency tool (yara-x): test_docker_image_tools checks that they run.
         """
         image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
         matrix, policy_engine = image_tool_matrix(image)
-        builtin = image_builtin_tools(image)
+        no_command = image_tools_without_a_command(image)
 
         missing = []
-        for tool in (*(t for t in matrix if t not in builtin), policy_engine):
+        for tool in (*(t for t in matrix if t not in no_command), policy_engine):
             result = subprocess.run(
                 [
                     "docker",

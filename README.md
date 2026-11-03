@@ -94,7 +94,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | **DAST** | OWASP ZAP, Nuclei |
 | **Dockerfile/Shell** | Hadolint, ShellCheck |
 | **GitHub Actions** | zizmor |
-| **Malware** | YARA |
+| **Malware** | YARA-X |
 | **Next.js, Supabase, Firebase** | jmo-native (JMo's own checks) |
 
 Hadolint runs only when Dockerfiles are present, ShellCheck only with shell scripts, zizmor only with GitHub Actions workflows, OSV-Scanner only with lockfiles, jmo-native only with JS/TS source, `.env` files, Firebase rules or Supabase migrations, and ZAP and Nuclei only on `--url` targets. Narrow the list with `--tools`, `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.

@@ -865,29 +865,29 @@ class TestGetRemediationForTool:
 class TestFindBinary:
     """Tests for _find_binary method."""
 
-    def test_find_yara_python_module(self, monkeypatch):
-        """Test finding yara as a Python module."""
+    def test_find_yara_x_python_module(self, monkeypatch):
+        """Test finding yara-x's engine as a Python module."""
         from scripts.cli.tool_manager import ToolManager
 
         manager = ToolManager()
 
-        # Mock importlib to find yara module
+        # Mock importlib to find the yara_x module
         mock_spec = MagicMock()
-        mock_spec.origin = "/path/to/yara.py"
+        mock_spec.origin = "/path/to/yara_x.py"
 
         with patch("importlib.util.find_spec", return_value=mock_spec):
-            result = manager._find_binary("yara")
+            result = manager._find_binary("yara-x")
 
-        assert result == "/path/to/yara.py"
+        assert result == "/path/to/yara_x.py"
 
-    def test_find_yara_not_installed(self, monkeypatch):
-        """Test yara not found when module not installed."""
+    def test_find_yara_x_not_installed(self, monkeypatch):
+        """Test yara-x not found when its module does not import."""
         from scripts.cli.tool_manager import ToolManager
 
         manager = ToolManager()
 
         with patch("importlib.util.find_spec", return_value=None):
-            result = manager._find_binary("yara")
+            result = manager._find_binary("yara-x")
 
         assert result is None
 
@@ -1594,15 +1594,15 @@ class TestNotReadyIsVisibleInTheTable:
     def test_not_ready_outranks_outdated(self):
         """A tool that cannot run at all is a worse problem than an old one."""
         status = self._status(
-            "yara",
+            "yara-x",
             installed=True,
             installed_version="4.5.0",
             expected_version="4.5.4",
             is_outdated=True,
             execution_ready=False,
             execution_warning=(
-                "No YARA rules installed - yara would report every scan clean. "
-                "Run: jmo tools install yara --force"
+                "No YARA rules installed - yara-x would report every scan clean. "
+                "Run: jmo tools install yara-x --force"
             ),
         )
 

@@ -107,10 +107,12 @@ def test_the_update_path_force_reinstall_also_isolates(tool, tmp_path, monkeypat
 
 def test_a_regular_pip_tool_still_goes_through_pip(tmp_path, monkeypatch):
     installer = _installer_with_nothing_installed(tmp_path, monkeypatch)
-    pinned = installer.registry.get_tool("yara").version
+    # The plain pip tool is ruff now: yara was, until its engine became a
+    # dependency of JMo.
+    pinned = installer.registry.get_tool("ruff").version
     plain = MagicMock(
         return_value=InstallResult(
-            tool_name="yara", success=True, method="pip", version_installed=pinned
+            tool_name="ruff", success=True, method="pip", version_installed=pinned
         )
     )
     isolated = MagicMock()
@@ -118,11 +120,8 @@ def test_a_regular_pip_tool_still_goes_through_pip(tmp_path, monkeypatch):
     with (
         patch.object(installer, "_install_pip", plain),
         patch.object(installer, "_isolated_pip_install", isolated),
-        # yara's rule bundle is fetched after a successful install; that
-        # download is not what this test is about, and must not hit the network.
-        patch.object(installer, "_install_yara_rules", side_effect=lambda r: r),
     ):
-        result = installer.install_tool("yara")
+        result = installer.install_tool("ruff")
 
     plain.assert_called_once()
     isolated.assert_not_called()

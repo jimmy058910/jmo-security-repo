@@ -26,7 +26,7 @@ Docker Hub is a replica; the primary registry is GHCR (`ghcr.io/jimmy058910/jmo-
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab
-- 🔐 **14 Security Scanners**: Secrets (TruffleHog, Gitleaks), SAST (Semgrep), SBOM/SCA (Syft, Trivy, OSV-Scanner), IaC (Checkov, Trivy), GitHub Actions (zizmor), Kubernetes (Trivy), DAST (OWASP ZAP, Nuclei), Next.js, Supabase and Firebase (jmo-native, JMo's own checks), plus Hadolint, ShellCheck and YARA. The target's content decides which of them run. OPA ships alongside them as the policy engine.
+- 🔐 **14 Security Scanners**: Secrets (TruffleHog, Gitleaks), SAST (Semgrep), SBOM/SCA (Syft, Trivy, OSV-Scanner), IaC (Checkov, Trivy), GitHub Actions (zizmor), Kubernetes (Trivy), DAST (OWASP ZAP, Nuclei), Next.js, Supabase and Firebase (jmo-native, JMo's own checks), plus Hadolint, ShellCheck and YARA-X. The target's content decides which of them run. OPA ships alongside them as the policy engine.
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, CSV, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
 - 📈 **Real-Time Progress**: Live scan progress with ETA estimation

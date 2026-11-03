@@ -30,7 +30,7 @@ V2_PHASE_2_MATRIX = {
     "checkov",
     "hadolint",
     "shellcheck",
-    "yara",
+    "yara-x",
     # Phase 6, PR G: grype left; osv-scanner and trivy report its findings.
     "zap",
     "nuclei",
@@ -251,16 +251,19 @@ def test_toolregistry_registers_every_tool_jmo_installs():
     registry and answers "Unknown tool" for anything missing, so this is the
     set that has to be there -- derived from TOOL_MATRIX, not a count.
 
-    The one exemption is a built-in tool (jmo-native): it ships inside JMo,
-    so it has no pin to read, and `install_tool` answers for it before the
-    registry is consulted. It must then be absent, not merely excused.
+    Two exemptions, each answered by `install_tool` before the registry is
+    consulted, so each must be absent, not merely excused: a built-in tool
+    (jmo-native) ships inside JMo, and a dependency tool (yara-x) has its engine
+    pinned in pyproject.toml, where a row here would pin it twice.
     """
-    from scripts.core.tool_registry import BUILTIN_TOOLS, ToolRegistry
+    from scripts.core.tool_registry import BUILTIN_TOOLS, DEPENDENCY_TOOLS, ToolRegistry
 
     registered = {t.name for t in ToolRegistry().get_all_tools()}
+    exempt = BUILTIN_TOOLS | set(DEPENDENCY_TOOLS)
 
-    assert sorted({*TOOL_MATRIX, POLICY_ENGINE} - BUILTIN_TOOLS - registered) == []
+    assert sorted({*TOOL_MATRIX, POLICY_ENGINE} - exempt - registered) == []
     assert BUILTIN_TOOLS and BUILTIN_TOOLS.isdisjoint(registered)
+    assert DEPENDENCY_TOOLS and set(DEPENDENCY_TOOLS).isdisjoint(registered)
 
 
 def test_toolregistry_handles_missing_versions_file():

@@ -45,12 +45,14 @@ BATCH_SUFFIXES = (".bat", ".cmd")
 
 # Which launcher JMo resolves each tool to on Windows (`find_tool`):
 # - a downloaded binary (`BINARY_URLS`): `BinaryInstaller` names it `<tool>.exe`;
-# - jmo-native, and yara (libyara bindings): the interpreter, `python.exe`;
+# - jmo-native, and yara-x (a library of JMo's): the interpreter, `python.exe`;
 # - checkov, in its own venv: `checkov.cmd` (its package declares none);
 # - zap: `zap.bat`, picked beside `zap.sh` (`_platform_launcher`).
 # A tool not shown here to resolve to an `.exe` is rendered with a batch
 # launcher, so a new tool is held to this until it is.
-RESOLVES_TO_EXE = (frozenset(BINARY_URLS) | BUILTIN_TOOLS | {"yara"}) & set(DESCRIPTORS)
+RESOLVES_TO_EXE = (frozenset(BINARY_URLS) | BUILTIN_TOOLS | {"yara-x"}) & set(
+    DESCRIPTORS
+)
 BATCH_TOOLS = sorted(set(DESCRIPTORS) - RESOLVES_TO_EXE)
 
 
@@ -228,7 +230,7 @@ class TestTheClassTestIsNotVacuous:
         assert {"checkov", "zap"} <= set(BATCH_TOOLS)
 
     def test_every_tool_named_an_exe_by_hand_is_in_the_matrix(self):
-        assert {"yara", "opengrep"} <= set(DESCRIPTORS)
+        assert {"yara-x", "opengrep"} <= set(DESCRIPTORS)
         assert "opengrep" in BINARY_URLS  # a downloaded `opengrep.exe`
 
     def test_checkov_is_still_run_through_its_batch_launcher(self, tmp_path, java):

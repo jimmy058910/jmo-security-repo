@@ -133,29 +133,6 @@ special_tools:
     update_check: gh api repos/zaproxy/zaproxy/releases/latest
     critical: true
     installation: tar.gz with Java dependency
-  yara:
-    # Tracks the PyPI package, which is what JMo installs. It previously
-    # tracked github_repo VirusTotal/yara as well - a different project with
-    # its own numbering - and took `version` from there. That is how this came
-    # to pin 4.5.5, which has never existed on PyPI: `jmo tools install yara`
-    # failed with "no version of yara-python==4.5.5". The C project is at 4.5.8
-    # and publishes prebuilt binaries for Windows only (and stopped at v4.5.6),
-    # so it is not a source JMo can install from on any platform.
-    version: 4.5.4
-    pypi_package: yara-python
-    description: Malware pattern detection (libyara engine)
-    update_check: pip index versions yara-python
-    critical: false
-    installation: yara-python pip package (Python library, not CLI)
-    notes: 'v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules).
-
-      NOTE: yara-python is a Python library, NOT a CLI binary. Version check
-
-      uses ''import yara'' instead of ''yara --version''. The native yara CLI
-
-      is a separate package from the VirusTotal/yara repo.
-
-      '
   opa:
     version: 1.21.4
     github_repo: open-policy-agent/opa
@@ -204,7 +181,6 @@ update_policies:
     - hadolint
     - shfmt
     - nuclei
-    - yara
     description: Non-critical tools can be updated monthly
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month

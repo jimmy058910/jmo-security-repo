@@ -36,6 +36,7 @@ dependencies = [
     "requests>=2.31.0",  # Required for EPSS/KEV integration (v0.9.0+)
     "rapidfuzz>=3.0.0",  # Required for cross-tool deduplication fuzzy matching (v1.0.0+)
     "rich>=13.0",  # Required for trend analysis console formatting (v1.0.0+)
+    "yara-x==1.22.1",  # The YARA engine (v2.0.0 Phase 6); `jmo tools install yara` fetches its rules
 ]
 
 [project.urls]

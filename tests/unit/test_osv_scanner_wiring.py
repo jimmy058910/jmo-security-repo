@@ -175,9 +175,9 @@ class TestDescriptor:
         assert pattern.search(printed).group(1) == "2.6.0"
         assert DESCRIPTORS["osv-scanner"].version_probe.command is None
 
-    def test_it_follows_yara_now_grype_has_left(self) -> None:
+    def test_it_follows_yara_x_now_grype_has_left(self) -> None:
         names = list(DESCRIPTORS)
-        assert names[names.index("yara") + 1] == "osv-scanner"
+        assert names[names.index("yara-x") + 1] == "osv-scanner"
 
 
 # --- through the scan loop ------------------------------------------------------

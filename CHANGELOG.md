@@ -248,6 +248,24 @@ All notable changes to JMo Security will be documented in this file.
   left a copy of its settings file, with a token, per invocation; opengrep writes no
   settings file). `jmo tools install opengrep` replaces the semgrep virtual environment.
   [UPGRADE.md](UPGRADE.md#semgrep-is-replaced-by-opengrep) has the migration.
+- **Breaking. yara-x and signature-base's rules replace yara and ReversingLabs' bundle.**
+  The engine is the `yara-x` Python package, a dependency of JMo pinned in
+  `pyproject.toml`, so it ships with JMo and has no `versions.yaml` row; yara-python and
+  the image's apt `yara` are gone. The rules are signature-base's, pinned by commit and
+  checked by sha256 before anything is unpacked: ReversingLabs' bundle matched nothing on
+  nine targets and a 24,942-file `node_modules`. Only rules under signature-base's
+  Detection Rule License 1.1 are installed (5,696 at the pin; the 209 left out are each
+  named in `manifest.json` with the reason), and every finding names its rule's author,
+  and its reference when it has one, as that license requires. YARA-X reads
+  `node_modules`, `vendor`, `.venv` and `venv`, where a compromised npm package is found,
+  and skips `.git`, the results directory and symlinked files. A single rule file works
+  as `rules_path` (#1413). `--tools yara`, `--skip-tools yara`, `tools: [yara]` and
+  `jmo tools install yara` are a usage error (exit 2) naming yara-x, and `per_tool.yara`
+  is ignored with a warning to move it to `per_tool.yara-x`. The tool's name is hashed
+  into every finding id, so **every YARA finding id changes once**. The Docker image
+  carries the rules in `/opt/jmo/yara-rules`, outside the `~/.jmo` volume, so YARA-X is
+  ready in a container (#1282: v1's image had no rules, so yara could match nothing there).
+  [UPGRADE.md](UPGRADE.md#yara-is-replaced-by-yara-x) has the migration.
 - **Breaking. TruffleHog no longer verifies secrets unless asked.** Verification sends
   each candidate secret to the service that issued it, and git history multiplies the
   candidates, so both TruffleHog runs pass `--no-verification`.

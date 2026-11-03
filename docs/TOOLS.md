@@ -24,7 +24,7 @@ To narrow the list:
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
 | zizmor | GitHub Actions flaws: template injection, unpinned actions, dangerous triggers, credential persistence | Repository, GitLab | Workflows, composite actions or a Dependabot config are present | Release binary |
 | jmo-native | Next.js, Supabase and Firebase mistakes: a server secret behind a public env prefix, the Supabase `service_role` key or an LLM key in browser code, tables without Row Level Security, open Firebase rules ([details](#jmo-native)) | Repository, GitLab | JS/TS source, `.env` files, Firebase rules or Supabase migrations are present | Nothing: it is part of JMo |
-| YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-python` via pip, plus a rule bundle |
+| YARA-X | Malware patterns: web shells, hack tools, cryptominers, compromised npm packages ([details](#yara-x)) | Repository, GitLab | Always | `yara-x`, a dependency of JMo, plus a rule bundle |
 | OSV-Scanner | Vulnerable dependencies, read from lockfiles against an offline OSV database | Repository, GitLab | A lockfile is present | Release binary |
 | ZAP | Web application vulnerabilities (DAST) | URL | Never: URL targets only | Extracted application, needs Java 17+ |
 | Nuclei | Template-based vulnerability probes (DAST) | URL | Never: URL targets only | Release binary |
@@ -88,7 +88,7 @@ so zap stops and reports before JMo's timeout. It runs with a ZAP home of JMo's 
 `~/.jmo/zap-home`, which starts each run without the settings the last one stored, so a
 scan neither reads nor changes your `~/ZAP`.
 
-The remaining repository tools (TruffleHog, Gitleaks, Syft, Trivy, YARA) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
+The remaining repository tools (TruffleHog, Gitleaks, Syft, Trivy, YARA-X) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
 
 Trivy's repository scan reads vulnerabilities (dev dependencies included, and offline: it never calls out to a package registry) and misconfigurations; its secret pass runs only on an image scan. A repository's secrets come from TruffleHog and Gitleaks, not Trivy.
 
@@ -125,11 +125,22 @@ Opengrep is JMo's code scanner. It replaced Semgrep in v2.0.0 ([upgrading](../UP
 - **What it skips.** Opengrep has an ignore list of its own, and it applies on top of JMo's exclusions ([Known limitations](KNOWN_LIMITATIONS.md#opengrep-also-skips-tests-build-output-and-vendored-code)).
 - **Finding ids.** The tool's name is part of every finding id, so every SAST finding id changed once, when opengrep took over.
 
+## YARA-X
+
+YARA-X matches files against YARA rules. It replaced yara (yara-python and ReversingLabs' rule bundle) in v2.0.0 ([upgrading](../UPGRADE.md#yara-is-replaced-by-yara-x)). Its engine is the `yara-x` Python package, a dependency of JMo; `jmo tools install yara-x` fetches the rules.
+
+- **The rules.** [signature-base](https://github.com/Neo23x0/signature-base), pinned by commit and checked by sha256 before anything is unpacked: web shells, hack tools, cryptominers and compromised npm packages among them. Only rules under its Detection Rule License 1.1 are installed. At the current pin that is 5,696 rules in 719 files; 209 rules are left out, and `manifest.json` beside the rules names each one and why ([Known limitations](KNOWN_LIMITATIONS.md#yara-x-runs-only-the-rules-jmo-may-redistribute)). The license file travels with them.
+- **Each finding names its rule's author**, and the rule's reference when it has one, in the finding's context and its message. The license requires it of every match.
+- **What it reads.** Every file in the tree, vendored trees included: `node_modules`, `vendor`, `.venv` and `venv`, which every other scanner but Syft skips, because a compromised dependency can be found nowhere else. It skips `.git` and the results directory when that sits inside the scanned tree. A symlinked file is counted, not followed, and a file over 50 MB is counted, not scanned; the run's summary says how many of each ([Known limitations](KNOWN_LIMITATIONS.md#yara-x-does-not-follow-symlinks)).
+- **Your own rules.** `per_tool.yara-x.rules_path` in `jmo.yml` replaces the bundle: a rule file or a directory of them.
+- **In the Docker image.** The image carries the rules in `/opt/jmo/yara-rules`, outside `~/.jmo`, so a volume on `~/.jmo` does not hide them. A `~/.jmo/yara-rules` that exists, from `jmo tools install yara-x` run in a container with that volume, is read instead ([Known limitations](KNOWN_LIMITATIONS.md#in-docker-a-jmo-volume-holding-older-yara-x-rules-overrides-the-images)).
+- **Finding ids.** The tool's name is part of every finding id, so every YARA finding id changed once, when YARA-X took over.
+
 ## Target types
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Syft, Trivy, YARA; Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Syft, Trivy, YARA-X; Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
@@ -152,7 +163,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 | TruffleHog, Gitleaks, Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
 | Syft, Trivy | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
 | Checkov | Pinned PyPI package in a virtual environment of its own, so its dependencies cannot conflict with JMo's | `~/.jmo/tools/venvs/<tool>/` |
-| YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |
+| YARA-X | `yara-x`, a dependency of JMo pinned in `pyproject.toml`, plus a pinned rule bundle (signature-base, only its rules under the Detection Rule License 1.1; `manifest.json` beside them lists every rule left out and why) | rules in `~/.jmo/yara-rules/` (the Docker image carries its own, [below](#yara-x)) |
 | ZAP | Pinned cross-platform release archive, extracted | `~/.jmo/bin/zap/` |
 | jmo-native | Nothing to install: it is part of JMo and runs on JMo's own Python. `jmo tools check` lists it at JMo's version; `jmo tools install jmo-native` and `jmo tools update jmo-native` say it is built in | inside JMo |
 | OPA | Pinned release binary | `~/.jmo/bin/` |
@@ -164,7 +175,7 @@ Platform differences:
 - **Opengrep unpacks about 255 MB on its first run**, outside `~/.jmo` (measured on Linux, 1.32.0: into `$XDG_CACHE_HOME/opengrep`, which is `~/.cache/opengrep` by default).
 - **zizmor has no Windows arm64 build.** On Windows, `jmo tools install` fetches the x86_64 one whatever the architecture, as it does for Hadolint and ShellCheck.
 - **ZAP needs Java 17 or newer** at runtime, which `jmo tools install` does not provide. Install it yourself (`winget install Microsoft.OpenJDK.17`, `sudo apt-get install default-jre-headless`, or `brew install openjdk@17`); `jmo wizard` offers to do it for you.
-- **YARA without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara.rules_path` in `jmo.yml`.
+- **YARA-X without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara-x.rules_path` in `jmo.yml`.
 
 Every tool installs natively on Windows, Linux and macOS. For installing a tool by hand, see [MANUAL_INSTALLATION.md](MANUAL_INSTALLATION.md).
 
@@ -188,6 +199,7 @@ These tools are no longer installed, run or parsed. A `per_tool` block for one o
 |------|-------------|--------------------|
 | kubescape | Kubernetes hardening checks | Trivy's config scan covers the same ground, and kubescape fetched its rules at scan time |
 | semgrep | Code-level SAST, rules fetched from the Semgrep registry at scan time | Replaced by [Opengrep](#opengrep), which runs a rule bundle that ships with JMo instead of fetching rules at scan time. Its findings have new ids |
+| yara | Malware patterns, through yara-python and ReversingLabs' rule bundle | Replaced by [YARA-X](#yara-x) and signature-base's rules. The bundle matched nothing on nine test targets and a 24,942-file `node_modules`, and the Docker image never carried rules, so yara could match nothing there. Its findings have new ids |
 | semgrep-secrets | Semgrep with secret-detection rules | It scanned 0 files; TruffleHog and Gitleaks read secrets |
 | bandit (as a scanner) | Python SAST | Its results were dominated by `.venv` noise; Opengrep's Python rules cover the ground |
 | trivy-rbac | Kubernetes RBAC checks | Its output was identical to Trivy's config scan |

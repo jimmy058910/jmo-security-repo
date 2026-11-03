@@ -17,8 +17,8 @@ outputs:
 - suppressions
 fail_on: ''
 # Scan defaults. There are no profiles (v2.0.0); these are the settings the
-# former default profile (balanced) used, plus the yara entry only the former
-# deep profile carried.
+# former default profile (balanced) used, plus the yara-x entry (yara's then)
+# only the former deep profile carried.
 threads: 4
 timeout: 600
 per_tool:
@@ -37,14 +37,11 @@ per_tool:
     flags:
     - -severity
     - critical,high,medium
-  yara:
+  yara-x:
     timeout: 900
-    # No flags by default. This shipped `--max-rules-per-file=500`, which is
-    # not a yara option: v4.5.8 defines `max-rules` and
-    # `max-strings-per-rule`, and nothing of that name. The scanner would
-    # have been rejected on an unknown option had it ever got far enough to
-    # run. Set `rules_path` here to point at your own rule set; otherwise
-    # the bundle installed by `jmo tools install yara` is used.
+    # No flags by default. Set `rules_path` here to point at your own rule
+    # set (a file or a directory); otherwise the bundle installed by
+    # `jmo tools install yara-x` is used, or the Docker image's own copy.
 profiling:
   min_threads: 2
   max_threads: 8

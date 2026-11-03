@@ -904,6 +904,21 @@ class TestARemovedToolIsNamedAsRemoved:
         assert captured.out == ""
         assert "opengrep replaced semgrep" in captured.err
 
+    def test_install_of_yara_names_yara_x(self, capsys):
+        """`jmo tools install yara` is what the v1 docs said to type."""
+        from scripts.cli.tool_commands import cmd_tools_install
+
+        manager = self._never_asked()
+        args = argparse.Namespace(
+            tools=["yara"], dry_run=False, print_script=False, yes=True
+        )
+        with patch("scripts.cli.tool_commands.ToolManager", return_value=manager):
+            result = cmd_tools_install(args)
+
+        assert result == 2
+        assert "yara-x replaced yara" in capsys.readouterr().err
+        manager.check_tool.assert_not_called()
+
     def test_install_dry_run_does_not_offer_it(self, capsys):
         from scripts.cli.tool_commands import cmd_tools_install
 

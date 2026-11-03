@@ -177,6 +177,22 @@ variables: `filename` (729 references), `filepath` (66), `filetype` (15), `exten
 supply-chain rules (`mal_npm_supply_chain_{sep25,nov25,mar26}.yar`, among them
 `SUSP_JS_NPM_Sha1_Hulud_Nov25`).
 
+**Re-measured 2026-11-03, same commit; the license picture above was incomplete.** The
+tarball is 1,882,246 bytes, sha256 `f63f2184ba3608876d695b4003b6e198ba129438dbd5aa9cb4b51ff0a86ebbe4`;
+`yara/` also holds `external-variable-rules.txt`. The metadata count missed a capital-L
+`License =` key (one more BSD-2-Clause rule) and one `MIT` line; SigmaHQ's DRL has a second
+spelling. Metadata is not the whole story either:
+
+- About 3,000 rules carry no license line, all eight npm supply-chain rules among them, so
+  "keep only rules whose metadata says DRL" would drop the rules decision 4 exists for.
+- About 18 files state a non-DRL license only in a header comment: Apache-2.0
+  (`gen_gcti_cobaltstrike.yar`, 88 rules), CC BY-NC 4.0, CC BY-NC-SA 4.0, GPL, MIT, BSD-2
+  (ESET's, FireEye's and Volexity's files), FireEye's own license, and JPCERT's copyright.
+  Two of them contradict their rules' metadata: `crime_malware_generic.yar` (CC BY-NC-SA
+  header, all 4 rules' metadata DRL) and `gen_loaders.yar` (GPL header, 5 of 6 DRL).
+- 61 block comments hold whole rule headers (disabled rules), so a line regex miscounts
+  rules; `apt_apt10.yar` disables a rule whose strings include `license.shenajou.com`.
+
 The shipped bundle today is ReversingLabs `e0a0be54` (`install_config.py:96`, still
 upstream HEAD): 310 files, about 1,240 rules, PE/ELF malware categories.
 `install_config.py:75-95` chose it over signature-base for two reasons, both measured false:
@@ -331,8 +347,18 @@ reports are in `~/.cache/jmo-p6/premise/`.
    its rule's `author` (and `reference` when present) in `context` and in the message the
    reporters show.
 6. **Only DRL-licensed rules ship.** A rule whose `license` metadata names another license
-   (CC BY-NC 4.0 13, OGL 8, Volexity 6, BSD-2 6, CC BY 4.0 4, CAPEv2 3 metadata lines) is
-   dropped at fetch time, and the manifest records each one dropped and why (J3).
+   (CC BY-NC 4.0 13, OGL 8, Volexity 7, BSD-2 7, CC BY 4.0 5, CAPEv2 3, MIT 1 metadata
+   lines; the key matched case-insensitively) is dropped at fetch time, and the manifest
+   records each one dropped and why (J3). **Refined 2026-11-03 (Jimmy), after the
+   re-measurement above:** a file whose header comment names a non-DRL license is dropped
+   whole, and the header wins over its rules' DRL metadata; a third-party file whose rules
+   carry a non-DRL license loses its rules with no license line too. Both are a reviewed
+   per-file list beside the pin in `install_config.py`, each entry with its reason (a file
+   whose comment only mentions a license, such as `apt_apt10.yar`, is listed as kept). The
+   guard is in the fetch itself: a header comment that mentions a license in a file the
+   list does not name fails the fetch, naming the file, so a pin bump cannot ship an
+   unreviewed file through `jmo tools install` or the image build. A rule with no license
+   line in any other file is DRL, as the repository's LICENSE says.
 7. **The fixture is a canary**: a JMo-written rule and a file holding its string,
    generated in `tmp_path`, under `node_modules/`. Never EICAR, never a real sample.
 8. **The row is renamed `yara-x`**; `yara` joins `REMOVED_TOOLS` with a warning naming
@@ -904,18 +930,28 @@ the pack is built in)
 
 ## Task Y1: The rules: signature-base, DRL only, five externals (P5)
 
-**Files:** `scripts/core/install_config.py:75-109` (`YARA_RULES_BUNDLE` → signature-base;
-its comment's two false reasons go), `scripts/cli/tool_installer.py:1816-1903` (the fetch),
+Line numbers in Y1-Y4 re-measured 2026-11-03 at `b69b93bc`; signature-base `master` is still
+`36ab7042`.
+
+**Files:** `scripts/core/install_config.py:74-107` (`YARA_RULES_BUNDLE` → signature-base;
+its comment's two false reasons go), `scripts/cli/tool_installer.py:1813-1914` (the fetch),
 `scripts/core/yara_rules.py` (new: filter + manifest), `tests/unit/test_yara_rules.py`
 
 - [ ] **Step 1:** Pin signature-base by commit and tarball sha256 (verify before
   extracting; `tarfile` `data` filter). Keep `yara/` only.
 - [ ] **Step 2: Failing tests** on a synthetic tree: a rule with
-  `license = "https://creativecommons.org/licenses/by-nc/4.0/"` is dropped and named in the
-  manifest; a DRL rule and a rule with no `license` line are kept (a file inherits the
-  repository's DRL); a file whose rules are all dropped leaves no empty file behind.
+  `license = "https://creativecommons.org/licenses/by-nc/4.0/"` (or `License =`) is dropped
+  and named in the manifest; a DRL rule and a rule with no `license` line are kept; a
+  commented-out rule is neither counted nor kept apart from its comment; a file on the
+  reviewed list as a drop leaves nothing, and one listed as kept stays whole; a header
+  comment that mentions a license in an unlisted file fails the fetch, naming the file; a
+  file whose rules are all dropped leaves no empty file behind.
 - [ ] **Step 3:** Implement; then measure on the real pin and record in the PR: files and
-  rules kept, rules dropped per license.
+  rules kept, rules dropped per license and per listed file. The oracle is yara-x 1.22.1:
+  every kept file compiles with the five externals declared, and per file, the names kept
+  plus dropped equal the live rule names yara-x reports for the unfiltered file (`Compiler`
+  has no rule count; `allowed_rule_name("^NEVER$")` raises one `invalid_rule_name` warning
+  per live rule, private ones included and commented-out ones not, with the name's span).
 - [ ] **Step 4:** Commit `feat: signature-base's DRL rules replace the ReversingLabs bundle`.
 
 ## Task Y2: The engine (P5)
@@ -923,13 +959,26 @@ its comment's two false reasons go), `scripts/cli/tool_installer.py:1816-1903` (
 The install path is the PyPI wheel as a runtime dependency of jmo-security (J2).
 
 **Files:** `pyproject.toml` (`yara-x==<pin>` in `dependencies`), `uv.lock` (`make
-deps-lock`), `versions.yaml:142-162` (the `yara` row leaves `python_tools`),
-`scripts/cli/installers/pip_installer.py`, `scripts/core/tool_utils.py`,
-`Dockerfile:170, 213, 286` (apt `yara` and `yara-python` both go)
+deps-lock`), `versions.yaml:136-158` (the `yara` row leaves `python_tools`) and `:207` (its
+name in `update_policies`, which no code reads), `scripts/cli/installers/pip_installer.py`,
+`scripts/core/tool_utils.py:183` (`find_spec("yara")` → `yara_x`),
+`scripts/cli/tool_installer.py:403, 1760-1775` (below), `Dockerfile:170, 209-210, 282` (apt
+`yara`, `yara-python` and the build's `yara --version` check all go; `--sync` cannot see
+them, #1563)
 
-- [ ] **Step 1:** Pin the newest yara-x release at least seven days old when PR Y is cut
-  (1.22.0, released 2026-10-20, qualifies now; 1.22.1 from 2026-11-02 08:53 EST). `uv` must
-  be 0.13.1 before the relock.
+**Decided 2026-11-03 (Jimmy): what fetches the rules on the host.** With no `versions.yaml`
+row, `jmo tools install yara-x` answers `Unknown tool` at the registry lookup
+(`tool_installer.py:424`), and `_post_install`, which fetches the rules only for
+`tool_name == "yara"` (`:1771`), never runs: #1282 on the host. So `yara-x` returns before
+that lookup, as `BUILTIN_TOOLS` does (`:403`), and then runs Y1's fetch. The engine's pin
+lives in `uv.lock` and the rules' in `install_config.py`, one place each. Rejected: a
+`yara-x` row in `versions.yaml` (a second pin of the engine to drift from `pyproject.toml`)
+and rules inside the wheel (rule text in site-packages, where Defender can quarantine it, and
+rules that move only with a release).
+
+- [ ] **Step 1:** Pin the newest yara-x release at least seven days old when PR Y is cut:
+  **1.22.1** (PyPI 2026-10-26 08:41 EDT; this line said 2026-11-02, measured false on 11-03).
+  `uv` must be 0.13.1 before the relock.
 - [ ] **Step 2: Failing test** `test_yara_x_is_importable_where_jmo_is`: the version probe
   reads `yara_x` and matches the lock.
 - [ ] **Step 3:** Commit `feat!: yara-x is a dependency of JMo, not an installed tool`.
@@ -937,8 +986,8 @@ deps-lock`), `versions.yaml:142-162` (the `yara` row leaves `python_tools`),
 ## Task Y3: The runner reads vendored trees, one rule file, and names the author (P5)
 
 **Files:** `scripts/core/yara_runner.py` (rewritten on `yara_x`), `scripts/core/adapters/yara_adapter.py`
-(→ `yara_x_adapter.py`), `scripts/core/tool_descriptors.py` (`_yara_repo` `:1335`, the row
-`:1985-1998`, `REMOVED_TOOLS`), `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py`
+(→ `yara_x_adapter.py`), `scripts/core/tool_descriptors.py` (`_yara_repo` `:1536`, the row
+`:2190-2205`, `REMOVED_TOOLS` `:2300`), `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py`
 
 - [ ] **Step 1: Failing tests:**
   - `test_vendored_trees_are_read`: the canary in `src/` and in `node_modules/x/` → 2 matches; one in `.git/` → none; one in the results directory passed as `--exclude-dir` → none.

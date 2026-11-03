@@ -26,7 +26,7 @@ from scripts.core.adapters.shellcheck_adapter import ShellCheckAdapter
 from scripts.core.adapters.syft_adapter import SyftAdapter
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
 from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
-from scripts.core.adapters.yara_adapter import YaraAdapter
+from scripts.core.adapters.yara_x_adapter import YaraXAdapter
 from scripts.core.adapters.zap_adapter import ZapAdapter
 
 # ============================================================================
@@ -42,7 +42,7 @@ ALL_ADAPTERS = [
     ("syft", SyftAdapter),
     ("trivy", TrivyAdapter),
     ("trufflehog", TruffleHogAdapter),
-    ("yara", YaraAdapter),
+    ("yara-x", YaraXAdapter),
     ("zap", ZapAdapter),
 ]
 

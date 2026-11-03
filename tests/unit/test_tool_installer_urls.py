@@ -315,33 +315,33 @@ class TestSpecialToolHandling:
     """Test special handling for tools that aren't standard binaries.
 
     Some tools require special detection/installation:
-    - yara: Python library (yara-python), not a CLI binary
+    - yara-x: a Python library and a dependency of JMo, not a CLI binary
     """
 
-    def test_yara_version_command_uses_python(self):
-        """Verify yara version check uses Python import, not CLI."""
+    def test_yara_x_version_command_uses_python(self):
+        """Verify yara-x's version check uses a Python import, not a CLI."""
         import sys
 
         from scripts.cli.tool_manager import VERSION_COMMANDS
 
-        yara_cmd = VERSION_COMMANDS.get("yara", [])
+        yara_cmd = VERSION_COMMANDS.get("yara-x", [])
         # Should use Python to check import, not 'yara --version'
         assert yara_cmd[0] == sys.executable, (
             "yara version check should use Python interpreter"
         )
         assert "-c" in yara_cmd, "yara version check should use -c flag"
-        assert "import yara" in yara_cmd[-1], (
-            "yara version check should import yara module"
+        assert "import yara_x" in yara_cmd[-1], (
+            "yara-x version check should import the yara_x module"
         )
 
-    def test_yara_version_pattern_matches_simple_version(self):
-        """Verify yara version pattern can parse simple version string."""
+    def test_yara_x_version_pattern_matches_simple_version(self):
+        """Verify yara-x's version pattern can parse a bare version string."""
         from scripts.cli.tool_manager import VERSION_PATTERNS
 
-        yara_pattern = VERSION_PATTERNS.get("yara")
-        assert yara_pattern is not None, "yara should have a version pattern"
+        yara_pattern = VERSION_PATTERNS.get("yara-x")
+        assert yara_pattern is not None, "yara-x should have a version pattern"
 
-        # yara-python outputs just the version number like "4.5.4"
+        # the probe prints just the version number, like "4.5.4"
         match = yara_pattern.search("4.5.4")
         assert match is not None, "Pattern should match simple version"
         assert match.group(1) == "4.5.4"

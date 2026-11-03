@@ -17,6 +17,7 @@ from scripts.cli.terminal import stream_is_tty
 from scripts.cli.tool_manager import (
     ToolManager,
     ToolStatus,
+    needs_install,
     print_tool_status_table,
 )
 from scripts.core.paths import clean_isolated_venvs
@@ -509,13 +510,14 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
                 print(f"{t}: built into JMo, nothing to install")
                 continue
             status = manager.check_tool(t)
-            if force or not status.installed:
+            # needs_install: also yara-x, whose engine ships with JMo and whose
+            # pinned rules are what this command provides.
+            if force or needs_install(status):
                 missing.append(status)
             elif not status.execution_ready:
-                # Present but unable to run - an incomplete install, not a
-                # finished one. yara reaches this state with its engine
-                # installed and no rules, where it would report every scan
-                # clean. Say so rather than printing a bare "already installed".
+                # Present but unable to run, for a reason this command cannot
+                # fix (zap without Java): say so rather than printing a bare
+                # "already installed".
                 print(
                     f"{t}: installed ({status.installed_version}) but not ready"
                     f" - {status.execution_warning}"

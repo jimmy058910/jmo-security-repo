@@ -1,36 +1,24 @@
 #!/usr/bin/env python3
-"""Drive libyara over a repository and emit the JSON the yara adapter parses.
+"""Drive yara-x over a repository and emit the JSON the yara-x adapter parses.
 
 Invoked as a subprocess, exactly like every other scanner::
 
-    python -m scripts.core.yara_runner --rules <dir> --target <dir> --output <file>
+    python -m scripts.core.yara_runner --rules <dir|file> --target <dir> --output <file>
 
-**Why this module exists.** ``yara-python`` is libyara plus bindings, not a
-command-line tool: the shipped artifact is a compiled extension
-(``yara.cp312-win_amd64.pyd``) exposing ``compile()``/``match()``, with no
-``main()`` and no console script. The scanner nevertheless built the *native C*
-yara command line (``yara -r -w -s <rules> <repo>``), which the library cannot
-satisfy, and ``find_tool`` bridged the gap by returning the pseudo-path
-``python:yara`` - truthy, so yara passed pre-flight, then died at exec.
-
-Using the native CLI instead is not an option: VirusTotal/yara publishes
-prebuilt binaries for **Windows only**, and stopped even that at v4.5.6 (v4.5.7
-and v4.5.8 ship zero release assets). Linux and macOS have never had one. The
-PyPI wheels, by contrast, cover win32/win_amd64, manylinux and musllinux on
-x86_64/aarch64/i686, and macOS on both arches - the same C engine
-(``yara.YARA_VERSION``), distributed everywhere the CLI is not.
-
+yara-x, VirusTotal's rewrite of YARA, is a runtime dependency of JMo: its wheel
+is the engine and its pin is `uv.lock`'s (v2.0.0 Phase 6, PR Y). The wheel
+has no command line of JMo's shape, so this module supplies one and the walk.
 Keeping it a subprocess rather than an in-process call preserves the uniform
 ToolRunner model - timeouts, retries, ``ok_return_codes``, and the accounting
 that ``scripts/dev/reconcile_scan_accounting.py`` validates - and puts a real
-executable at ``command[0]``, which is what the pseudo-path broke.
+executable, this interpreter, at ``command[0]``.
 
 Exit codes are the scanner's ``ok_return_codes=(0, 1)`` plus a distinct error:
 
 ===  ===========================================================
   0  scanned, no matches
   1  scanned, matches found
-  2  did NOT scan (no library, no rules, unreadable target, a crash)
+  2  did NOT scan (no engine, no rules, unreadable target, a crash)
 ===  ===========================================================
 
 Code 2 matters as much as the other two. A run that examines nothing produces
@@ -49,45 +37,59 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from scripts.core.tool_descriptors import VENDORED_DIRS
+from scripts.core.yara_rules import RULE_SUFFIXES
 
 EXIT_CLEAN = 0
 EXIT_MATCHES = 1
 EXIT_ERROR = 2
 
-RULE_SUFFIXES = (".yar", ".yara")
-
-# Repositories vendor dependencies; scanning node_modules or a bundled venv
-# buries the repo's own findings in third-party noise. The one list every
-# tool's exclusions are rendered from (this was a copy of it).
-SKIP_DIRS = frozenset(VENDORED_DIRS)
+# yara-x is the one tool that reads vendored trees (decision 4): signature-base's
+# npm supply-chain rules can match nowhere but `node_modules`. A git object
+# store is never source, so it is pruned even when the scan names nothing.
+SKIP_DIRS = frozenset({".git"})
 
 # yara on a multi-gigabyte artifact costs minutes and finds nothing a rule set
 # aimed at source trees would catch. Skipped files are counted and reported.
 DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024
 
-# Per-file match timeout. libyara can pathologically backtrack on some rule and
-# input combinations; without this a single file can hang the whole scan.
+# Per-file match timeout: some rule and input combinations are pathological,
+# and without this a single file can hang the whole scan.
 DEFAULT_MATCH_TIMEOUT = 60
 
 # Per-file scan errors are reported individually up to this many, then counted.
 # A locked or quarantined file is routine; thousands of them is a broken run.
 MAX_REPORTED_FILE_ERRORS = 10
 
+# The externals LOKI defines per file, which signature-base's rules read
+# (`filename matches /.../`, `filepath == "/var/log"`, `extension == ".jpg"`).
+EXTERNALS = ("filename", "filepath", "extension", "filetype", "owner")
 
-def _import_yara() -> Any | None:
-    """Return the yara module, or None if it is not installed.
+# The binary entries of signature-base's `misc/file-type-signatures.txt`, the
+# table LOKI sets `filetype` from. Two kept rules read it: one guards on
+# `not filetype == "EXE"` beside a test for `MZ`, so with no label it fires on
+# every such executable. Its text types (PHP, JSP, ASP, VBS, BATCH) are not
+# read: a `.jpg` that is really one of those is not reported as cloaked.
+FILE_TYPES: tuple[tuple[bytes, str], ...] = (
+    (b"MZ", "EXE"),
+    (b"\x7fE", "ELF"),
+    (b"{\\rt", "RTF"),
+    (b"MDMP", "MDMP"),
+)
 
-    Isolated into a function so tests can force the absent case without
-    manipulating sys.modules: the "library missing" path is the one a machine
-    that never ran `jmo tools install yara` actually takes, so it needs a test.
+
+def _import_yara_x() -> Any | None:
+    """Return the yara_x module, or None if this interpreter cannot import it.
+
+    It ships with JMo, so None means a broken install. Isolated into a function
+    so tests can force that case: it must fail as loudly as any other way of
+    scanning nothing.
     """
     try:
         # Deferred deliberately: this import IS the availability probe.
-        import yara
+        import yara_x
     except ImportError:
         return None
-    return yara
+    return yara_x
 
 
 def _log(message: str) -> None:
@@ -113,21 +115,18 @@ def collect_rule_files(rules_root: Path) -> list[Path]:
     return sorted(found)
 
 
-# TODO(issue-#1413): a single-file rules root gives a relative path of `.`,
-# whose stem raises ValueError (exit 2).
 def namespace_for(path: Path, rules_root: Path) -> str:
-    """Name a rule file's namespace by its position in the bundle.
+    """Name a rule file's namespace by its position in the rule set.
 
-    libyara reports the namespace on every match, and the adapter turns it into
-    a `namespace:<value>` tag. Keying namespaces by absolute path - the obvious
-    thing, since compile() wants unique keys - put
+    yara-x reports the namespace on every match, and the adapter turns it into
+    a `namespace:<value>` tag. Keying namespaces by absolute path put
     `C:\\Users\\<name>\\.jmo\\yara-rules\\...` in every finding, leaking local
     filesystem layout into reports, the history database and any shared export.
-
-    The relative stem is both safe and more useful: the pinned bundle is
-    organised by category, so this yields `ransomware/Win32_Foo`, and the
-    leading segment is real signal about what matched.
+    The relative stem is both safe and more useful. A single rule file is its
+    own root, and its namespace is its stem (#1413).
     """
+    if path == rules_root:
+        return path.stem
     try:
         rel = path.relative_to(rules_root)
     except ValueError:
@@ -136,59 +135,52 @@ def namespace_for(path: Path, rules_root: Path) -> str:
 
 
 def compile_rules(
-    yara: Any, rule_files: list[Path], rules_root: Path
+    yara_x: Any, rule_files: list[Path], rules_root: Path
 ) -> tuple[Any | None, int, list[Path]]:
-    """Compile `rule_files`, skipping the ones this libyara cannot build.
+    """Compile `rule_files` into one rule set, one namespace per file.
 
-    Returns (compiled Rules or None, compiled count, skipped files).
+    Returns (compiled Rules or None, files compiled cleanly, files with errors).
 
-    A third-party bundle will always contain files a given build rejects - the
-    pinned ReversingLabs set is 310 files, and rules referencing modules a build
-    lacks (``cuckoo``, ``magic``) fail to compile. yara.compile() over a dict is
-    all-or-nothing, so one such file would silently cost every rule, producing a
-    confident all-clear. Try the bulk path first because it is much faster, and
-    fall back to per-file only to identify what to drop.
+    yara-x compiles rule by rule: a rule that fails is left out and the rest of
+    its file is kept (measured, 1.22.1: a rule after a syntax error still
+    matched). So a broken file costs only its broken rules, and the run names
+    the file. With no file compiled cleanly the result is None: what little
+    might have compiled is not a scan anyone asked for.
     """
-    namespaces = {namespace_for(p, rules_root): str(p) for p in rule_files}
-    try:
-        return yara.compile(filepaths=namespaces), len(rule_files), []
-    except yara.Error:
-        pass
-
-    good: dict[str, str] = {}
-    skipped: list[Path] = []
+    compiler = yara_x.Compiler()
+    for name in EXTERNALS:
+        compiler.define_global(name, "")
+    clean = 0
+    with_errors: list[Path] = []
     for path in rule_files:
+        compiler.new_namespace(namespace_for(path, rules_root))
         try:
-            yara.compile(filepath=str(path))
-        except yara.Error as exc:
-            skipped.append(path)
-            _log(f"yara: skipping unusable rule file {path.name}: {exc}")
+            compiler.add_source(path.read_text(encoding="utf-8"), origin=path.name)
+        except (yara_x.CompileError, UnicodeDecodeError, OSError) as exc:
+            with_errors.append(path)
+            _log(f"yara-x: skipped what would not compile in {path.name}:\n{exc}")
             continue
-        good[namespace_for(path, rules_root)] = str(path)
-
-    if not good:
-        return None, 0, skipped
-    try:
-        return yara.compile(filepaths=good), len(good), skipped
-    except yara.Error as exc:  # pragma: no cover - every file compiled alone
-        _log(f"yara: rule set failed to link after filtering: {exc}")
-        return None, 0, rule_files
+        clean += 1
+    if clean == 0:
+        return None, 0, with_errors
+    return compiler.build(), clean, with_errors
 
 
 def iter_target_files(
     target: Path, max_bytes: int, exclude_dirs: frozenset[str] = frozenset()
 ) -> tuple[list[Path], int]:
-    """Walk `target`, pruning vendored trees. Returns (files, skipped_too_large).
+    """Walk `target`. Returns (files, skipped_over_the_cap).
 
-    `exclude_dirs` adds directory names to prune: the scan passes JMo's own
-    results directory when it sits inside the tree, which yara read back on
-    every later scan (#1235).
+    `exclude_dirs` adds directory names to prune: the scan passes `.git` and
+    JMo's own results directory when it sits inside the tree, which yara read
+    back on every later scan (#1235).
 
     Pruning happens *during* traversal via the in-place ``dirnames[:]``
     mutation, not by filtering paths afterwards. The post-filter form stats
-    every vendored file on the way past, which descended into pnpm symlink
-    farms and raised WinError 1920 on Windows while merely timing out on Linux -
-    one cause, two symptoms that point nowhere near it (commit ded93df).
+    every pruned file on the way past (commit ded93df). `os.walk`'s default
+    `followlinks=False` keeps a linked directory from being followed; a
+    linked *file* is returned unread, for the scan to count and pass over. A
+    file whose size cannot be read is kept, so the scan reports why.
     """
     skip = SKIP_DIRS | exclude_dirs
     files: list[Path] = []
@@ -197,33 +189,78 @@ def iter_target_files(
         dirnames[:] = [d for d in dirnames if d not in skip]
         for name in filenames:
             path = Path(dirpath) / name
-            try:
-                if path.stat().st_size > max_bytes:
-                    too_large += 1
-                    continue
-            except OSError:
-                # Broken symlink, race, or permission denied. Not scannable;
-                # counted as unreadable rather than silently treated as clean.
-                too_large += 1
-                continue
+            if not path.is_symlink():
+                try:
+                    if path.stat().st_size > max_bytes:
+                        too_large += 1
+                        continue
+                except OSError:
+                    pass
             files.append(path)
     return sorted(files), too_large
 
 
-def match_to_dict(match: Any, path: Path) -> dict[str, Any]:
-    """Shape one libyara Match into what yara_adapter._load_yara_internal reads.
+def _owner(path: Path) -> str:
+    """The owning account's name, as LOKI reads it; "" where none can be read."""
+    if sys.platform == "win32":
+        return ""
+    import pwd
 
-    Matched *string identifiers* only, never the matched bytes. A malware rule
+    try:
+        return pwd.getpwuid(path.stat().st_uid).pw_name
+    except (KeyError, OSError):
+        return ""
+
+
+def loki_externals(path: Path) -> dict[str, str]:
+    """The five externals signature-base's rules read, as LOKI sets them for
+    `path`: its name, its directory, its lower-case suffix with the dot, the
+    type its first bytes name, and its owner."""
+    with path.open("rb") as handle:
+        head = handle.read(4)
+    return {
+        "filename": path.name,
+        "filepath": str(path.absolute().parent),
+        "extension": path.suffix.lower(),
+        "filetype": next((t for magic, t in FILE_TYPES if head.startswith(magic)), ""),
+        "owner": _owner(path),
+    }
+
+
+def _meta_value(value: Any) -> Any:
+    """A metadata value JSON can hold. yara-x returns a string written with
+    `\\x` escapes as bytes (measured, 1.22.1)."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def match_to_dict(rule: Any, path: Path) -> dict[str, Any]:
+    """Shape one matching yara-x Rule into what the yara-x adapter reads.
+
+    Matched *pattern identifiers* only, never the matched bytes. A malware rule
     can match on an embedded key or token, and these findings flow into shared
     reports and the history database - the adapter only uses the count and the
     identifiers, so the content buys nothing and leaks something.
+
+    A key the rule repeats keeps every value, as a list: signature-base names
+    two `reference`s on some rules, and DRL 1.1 wants them with the output.
     """
+    meta: dict[str, Any] = {}
+    for key, raw in rule.metadata:
+        value = _meta_value(raw)
+        if key not in meta:
+            meta[key] = value
+        elif isinstance(meta[key], list):
+            meta[key].append(value)
+        else:
+            meta[key] = [meta[key], value]
     return {
-        "rule": match.rule,
-        "namespace": match.namespace,
-        "tags": [str(t) for t in match.tags],
-        "meta": {str(k): v for k, v in dict(match.meta).items()},
-        "strings": [str(s.identifier) for s in match.strings],
+        "rule": rule.identifier,
+        "namespace": rule.namespace,
+        "tags": [str(t) for t in rule.tags],
+        "meta": meta,
+        "strings": [p.identifier for p in rule.patterns if p.matches],
         "file": str(path),
     }
 
@@ -231,7 +268,7 @@ def match_to_dict(match: Any, path: Path) -> dict[str, Any]:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="yara_runner",
-        description="Scan a tree with libyara and write JSON the yara adapter parses.",
+        description="Scan a tree with yara-x and write JSON the yara-x adapter parses.",
         # `--outp x` would otherwise be `--output x`, and a user's flags come
         # after JMo's: the report would move (#1335).
         allow_abbrev=False,
@@ -274,7 +311,7 @@ def main(argv: list[str] | None = None) -> int:
         out_path.unlink(missing_ok=True)
     except OSError as exc:
         _log(
-            f"yara: could not remove an earlier output {out_path}: {exc} - "
+            f"yara-x: could not remove an earlier output {out_path}: {exc} - "
             "nothing was scanned"
         )
         return EXIT_ERROR
@@ -284,64 +321,76 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         # Python exits 1 on an uncaught exception, which is EXIT_MATCHES and
         # which the row accepts; a crash is "did not scan", and says why.
-        _log(f"yara: {type(exc).__name__}: {exc} - nothing was scanned")
+        _log(f"yara-x: {type(exc).__name__}: {exc} - nothing was scanned")
         _log(traceback.format_exc().rstrip())
         return EXIT_ERROR
 
 
 def _scan(args: argparse.Namespace, out_path: Path) -> int:
-    yara = _import_yara()
-    if yara is None:
+    yara_x = _import_yara_x()
+    if yara_x is None:
         _log(
-            "yara: the yara-python library is not installed for this interpreter "
-            f"({sys.executable}), so nothing was scanned. "
-            "Install it with: jmo tools install yara"
+            "yara-x: the yara-x engine cannot be imported by this interpreter "
+            f"({sys.executable}), so nothing was scanned. It ships with JMo: "
+            "reinstall jmo-security"
         )
         return EXIT_ERROR
 
     rules_root = Path(args.rules)
     if not rules_root.exists():
         _log(
-            f"yara: rules path does not exist: {rules_root} - nothing was scanned. "
-            "Install the bundled rule set with: jmo tools install yara"
+            f"yara-x: rules path does not exist: {rules_root} - nothing was scanned. "
+            "Install the pinned rule set with: jmo tools install yara-x"
         )
         return EXIT_ERROR
 
     target = Path(args.target)
     if not target.exists():
-        _log(f"yara: target path does not exist: {target} - nothing was scanned")
+        _log(f"yara-x: target path does not exist: {target} - nothing was scanned")
         return EXIT_ERROR
 
     rule_files = collect_rule_files(rules_root)
     if not rule_files:
         _log(
-            f"yara: no {' or '.join(RULE_SUFFIXES)} files under {rules_root} - nothing was scanned"
+            f"yara-x: no {' or '.join(RULE_SUFFIXES)} files under {rules_root} - "
+            "nothing was scanned"
         )
         return EXIT_ERROR
 
-    rules, compiled, skipped = compile_rules(yara, rule_files, rules_root)
-    if rules is None or compiled == 0:
+    rules, compiled, with_errors = compile_rules(yara_x, rule_files, rules_root)
+    if rules is None:
         _log(
-            f"yara: 0 of {len(rule_files)} rule file(s) compiled - nothing was "
+            f"yara-x: 0 of {len(rule_files)} rule file(s) compiled - nothing was "
             "scanned. Reporting this as a clean scan would be a false all-clear."
         )
         return EXIT_ERROR
-    if skipped:
+    if with_errors:
         _log(
-            f"yara: compiled {compiled} rule file(s), skipped {len(skipped)} that would not build"
+            f"yara-x: compiled {compiled} rule file(s) cleanly; {len(with_errors)} "
+            "had rules that would not compile, skipped"
         )
 
-    files, unreadable = iter_target_files(
+    files, too_large = iter_target_files(
         target, args.max_file_bytes, frozenset(args.exclude_dir)
     )
 
+    scanner = yara_x.Scanner(rules)
+    # Before the loop: a value no u64 holds raises OverflowError here, once,
+    # rather than as a per-file error on every file.
+    scanner.set_timeout(args.timeout)
+
     matches: list[dict[str, Any]] = []
+    links = 0
     errored = 0
     for path in files:
+        if path.is_symlink():
+            links += 1
+            continue
         try:
-            for match in rules.match(filepath=str(path), timeout=args.timeout):
-                matches.append(match_to_dict(match, path))
-        except (yara.Error, OSError) as exc:
+            for name, value in loki_externals(path).items():
+                scanner.set_global(name, value)
+            results = scanner.scan_file(str(path))
+        except (yara_x.ScanError, yara_x.TimeoutError, OSError) as exc:
             # A single unscannable file must not abort the run, but it must not
             # vanish either. Naming the reason is not decoration: an early
             # version of this loop counted errors without printing them, and
@@ -350,14 +399,17 @@ def _scan(args: argparse.Namespace, out_path: Path) -> int:
             # (OSError 22 on a path Path.exists() reported as present).
             errored += 1
             if errored <= MAX_REPORTED_FILE_ERRORS:
-                _log(f"yara: could not scan {path}: {exc}")
+                _log(f"yara-x: could not scan {path}: {exc}")
+            continue
+        matches.extend(match_to_dict(rule, path) for rule in results.matching_rules)
 
-    scanned = len(files) - errored
-    if files and scanned == 0:
+    attempted = len(files) - links
+    scanned = attempted - errored
+    if attempted and scanned == 0:
         # Every file failed. The findings list is empty for the same reason a
         # clean repository's is, and only this branch can tell them apart.
         _log(
-            f"yara: all {len(files)} file(s) failed to scan - nothing was "
+            f"yara-x: all {attempted} file(s) failed to scan - nothing was "
             "examined. Reporting this as a clean scan would be a false all-clear."
         )
         return EXIT_ERROR
@@ -366,9 +418,9 @@ def _scan(args: argparse.Namespace, out_path: Path) -> int:
     out_path.write_text(json.dumps(matches, indent=2), encoding="utf-8")
 
     _log(
-        f"yara: scanned {scanned} of {len(files)} file(s) with {compiled} rule "
-        f"file(s); {len(matches)} match(es), {unreadable} skipped as too large "
-        f"or unreadable, {errored} errored"
+        f"yara-x: scanned {scanned} of {attempted} file(s) with {compiled} rule "
+        f"file(s); {len(matches)} match(es), {too_large} over the size cap, "
+        f"{links} symlinks not followed, {errored} errored"
     )
     return EXIT_MATCHES if matches else EXIT_CLEAN
 

@@ -35,6 +35,7 @@ TOOL_NAME_SIDES: dict[str, str] = {
     "TOOL_EXECUTION_COMMANDS": "keys",  # tool -> [executables it needs]
     "_REPO_TOOLS": "members",  # the repository target's tools
     "BUILTIN_TOOLS": "members",  # the tools that ship inside JMo
+    "DEPENDENCY_TOOLS": "keys",  # tool -> the PyPI distribution of its engine
 }
 
 # The universe itself, which everything else is measured against.

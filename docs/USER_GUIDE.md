@@ -179,7 +179,7 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 | **Syft** | Generates a Software Bill of Materials (SBOM) from `requirements.txt` / `pyproject.toml` |
 | **Trivy** | Checks Python dependencies for known CVEs |
 | **Checkov** | Scans any IaC files if present (Terraform, CloudFormation) |
-| **YARA** | Matches malware patterns (web shells, backdoors) across the tree |
+| **YARA-X** | Matches malware patterns (web shells, hack tools, compromised npm packages) across the tree, `node_modules` and virtual environments included |
 | **Hadolint** | Lints Dockerfiles — only fires if a `Dockerfile` exists in the repo |
 | **ShellCheck** | Analyses shell scripts — only fires if `.sh` files exist |
 | **zizmor** | Audits GitHub Actions workflows — only fires if the repo has `.github/workflows`, an `action.yml` or a Dependabot config |
@@ -355,7 +355,7 @@ jmo tools uninstall --yes
 **What gets removed with `--all`:**
 
 - `~/.jmo/` directory (config, cache, history.db, bin/)
-- pip-installed tools (checkov, yara-python, etc.)
+- pip-installed tools (checkov, etc.)
 - npm-installed tools (retire.js, etc.)
 - Binary tools in `~/.jmo/bin/`
 
@@ -551,7 +551,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Syft, Trivy, YARA, plus Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Syft, Trivy, YARA-X, plus Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -1185,7 +1185,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
       trivy's and Gitleaks' `--exit-code`, TruffleHog's `--fail`,
       Checkov's `--soft-fail` and hadolint's `--no-fail` (both exit 0 whatever they find).
       JMo's own `--fail-on` (`jmo ci`, `jmo report`) sets the failure threshold
-    - Where JMo's own runners scan: yara's and jmo-native's `--target`
+    - Where JMo's own runners scan: yara-x's and jmo-native's `--target`
     - A download during the scan, which a scan never makes: OSV-Scanner's
       `--download-offline-databases` (`jmo tools update` fetches its databases)
   - A flag another tool spells the same way is left alone: opengrep's `-f` is `--config`, and
