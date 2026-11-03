@@ -10,6 +10,8 @@ version string and tool name validation to prevent URL/path injection.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import shutil
@@ -22,7 +24,7 @@ import zipfile
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import requests
@@ -56,6 +58,7 @@ from scripts.core.install_config import (
     ISOLATED_TOOLS,
     SPECIAL_INSTALL,
     YARA_RULES_BUNDLE,
+    YARA_RULES_REVIEWED,
 )
 from scripts.core.paths import (
     get_isolated_tool_path,
@@ -75,6 +78,7 @@ from scripts.core.validation import (
     validate_tool_name,
     validate_version,
 )
+from scripts.core.yara_rules import filter_rules
 
 logger = logging.getLogger(__name__)
 
@@ -1858,6 +1862,14 @@ class ToolInstaller:
                         f"{sanitize_subprocess_output(proc.stderr, max_length=200)}"
                     )
 
+                # Checked before extraction: the pin is the commit and its bytes.
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                if digest != YARA_RULES_BUNDLE["sha256"]:
+                    return failed(
+                        f"the download's sha256 {digest} is not the pinned "
+                        f"{YARA_RULES_BUNDLE['sha256']}"
+                    )
+
                 extract_dir = tmppath / "extracted"
                 extract_dir.mkdir()
                 with tarfile.open(archive, "r:gz") as tar:
@@ -1876,20 +1888,39 @@ class ToolInstaller:
                         f"'{YARA_RULES_BUNDLE['subdir']}' missing from archive"
                     )
 
+                # Only what JMo may redistribute (Phase 6 decision 6), decided
+                # here in the temporary tree: a bundle the filter refuses
+                # (UnreviewedRuleFile is a ValueError) leaves the installed
+                # rules as they were.
+                kept = filter_rules(src, YARA_RULES_REVIEWED)
+                if kept.kept_rules == 0:
+                    return failed("bundle contained no rule JMo may ship")
+                manifest: dict[str, object] = {
+                    key: YARA_RULES_BUNDLE[key]
+                    for key in ("repo", "ref", "sha256", "license")
+                }
+                manifest |= {
+                    "kept_files": kept.kept_files,
+                    "kept_rules": kept.kept_rules,
+                    "dropped": [asdict(d) for d in kept.dropped],
+                }
+                (src / "manifest.json").write_bytes(
+                    json.dumps(manifest, indent=2).encode("utf-8")
+                )
+
+                # The licence has to travel with the rules: DRL binds whoever
+                # shares them to keep it, and taking only the rules subtree
+                # leaves it behind.
+                for name in ("LICENSE", "LICENSE.md", "LICENSE.txt"):
+                    licence = roots[0] / name
+                    if licence.is_file():
+                        shutil.copy2(str(licence), str(src / name))
+                        break
+
                 if rules_dir.exists():
                     shutil.rmtree(rules_dir)
                 rules_dir.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(src), str(rules_dir))
-
-                # The licence has to travel with the rules. MIT requires the
-                # notice to accompany copies, and taking only the rules subtree
-                # leaves it behind - the installed content would carry no
-                # statement of what it is or who wrote it.
-                for name in ("LICENSE", "LICENSE.md", "LICENSE.txt"):
-                    licence = roots[0] / name
-                    if licence.is_file():
-                        shutil.copy2(str(licence), str(rules_dir / name))
-                        break
         except (
             OSError,
             tarfile.TarError,
@@ -1898,17 +1929,14 @@ class ToolInstaller:
         ) as exc:
             return failed(f"{type(exc).__name__}: {exc}")
 
-        count = sum(1 for _ in rules_dir.rglob("*.yar")) + sum(
-            1 for _ in rules_dir.rglob("*.yara")
-        )
-        if count == 0:
-            return failed("bundle contained no .yar/.yara files")
-
         return InstallResult(
             tool_name="yara",
             success=True,
             method=result.method,
-            message=f"{result.message} + {count} rules ({YARA_RULES_BUNDLE['license']})",
+            message=(
+                f"{result.message} + {kept.kept_rules} rules in {kept.kept_files} "
+                f"files ({YARA_RULES_BUNDLE['license']})"
+            ),
             version_installed=result.version_installed,
             duration_seconds=result.duration_seconds,
         )

@@ -9,6 +9,7 @@ better modularity and reuse.
 from __future__ import annotations
 
 from scripts.core.tool_registry import Platform
+from scripts.core.yara_rules import Review
 
 # ============================================================================
 # TIMEOUT AND LIMIT CONSTANTS
@@ -75,35 +76,78 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 # YARA RULE BUNDLE
 # ============================================================================
 # yara is the one scanner whose package carries no detection content: the
-# yara-python wheel is the libyara engine and nothing else. Without rules it
-# examines every file and matches nothing, which is byte-for-byte the same
-# result as a clean repository - so the rules are part of the install, not an
-# optional extra.
+# engine holds no rules. Without rules it examines every file and matches
+# nothing, which is byte-for-byte the same result as a clean repository - so
+# the rules are part of the install, not an optional extra.
 #
-# Why this bundle:
-#   - MIT (verified verbatim in its LICENSE), so it can be redistributed and
-#     used commercially. The set the yara adapter's docstring names,
-#     Neo23x0/signature-base, reports its licence as NOASSERTION and is 42 MB,
-#     which also exceeds the repo's 10 MB check-added-large-files hook.
-#   - 615 KB across 310 rule files, organised by category (backdoor,
-#     ransomware, trojan, exploit, ...). Those directory names become the
-#     namespace, and the adapter infers severity from exactly such tags.
-#   - Fetched at install time into ~/.jmo/yara-rules/, matching how zap
-#     already lives under ~/.jmo/. Nothing is vendored.
+# Why signature-base (v2.0.0 Phase 6, decision 3): ReversingLabs' bundle, the
+# previous choice, matched nothing on nine targets and a 24,942-file
+# node_modules, and its categories are PE/ELF malware; signature-base carries
+# webshell, hack-tool and npm supply-chain rules. The two reasons once given
+# against it were both false: 42 MB is GitHub's size of the repository with its
+# history (the tarball is 1.9 MB), and NOASSERTION is GitHub not recognising
+# the Detection Rule License 1.1 it is under. Nothing is vendored: the rules are
+# fetched at install time into ~/.jmo/yara-rules/.
 #
-# Pinned to a commit because the repository publishes no releases or tags. Bump
-# deliberately - a rule set that changes under you changes your findings.
+# DRL 1.1 binds whoever shares the rules to keep each rule's author, and every
+# message from a match to name it. Not every rule is DRL:
+# scripts/core/yara_rules.py drops the others during the fetch (decision 6),
+# and YARA_RULES_REVIEWED lists the files it cannot decide alone.
+#
+# Pinned by commit and by the tarball's sha256, checked before extraction: the
+# repository publishes no releases, and a rule set that changes under you
+# changes your findings. A bump re-reads every file the fetch then refuses.
 YARA_RULES_BUNDLE: dict[str, str] = {
-    "repo": "reversinglabs/reversinglabs-yara-rules",
-    "ref": "e0a0be54aa1e11ccfd6854e4f19e9476f328fd84",  # 2025-11-03
+    "repo": "Neo23x0/signature-base",
+    "ref": "36ab70428fc5b52701b7ee6107c853ff019ed759",  # 2026-10-29
     "url": (
-        "https://github.com/reversinglabs/reversinglabs-yara-rules/"
-        "archive/e0a0be54aa1e11ccfd6854e4f19e9476f328fd84.tar.gz"
+        "https://github.com/Neo23x0/signature-base/"
+        "archive/36ab70428fc5b52701b7ee6107c853ff019ed759.tar.gz"
     ),
-    # Directory inside the archive holding the rules; everything else (README,
-    # LICENSE) is dropped so the namespace stays category-relative.
+    "sha256": "f63f2184ba3608876d695b4003b6e198ba129438dbd5aa9cb4b51ff0a86ebbe4",
+    # Directory inside the archive holding the rules; everything else (IOCs,
+    # scripts) is dropped, and the LICENSE is copied beside them.
     "subdir": "yara",
-    "license": "MIT",
+    "license": "DRL 1.1",
+}
+
+# signature-base's ambiguous files, read at the pin above (decided 2026-11-03).
+# "drop": a header names a license other than DRL, which wins over any DRL
+# metadata in its rules; or third-party rules licensed otherwise sit beside
+# rules with no license line. "keep": read, and its rules with no license line
+# are DRL (a rule naming another license is still dropped).
+YARA_RULES_REVIEWED: dict[str, Review] = {
+    "apt_apt37_bluelight.yar": ("drop", "Volexity, BSD-2-Clause header"),
+    "apt_apt41.yar": ("drop", "CC BY-NC 4.0 header"),
+    "apt_carbon_paper_turla.yar": ("drop", "ESET, BSD-2-Clause header"),
+    "apt_cobaltstrike.yar": ("drop", "JPCERT copyright header"),
+    "apt_lnx_kobalos.yar": ("drop", "ESET, BSD-2-Clause header"),
+    "apt_nk_inkysquid.yar": ("drop", "Volexity, BSD-2-Clause header"),
+    "apt_prikormka.yar": ("drop", "ESET, BSD-2-Clause header"),
+    "apt_pulsesecure.yar": ("drop", "FireEye, BSD-2-Clause header"),
+    "apt_royalroad.yar": ("drop", "MIT header"),
+    "apt_solarwinds_sunburst.yar": ("drop", "FireEye license header"),
+    "apt_triton_mal_sshdoor.yar": ("drop", "ESET, BSD-2-Clause header"),
+    "crime_malware_generic.yar": ("drop", "CC BY-NC-SA 4.0 header"),
+    "crime_nansh0u.yar": ("drop", "CC BY-NC 4.0 header"),
+    "crime_xbash.yar": ("drop", "CC BY-NC 4.0 header"),
+    "gen_gcti_cobaltstrike.yar": ("drop", "Apache-2.0 header"),
+    "gen_gcti_sliver.yar": ("drop", "Apache-2.0 header"),
+    "gen_loaders.yar": ("drop", "GPL header"),
+    "gen_rtf_malver_objects.yar": ("drop", "ditekSHen, BSD-2-Clause header"),
+    "apt_apt27_hyperbro.yar": ("drop", "CC BY-NC 4.0 rules beside unlabelled ones"),
+    "apt_cisco_asa_lineviper_rayinitiator_sep25.yar": (
+        "drop",
+        "UK OGL v3 rules beside an unlabelled one",
+    ),
+    "apt_mal_ru_snake_may23.yar": ("drop", "an MIT rule beside an unlabelled one"),
+    "apt_apt10.yar": ("keep", "'license' is a C2 domain in a disabled rule"),
+    "gen_github_net_redteam_tools_names.yar": (
+        "keep",
+        "its one CC BY-NC rule is commented out upstream",
+    ),
+    "generic_anomalies.yar": ("keep", "the author's own; one rule is CC BY-NC"),
+    "thor-hacktools.yar": ("keep", "the author's own; one rule is CC BY-NC"),
 }
 
 
