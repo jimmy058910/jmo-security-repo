@@ -11,6 +11,7 @@ rules are a readiness question that both install paths act on.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tomllib
@@ -208,5 +209,7 @@ def test_the_image_path_is_where_the_dockerfile_puts_the_rules() -> None:
     from scripts.core.paths import IMAGE_YARA_RULES_DIR
 
     dockerfile = (REPO / "Dockerfile").read_bytes().decode("utf-8")
+    # The move's destination, not a comment that names the path.
+    moved_to = re.findall(r"^\s*mv \S+ (\S+)", dockerfile, re.MULTILINE)
 
-    assert IMAGE_YARA_RULES_DIR.as_posix() in dockerfile
+    assert IMAGE_YARA_RULES_DIR.as_posix() in moved_to
