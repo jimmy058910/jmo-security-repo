@@ -12,7 +12,7 @@ the fetch rather than shipping.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 
@@ -143,6 +143,31 @@ def test_a_file_whose_rules_all_drop_is_removed(tmp_path: Path) -> None:
 
     assert not path.exists()
     assert Dropped("f.yar", "Gone", CC_BY_NC) in result.dropped
+
+
+class _CaseFoldingPath(type(Path())):
+    """This OS's path, sorting as WindowsPath does: by lowercased parts."""
+
+    def __lt__(self, other: PurePath) -> bool:
+        return [p.lower() for p in self.parts] < [p.lower() for p in other.parts]
+
+
+@pytest.mark.parametrize(
+    "path_type", [type(Path()), _CaseFoldingPath], ids=["native", "windows-order"]
+)
+def test_dropped_rules_are_listed_in_the_same_order_on_every_os(
+    tmp_path: Path, path_type: type[Path]
+) -> None:
+    """The order is the manifest's `dropped` list, which is hashed. Sorting the
+    paths put `hktl_HvS_nfs_security_tooling.yar` before `hktl_adaptixc2.yar` on
+    Linux and after it on Windows, so one pin wrote two manifests: 1 file of 722
+    differed on Windows. Code-point order is Linux's, which the image ships."""
+    for name in ("B.yar", "a.yar"):
+        _write(tmp_path, name, _rule(f"Rule_{name[0]}", CC_BY_NC))
+
+    result = filter_rules(path_type(tmp_path), reviewed={})
+
+    assert [d.file for d in result.dropped] == ["B.yar", "a.yar"]
 
 
 def test_an_unreviewed_license_comment_fails_naming_the_file(tmp_path: Path) -> None:

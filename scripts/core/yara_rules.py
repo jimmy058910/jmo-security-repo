@@ -159,7 +159,10 @@ def filter_rules(rules_dir: Path, reviewed: Mapping[str, Review]) -> FilterResul
     """Cut every rule JMo may not redistribute out of `rules_dir`, in place."""
     result = FilterResult()
     paths = sorted(
-        p for p in rules_dir.rglob("*") if p.suffix in RULE_SUFFIXES and p.is_file()
+        (p for p in rules_dir.rglob("*") if p.suffix in RULE_SUFFIXES and p.is_file()),
+        # Case-sensitive on every OS: WindowsPath sorts by lowercased parts, so
+        # sorting the paths themselves made `dropped`, and the manifest, per-OS.
+        key=lambda p: p.relative_to(rules_dir).parts,
     )
     for path in paths:
         name = path.relative_to(rules_dir).as_posix()
