@@ -17,22 +17,50 @@ from scripts.core.install_config import ISOLATED_TOOLS
 
 logger = logging.getLogger(__name__)
 
+# Where the Docker image keeps the pinned rules it fetches at build time
+# (Dockerfile): outside ~/.jmo, which a persistence mount would cover.
+IMAGE_YARA_RULES_DIR = Path("/opt/jmo/yara-rules")
+
+
+def get_yara_rules_install_dir() -> Path:
+    """Where `jmo tools install yara-x` puts the pinned rule bundle.
+
+    Returns:
+        Path to the user's rules directory (~/.jmo/yara-rules/)
+    """
+    return Path.home() / ".jmo" / "yara-rules"
+
 
 def get_yara_rules_dir() -> Path:
-    """Get the directory holding the installed YARA rule set.
+    """Get the directory holding the YARA rule set yara-x reads.
 
-    Defined once because the installer writes here and the scanner reads here;
-    two literals would drift, and a rules path that silently points at nothing
-    makes yara-x report a clean scan of an unexamined tree.
+    Defined once because readiness, the scan's default `--rules` and the
+    installer's "already installed" check have to agree; a rules path that
+    silently points at nothing makes yara-x report a clean scan of an
+    unexamined tree.
+
+    The user's install wins whenever it exists, even at an older pin:
+    readiness then says to re-install it, where falling through to the image's
+    rules would hide that the user's own tree is stale. Without it, the Docker
+    image's rules are read; they live outside ~/.jmo because that is the
+    documented persistence mount, and a volume there hides whatever the image
+    put beneath it (#1282). With neither, the user's path: the one
+    `jmo tools install yara-x` fills and the runner names when it is empty.
+
+    Read-only: the installer writes to get_yara_rules_install_dir(). The
+    image's tree is root's, and would not outlive a `--rm` container.
 
     The previous default was the hardcoded `/usr/share/yara/rules`, which does
     not exist on Windows *or* on stock Ubuntu - measured absent on both - so
     yara could never have found rules on either platform.
 
     Returns:
-        Path to the rules directory (~/.jmo/yara-rules/)
+        Path to the rules directory (~/.jmo/yara-rules/, or the image's)
     """
-    return Path.home() / ".jmo" / "yara-rules"
+    user = get_yara_rules_install_dir()
+    if user.exists() or not IMAGE_YARA_RULES_DIR.exists():
+        return user
+    return IMAGE_YARA_RULES_DIR
 
 
 def get_isolated_venv_path(tool_name: str) -> Path:

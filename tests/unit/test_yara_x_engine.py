@@ -12,14 +12,17 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from scripts.cli.tool_manager import ToolManager
 from scripts.core.attestation.provenance import ProvenanceGenerator
 from scripts.core.install_config import YARA_RULES_BUNDLE
-from scripts.core.tool_descriptors import DESCRIPTORS
+from scripts.core.tool_descriptors import DESCRIPTORS, ScanContext
 from scripts.core.tool_registry import DEPENDENCY_TOOLS, ToolRegistry
 
 REPO = Path(__file__).resolve().parents[2]
@@ -105,3 +108,105 @@ def test_an_attestation_records_the_engine_version() -> None:
 
     assert dep["annotations"]["version"] == _locked_version("yara-x")
     assert dep["uri"] == "https://pypi.org/project/yara-x/"
+
+
+# The image carries the rules (Task Y4, #1282). `~/.jmo` is the documented
+# persistence mount, and a mount hides whatever the image put beneath it, so
+# the image keeps its rules elsewhere. A scan reads the user's install when
+# there is one, and the image's otherwise.
+
+
+def _rule_set(where: Path, ref: str) -> Path:
+    where.mkdir(parents=True)
+    (where / "a.yar").write_bytes(b"rule A { condition: true }\n")
+    (where / "manifest.json").write_bytes(json.dumps({"ref": ref}).encode())
+    return where
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A home with no rules of its own."""
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    return home
+
+
+@pytest.fixture
+def image_rules(tmp_path: Path, home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The pinned rules an image carries."""
+    image = _rule_set(tmp_path / "opt" / "yara-rules", YARA_RULES_BUNDLE["ref"])
+    monkeypatch.setattr("scripts.core.paths.IMAGE_YARA_RULES_DIR", image)
+    return image
+
+
+def test_the_images_rules_make_yara_x_ready_without_a_home_install(
+    image_rules: Path,
+) -> None:
+    # A container with nothing (or an empty volume) at ~/.jmo.
+    status = ToolManager().check_tool("yara-x")
+
+    assert status.execution_ready, status.execution_warning
+
+
+def test_a_stale_home_install_is_reported_not_hidden_by_the_images(
+    home: Path, image_rules: Path
+) -> None:
+    # A volume that kept an older pin: the user's tree is the one a scan
+    # reads, so readiness must say it needs re-installing.
+    _rule_set(home / ".jmo" / "yara-rules", "an-older-pin")
+
+    status = ToolManager().check_tool("yara-x")
+
+    assert not status.execution_ready
+    assert "jmo tools install yara-x" in (status.execution_warning or "")
+
+
+@pytest.mark.parametrize(
+    ("home_has_rules", "image_has_rules", "reads"),
+    [
+        (True, True, "home"),
+        (False, True, "image"),
+        # Neither: the path `jmo tools install yara-x` fills, which the
+        # runner then names when it finds nothing there.
+        (False, False, "home"),
+    ],
+)
+def test_a_scan_reads_the_home_rules_else_the_images(
+    tmp_path: Path,
+    home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    home_has_rules: bool,
+    image_has_rules: bool,
+    reads: str,
+) -> None:
+    home_rules = home / ".jmo" / "yara-rules"
+    image = tmp_path / "opt" / "yara-rules"
+    if home_has_rules:
+        _rule_set(home_rules, YARA_RULES_BUNDLE["ref"])
+    if image_has_rules:
+        _rule_set(image, YARA_RULES_BUNDLE["ref"])
+    monkeypatch.setattr("scripts.core.paths.IMAGE_YARA_RULES_DIR", image)
+    ctx = ScanContext(
+        tool="yara-x",
+        target_type="repo",
+        target=tmp_path / "repo",
+        out_dir=tmp_path / "out",
+        binary=sys.executable,
+    )
+
+    (invocation,) = DESCRIPTORS["yara-x"].invocations["repo"](ctx)
+
+    command = list(invocation.command)
+    rules = Path(command[command.index("--rules") + 1])
+    assert rules == {"home": home_rules, "image": image}[reads]
+
+
+def test_the_image_path_is_where_the_dockerfile_puts_the_rules() -> None:
+    # docker-smoke's path filter does not include paths.py: a move on one side
+    # alone would ship an image whose rules nothing reads, and no PR check
+    # would build it.
+    from scripts.core.paths import IMAGE_YARA_RULES_DIR
+
+    dockerfile = (REPO / "Dockerfile").read_bytes().decode("utf-8")
+
+    assert IMAGE_YARA_RULES_DIR.as_posix() in dockerfile

@@ -20,9 +20,12 @@ import tarfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scripts.cli.installers.models import InstallResult
 from scripts.cli.tool_installer import ToolInstaller
 from scripts.cli.tool_manager import ToolStatus
+from scripts.core.install_config import YARA_RULES_BUNDLE
 
 DRL = "Detection Rule License 1.1 https://github.com/Neo23x0/signature-base/blob/master/LICENSE"
 CC_BY_NC = "https://creativecommons.org/licenses/by-nc/4.0/"
@@ -51,7 +54,10 @@ def _bundle(tmp_path: Path, files: dict[str, str]) -> tuple[Path, str]:
 def _install(
     tmp_path: Path, tarball: Path, sha256: str, reviewed: dict | None = None
 ) -> tuple[InstallResult, Path]:
-    rules_dir = tmp_path / "home" / ".jmo" / "yara-rules"
+    # The home, not the destination function, is redirected: where the fetch
+    # writes is part of what these tests check (Task Y4).
+    home = tmp_path / "home"
+    rules_dir = home / ".jmo" / "yara-rules"
     installer = ToolInstaller(manager=MagicMock())
     bundle = {
         "repo": "Neo23x0/signature-base",
@@ -69,7 +75,7 @@ def _install(
     with (
         patch.dict("scripts.cli.tool_installer.YARA_RULES_BUNDLE", bundle, clear=True),
         patch("scripts.cli.tool_installer.YARA_RULES_REVIEWED", reviewed or {}),
-        patch("scripts.cli.tool_installer.get_yara_rules_dir", return_value=rules_dir),
+        patch.object(Path, "home", staticmethod(lambda: home)),
         patch.object(installer, "_get_download_command", side_effect=copy),
     ):
         return installer._install_yara_rules(ENGINE), rules_dir
@@ -163,3 +169,65 @@ def test_force_fetches_the_rules_again(tmp_path: Path) -> None:
     _, fetch = _routed(tmp_path, pinned=True, force=True)
 
     fetch.assert_called_once()
+
+
+# Task Y4: the image carries pinned rules outside ~/.jmo (#1282), so in a
+# container what a scan reads and where an install writes are two paths.
+
+
+def _pinned(where: Path, ref: str) -> Path:
+    where.mkdir(parents=True)
+    (where / "a.yar").write_bytes(_rule("Image").encode("utf-8"))
+    (where / "manifest.json").write_bytes(json.dumps({"ref": ref}).encode())
+    return where
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {
+        p.relative_to(root).as_posix(): p.read_bytes()
+        for p in root.rglob("*")
+        if p.is_file()
+    }
+
+
+def test_an_unforced_install_takes_the_images_rules_as_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The wizard and `jmo scan`'s offer to install missing tools call
+    # install_tool without force; in the image a scan already reads the
+    # pinned rules, so there is nothing to fetch.
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    image = _pinned(tmp_path / "opt" / "yara-rules", YARA_RULES_BUNDLE["ref"])
+    monkeypatch.setattr("scripts.core.paths.IMAGE_YARA_RULES_DIR", image)
+    installer = ToolInstaller(manager=MagicMock())
+
+    with patch.object(
+        installer,
+        "_get_download_command",
+        side_effect=AssertionError("fetched rules the image already carries"),
+    ):
+        result = installer.install_tool("yara-x")
+
+    assert result.success, result.message
+    assert result.method == "existing"
+    assert not home.exists()
+
+
+def test_a_forced_install_writes_under_home_and_leaves_the_images_rules_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fallback a scan reads is not where an install writes. The image's
+    # tree is root's (the container user cannot replace it) and would not
+    # outlive a `--rm` container; the user's own install lands under ~/.jmo,
+    # the persistence mount, which is also the path that wins on read.
+    image = _pinned(tmp_path / "opt" / "yara-rules", "the-images-pin")
+    monkeypatch.setattr("scripts.core.paths.IMAGE_YARA_RULES_DIR", image)
+    before = _tree(image)
+    tarball, sha256 = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
+
+    result, rules_dir = _install(tmp_path, tarball, sha256)
+
+    assert result.success, result.message
+    assert json.loads((rules_dir / "manifest.json").read_bytes())["ref"] == "abc"
+    assert _tree(image) == before

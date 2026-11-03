@@ -1291,7 +1291,8 @@ class ToolManager:
         # library imports" is not the same question as "yara-x can detect
         # anything", and only the second one is worth reporting.
         #
-        # Checked against the bundle directory `jmo tools install yara-x` fills.
+        # Checked against the rules a scan reads by default (get_yara_rules_dir:
+        # what `jmo tools install yara-x` fills, else the Docker image's).
         # A user pointing per_tool.yara-x.rules_path at their own set is not
         # visible here, which is why this downgrades execution readiness rather
         # than claiming the tool is absent; the runner re-checks the configured

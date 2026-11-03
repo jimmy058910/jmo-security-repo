@@ -50,14 +50,9 @@ PULL_TIMEOUT = 600
 
 # Scanners the image carries but cannot run yet, each with the issue that fixes
 # it. test_docker_image_tools fails on any OTHER not-ready tool, and fails on a
-# listed one once it can run, so an entry cannot outlive its fix.
-KNOWN_NOT_READY = {
-    # The image carries yara-x (a dependency of JMo) but never fetches a rule
-    # bundle, so `tools check` reports yara-x installed and not
-    # execution_ready: a scan would report every file clean. v1's image was the
-    # same; its test asserted only `installed`. Phase 6's Y4 fetches the rules.
-    "yara-x": "no rules in the image, TODO(issue-#1282)",
-}
+# listed one once it can run, so an entry cannot outlive its fix. Empty since
+# Phase 6's Y4 put yara-x's rules in the image (#1282).
+KNOWN_NOT_READY: dict[str, str] = {}
 
 
 def _docker(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
@@ -970,6 +965,50 @@ class TestDockerNonRootExecution:
             f"/home/jmo/.jmo: {result.stderr.strip()}"
         )
         assert result.stdout.strip() == "jmo", result.stdout
+
+    def test_yara_x_is_ready_with_an_empty_dir_mounted_on_the_jmo_home(
+        self, tmp_path: Path
+    ):
+        """`~/.jmo` is the documented persistence mount, and a mount hides
+        whatever the image put beneath it: rules baked there would leave
+        yara-x installed and never ready, every scan reporting clean (#1282).
+        The image keeps its rules outside `~/.jmo`, so an empty mount must
+        leave yara-x `execution_ready`."""
+        image = f"{DOCKER_REGISTRY}:latest"
+
+        ensure_image(image)
+        v2_tool_registry(image, "yara-x's rules outside /home/jmo/.jmo")
+
+        jmo_home = tmp_path / "jmo-home"
+        jmo_home.mkdir()
+        # CI's runner is uid 1001 and the image's jmo user 1000: without this
+        # the container cannot read its own home.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(jmo_home), 0o777)
+
+        result = _docker(
+            "run",
+            "--rm",
+            "-v",
+            f"{jmo_home}:/home/jmo/.jmo",
+            image,
+            "tools",
+            "check",
+            "--json",
+            "yara-x",
+            timeout=300,
+        )
+
+        try:
+            status = json.loads(result.stdout)["tools"]["yara-x"]
+        except (json.JSONDecodeError, KeyError):
+            pytest.fail(
+                f"tools check --json yara-x printed no yara-x entry "
+                f"(rc={result.returncode}): stdout={result.stdout[:500]} "
+                f"stderr={result.stderr.strip()[:500]}"
+            )
+        assert status.get("installed") and status.get("execution_ready"), status
+        assert result.returncode == 0, result.stderr.strip()[:500]
 
     @skip_on_windows
     def test_run_with_uid_mapping(self, tmp_path: Path):

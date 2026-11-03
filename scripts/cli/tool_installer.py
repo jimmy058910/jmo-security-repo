@@ -65,6 +65,7 @@ from scripts.core.paths import (
     get_isolated_tool_path,
     get_isolated_venv_path,
     get_yara_rules_dir,
+    get_yara_rules_install_dir,
 )
 from scripts.core.secure_temp import remove_tree, secure_temp_dir
 from scripts.core.tool_registry import (
@@ -1850,7 +1851,8 @@ class ToolInstaller:
         precise failure mode this whole change exists to remove, so it must not
         be reintroduced at the install layer.
         """
-        rules_dir = get_yara_rules_dir()
+        # Not get_yara_rules_dir(): in the image that reads the image's tree.
+        rules_dir = get_yara_rules_install_dir()
         url = YARA_RULES_BUNDLE["url"]
 
         def failed(message: str) -> InstallResult:

@@ -261,7 +261,23 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -e "/opt/jmo-s
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify every scanner and the policy engine are installed and accessible
+# yara-x's rules (#1282): the engine ships no detection content, and with no
+# rules it reports every scan clean. Fetched by the command a user runs, `jmo
+# tools install yara-x` (pinned commit, sha256 checked before extraction,
+# non-DRL rules dropped, manifest written), under a scratch HOME, then moved
+# out of ~/.jmo: that is the documented persistence mount, and a volume there
+# hides whatever the image put beneath it. scripts/core/paths.py reads
+# /opt/jmo/yara-rules whenever ~/.jmo/yara-rules is absent. Root's and
+# world-readable: any --user can read the rules, and none can replace them.
+RUN HOME=/tmp/jmo-rules-home jmo tools install yara-x && \
+    mkdir -p /opt/jmo && \
+    mv /tmp/jmo-rules-home/.jmo/yara-rules /opt/jmo/yara-rules && \
+    rm -rf /tmp/jmo-rules-home && \
+    chmod -R a+rX /opt/jmo
+
+# Verify every scanner and the policy engine are installed and accessible.
+# yara-x is checked with an empty HOME, as under an empty ~/.jmo mount, so it
+# can only be ready by reading the image's rules.
 RUN echo "=== Verifying tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
@@ -276,6 +292,9 @@ RUN echo "=== Verifying tools ===" && \
     zap -version && \
     nuclei -version && \
     python3 -c "import yara_x" && \
+    mkdir /tmp/jmo-empty-home && \
+    HOME=/tmp/jmo-empty-home jmo tools check yara-x && \
+    rm -rf /tmp/jmo-empty-home && \
     shellcheck --version && \
     shfmt --version && \
     opa version && \
