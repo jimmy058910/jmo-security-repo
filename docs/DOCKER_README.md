@@ -593,6 +593,15 @@ run. This is separate from the Trivy database above and from `~/.jmo/history.db`
 below; a volume mounted at one of those paths does not cover this one, and
 vice versa -- each needs its own `-v` if you want it to persist.
 
+### YARA-X's Rules
+
+Unlike osv-scanner's databases, YARA-X's rules **are** in the image, in
+`/opt/jmo/yara-rules`: outside `~/.jmo`, so the `jmo-home` volume above does
+not hide them, and `tools update` leaves them alone. `tools install yara-x` run
+against that volume puts a copy in `/home/jmo/.jmo/yara-rules`, which is then
+read instead of the image's, until you delete it from the volume
+([Known limitations](KNOWN_LIMITATIONS.md#in-docker-a-jmo-volume-holding-older-yara-x-rules-overrides-the-images)).
+
 ### Suppression File
 
 Create `jmo.suppress.yml` to ignore false positives:

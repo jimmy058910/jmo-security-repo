@@ -199,13 +199,13 @@ choco install shellcheck -y
 
 #### Malware Detection
 
-**YARA** (Malware pattern matching):
+**YARA-X** (Malware pattern matching):
 
 ```bash
 jmo tools install yara-x
 ```
 
-The engine, `yara-x`, is a dependency of JMo and arrives with it. It carries no rules, and YARA with no rules matches nothing, so `jmo tools install yara-x` downloads JMo's pinned rule bundle (signature-base, only its rules under the Detection Rule License) into `~/.jmo/yara-rules/`. To use your own rules instead, point `per_tool.yara-x.rules_path` in `jmo.yml` at a rule set.
+The engine, `yara-x`, is a dependency of JMo and arrives with it. It carries no rules, and with no rules it matches nothing, so `jmo tools install yara-x` downloads JMo's pinned rule bundle (signature-base, only its rules under the Detection Rule License) into `~/.jmo/yara-rules/`. The Docker image carries its own copy, in `/opt/jmo/yara-rules/`. To use your own rules instead, point `per_tool.yara-x.rules_path` in `jmo.yml` at a rule set.
 
 #### DAST (Dynamic Analysis)
 
@@ -271,7 +271,7 @@ java -version
 | Checkov | ✅ | ✅ | ✅ | ✅ |
 | Hadolint | ✅ | ✅ | ✅ | ✅ |
 | ShellCheck | ✅ | ✅ | ✅ | ✅ |
-| YARA | ✅ | ✅ | ✅ | ✅ |
+| YARA-X | ✅ | ✅ | ✅ | ✅ |
 | Nuclei | ✅ | ✅ | ✅ | ✅ |
 | OWASP ZAP | ✅ | ✅ | ✅ | ✅ |
 

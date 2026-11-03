@@ -141,8 +141,8 @@ are write-once, so the risk is low — but it is untested, not proven.
 ### Secret scanning skips `.git/`, `.jmo/` and vendored trees
 
 TruffleHog and Gitleaks read the working tree with `.git/` and `.jmo/` excluded,
-and the vendored trees every source reader skips: `node_modules/`, `vendor/`,
-`.venv/` and `venv/`, at any depth. They also skip the results directory when it
+and the vendored trees every source reader but YARA-X skips: `node_modules/`,
+`vendor/`, `.venv/` and `venv/`, at any depth. They also skip the results directory when it
 sits inside the scanned tree. A key committed inside a vendored package is
 therefore not reported. This was measured on a real Next.js application: 253
 TruffleHog findings before, 222 of them in `node_modules`, and a run of 281 s; 31
@@ -303,6 +303,60 @@ For a gitignored target, add `--no-git-ignore` to `per_tool.opengrep.flags`. Mea
 scan above went from 0 files to 1, and the row from `failed` to `ran`. The flag reads
 gitignored files for every repository that config scans, so set it for the one scan that
 needs it.
+
+### YARA-X runs only the rules JMo may redistribute
+
+signature-base is under the Detection Rule License 1.1, but not all of it: some
+files open with a header naming another license, and some rules carry a
+`license` line of their own. JMo installs only the DRL rules, decided when the
+bundle is fetched. At the current pin, 209 rules in 35 files are left out: files
+whose header names Apache-2.0, CC BY-NC 4.0, BSD-2-Clause, MIT, GPL or a vendor's
+own terms, and rules whose `license` line names one of those.
+`manifest.json` in the rules directory lists every left-out rule with its file
+and the reason. A new pin that brings a file whose header mentions a license
+nobody has reviewed fails the fetch, naming the file, rather than installing it.
+
+**What to do:** to run rules JMo leaves out, where their license allows your
+use, put them in a directory of your own beside the bundle's and point
+`per_tool.yara-x.rules_path` at it.
+
+### YARA-X knows a file's type only for executables, ELF, RTF and minidumps
+
+signature-base is written for LOKI, which sets a `filetype` variable from a
+table of file signatures. JMo sets it from the table's four binary entries (EXE,
+ELF, RTF and MDMP), read from a file's first bytes. The text entries (PHP, JSP,
+ASP, VBS and batch) are not read, so a rule that needs one of them does not
+fire: a `.jpg` that is really a PHP script is not reported as disguised. LOKI's
+other variables, `filename`, `filepath`, `extension` and `owner`, are set for
+every file; `owner` is empty on Windows.
+
+**What to do:** read a clean YARA-X result as saying nothing about scripts
+renamed to look like images.
+
+### YARA-X does not follow symlinks
+
+A symlinked file is counted and not scanned, and a symlinked directory is not
+entered. The run's summary says how many links it did not follow. A Python
+virtual environment's interpreter is one (`.venv/bin/python` points at the
+system's), and `node_modules/.bin` holds links into the packages: measured, 33
+in one application's `node_modules` and 3 in a Linux `.venv`. A file that is
+reachable only through a link is not read.
+
+**What to do:** when a link points outside the tree, scan its target directly.
+
+### In Docker, a `~/.jmo` volume holding older YARA-X rules overrides the image's
+
+The image keeps its rules in `/opt/jmo/yara-rules`, outside `~/.jmo`, so a
+volume mounted on `~/.jmo` does not hide them. But `~/.jmo/yara-rules` is
+where `jmo tools install yara-x` puts the rules a user installs, and when it
+exists it is read instead. A volume that kept rules installed under an earlier
+image, or v1's ReversingLabs bundle, therefore wins over a newer image's. When
+they are not at the pin the image expects, `jmo tools check` reports YARA-X not
+ready and says to re-install: it does not quietly fall back to the image's
+rules, which would hide that the volume's copy is stale.
+
+**What to do:** run `jmo tools install yara-x` in a container with the volume
+mounted, or delete `yara-rules` from the volume to use the image's rules.
 
 ### zizmor runs offline, so its online audits never run
 

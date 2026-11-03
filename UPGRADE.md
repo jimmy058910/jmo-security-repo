@@ -4,7 +4,7 @@ Migration guide for users upgrading JMo Security. [Upgrading to v2.0.0](#upgradi
 
 ## Upgrading to v2.0.0
 
-v2.0.0 removes scan profiles, 17 tools and all but one Docker image, and replaces Semgrep with opengrep. There are no aliases and no deprecation period: a removed flag or subcommand now fails with an argument error (exit code 2).
+v2.0.0 removes scan profiles, 17 tools and all but one Docker image, replaces Semgrep with opengrep, and replaces yara with YARA-X. There are no aliases and no deprecation period: a removed flag or subcommand now fails with an argument error (exit code 2).
 
 ### Scan profiles are removed
 
@@ -88,6 +88,31 @@ opengrep, a fork of Semgrep's engine, is the code scanner. It is a single static
 - **The rules are the bundle's.** It holds security rules only, one file per language, and a scan loads the files of the languages the repository has. Do not expect the same findings as `--config auto`: read an empty result on JavaScript or TypeScript as the bundle's coverage, not as current coverage ([Known limitations](docs/KNOWN_LIMITATIONS.md#most-of-the-rule-bundle-is-a-frozen-snapshot-javascript-and-typescript-included)). A repository with no file in a language the bundle covers, and none that only `generic.yaml`'s rules read (an nginx config, Bicep, Handlebars), is `skipped:no files in a language the rule bundle reads`; one that has such a file runs with `generic.yaml`. If you scan incrementally with `--baseline-commit` in `per_tool.opengrep.flags`, a commit that changes no file opengrep reads (it only deletes files, or touches only `tests/` or `*.min.js`) is `skipped:no changed file opengrep reads since the baseline commit`, and the scan still exits 0 ([docs/SCAN_OPTIMIZATION.md](docs/SCAN_OPTIMIZATION.md)).
 - **The results directory holds matched source text.** opengrep's debug log lands in `<results-dir>/individual-*/<target>/.opengrep/semgrep.log` and records the source text of each match. Treat the results directory like the code it scanned, for example before uploading it as a CI artifact ([docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md#the-results-directory-structure)).
 - **Installing.** `jmo tools install opengrep` downloads the pinned release binary into `~/.jmo/bin/`. The semgrep virtual environment is not removed for you; `jmo tools clean --force` removes the isolated venvs, and checkov's is recreated by `jmo tools install checkov`.
+
+### yara is replaced by yara-x
+
+YARA-X is the malware-pattern scanner. Its engine is the `yara-x` Python package, a dependency of JMo, so it arrives with `pip install jmo-security`; yara-python is no longer used. Its rules are signature-base's, pinned and fetched by `jmo tools install yara-x`, in place of ReversingLabs' bundle, which matched nothing on nine test targets ([docs/TOOLS.md](docs/TOOLS.md#yara-x)).
+
+- **The tool's name changed.** `--tools yara`, `--skip-tools yara`, a `yara` entry in `tools:` and `jmo tools install yara` fail with exit code 2, saying yara was removed in v2.0.0 and naming yara-x. Use `yara-x`. The raw output is `yara-x.json`, where it was `yara.json`.
+- **`per_tool.yara` becomes `per_tool.yara-x`.** A `jmo.yml` that still carries `per_tool.yara` loads, logs one warning saying to move it to `per_tool.yara-x`, and ignores the entry: your own `rules_path` stops applying until you move it.
+
+  ```yaml
+  # v1.x
+  per_tool:
+    yara:
+      rules_path: ./rules/yara
+
+  # v2.0.0
+  per_tool:
+    yara-x:
+      rules_path: ./rules/yara
+  ```
+
+- **Every YARA finding id changes, once.** A finding's id hashes the tool's name, so the same match has a new id under yara-x. A suppression in `jmo.suppress.yml` that names a finding by its id stops matching, and `jmo diff` against a scan stored before the upgrade reports the old findings as fixed and the same matches as new. Suppress by rule or path instead of by id where you can.
+- **Install the new rules.** The rules v1 put in `~/.jmo/yara-rules` are not the pinned bundle, so `jmo tools check` reports yara-x not ready until `jmo tools install yara-x` (or `jmo tools install` with no names) replaces them. yara-python is not uninstalled for you, and nothing uses it.
+- **Vendored trees are read.** YARA-X reads `node_modules`, `vendor`, `.venv` and `venv`, which v1's yara skipped, because a compromised npm package can be found nowhere else. Findings can now come from dependencies, and a large `node_modules` adds to a scan: 27 s for one of 24,942 files, measured on Linux.
+- **Each finding names its rule's author**, and the rule's reference when it has one: the rules' Detection Rule License requires it of every match.
+- **Docker.** The image now carries the rules, in `/opt/jmo/yara-rules`, so YARA-X runs in a container; v1's image carried none, so yara could match nothing there. A `~/.jmo` volume that holds rules of its own overrides the image's ([Known limitations](docs/KNOWN_LIMITATIONS.md#in-docker-a-jmo-volume-holding-older-yara-x-rules-overrides-the-images)).
 
 ### Removed tools
 

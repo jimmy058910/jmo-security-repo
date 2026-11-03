@@ -87,7 +87,8 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 # against it were both false: 42 MB is GitHub's size of the repository with its
 # history (the tarball is 1.9 MB), and NOASSERTION is GitHub not recognising
 # the Detection Rule License 1.1 it is under. Nothing is vendored: the rules are
-# fetched at install time into ~/.jmo/yara-rules/.
+# fetched at install time into ~/.jmo/yara-rules/, and by the Docker image's
+# build into /opt/jmo/yara-rules/ (scripts/core/paths.py).
 #
 # DRL 1.1 binds whoever shares the rules to keep each rule's author, and every
 # message from a match to name it. Not every rule is DRL:

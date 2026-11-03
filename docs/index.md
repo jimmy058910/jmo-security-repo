@@ -157,7 +157,7 @@ JMo Security orchestrates these security scanners:
 | DAST | OWASP ZAP, Nuclei |
 | Dockerfile | Hadolint |
 | Shell scripts | ShellCheck |
-| Malware | YARA |
+| Malware | YARA-X |
 
 OPA is the policy engine for [policy-as-code](POLICY_AS_CODE.md), installed with the scanners but not one of them.
 
