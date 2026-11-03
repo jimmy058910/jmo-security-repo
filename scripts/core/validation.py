@@ -525,21 +525,36 @@ def validate_schedule_name(name: str) -> bool:
 # Container Image Validation
 # =============================================================================
 
-# Pattern for valid container image references
-# Format: [registry/][repository/]name[:tag][@digest]
-IMAGE_NAME_PATTERN = re.compile(
-    r"^"
-    r"([a-zA-Z0-9][a-zA-Z0-9\-_.]*[a-zA-Z0-9]/)*"  # Optional registry/repo
-    r"[a-zA-Z0-9][a-zA-Z0-9\-_.]*[a-zA-Z0-9]?"  # Image name
-    r"(:[a-zA-Z0-9][a-zA-Z0-9\-_.]{0,127})?"  # Optional tag
-    r"(@sha256:[a-fA-F0-9]{64})?$"  # Optional digest
+# Docker's grammar for an image reference (distribution's `reference`
+# package): what a `docker pull`, a `FROM` or an `image:` must be for Docker to
+# accept it. `[registry[:port]/]repository[:tag][@digest]`. JMo's rule for the
+# first component (#1405): a registry only when it holds `.` or `:` or is
+# exactly `localhost`; anything else is a repository path, which is lower case.
+# Match it whole, with `fullmatch`.
+_PATH_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+_DOMAIN_COMPONENT = r"(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])"
+_REGISTRY = (
+    r"(?:localhost(?::[0-9]+)?"
+    rf"|{_DOMAIN_COMPONENT}(?:\.{_DOMAIN_COMPONENT})+(?::[0-9]+)?"
+    rf"|{_DOMAIN_COMPONENT}:[0-9]+)/"
+)
+IMAGE_REFERENCE_PATTERN = re.compile(
+    rf"(?:{_REGISTRY})?{_PATH_COMPONENT}(?:/{_PATH_COMPONENT})*"
+    r"(?::\w[\w.-]{0,127})?"
+    r"(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?",
+    re.ASCII,
 )
 
 
-# TODO(issue-#1405): a registry with a port (`host:5000/app`) is refused.
 def validate_container_image(image: str) -> bool:
     """
     Validate container image reference format.
+
+    The repository path must be lower case, as Docker requires, so `MyApp:1`
+    and `ghcr.io/Org/app` are refused: by `--image`, `--images-file` and
+    scheduled scans alike. So is `Org/app`, by JMo's rule (#1405) that a first
+    component is a registry only when it holds `.` or `:` or is `localhost`;
+    Docker would read `Org` as a registry host.
 
     Args:
         image: Container image reference to validate
@@ -551,6 +566,8 @@ def validate_container_image(image: str) -> bool:
         >>> validate_container_image("nginx:latest")
         True
         >>> validate_container_image("ghcr.io/owner/repo:v1.2.3")
+        True
+        >>> validate_container_image("registry.example.com:5000/team/app:1.2")
         True
         >>> validate_container_image("; rm -rf /")
         False
@@ -594,7 +611,7 @@ def image_reference_problem(image: str) -> str | None:
         return f"Image reference too long: '{image}' ({len(image)} chars)"
 
     # Basic format validation
-    if not IMAGE_NAME_PATTERN.match(image):
+    if not IMAGE_REFERENCE_PATTERN.fullmatch(image):
         return f"Invalid container image format: '{image}'"
 
     return None

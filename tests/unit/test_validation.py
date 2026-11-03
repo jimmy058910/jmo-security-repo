@@ -350,6 +350,55 @@ class TestContainerImageValidation:
         """Invalid or malicious image references should fail."""
         assert validate_container_image(image) is False
 
+    @pytest.mark.parametrize(
+        "image",
+        [
+            pytest.param("nginx:1.27", id="docker-hub"),
+            pytest.param("ghcr.io/org/app:1.0", id="registry-and-path"),
+            pytest.param(
+                "registry.example.com:5000/team/app:1.2", id="registry-with-a-port"
+            ),
+            pytest.param("localhost:5000/app", id="localhost-with-a-port"),
+            pytest.param("localhost/app", id="localhost-without-one"),
+            pytest.param("127.0.0.1:5000/app:1", id="ip-address-with-a-port"),
+            pytest.param("host:5000/app@sha256:" + "a" * 64, id="digest-after-a-port"),
+            pytest.param("host:5000/app:1@sha256:" + "A" * 64, id="tag-and-digest"),
+            pytest.param("ubuntu@sha512:" + "0" * 128, id="any-digest-algorithm"),
+            pytest.param("ghcr.io/o/a:1", id="one-character-path-components"),
+            pytest.param("a/b", id="one-character-names-on-hub"),
+            pytest.param("Registry.Example.COM/team/app", id="upper-case-registry"),
+        ],
+    )
+    def test_a_reference_docker_pulls_is_valid(self, image):
+        """#1405: a registry with a port is a registry, so an image on a
+        private registry is a target, not a refusal before any tool runs."""
+        assert validate_container_image(image) is True
+
+    @pytest.mark.parametrize(
+        "image",
+        [
+            pytest.param("registry.example.com/App:1", id="upper-case-path"),
+            pytest.param("Nginx", id="upper-case-name"),
+            pytest.param("Org/app", id="upper-case-first-component-is-no-registry"),
+            pytest.param("ghcr.io/Org/app:1", id="upper-case-org"),
+            pytest.param("host:5000/App", id="upper-case-path-after-a-port"),
+            pytest.param("nginx;id", id="shell-metacharacter"),
+            pytest.param("", id="empty-name"),
+            pytest.param("ghcr.io/../app:1", id="dot-dot-component"),
+            pytest.param("host:port/app", id="port-is-not-digits"),
+            pytest.param("ghcr.io//app", id="empty-component"),
+            pytest.param("nginx:", id="empty-tag"),
+            pytest.param("ubuntu@sha256:abc", id="digest-too-short"),
+            pytest.param("nginx\n", id="trailing-newline"),
+        ],
+    )
+    def test_a_malformed_or_upper_case_reference_is_invalid(self, image):
+        """JMo's rule (#1405): only a first component holding `.` or `:`, or
+        `localhost`, is a registry, and the repository path is lower case. So
+        `Org/app` is refused as an upper-case path, where Docker would read
+        `Org` as a registry host; the other rows are refused by Docker too."""
+        assert validate_container_image(image) is False
+
 
 class TestIntegerValidation:
     """Test integer range validation."""
