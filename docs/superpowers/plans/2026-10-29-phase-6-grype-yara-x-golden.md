@@ -904,8 +904,11 @@ the pack is built in)
 
 ## Task Y1: The rules: signature-base, DRL only, five externals (P5)
 
-**Files:** `scripts/core/install_config.py:75-109` (`YARA_RULES_BUNDLE` → signature-base;
-its comment's two false reasons go), `scripts/cli/tool_installer.py:1816-1903` (the fetch),
+Line numbers in Y1-Y4 re-measured 2026-11-03 at `b69b93bc`; signature-base `master` is still
+`36ab7042`.
+
+**Files:** `scripts/core/install_config.py:74-107` (`YARA_RULES_BUNDLE` → signature-base;
+its comment's two false reasons go), `scripts/cli/tool_installer.py:1813-1914` (the fetch),
 `scripts/core/yara_rules.py` (new: filter + manifest), `tests/unit/test_yara_rules.py`
 
 - [ ] **Step 1:** Pin signature-base by commit and tarball sha256 (verify before
@@ -923,13 +926,26 @@ its comment's two false reasons go), `scripts/cli/tool_installer.py:1816-1903` (
 The install path is the PyPI wheel as a runtime dependency of jmo-security (J2).
 
 **Files:** `pyproject.toml` (`yara-x==<pin>` in `dependencies`), `uv.lock` (`make
-deps-lock`), `versions.yaml:142-162` (the `yara` row leaves `python_tools`),
-`scripts/cli/installers/pip_installer.py`, `scripts/core/tool_utils.py`,
-`Dockerfile:170, 213, 286` (apt `yara` and `yara-python` both go)
+deps-lock`), `versions.yaml:136-158` (the `yara` row leaves `python_tools`) and `:207` (its
+name in `update_policies`, which no code reads), `scripts/cli/installers/pip_installer.py`,
+`scripts/core/tool_utils.py:183` (`find_spec("yara")` → `yara_x`),
+`scripts/cli/tool_installer.py:403, 1760-1775` (below), `Dockerfile:170, 209-210, 282` (apt
+`yara`, `yara-python` and the build's `yara --version` check all go; `--sync` cannot see
+them, #1563)
 
-- [ ] **Step 1:** Pin the newest yara-x release at least seven days old when PR Y is cut
-  (1.22.0, released 2026-10-20, qualifies now; 1.22.1 from 2026-11-02 08:53 EST). `uv` must
-  be 0.13.1 before the relock.
+**Decided 2026-11-03 (Jimmy): what fetches the rules on the host.** With no `versions.yaml`
+row, `jmo tools install yara-x` answers `Unknown tool` at the registry lookup
+(`tool_installer.py:424`), and `_post_install`, which fetches the rules only for
+`tool_name == "yara"` (`:1771`), never runs: #1282 on the host. So `yara-x` returns before
+that lookup, as `BUILTIN_TOOLS` does (`:403`), and then runs Y1's fetch. The engine's pin
+lives in `uv.lock` and the rules' in `install_config.py`, one place each. Rejected: a
+`yara-x` row in `versions.yaml` (a second pin of the engine to drift from `pyproject.toml`)
+and rules inside the wheel (rule text in site-packages, where Defender can quarantine it, and
+rules that move only with a release).
+
+- [ ] **Step 1:** Pin the newest yara-x release at least seven days old when PR Y is cut:
+  **1.22.1** (PyPI 2026-10-26 08:41 EDT; this line said 2026-11-02, measured false on 11-03).
+  `uv` must be 0.13.1 before the relock.
 - [ ] **Step 2: Failing test** `test_yara_x_is_importable_where_jmo_is`: the version probe
   reads `yara_x` and matches the lock.
 - [ ] **Step 3:** Commit `feat!: yara-x is a dependency of JMo, not an installed tool`.
@@ -937,8 +953,8 @@ deps-lock`), `versions.yaml:142-162` (the `yara` row leaves `python_tools`),
 ## Task Y3: The runner reads vendored trees, one rule file, and names the author (P5)
 
 **Files:** `scripts/core/yara_runner.py` (rewritten on `yara_x`), `scripts/core/adapters/yara_adapter.py`
-(→ `yara_x_adapter.py`), `scripts/core/tool_descriptors.py` (`_yara_repo` `:1335`, the row
-`:1985-1998`, `REMOVED_TOOLS`), `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py`
+(→ `yara_x_adapter.py`), `scripts/core/tool_descriptors.py` (`_yara_repo` `:1536`, the row
+`:2190-2205`, `REMOVED_TOOLS` `:2300`), `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py`
 
 - [ ] **Step 1: Failing tests:**
   - `test_vendored_trees_are_read`: the canary in `src/` and in `node_modules/x/` → 2 matches; one in `.git/` → none; one in the results directory passed as `--exclude-dir` → none.
