@@ -164,7 +164,7 @@ Platform differences:
 - **Opengrep unpacks about 255 MB on its first run**, outside `~/.jmo` (measured on Linux, 1.32.0: into `$XDG_CACHE_HOME/opengrep`, which is `~/.cache/opengrep` by default).
 - **zizmor has no Windows arm64 build.** On Windows, `jmo tools install` fetches the x86_64 one whatever the architecture, as it does for Hadolint and ShellCheck.
 - **ZAP needs Java 17 or newer** at runtime, which `jmo tools install` does not provide. Install it yourself (`winget install Microsoft.OpenJDK.17`, `sudo apt-get install default-jre-headless`, or `brew install openjdk@17`); `jmo wizard` offers to do it for you.
-- **YARA without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara.rules_path` in `jmo.yml`.
+- **YARA without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara-x.rules_path` in `jmo.yml`.
 
 Every tool installs natively on Windows, Linux and macOS. For installing a tool by hand, see [MANUAL_INSTALLATION.md](MANUAL_INSTALLATION.md).
 

@@ -522,7 +522,7 @@ class TestToolVersionChecks:
 
     @patch("scripts.core.validators.release_validator._read_text")
     def test_matrix_versions_need_no_pin_for_a_dependency_tool(self, mock_read):
-        """yara's engine is a dependency of JMo, pinned in pyproject.toml: a
+        """yara-x's engine is a dependency of JMo, pinned in pyproject.toml: a
         versions.yaml row would pin it twice, so its absence is not a gap."""
         from scripts.core.tool_registry import (
             BUILTIN_TOOLS,

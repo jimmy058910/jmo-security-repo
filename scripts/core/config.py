@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from typing import Any as AnyType
 
-from scripts.core.tool_descriptors import REMOVED_TOOLS
+from scripts.core.tool_descriptors import REMOVED_TOOLS, REPLACED_BY
 from scripts.core.tool_registry import TOOL_MATRIX
 
 logger = logging.getLogger(__name__)
@@ -319,14 +319,21 @@ def _warn_v1_semgrep_entry(path: Path, per_tool: dict) -> None:
 
 def _warn_removed_tool_entries(path: Path, per_tool: dict) -> None:
     """Name ``per_tool`` entries for tools v2.0.0 removed, which configure
-    nothing since no scan runs them. One warning per file. semgrep is left to
-    ``_warn_v1_semgrep_entry``, which also says where its settings go."""
+    nothing since no scan runs them. One warning per file. One with a successor
+    is told where its settings go; semgrep is left to
+    ``_warn_v1_semgrep_entry``, which says so key by key."""
     removed = [k for k in per_tool if k in REMOVED_TOOLS and k != "semgrep"]
     if not removed or not _first_warning("removed-tools", path):
         return
     names = ", ".join(f"per_tool.{k}" for k in removed)
+    moves = "".join(
+        f". Move per_tool.{k} to per_tool.{REPLACED_BY[k]}"
+        for k in removed
+        if k in REPLACED_BY
+    )
     logger.warning(
-        f"{path} has {names}, which is ignored: removed in v2.0.0 (see docs/TOOLS.md)"
+        f"{path} has {names}, which is ignored: removed in v2.0.0 "
+        f"(see docs/TOOLS.md){moves}"
     )
 
 

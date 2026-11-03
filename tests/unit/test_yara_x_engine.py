@@ -40,7 +40,7 @@ def _rules(tmp_path: Path, ref: str | None) -> Path:
 
 
 def test_yara_x_is_importable_where_jmo_is() -> None:
-    probe = DESCRIPTORS["yara"].version_probe
+    probe = DESCRIPTORS["yara-x"].version_probe
     assert probe is not None and isinstance(probe.command, list)
 
     out = subprocess.run(
@@ -54,25 +54,25 @@ def test_yara_x_is_importable_where_jmo_is() -> None:
 
 def test_the_engine_has_no_versions_yaml_row() -> None:
     # A row would be a second pin of the engine, beside pyproject.toml's.
-    assert ToolRegistry().get_tool("yara") is None
+    assert ToolRegistry().get_tool("yara-x") is None
 
 
-def test_rules_at_another_pin_leave_yara_not_ready(tmp_path: Path) -> None:
+def test_rules_at_another_pin_leave_yara_x_not_ready(tmp_path: Path) -> None:
     # An install from before the pin moved, or v1's ReversingLabs tree.
     rules_dir = _rules(tmp_path, ref="an-older-pin")
     with patch("scripts.core.paths.get_yara_rules_dir", return_value=rules_dir):
-        status = ToolManager().check_tool("yara")
+        status = ToolManager().check_tool("yara-x")
 
     assert status.installed
     assert not status.execution_ready
     assert status.missing_deps == ["yara-rules"]
-    assert "jmo tools install yara" in (status.execution_warning or "")
+    assert "jmo tools install yara-x" in (status.execution_warning or "")
 
 
-def test_the_pinned_rules_make_yara_ready(tmp_path: Path) -> None:
+def test_the_pinned_rules_make_yara_x_ready(tmp_path: Path) -> None:
     rules_dir = _rules(tmp_path, ref=YARA_RULES_BUNDLE["ref"])
     with patch("scripts.core.paths.get_yara_rules_dir", return_value=rules_dir):
-        status = ToolManager().check_tool("yara")
+        status = ToolManager().check_tool("yara-x")
 
     assert status.installed
     assert status.execution_ready
@@ -80,12 +80,12 @@ def test_the_pinned_rules_make_yara_ready(tmp_path: Path) -> None:
 
 def test_a_default_install_picks_up_missing_rules(tmp_path: Path) -> None:
     # `jmo tools install` with no names installs what get_missing_tools lists;
-    # the engine is always present, so the rules have to put yara on it.
+    # the engine is always present, so the rules have to put yara-x on it.
     rules_dir = _rules(tmp_path, ref=None)
     with patch("scripts.core.paths.get_yara_rules_dir", return_value=rules_dir):
-        missing = ToolManager().get_missing_tools(["yara"])
+        missing = ToolManager().get_missing_tools(["yara-x"])
 
-    assert [s.name for s in missing] == ["yara"]
+    assert [s.name for s in missing] == ["yara-x"]
 
 
 def test_every_dependency_tool_is_a_declared_dependency() -> None:
@@ -95,13 +95,13 @@ def test_every_dependency_tool_is_a_declared_dependency() -> None:
         for dep in pyproject["project"]["dependencies"]
     }
 
-    assert DEPENDENCY_TOOLS == {"yara": "yara-x"}
+    assert DEPENDENCY_TOOLS == {"yara-x": "yara-x"}
     assert set(DEPENDENCY_TOOLS.values()) <= declared
 
 
 def test_an_attestation_records_the_engine_version() -> None:
     # With no versions.yaml row, the registry would record "unknown".
-    (dep,) = ProvenanceGenerator()._get_tool_versions(["yara"])
+    (dep,) = ProvenanceGenerator()._get_tool_versions(["yara-x"])
 
     assert dep["annotations"]["version"] == _locked_version("yara-x")
     assert dep["uri"] == "https://pypi.org/project/yara-x/"

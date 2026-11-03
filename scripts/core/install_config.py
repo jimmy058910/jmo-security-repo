@@ -75,7 +75,7 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 # ============================================================================
 # YARA RULE BUNDLE
 # ============================================================================
-# yara is the one scanner whose package carries no detection content: the
+# yara-x is the one scanner whose package carries no detection content: the
 # engine holds no rules. Without rules it examines every file and matches
 # nothing, which is byte-for-byte the same result as a clean repository - so
 # the rules are part of the install, not an optional extra.

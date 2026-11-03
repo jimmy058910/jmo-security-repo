@@ -202,10 +202,10 @@ choco install shellcheck -y
 **YARA** (Malware pattern matching):
 
 ```bash
-jmo tools install yara
+jmo tools install yara-x
 ```
 
-The engine, `yara-x`, is a dependency of JMo and arrives with it. It carries no rules, and YARA with no rules matches nothing, so `jmo tools install yara` downloads JMo's pinned rule bundle (signature-base, only its rules under the Detection Rule License) into `~/.jmo/yara-rules/`. To use your own rules instead, point `per_tool.yara.rules_path` in `jmo.yml` at a rule set.
+The engine, `yara-x`, is a dependency of JMo and arrives with it. It carries no rules, and YARA with no rules matches nothing, so `jmo tools install yara-x` downloads JMo's pinned rule bundle (signature-base, only its rules under the Detection Rule License) into `~/.jmo/yara-rules/`. To use your own rules instead, point `per_tool.yara-x.rules_path` in `jmo.yml` at a rule set.
 
 #### DAST (Dynamic Analysis)
 

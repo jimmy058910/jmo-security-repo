@@ -968,7 +968,7 @@ class TestToolExistsConsistencyHasTeeth:
         assert known == declared | binaries, f"registry lookup looks wrong: {known}"
         # A built-in (jmo-native) has no versions.yaml entry: it ships inside
         # JMo and `find_tool` answers for it with this interpreter. Nor does a
-        # dependency tool (yara): its engine is a library, with no binary to find.
+        # dependency tool (yara-x): its engine is a library, with no binary to find.
         exempt = BUILTIN_TOOLS | set(DEPENDENCY_TOOLS)
         assert {*TOOL_MATRIX, POLICY_ENGINE} - exempt <= known
         for tool in ("trivy", "opengrep", "trufflehog", "syft"):

@@ -1185,7 +1185,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
       trivy's and Gitleaks' `--exit-code`, TruffleHog's `--fail`,
       Checkov's `--soft-fail` and hadolint's `--no-fail` (both exit 0 whatever they find).
       JMo's own `--fail-on` (`jmo ci`, `jmo report`) sets the failure threshold
-    - Where JMo's own runners scan: yara's and jmo-native's `--target`
+    - Where JMo's own runners scan: yara-x's and jmo-native's `--target`
     - A download during the scan, which a scan never makes: OSV-Scanner's
       `--download-offline-databases` (`jmo tools update` fetches its databases)
   - A flag another tool spells the same way is left alone: opengrep's `-f` is `--config`, and

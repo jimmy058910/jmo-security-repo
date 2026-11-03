@@ -27,7 +27,7 @@ from scripts.cli.tool_manager import ToolStatus
 DRL = "Detection Rule License 1.1 https://github.com/Neo23x0/signature-base/blob/master/LICENSE"
 CC_BY_NC = "https://creativecommons.org/licenses/by-nc/4.0/"
 ENGINE = InstallResult(
-    tool_name="yara", success=True, method="pip", version_installed="4.5.4"
+    tool_name="yara-x", success=True, method="dependency", version_installed="1.22.1"
 )
 
 
@@ -129,17 +129,19 @@ def test_an_unreviewed_rule_file_fails_and_keeps_the_installed_rules(
 def _routed(tmp_path: Path, *, pinned: bool, force: bool = False) -> tuple:
     installer = ToolInstaller(manager=MagicMock())
     # Never "already installed" by the manager: only the pinned rules may skip.
-    installer.manager.check_tool.return_value = ToolStatus(name="yara", installed=False)
-    fetched = InstallResult(tool_name="yara", success=True, method="dependency")
+    installer.manager.check_tool.return_value = ToolStatus(
+        name="yara-x", installed=False
+    )
+    fetched = InstallResult(tool_name="yara-x", success=True, method="dependency")
     with (
         patch("scripts.cli.tool_installer.pinned_rules_installed", return_value=pinned),
         patch.object(installer, "_install_yara_rules", return_value=fetched) as fetch,
     ):
-        result = installer.install_tool("yara", force=force)
+        result = installer.install_tool("yara-x", force=force)
     return result, fetch
 
 
-def test_yara_installs_its_rules_with_no_versions_yaml_row(tmp_path: Path) -> None:
+def test_yara_x_installs_its_rules_with_no_versions_yaml_row(tmp_path: Path) -> None:
     result, fetch = _routed(tmp_path, pinned=False)
 
     assert result.success, result.message

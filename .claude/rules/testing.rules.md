@@ -255,9 +255,9 @@ Two consequences worth carrying:
   **The transferable part: a bullet saying "this is correct, do not fix it" ages
   worse than one recording a measurement.** Prefer stating what was measured and
   when; let the reader draw the conclusion.
-- **`yara-python` is collateral.** The 7 yara skips are a real cost: a security
-  tool's Python module gets removed from the venv by a dependency sync.
-  Reinstall with `jmo tools install yara` when those tests matter.
+- **`yara-python` was collateral** until v2.0.0 Phase 6 replaced it with
+  yara-x, a dependency in `uv.lock`: a sync keeps it, and
+  `tests/unit/test_yara_runner.py` skips nothing.
 - **#792 does not "fail to reproduce" in a synced environment — it *skips*.**
   `test_30k_findings_memory_usage` (named `test_100k_findings_memory_usage`
   until #792/#767 were fixed — see below) lives in `test_stress.py` behind the

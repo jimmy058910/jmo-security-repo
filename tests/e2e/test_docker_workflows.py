@@ -52,11 +52,11 @@ PULL_TIMEOUT = 600
 # it. test_docker_image_tools fails on any OTHER not-ready tool, and fails on a
 # listed one once it can run, so an entry cannot outlive its fix.
 KNOWN_NOT_READY = {
-    # The Dockerfile installs yara-python but never fetches a rule bundle, so
-    # `tools check` reports yara installed and not execution_ready: a scan would
-    # report every file clean. v1's image was the same; its test asserted only
-    # `installed`. Phase 6 replaces yara with yara-x + signature-base.
-    "yara": "no rules in the image, TODO(issue-#1282)",
+    # The image carries yara-x (a dependency of JMo) but never fetches a rule
+    # bundle, so `tools check` reports yara-x installed and not
+    # execution_ready: a scan would report every file clean. v1's image was the
+    # same; its test asserted only `installed`. Phase 6's Y4 fetches the rules.
+    "yara-x": "no rules in the image, TODO(issue-#1282)",
 }
 
 

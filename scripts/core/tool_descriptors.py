@@ -1533,9 +1533,10 @@ def _osv_partly_read(ctx: ScanContext) -> dict[str, str]:
     return partly
 
 
-def _yara_repo(ctx: ScanContext) -> list[Invocation]:
-    # yara is libyara bindings, not a CLI: the binary is this interpreter and
-    # scripts/core/yara_runner.py supplies the command line and the walk.
+def _yara_x_repo(ctx: ScanContext) -> list[Invocation]:
+    # yara-x's engine is a library of JMo's, not a CLI: the binary is this
+    # interpreter and scripts/core/yara_runner.py supplies the command line
+    # and the walk.
     # Imported here: paths -> install_config -> tool_registry -> this module.
     from scripts.core.paths import get_yara_rules_dir
 
@@ -2174,8 +2175,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                     "--version",
                 ],
             ),
-            # As yara's: the runner prunes VENDORED_DIRS itself and takes the
-            # results directory as --exclude-dir.
+            # The runner prunes VENDORED_DIRS itself and takes the results
+            # directory as --exclude-dir.
             exclusion_style=ExclusionStyle.INLINE,
             exclusion_flag="--exclude-dir",
             flag_grammar=FlagGrammar.ARGPARSE,
@@ -2188,8 +2189,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             stub={"version": "2.1.0", "runs": []},
         ),
         ToolDescriptor(
-            name="yara",
-            invocations={"repo": _yara_repo},
+            name="yara-x",
+            invocations={"repo": _yara_x_repo},
             version_probe=VersionProbe(
                 re.compile(r"v?(\d+\.\d+\.\d+)"),
                 # yara-x, a dependency of JMo: import it, then read its version
@@ -2200,14 +2201,18 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                     "import yara_x, importlib.metadata as m; print(m.version('yara-x'))",
                 ],
             ),
-            # JMo's own runner: it prunes VENDORED_DIRS itself and takes the
-            # results directory as --exclude-dir.
+            # JMo's own runner: it takes `.git` and the results directory as
+            # --exclude-dir.
             exclusion_style=ExclusionStyle.INLINE,
             exclusion_flag="--exclude-dir",
             flag_grammar=FlagGrammar.ARGPARSE,
             # As jmo-native's.
             reserved_flags=_reserve(OUTPUT=("--output",), TARGET=("--target",)),
             short_switches=frozenset({"-h"}),
+            # The one tool that reads vendored trees (decision 4):
+            # signature-base's npm supply-chain rules can match nowhere but
+            # `node_modules`. A git object store is never source.
+            excluded_vendored=(".git",),
         ),
         ToolDescriptor(
             name="osv-scanner",
@@ -2301,13 +2306,14 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
 
 
 # The seventeen tools v2.0.0 removed (docs/TOOLS.md), falco's companion,
-# semgrep, which opengrep replaced, and grype, whose findings osv-scanner and
-# trivy report (Phase 6).
+# semgrep, which opengrep replaced, grype, whose findings osv-scanner and trivy
+# report (Phase 6), and yara, which yara-x replaced (Phase 6).
 REMOVED_TOOLS: frozenset[str] = frozenset(
     {
         "kubescape",
         "semgrep",
         "grype",
+        "yara",
         "semgrep-secrets",
         "bandit",
         "trivy-rbac",
@@ -2330,7 +2336,7 @@ REMOVED_TOOLS: frozenset[str] = frozenset(
 
 #: A removed tool that has a successor says so: `--tools semgrep` is told to
 #: type `opengrep`, not left to read the removed-tools page for it.
-REPLACED_BY: dict[str, str] = {"semgrep": "opengrep"}
+REPLACED_BY: dict[str, str] = {"semgrep": "opengrep", "yara": "yara-x"}
 
 _NAME_SEPARATORS = re.compile(r"[,\s]+")
 

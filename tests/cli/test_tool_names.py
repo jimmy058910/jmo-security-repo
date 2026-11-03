@@ -50,6 +50,7 @@ def test_tools_split_on_commas_and_spaces(sub, argv, expected):
         ("gosec", "removed in v2.0.0"),
         ("grype", "removed in v2.0.0"),
         ("semgrep", "removed in v2.0.0"),
+        ("yara", "removed in v2.0.0"),
         ("trivvy", "unknown tool 'trivvy'"),
     ],
 )
@@ -75,6 +76,38 @@ def test_semgrep_is_removed_and_the_error_names_its_replacement(capsys):
     said = err.split("error:", 1)[1].split("The tools are:")[0]
     assert "removed in v2.0.0" in said
     assert "opengrep" in said, "the replacement must be named outside the tool list"
+
+
+def test_yara_is_removed_and_the_error_names_yara_x(capsys):
+    """Phase 6, PR Y: the row is yara-x, its engine. A user who typed the
+    old name is told the new one."""
+    with pytest.raises(SystemExit) as exc:
+        jmo.build_parser().parse_args(["scan", "--repo", ".", "--tools", "yara"])
+
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    said = err.split("error:", 1)[1].split("The tools are:")[0]
+    assert "removed in v2.0.0" in said
+    assert "yara-x replaced yara" in said
+
+
+def test_a_v1_yara_config_names_where_it_goes(tmp_path, caplog):
+    """`per_tool.yara` (a `rules_path`, a timeout) configures nothing once the
+    row is yara-x: the warning names `per_tool.yara-x`, as semgrep's names
+    `per_tool.opengrep`."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump({"per_tool": {"yara": {"rules_path": "/r", "timeout": 900}}}),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        jmo.load_config(str(cfg))
+
+    (warning,) = [
+        r.getMessage() for r in caplog.records if "removed in v2.0.0" in r.getMessage()
+    ]
+    assert "Move per_tool.yara to per_tool.yara-x" in warning, warning
 
 
 def test_a_removed_tools_config_entries_are_named_not_dropped(tmp_path, caplog):

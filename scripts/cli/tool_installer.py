@@ -414,17 +414,19 @@ class ToolInstaller:
                 message="Built into JMo, nothing to install",
             )
 
-        # yara's engine, yara-x, is a dependency of JMo (Phase 6, J2): nothing to
+        # yara-x's engine is a dependency of JMo (Phase 6, J2): nothing to
         # download and no versions.yaml row. What install provides is the pinned
         # rule bundle, so it is checked here, before "already installed", which
         # the engine always is.
-        if tool_name == "yara":
+        if tool_name == "yara-x":
             engine = InstallResult(
-                tool_name="yara",
+                tool_name="yara-x",
                 success=True,
                 method="dependency",
                 message="engine ships with JMo",
-                version_installed=importlib.metadata.version(DEPENDENCY_TOOLS["yara"]),
+                version_installed=importlib.metadata.version(
+                    DEPENDENCY_TOOLS["yara-x"]
+                ),
             )
             if not force and pinned_rules_installed(
                 get_yara_rules_dir(), YARA_RULES_BUNDLE["ref"]
@@ -1788,7 +1790,7 @@ class ToolInstaller:
     def _post_install(self, tool_name: str, result: InstallResult) -> InstallResult:
         """Fetch companion data a tool needs but its package does not carry.
 
-        yara's wheel is the libyara engine and no detection content
+        yara-x's wheel is the engine and no detection content
         whatsoever, so an engine-only install matches nothing and produces
         exactly the output of a clean repository. osv-scanner's binary
         carries no vulnerability data either: Phase 4 decision 6 keeps OSV's
@@ -1796,7 +1798,7 @@ class ToolInstaller:
         install artifact and fills them here instead, once osv-scanner itself
         is on disk.
         """
-        if tool_name == "yara" and result.success:
+        if tool_name == "yara-x" and result.success:
             return self._install_yara_rules(result)
         if tool_name == "osv-scanner" and result.success:
             return self._install_osv_databases(result)
@@ -1842,7 +1844,7 @@ class ToolInstaller:
         """Install the pinned rule bundle into ~/.jmo/yara-rules/.
 
         Reports failure when the rules do not land, even though the engine
-        installed. "yara is installed" has to mean "yara can detect something";
+        installed. "yara-x is installed" has to mean "yara-x can detect something";
         an engine with no rules scans every file, matches nothing, and returns a
         clean result indistinguishable from a genuinely clean tree. That is the
         precise failure mode this whole change exists to remove, so it must not
@@ -1853,13 +1855,13 @@ class ToolInstaller:
 
         def failed(message: str) -> InstallResult:
             return InstallResult(
-                tool_name="yara",
+                tool_name="yara-x",
                 success=False,
                 method=result.method,
                 message=(
                     f"engine installed, but its rules did not: {message}. "
-                    f"yara cannot detect anything without them. Retry, or point "
-                    f"per_tool.yara.rules_path in jmo.yml at your own rule set."
+                    f"yara-x cannot detect anything without them. Retry, or point "
+                    f"per_tool.yara-x.rules_path in jmo.yml at your own rule set."
                 ),
                 version_installed=result.version_installed,
                 duration_seconds=result.duration_seconds,
@@ -1954,7 +1956,7 @@ class ToolInstaller:
             return failed(f"{type(exc).__name__}: {exc}")
 
         return InstallResult(
-            tool_name="yara",
+            tool_name="yara-x",
             success=True,
             method=result.method,
             message=(

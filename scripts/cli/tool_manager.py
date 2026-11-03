@@ -186,14 +186,14 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
         },
         "jmo_install": "jmo tools install nuclei",
     },
-    "yara": {
+    "yara-x": {
         "install": {
-            # The engine (yara-x) ships with JMo; this fetches its rules.
-            "linux": "jmo tools install yara",
-            "macos": "jmo tools install yara",
-            "windows": "jmo tools install yara",
+            # The engine ships with JMo; this fetches its rules.
+            "linux": "jmo tools install yara-x",
+            "macos": "jmo tools install yara-x",
+            "windows": "jmo tools install yara-x",
         },
-        "jmo_install": "jmo tools install yara",
+        "jmo_install": "jmo tools install yara-x",
     },
 }
 
@@ -345,7 +345,7 @@ class ToolStatus:
         return self.expected_version or "-"
 
 
-# A missing dependency that `jmo tools install <tool>` itself provides: yara's
+# A missing dependency that `jmo tools install <tool>` itself provides: yara-x's
 # pinned rule bundle. Its engine ships with JMo, so it is always installed, and
 # only this puts it on an install list.
 INSTALLED_BY_JMO = "yara-rules"
@@ -862,9 +862,9 @@ class ToolManager:
                 if zap_path.exists():
                     return str(zap_path)
 
-        # yara's engine is yara-x, a Python library and a dependency of JMo
+        # yara-x's engine is a Python library and a dependency of JMo
         # (Phase 6, J2), not a CLI binary: check that it imports.
-        if binary_name == "yara":
+        if binary_name == "yara-x":
             try:
                 import importlib.util
 
@@ -979,7 +979,7 @@ class ToolManager:
                 cmd = list(version_cmd_config)  # Copy to avoid mutation
 
             # Replace first element (the binary) with full path
-            # EXCEPT for Python module tools (yara, etc.) where cmd[0] is sys.executable
+            # EXCEPT for Python module tools (yara-x, etc.) where cmd[0] is sys.executable
             # These tools use 'python -c "import X"' patterns, not binaries
             if cmd[0] != sys.executable and binary_path:
                 cmd[0] = binary_path
@@ -1285,20 +1285,20 @@ class ToolManager:
         if missing:
             return False, f"Missing: {', '.join(missing)}", missing
 
-        # yara ships an engine and no detection content. Without rules it
+        # yara-x ships an engine and no detection content. Without rules it
         # examines every file, matches nothing, and returns a result that is
         # byte-for-byte identical to a genuinely clean repository - so "the
-        # library imports" is not the same question as "yara can detect
+        # library imports" is not the same question as "yara-x can detect
         # anything", and only the second one is worth reporting.
         #
-        # Checked against the bundle directory `jmo tools install yara` fills.
-        # A user pointing per_tool.yara.rules_path at their own set is not
+        # Checked against the bundle directory `jmo tools install yara-x` fills.
+        # A user pointing per_tool.yara-x.rules_path at their own set is not
         # visible here, which is why this downgrades execution readiness rather
         # than claiming the tool is absent; the runner re-checks the configured
         # path at scan time and fails loudly there if it is empty.
         # The pinned bundle, known by the manifest its fetch writes: a tree from
         # an older pin, or v1's ReversingLabs bundle, is not it.
-        if tool_name == "yara":
+        if tool_name == "yara-x":
             from scripts.core.install_config import YARA_RULES_BUNDLE
             from scripts.core.paths import get_yara_rules_dir
             from scripts.core.yara_rules import pinned_rules_installed
@@ -1308,8 +1308,8 @@ class ToolManager:
             ):
                 return (
                     False,
-                    "The pinned YARA rules are not installed - yara would report "
-                    "every scan clean. Run: jmo tools install yara",
+                    "The pinned YARA rules are not installed - yara-x would report "
+                    "every scan clean. Run: jmo tools install yara-x",
                     [INSTALLED_BY_JMO],
                 )
 
@@ -1394,7 +1394,7 @@ def print_tool_status_table(
         elif not status.execution_ready:
             # Installed, and still unable to run. `check_tool` has always
             # computed this - `_verify_execution` checks Java for zap and rules
-            # for yara - and this table threw the answer away, so a box with no
+            # for yara-x - and this table threw the answer away, so a box with no
             # `java` printed
             # `dependency-check  OK  -  12.1.0` and exit 0 while every scan
             # exited 1 with no output. The dash in the Installed column was the

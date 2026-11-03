@@ -665,17 +665,17 @@ class TestFailedToolsAreReported:
                 tmp_path,
                 [
                     ToolResult(
-                        tool="yara",
+                        tool="yara-x",
                         status="error",
-                        error_message="Tool not found: yara",
+                        error_message="Tool not found: yara-x",
                         failure="missing_tool",
                     )
                 ],
-                ["yara"],
+                ["yara-x"],
             )
 
-        assert rows["yara"].label == "failed:not found at run time"
-        assert "yara: its executable was not found at run time" in caplog.text
+        assert rows["yara-x"].label == "failed:not found at run time"
+        assert "yara-x: its executable was not found at run time" in caplog.text
 
     def test_no_output_is_reported_durably(self, tmp_path, caplog):
         """The #700 class (an accepted code, nothing written) must reach the
@@ -843,12 +843,15 @@ class TestExclusions:
                 # A bare name or a `**/` glob.
                 assert any("results" in arg for arg in command), (tool, command)
 
-    def test_yara_is_told_to_skip_the_results_directory(self, tmp_path):
+    def test_yara_x_is_told_to_skip_git_and_the_results_directory(self, tmp_path):
+        """And nothing else: it reads `node_modules`, `vendor`, `.venv` and
+        `venv` (Phase 6, PR Y, decision 4)."""
         repo = _repo(tmp_path, files={"a.py": "x\n"})
 
-        _, _, defs = _scan(repo, repo / "results" / "individual-repos", ["yara"])
+        _, _, defs = _scan(repo, repo / "results" / "individual-repos", ["yara-x"])
 
-        assert "--exclude-dir=results" in defs["yara"].command
+        excludes = [a for a in defs["yara-x"].command if a.startswith("--exclude-dir")]
+        assert excludes == ["--exclude-dir=.git", "--exclude-dir=results"]
 
     def test_jmos_own_file_walk_skips_a_vendored_tree(self, tmp_path):
         repo = _repo(

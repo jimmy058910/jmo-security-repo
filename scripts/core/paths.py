@@ -23,7 +23,7 @@ def get_yara_rules_dir() -> Path:
 
     Defined once because the installer writes here and the scanner reads here;
     two literals would drift, and a rules path that silently points at nothing
-    makes yara report a clean scan of an unexamined tree.
+    makes yara-x report a clean scan of an unexamined tree.
 
     The previous default was the hardcoded `/usr/share/yara/rules`, which does
     not exist on Windows *or* on stock Ubuntu - measured absent on both - so

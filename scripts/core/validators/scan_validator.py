@@ -42,7 +42,7 @@ EXPECTED_ADAPTERS = sorted(
         "syft",
         "trivy",
         "trufflehog",
-        "yara",
+        "yara_x",
         "zap",
         "zizmor",
     ]

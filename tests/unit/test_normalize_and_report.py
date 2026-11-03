@@ -320,18 +320,18 @@ class TestWhichOutputsAreRead:
     def test_a_tool_is_matched_by_its_name_before_the_first_dot(
         self, tmp_path, monkeypatch
     ):
-        """`yara.json` and `yara-x.json` are two tools. A `yara*` prefix match
-        read the second as the first's."""
+        """`yara-x.json` and a v1 scan's `yara.json` are two tools. A `yara*`
+        prefix match read the one as the other's."""
         _scan_wrote(
             tmp_path,
-            {"yara": _ran("yara")},
+            {"yara-x": _ran("yara-x")},
             {"yara.json": b"[]", "yara-x.json": b"[]"},
         )
         loaded = _loaded(monkeypatch)
 
         nr.gather_results(tmp_path)
 
-        assert _names(loaded) == ["yara.json"]
+        assert _names(loaded) == ["yara-x.json"]
 
     @pytest.mark.parametrize("extra", ["trivy.git.json", "trivy.part2.json"])
     @pytest.mark.parametrize(

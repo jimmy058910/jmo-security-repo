@@ -325,11 +325,11 @@ REFUSED = [
     ("zap", "-quickout other.html"),
     # JMo's own runners: a second --target re-points the scan (argparse is
     # last-one-wins), and argparse's default reads a long option's prefix.
-    ("yara", "--output x.json"),
-    ("yara", "--target elsewhere"),
-    ("yara", "--o x.json"),
-    ("yara", "--ou x.json"),
-    ("yara", "--outp x.json"),
+    ("yara-x", "--output x.json"),
+    ("yara-x", "--target elsewhere"),
+    ("yara-x", "--o x.json"),
+    ("yara-x", "--ou x.json"),
+    ("yara-x", "--outp x.json"),
     ("jmo-native", "--output x.sarif"),
     ("jmo-native", "--target elsewhere"),
     ("jmo-native", "--outp x.sarif"),
@@ -400,8 +400,8 @@ KEPT = [
     ("nuclei", "-silent=false"),
     ("nuclei", "-severity critical,high,medium"),
     ("zap", "-config api.disablekey=true"),
-    ("yara", "--exclude-dir build"),
-    ("yara", "--timeout 5"),
+    ("yara-x", "--exclude-dir build"),
+    ("yara-x", "--timeout 5"),
     ("jmo-native", "--exclude-dir build"),
 ]
 
@@ -432,7 +432,7 @@ class TestEachToolsOwnGrammar:
             "shellcheck": FlagGrammar.GETOPT,
             "zizmor": FlagGrammar.CLAP,
             "jmo-native": FlagGrammar.ARGPARSE,
-            "yara": FlagGrammar.ARGPARSE,
+            "yara-x": FlagGrammar.ARGPARSE,
             "osv-scanner": FlagGrammar.GO_FLAG,
             "zap": FlagGrammar.ZAP,
             "nuclei": FlagGrammar.GO_FLAG,
@@ -582,7 +582,7 @@ class TestEachRefusalSaysWhy:
             ("trivy", "-ftable", "where the tool writes"),
             ("zizmor", "-o", "JMo already passes it"),
             ("trivy", "--exit-code 1", "--fail-on"),
-            ("yara", "--target elsewhere", "another target"),
+            ("yara-x", "--target elsewhere", "another target"),
             ("trufflehog", "--no-verification", "per_tool.trufflehog.verify: true"),
             ("osv-scanner", "--download-offline-databases", "jmo tools update"),
         ],
@@ -730,7 +730,7 @@ class TestJmosOwnRunnersTakeNoAbbreviation:
             ("yara_runner", ["--rules", "r", "--target", "t", "--output", "o"]),
             ("native_checks", ["--target", "t", "--output", "o"]),
         ],
-        ids=["yara", "jmo-native"],
+        ids=["yara-x", "jmo-native"],
     )
     @pytest.mark.parametrize("abbreviation", ["--outp", "--targ", "--o"])
     def test_a_prefix_of_a_long_option_is_an_error(
@@ -1082,7 +1082,7 @@ class TestShippedFlagsAreFlagsTheToolActuallyHas:
     tool that stays:
 
     - `yara` shipped `--max-rules-per-file=500`, which is not a yara option
-      (recorded in `jmo.yml`'s own comment on the yara entry).
+      (recorded in `jmo.yml`'s own comment on the entry, yara-x's now).
 
     What this guard is NOT: proof that a flag is valid. Only running the binary
     shows that, and the suite mocks `subprocess`. It is a memory of the ones
@@ -1093,9 +1093,9 @@ class TestShippedFlagsAreFlagsTheToolActuallyHas:
     # a guard that reads its expectation from the file it guards cannot fail
     # when that file changes (#1061).
     REJECTED_FLAGS: dict[tuple[str, str], str] = {
-        ("yara", "--max-rules-per-file=500"): (
-            "not a yara option: v4.5.8 defines `max-rules` and "
-            "`max-strings-per-rule` and nothing of that name, so the scanner "
+        ("yara-x", "--max-rules-per-file=500"): (
+            "not an option of JMo's yara-x runner, nor of yara 4.5.8 (which "
+            "defines `max-rules` and `max-strings-per-rule`), so the scanner "
             "would be rejected on an unknown option"
         ),
     }

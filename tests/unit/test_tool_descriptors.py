@@ -34,7 +34,8 @@ from scripts.core.tool_descriptors import (
 )
 
 # --- the literals, as they stood at 025edd01 ---------------------------------
-# (semgrep's row is opengrep's since Phase 5, PR B: the tables carry its name.)
+# (semgrep's row is opengrep's since Phase 5, PR B, and yara's is yara-x's
+# since Phase 6, PR Y: the tables carry their names.)
 
 OLD_REPO_TOOLS = {
     "trufflehog",
@@ -44,7 +45,7 @@ OLD_REPO_TOOLS = {
     "checkov",
     "hadolint",
     "shellcheck",
-    "yara",
+    "yara-x",
     "zap",
 }
 OLD_TOOL_SCAN_TYPES = {
@@ -92,7 +93,7 @@ OLD_VERSION_PATTERNS = {
         r"v?(\d+\.\d+\.\d+)(?!\d|\.jar|\.\d)",
         re.IGNORECASE,
     ),
-    "yara": (r"v?(\d+\.\d+\.\d+)", 0),
+    "yara-x": (r"v?(\d+\.\d+\.\d+)", 0),
     "opa": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
 }
 OLD_VERSION_COMMANDS = {
@@ -101,7 +102,7 @@ OLD_VERSION_COMMANDS = {
     "nuclei": ["nuclei", "-version"],
     "zap": {"windows": ["zap.bat", "-version"], "default": ["zap.sh", "-version"]},
     # Phase 6, PR Y: the engine is yara-x, a dependency of JMo.
-    "yara": [
+    "yara-x": [
         sys.executable,
         "-c",
         "import yara_x, importlib.metadata as m; print(m.version('yara-x'))",
@@ -140,18 +141,18 @@ def test_zizmor_joined_beside_the_other_walk_fed_linters() -> None:
 def test_osv_scanner_joined_beside_the_other_dependency_scanner() -> None:
     """Phase 4, PR O: osv-scanner reads lockfiles offline. It was listed after
     grype, the other scanner of dependencies only, which Phase 6's PR G removed;
-    yara is its neighbour now."""
+    yara-x is its neighbour now."""
     names = list(DESCRIPTORS)
-    assert names[names.index("yara") + 1] == "osv-scanner"
+    assert names[names.index("yara-x") + 1] == "osv-scanner"
 
 
-def test_jmo_native_joined_before_yara() -> None:
-    """Phase 4, PR N: jmo-native, JMo's own check pack. Listed before yara, the
+def test_jmo_native_joined_before_yara_x() -> None:
+    """Phase 4, PR N: jmo-native, JMo's own check pack. Listed before yara-x, the
     other runner JMo drives on its own interpreter. PR G removed gosec (#1310),
     and Phase 6's PR G removed grype (#1372), so the matrix is 14."""
     assert len(DESCRIPTORS) == 14
     names = list(DESCRIPTORS)
-    assert names[names.index("jmo-native") + 1] == "yara"
+    assert names[names.index("jmo-native") + 1] == "yara-x"
 
 
 def test_target_types_differ_from_the_old_literal_only_by_the_url_tools() -> None:
@@ -177,7 +178,7 @@ def test_timeout_floors_are_derived_unchanged() -> None:
 
 
 def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
-    """shellcheck and yara had no entry and fell back to `{}`; they are
+    """shellcheck and yara (yara-x now) had no entry and fell back to `{}`; they are
     declared now, with the value they already got. gitleaks (PR C), zizmor
     (PR Z), osv-scanner (PR O) and jmo-native (PR N) write SARIF, so their
     empty result is an empty SARIF document."""
@@ -185,7 +186,7 @@ def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
     assert derived == {
         **OLD_STUBS,
         "shellcheck": {},
-        "yara": {},
+        "yara-x": {},
         "gitleaks": {"version": "2.1.0", "runs": []},
         "zizmor": {"version": "2.1.0", "runs": []},
         "osv-scanner": {"version": "2.1.0", "runs": []},
@@ -260,7 +261,6 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
             "trufflehog",
             "hadolint",
             "shellcheck",
-            "yara",
             # PR C: the second secret scanner, for the same reason as the first.
             "gitleaks",
             # PR Z: walk-fed like hadolint; it read vendored workflows when
@@ -269,12 +269,23 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
             # PR O: walk-fed; an installed package's own lockfile is not the
             # repository's dependency set.
             "osv-scanner",
-            # PR N: JMo's own runner, which prunes them itself, as yara's does.
+            # PR N: JMo's own runner, which prunes them itself.
             "jmo-native",
         }
         == scan_utils.VENDOR_NOISE_TOOLS
     )
     assert DESCRIPTORS["syft"].excluded_vendored == ()
+
+
+def test_yara_x_reads_the_vendored_trees_but_not_git() -> None:
+    """Phase 6, PR Y, decision 4: yara-x left the tier. signature-base's npm
+    supply-chain rules can match nowhere but `node_modules`; a git object
+    store is never source."""
+    from scripts.core import yara_runner
+
+    assert DESCRIPTORS["yara-x"].excluded_vendored == (".git",)
+    assert "yara-x" not in scan_utils.VENDOR_NOISE_TOOLS
+    assert {".git"} == yara_runner.SKIP_DIRS
 
 
 def test_every_descriptor_declares_an_exclusion_style() -> None:
@@ -293,11 +304,7 @@ def test_every_descriptor_declares_an_exclusion_style() -> None:
 
 
 def test_vendored_dirs_is_one_list() -> None:
-    """yara_runner carried its own copy; the walk and the flags read this one."""
-    from scripts.core import yara_runner
-
     assert scan_utils.VENDORED_DIRS is VENDORED_DIRS
-    assert set(yara_runner.SKIP_DIRS) == set(VENDORED_DIRS)
 
 
 def test_hadolints_patterns_are_the_dockerfile_rule_files_first_three() -> None:
@@ -341,14 +348,16 @@ class TestToolNames:
         assert f"{name}" in str(exc.value)
         assert "removed in v2.0.0" in str(exc.value)
 
-    def test_nineteen_were_removed(self) -> None:
+    def test_twenty_were_removed(self) -> None:
         """docs/TOOLS.md "Removed in v2.0.0" lists seventeen; semgrep, which
-        opengrep replaced, is the eighteenth, and grype, whose findings
-        osv-scanner and trivy report (Phase 6), the nineteenth. falco's
-        companion falcoctl is accepted as a spelling of the same removal."""
-        assert len(REMOVED_TOOLS - {"falcoctl"}) == 19
+        opengrep replaced, is the eighteenth, grype, whose findings
+        osv-scanner and trivy report (Phase 6), the nineteenth, and yara,
+        which yara-x replaced (Phase 6), the twentieth. falco's companion
+        falcoctl is accepted as a spelling of the same removal."""
+        assert len(REMOVED_TOOLS - {"falcoctl"}) == 20
         assert "semgrep" in REMOVED_TOOLS
         assert "grype" in REMOVED_TOOLS
+        assert "yara" in REMOVED_TOOLS
         assert not REMOVED_TOOLS & set(DESCRIPTORS)
 
 

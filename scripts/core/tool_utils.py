@@ -163,10 +163,10 @@ def find_tool(tool_name: str) -> str | None:
         if zap_launcher is not None:
             return str(zap_launcher)
 
-    # yara's engine is yara-x, a Python wheel and a dependency of JMo, not a
-    # CLI: the installed artifact is a compiled extension with no main() and no
+    # yara-x's engine is a Python wheel and a dependency of JMo, not a CLI:
+    # the installed artifact is a compiled extension with no main() and no
     # console script. JMo drives it through scripts/core/yara_runner.py, so the
-    # executable that runs yara *is* this interpreter - the same shape the
+    # executable that runs yara-x *is* this interpreter - the same shape the
     # version probe uses (`[sys.executable, "-c", "import yara_x, ..."]`).
     #
     # This used to return the pseudo-path "python:yara", which broke the
@@ -179,7 +179,7 @@ def find_tool(tool_name: str) -> str | None:
     #
     # Falls through rather than returning None, so a genuine native yara binary
     # under ~/.jmo/bin is still found by the generic checks below.
-    if tool_name == "yara" and importlib.util.find_spec("yara_x") is not None:
+    if tool_name == "yara-x" and importlib.util.find_spec("yara_x") is not None:
         return sys.executable
 
     # Generic check for tools in ~/.jmo/bin/{tool}/

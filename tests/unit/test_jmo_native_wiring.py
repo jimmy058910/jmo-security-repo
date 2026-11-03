@@ -2,8 +2,8 @@
 
 jmo-native is JMo's own check pack (`scripts/core/native_checks.py`): six
 checks over Next.js, Supabase and Firebase code, written as SARIF, with no rule
-engine. The row runs it on the interpreter JMo runs on, as yara's row runs
-`yara_runner`, and unlike yara it ships inside JMo: no package, no rule bundle,
+engine. The row runs it on the interpreter JMo runs on, as yara-x's row runs
+`yara_runner`, and unlike yara-x it ships inside JMo: no package, no rule bundle,
 no `versions.yaml` pin, nothing for `jmo tools install` or `update` to do.
 
 Nothing here is `requires_tools`, the end-to-end scan included: the row needs
@@ -81,7 +81,7 @@ class TestTheRow:
         assert DESCRIPTORS[TOOL].stub == {"version": "2.1.0", "runs": []}
 
     def test_the_runner_accepts_the_exclusions_the_row_renders(self):
-        """INLINE, `--exclude-dir=NAME`: what yara's row passes yara_runner.
+        """INLINE, `--exclude-dir=NAME`: what yara-x's row passes yara_runner.
         The runner prunes VENDORED_DIRS itself, so they are redundant there
         but harmless; the results directory is the one that matters."""
         d = DESCRIPTORS[TOOL]

@@ -1,22 +1,15 @@
 #!/usr/bin/env python3
 """
-YARA adapter - Maps YARA malware detection JSON output to CommonFinding schema.
+yara-x adapter - Maps the yara-x runner's JSON matches to the CommonFinding schema.
 
-Plugin Architecture (v0.9.0):
-- Uses @adapter_plugin decorator for auto-discovery
-- Inherits from AdapterPlugin base class
-- Returns Finding objects (not dicts)
-- Auto-loaded by plugin registry
+The input is what `scripts/core/yara_runner.py` writes: one object per match,
+with the rule's metadata, the matched pattern identifiers and the file. The
+rules are Neo23x0/signature-base's, under the Detection Rule License 1.1, which
+requires each rule's author (and its reference, when it has one) with what it
+detects: both reach the finding's context and its message.
 
-v1.0.0 Feature #1:
-- Malware pattern matching and detection
-- 200-500 curated rules from Neo23x0/signature-base
-- Web shells, backdoors, APTs, cryptominers, ransomware detection
-- Performance optimized (<10s for 1,000 files)
-
-Tool Version: 4.3.0+
-Output Format: JSON with matches array
-Exit Codes: 0 (no matches), 1+ (matches found)
+Output Format: JSON array of matches
+Exit Codes: 0 (no matches), 1 (matches found), 2 (did not scan)
 
 Supported Detection Categories:
 - Web shells (PHP, ASPX, JSP)
@@ -28,6 +21,7 @@ Supported Detection Categories:
 
 from __future__ import annotations
 
+import importlib.metadata
 import logging
 from pathlib import Path
 from typing import Any
@@ -47,26 +41,20 @@ logger = logging.getLogger(__name__)
 
 @adapter_plugin(
     PluginMetadata(
-        name="yara",
+        name="yara_x",
         version="1.0.0",
         author="JMo Security",
-        description="Adapter for YARA malware detection scanner",
-        tool_name="yara",
+        description="Adapter for the yara-x malware detection scanner",
+        tool_name="yara-x",
         schema_version="1.2.0",
         output_format="json",
         exit_codes={0: "clean", 1: "matches"},
     )
 )
-class YaraAdapter(AdapterPlugin):
-    """Adapter for YARA malware detection (plugin architecture).
+class YaraXAdapter(AdapterPlugin):
+    """Adapter for yara-x malware detection (plugin architecture).
 
-    v1.0.0 Features:
-    - Malware pattern matching (web shells, backdoors, APTs, cryptominers)
-    - 200-500 curated rules from Neo23x0/signature-base
-    - Tag-based categorization (webshell, apt, trojan, exploit)
-    - Performance optimized for development security
-
-    Findings are automatically tagged as 'malware-detection'.
+    Findings are tagged 'malware-detection', with each rule's own tags beside.
     """
 
     @property
@@ -78,13 +66,13 @@ class YaraAdapter(AdapterPlugin):
         """Parse tool output and return normalized findings.
 
         Args:
-            output_path: Path to yara.json output file
+            output_path: Path to the yara-x.json output file
 
         Returns:
             List of Finding objects following CommonFinding schema v1.2.0
         """
         # Delegate to internal function that returns dicts
-        findings_dicts = _load_yara_internal(output_path)
+        findings_dicts = _load_yara_x_internal(output_path)
 
         # Convert dicts to Finding objects
         findings = []
@@ -113,11 +101,26 @@ class YaraAdapter(AdapterPlugin):
         return findings
 
 
-def _load_yara_internal(path: str | Path) -> list[dict[str, Any]]:
-    """Internal function to parse YARA JSON output.
+def _text(value: Any) -> str:
+    """A metadata value as text. The runner hands a key a rule repeats over as
+    a list of its values."""
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value if v)
+    return "" if value is None else str(value)
+
+
+def _engine_version() -> str:
+    try:
+        return importlib.metadata.version("yara-x")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def _load_yara_x_internal(path: str | Path) -> list[dict[str, Any]]:
+    """Internal function to parse the yara-x runner's JSON output.
 
     Args:
-        path: Path to yara.json output file
+        path: Path to the yara-x.json output file
 
     Returns:
         List of dicts (converted to Finding objects by parse() method)
@@ -127,10 +130,11 @@ def _load_yara_internal(path: str | Path) -> list[dict[str, Any]]:
         return []
 
     out: list[dict[str, Any]] = []
+    version = _engine_version()
 
-    # YARA JSON structure (with --json-output flag):
-    # Single match: {"rule": "...", "namespace": "...", "tags": [...], "meta": {...}, "strings": [...]}
-    # Multiple matches: Array of match objects
+    # The runner writes an array of
+    # {"rule", "namespace", "tags", "meta", "strings", "file"}; one bare
+    # object is read as an array of one.
 
     # Handle both single match and array of matches
     matches = []
@@ -167,9 +171,15 @@ def _load_yara_internal(path: str | Path) -> list[dict[str, Any]]:
             meta = {}
 
         # Extract description and severity from metadata
-        description = str(meta.get("description", rule_name))
-        author = str(meta.get("author", ""))
-        reference = str(meta.get("reference", ""))
+        description = _text(meta.get("description")) or rule_name
+        author = _text(meta.get("author"))
+        ref_value = meta.get("reference")
+        refs = [
+            str(r)
+            for r in (ref_value if isinstance(ref_value, list) else [ref_value])
+            if r
+        ]
+        reference = ", ".join(refs)
 
         # Determine severity from rule tags and metadata
         severity_raw = str(meta.get("severity", "")).upper()
@@ -212,21 +222,23 @@ def _load_yara_internal(path: str | Path) -> list[dict[str, Any]]:
             # Fallback to rule name
             file_path = f"malware:{rule_name}"
 
-        # Build message
+        # Build message. DRL 1.1: the rule's author, and its reference when it
+        # has one, travel with what it detects (decision 5).
         message = f"YARA rule '{rule_name}' matched: {description}"
         if strings_matched:
             message += f" ({len(strings_matched)} string matches)"
+        if author:
+            message += f". Rule by {author}"
+            if reference:
+                message += f" ({reference})"
+        elif reference:
+            message += f". Rule reference: {reference}"
 
         # Generate stable fingerprint
-        fid = fingerprint("yara", rule_name, file_path, 0, message)
-
-        # Build references
-        references = []
-        if reference:
-            references.append(reference)
+        fid = fingerprint("yara-x", rule_name, file_path, 0, message)
 
         # Build tags (combine tool-specific and rule-specific tags)
-        tags = ["malware-detection", "yara"]
+        tags = ["malware-detection", "yara-x"]
         tags.extend([tag.lower().replace(" ", "-") for tag in rule_tags])
         if namespace != "default":
             tags.append(f"namespace:{namespace.lower()}")
@@ -240,21 +252,19 @@ def _load_yara_internal(path: str | Path) -> list[dict[str, Any]]:
             "message": message,
             "description": description,
             "severity": severity,
-            "tool": {
-                "name": "yara",
-                "version": "4.3.0",  # YARA v4.3.0+
-            },
+            "tool": {"name": "yara-x", "version": version},
             "location": {
                 "path": file_path,
                 "startLine": 0,  # Binary files don't have line numbers
             },
             "remediation": f"Review file for malware indicators. YARA rule '{rule_name}' detected malicious patterns.",
-            "references": references,
+            "references": refs,
             "tags": tags,
             "context": {
                 "rule_name": rule_name,
                 "namespace": namespace,
                 "author": author or None,
+                "reference": reference or None,
                 "rule_tags": rule_tags,
                 "matched_strings_count": len(strings_matched),
                 "matched_strings": strings_matched or None,

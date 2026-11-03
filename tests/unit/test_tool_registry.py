@@ -30,7 +30,7 @@ V2_PHASE_2_MATRIX = {
     "checkov",
     "hadolint",
     "shellcheck",
-    "yara",
+    "yara-x",
     # Phase 6, PR G: grype left; osv-scanner and trivy report its findings.
     "zap",
     "nuclei",
@@ -253,7 +253,7 @@ def test_toolregistry_registers_every_tool_jmo_installs():
 
     Two exemptions, each answered by `install_tool` before the registry is
     consulted, so each must be absent, not merely excused: a built-in tool
-    (jmo-native) ships inside JMo, and a dependency tool (yara) has its engine
+    (jmo-native) ships inside JMo, and a dependency tool (yara-x) has its engine
     pinned in pyproject.toml, where a row here would pin it twice.
     """
     from scripts.core.tool_registry import BUILTIN_TOOLS, DEPENDENCY_TOOLS, ToolRegistry

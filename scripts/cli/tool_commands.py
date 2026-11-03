@@ -510,7 +510,7 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
                 print(f"{t}: built into JMo, nothing to install")
                 continue
             status = manager.check_tool(t)
-            # needs_install: also yara, whose engine ships with JMo and whose
+            # needs_install: also yara-x, whose engine ships with JMo and whose
             # pinned rules are what this command provides.
             if force or needs_install(status):
                 missing.append(status)

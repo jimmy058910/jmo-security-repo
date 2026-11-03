@@ -64,7 +64,7 @@ def _iac_target(tmp_path: Path) -> dict:
 # (module under scripts.cli.scan_jobs, entry point, target kwargs, a tool it runs)
 SCANNERS = [
     pytest.param(
-        "repository_scanner", scan_repository, _repo_target, "yara", id="repository"
+        "repository_scanner", scan_repository, _repo_target, "yara-x", id="repository"
     ),
     pytest.param("iac_scanner", scan_iac_file, _iac_target, "checkov", id="iac"),
     pytest.param(
@@ -188,11 +188,11 @@ def test_failure_report_carries_the_tool_stderr(tmp_path, caplog):
     with caplog.at_level(logging.ERROR):
         report_tool_failure(
             ToolResult(
-                tool="yara",
+                tool="yara-x",
                 status="error",
                 returncode=2,
                 error_message="Return code 2 not in (0, 1)",
-                stderr="yara: 0 of 310 rule file(s) compiled - nothing was scanned.",
+                stderr="yara-x: 0 of 310 rule file(s) compiled - nothing was scanned.",
             ),
             "it failed",
         )
@@ -226,7 +226,7 @@ def test_resolve_then_vanish_writes_no_stub(tmp_path, caplog):
     A stub is an empty findings array, which the report phase cannot tell apart
     from "this tool ran and found nothing". That is the precise lie being
     removed, so the fix must not keep writing one. Asserted on the repository
-    scanner, whose pre-flight resolves yara cleanly and so writes no stub of its
+    scanner, whose pre-flight resolves yara-x cleanly and so writes no stub of its
     own to confuse the signal.
     """
     stubbed: list[str] = []
@@ -235,7 +235,7 @@ def test_resolve_then_vanish_writes_no_stub(tmp_path, caplog):
             "repository_scanner",
             scan_repository,
             _repo_target(tmp_path),
-            "yara",
+            "yara-x",
             tmp_path,
             stubbed,
         )
@@ -245,7 +245,7 @@ def test_resolve_then_vanish_writes_no_stub(tmp_path, caplog):
         f"An empty stub is indistinguishable from a genuine empty result once "
         f"the report phase reads it."
     )
-    assert statuses["yara"].label == "failed:not found at run time"
+    assert statuses["yara-x"].label == "failed:not found at run time"
 
 
 def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplog):
