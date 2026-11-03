@@ -91,7 +91,7 @@ opengrep, a fork of Semgrep's engine, is the code scanner. It is a single static
 
 ### Removed tools
 
-These 17 tools are no longer installed, run or parsed. Their `per_tool` blocks in `jmo.yml` have nothing left to configure.
+These 18 tools are no longer installed, run or parsed. Their `per_tool` blocks in `jmo.yml` have nothing left to configure: a `jmo.yml` that still carries one loads, logs one warning naming it, and ignores it.
 
 | Tool | Why it was removed |
 |------|--------------------|
@@ -99,8 +99,11 @@ These 17 tools are no longer installed, run or parsed. Their `per_tool` blocks i
 | semgrep-secrets, bandit (as a scanner) | semgrep-secrets scanned 0 files and bandit's results were dominated by `.venv` noise; opengrep's rule bundle covers SAST |
 | trivy-rbac | Its output was identical to Trivy's config scan |
 | checkov-cicd | Folded into checkov, which never actually read `.github/workflows` under JMo (its `.git` exclusion also matched `.github`, #1313); checkov's repository run was then narrowed to Terraform and CloudFormation only, dropping its other CI/CD and secrets frameworks there. zizmor now audits workflows -- see [docs/TOOLS.md](docs/TOOLS.md#when-each-tool-runs) |
+| grype | On two real applications every dependency finding it made was also reported by OSV-Scanner or Trivy, none by grype alone, and its database is 3.2 GB on disk. Known-vulnerable GitHub Actions are no longer reported offline ([docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md#a-known-vulnerable-github-action-is-not-reported-offline)). A dependency finding grype also reported changes its id once: see below |
 | gosec | It examined 0 files on every run, because neither the image nor `jmo tools install` provides the Go toolchain it loads packages with. opengrep's Go rules cover Go |
 | noseyparker, prowler, akto, scancode, cdxgen, dependency-check, horusec, falco (with falcoctl), afl++, mobsf, lynis | Never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream |
+
+**grype's departure changes some dependency finding ids, once.** A finding several tools report is one consensus finding whose id is its lead's (`cluster-<lead id>`), and the lead is the highest severity, then the tool name in alphabetical order, so at equal severity grype led every finding it was part of. Those findings are now led by OSV-Scanner or Trivy and take that tool's id. A suppression in `jmo.suppress.yml` that names one by id stops matching, and `jmo diff` against a scan stored before the upgrade reports it as fixed and new. No other finding's id changes.
 
 Bandit remains this repository's own pre-commit hook and lint step; only bandit as a JMo scanner is gone. Details: [docs/TOOLS.md](docs/TOOLS.md#removed-in-v200).
 

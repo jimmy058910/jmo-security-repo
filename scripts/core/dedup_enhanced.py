@@ -929,7 +929,7 @@ def cluster_dependency_findings(
     per tool (`FindingCluster.can_accept`). A union of the members' ids is
     never enough: osv-scanner files some distinct advisories under one rule
     (on NodeGoat its lodash rule CVE-2021-23337 lists CVE-2026-4800, which
-    trivy and grype each report as a finding of its own), and a union would
+    trivy reports as a finding of its own), and a union would
     fold both advisories into one finding.
 
     Within one package, the pairs that share an id are joined strongest first

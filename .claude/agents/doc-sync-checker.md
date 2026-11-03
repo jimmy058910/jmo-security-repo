@@ -92,7 +92,7 @@ The full inventory is [docs/index.md](../../docs/index.md).
 1. **Check current tool lists in all docs:**
 
    ```bash
-   Grep: "trivy|opengrep|trufflehog|syft|checkov|hadolint|shellcheck|zizmor|yara|grype|zap|nuclei"
+   Grep: "trivy|opengrep|trufflehog|syft|checkov|hadolint|shellcheck|zizmor|yara|zap|nuclei"
    ```
 
 2. **Identify docs that list tools:**

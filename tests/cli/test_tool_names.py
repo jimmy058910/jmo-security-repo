@@ -31,7 +31,7 @@ from scripts.cli import jmo
     [
         (["--tools", "trivy,syft"], ["trivy", "syft"]),
         (["--tools", "trivy", "syft"], ["trivy", "syft"]),
-        (["--tools", "trivy, syft", "grype"], ["trivy", "syft", "grype"]),
+        (["--tools", "trivy, syft", "zizmor"], ["trivy", "syft", "zizmor"]),
         (["--tools", "syft", "trivy,syft"], ["syft", "trivy"]),
     ],
 )
@@ -48,6 +48,7 @@ def test_tools_split_on_commas_and_spaces(sub, argv, expected):
         ("bandit", "removed in v2.0.0"),
         ("kubescape", "removed in v2.0.0"),
         ("gosec", "removed in v2.0.0"),
+        ("grype", "removed in v2.0.0"),
         ("semgrep", "removed in v2.0.0"),
         ("trivvy", "unknown tool 'trivvy'"),
     ],
@@ -74,6 +75,37 @@ def test_semgrep_is_removed_and_the_error_names_its_replacement(capsys):
     said = err.split("error:", 1)[1].split("The tools are:")[0]
     assert "removed in v2.0.0" in said
     assert "opengrep" in said, "the replacement must be named outside the tool list"
+
+
+def test_a_removed_tools_config_entries_are_named_not_dropped(tmp_path, caplog):
+    """A `per_tool` entry for a tool v2.0.0 removed configures nothing, since
+    no scan runs the tool. Unnamed, a user's settings for it would stop
+    applying without a word. One warning per file names every such entry, and
+    a tool still in the matrix is not among them."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "per_tool": {
+                    "grype": {"timeout": 600},
+                    "bandit": {"flags": ["-ll"]},
+                    "trivy": {"timeout": 900},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        loaded = jmo.load_config(str(cfg))
+
+    (warning,) = [
+        r.getMessage() for r in caplog.records if "removed in v2.0.0" in r.getMessage()
+    ]
+    assert "per_tool.grype" in warning, warning
+    assert "per_tool.bandit" in warning, warning
+    assert "trivy" not in warning, warning
+    assert "grype" in loaded.per_tool, "the user's entry is left as written"
 
 
 def test_a_v1_semgrep_config_is_named_not_dropped(tmp_path, caplog):

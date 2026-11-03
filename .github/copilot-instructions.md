@@ -6,7 +6,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 - Terminal-first security audit toolkit with a Python CLI (`scripts/cli/jmo.py`) and supporting modules under `scripts/core/`.
 - Two main phases:
-  1) scan: invoke external scanners (trufflehog, opengrep, syft, trivy, checkov, hadolint, shellcheck, yara, grype, zap, nuclei) and write raw JSON per repo under `results/individual-repos/<repo>/`.
+  1) scan: invoke external scanners (trufflehog, opengrep, syft, trivy, checkov, hadolint, shellcheck, yara, zap, nuclei) and write raw JSON per repo under `results/individual-repos/<repo>/`.
   2) report: normalize + dedupe into a CommonFinding shape and emit summaries (`findings.json`, `SUMMARY.md`, `dashboard.html`, optional SARIF) under `results/summaries/`.
 
 - Goals: unified outputs, stable fingerprints for dedupe, resilient to missing tools, and fast local iteration.
@@ -62,7 +62,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 ## External tools & integration
 
-- Tools invoked via subprocess without shell: trufflehog, opengrep, syft, trivy, checkov, hadolint, shellcheck, yara, grype, zap, nuclei.
+- Tools invoked via subprocess without shell: trufflehog, opengrep, syft, trivy, checkov, hadolint, shellcheck, yara, zap, nuclei.
 - Respect tool-specific return codes: opengrep (0 only), trivy (0/1), checkov (0/1). The CLI treats these as success when outputs are produced.
 
 ## Safe change checklist for agents

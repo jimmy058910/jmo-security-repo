@@ -144,7 +144,7 @@ allow if {
 }
 
 # Container scanning tools
-container_tools := ["trivy", "grype", "syft"]
+container_tools := ["trivy", "syft"]
 
 container_vulnerabilities contains finding if {
     finding := input.findings[_]

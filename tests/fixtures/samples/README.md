@@ -16,7 +16,7 @@ These samples serve as **static test targets** that produce deterministic, repro
 samples/
 ├── python-vulnerable/     # Python security issues (Semgrep)
 │   ├── vulnerable_app.py  # SAST findings (SQL injection, RCE, etc.)
-│   └── requirements.txt   # CVE-affected dependencies (Trivy, Grype)
+│   └── requirements.txt   # CVE-affected dependencies (Trivy, OSV-Scanner)
 ├── dockerfile-issues/     # Dockerfile best practices (Hadolint, Trivy)
 │   └── Dockerfile         # Missing healthcheck, running as root, etc.
 ├── terraform-misconfig/   # IaC misconfigurations (Checkov, Trivy)
@@ -46,7 +46,7 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 
 | Sample Directory | Tools That Should Find Issues |
 |-----------------|------------------------------|
-| python-vulnerable/ | Semgrep, Trivy (CVEs), Grype, OSV-Scanner (against `tests/fixtures/osv-db`, a frozen database of three synthetic advisories) |
+| python-vulnerable/ | Semgrep, Trivy (CVEs), OSV-Scanner (against `tests/fixtures/osv-db`, a frozen database of three synthetic advisories) |
 | dockerfile-issues/ | Hadolint, Trivy (misconfig) |
 | terraform-misconfig/ | Checkov, Trivy (config) |
 | credential-patterns/ | TruffleHog, Trivy (secrets) |

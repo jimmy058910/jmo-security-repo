@@ -79,7 +79,6 @@ Severity Mapping (Trivy -> CommonFinding):
 
 Integration Notes:
 - Syft SBOM can feed into Trivy for vulnerability scanning
-- Grype is an alternative with similar capabilities
 
 Example:
     >>> adapter = TrivyAdapter()
@@ -158,8 +157,8 @@ def _best_vulnerability_cvss(cvss_block: Any) -> dict[str, Any] | None:
     which is alphabetical: trivy's ``CVSS`` block is a Go map, and
     ``encoding/json`` sorts map keys. That gives at most one candidate per
     version, which `preferred_cvss` then ranks v3.x over v4.0 over v2.0
-    (#1356) -- the same order the consensus merge and grype use, all
-    through that one function.
+    (#1356) -- the same order the consensus merge uses, both through that
+    one function.
     """
     if not isinstance(cvss_block, dict) or not cvss_block:
         return None

@@ -418,7 +418,7 @@ make samples-verify
 
 Before publishing Docker images to GHCR, test them locally to validate changes.
 
-There is one image, built from the repository's single `Dockerfile`. It carries the 15 scanners plus OPA, the policy engine.
+There is one image, built from the repository's single `Dockerfile`. It carries the 14 scanners plus OPA, the policy engine.
 
 ### Build local images
 
@@ -1085,18 +1085,18 @@ JMo Security runs in two phases:
 | `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
 | `scripts/core/schema_validator.py` | JSON schema validation for findings |
 | `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
-| `scripts/core/adapters/*.py` | Tool output parsers (15 adapters; four are SARIF bindings over `sarif_common.py`) |
+| `scripts/core/adapters/*.py` | Tool output parsers (14 adapters; four are SARIF bindings over `sarif_common.py`) |
 | `scripts/core/reporters/` | Output formatters |
 | `scripts/jmo_mcp/jmo_server.py` | MCP server (see [mcp.rules.md](.claude/rules/mcp.rules.md)) |
 | `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
 | `jmo.yml` / `versions.yaml` | Main configuration / tool version registry |
-| `Dockerfile` | The one image (tagged `:latest` and the release version): the 15 scanners plus OPA |
+| `Dockerfile` | The one image (tagged `:latest` and the release version): the 14 scanners plus OPA |
 
 `tests/` holds 8,000+ tests across unit/adapters/reporters/integration; `.github/workflows/` holds CI/CD.
 
 ## Adding Tool Adapters (Plugin System)
 
-JMo Security uses a plugin-based architecture for all 15 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all 14 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
 
 ### Plugin Architecture Overview
 
@@ -1106,7 +1106,7 @@ JMo Security uses a plugin-based architecture for all 15 adapters. This enables 
 - **Fast Development** - 4 hours → 1 hour per adapter (75% reduction)
 - **Independent Updates** - Ship adapter improvements without core releases
 - **Low-Risk Testing** - Test new tools in `~/.jmo/adapters/` without modifying core
-- **Performance** - <100ms plugin loading overhead for all 15 adapters
+- **Performance** - <100ms plugin loading overhead for all 14 adapters
 
 **Core Components:**
 

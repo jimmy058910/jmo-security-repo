@@ -64,7 +64,7 @@ class TestBinaryUrls:
         replaced ``len(...) > 0`` was the only guard against that, and it still
         could not notice a single tool being dropped. Naming them can.
         """
-        assert {"trivy", "grype", "syft", "trufflehog", "nuclei"} <= set(BINARY_URLS)
+        assert {"trivy", "syft", "trufflehog", "nuclei"} <= set(BINARY_URLS)
 
     @pytest.mark.parametrize("tool", list(BINARY_URLS.keys()))
     def test_url_values_are_non_empty_strings(self, tool: str) -> None:
@@ -137,7 +137,7 @@ class TestInstallScripts:
         precisely because they resolve "latest" at runtime; the set is small and
         deliberate, so pin it rather than asserting it is merely non-empty.
         """
-        assert set(INSTALL_SCRIPTS) == {"grype", "syft", "trivy"}
+        assert set(INSTALL_SCRIPTS) == {"syft", "trivy"}
 
     @pytest.mark.parametrize("tool", list(INSTALL_SCRIPTS.keys()))
     def test_scripts_are_https_urls(self, tool: str) -> None:

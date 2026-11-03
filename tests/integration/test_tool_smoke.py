@@ -198,20 +198,6 @@ SMOKE_TEST_CONFIGS: dict[str, ToolSmokeConfig] = {
         ],
         description="Vulnerability and misconfiguration scanner",
     ),
-    "grype": ToolSmokeConfig(
-        name="grype",
-        timeout=180,
-        min_findings=0,  # Findings vary - just check tool runs
-        command_template=[
-            "grype",
-            "dir:{target}",
-            "-o",
-            "json",
-            "--file",
-            "{output}",
-        ],
-        description="Vulnerability scanner",
-    ),
     "syft": ToolSmokeConfig(
         name="syft",
         timeout=120,

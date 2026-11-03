@@ -67,10 +67,6 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.shellcheck_adapter",
         "class": "ShellCheckAdapter",
     },
-    "grype": {
-        "module": "scripts.core.adapters.grype_adapter",
-        "class": "GrypeAdapter",
-    },
     # Phase 1 of the v2.0.0 program: the three SARIF bindings. Each is ~25
     # lines over `sarif_common.parse_sarif`, so a regression here is the
     # importer's, and these three real documents are the only place its

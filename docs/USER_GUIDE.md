@@ -178,7 +178,6 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 | **Opengrep** | Static analysis for security issues in source code (command injection, insecure deserialization, etc.), by the rule bundle that ships with JMo |
 | **Syft** | Generates a Software Bill of Materials (SBOM) from `requirements.txt` / `pyproject.toml` |
 | **Trivy** | Checks Python dependencies for known CVEs |
-| **Grype** | Checks the same dependencies against a second vulnerability database |
 | **Checkov** | Scans any IaC files if present (Terraform, CloudFormation) |
 | **YARA** | Matches malware patterns (web shells, backdoors) across the tree |
 | **Hadolint** | Lints Dockerfiles — only fires if a `Dockerfile` exists in the repo |
@@ -552,7 +551,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Syft, Trivy, YARA, Grype, plus Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Syft, Trivy, YARA, plus Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -1174,7 +1173,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
   - A flag JMo must control is dropped with a warning that names it and says why. Which flags
     those are is each tool's own (every one is listed in its row's `reserved_flags`, in
     `scripts/core/tool_descriptors.py`). They come in five kinds, for example:
-    - Where it writes or in what format: trivy's and hadolint's `-f`, grype's and syft's `-o`
+    - Where it writes or in what format: trivy's and hadolint's `-f`, syft's `-o`
       and `--file`, opengrep's `-o`, `--text` and `--sarif`, nuclei's `-jsonl`, Gitleaks'
       `--report-format`, `--report-path`/`-r` and `--redact`
     - A flag JMo already passes to a tool that refuses one given twice, or whose second one
@@ -1183,7 +1182,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
       `--config`/`-c` (a repository's own `.gitleaks.toml` is read instead; see
       [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml))
     - Its exit code, which JMo reads to tell a run that worked from one that did not:
-      grype's `-f`/`--fail-on`, trivy's and Gitleaks' `--exit-code`, TruffleHog's `--fail`,
+      trivy's and Gitleaks' `--exit-code`, TruffleHog's `--fail`,
       Checkov's `--soft-fail` and hadolint's `--no-fail` (both exit 0 whatever they find).
       JMo's own `--fail-on` (`jmo ci`, `jmo report`) sets the failure threshold
     - Where JMo's own runners scan: yara's and jmo-native's `--target`
@@ -1632,7 +1631,7 @@ Default directory exclusions:
   `--exclude` of those directories is not needed to get that effect. Your own
   `flags` are appended after JMo's, so anything you add still applies.
 - The tools that *inventory* dependencies are deliberately exempt:
-  `syft` and `grype` still read those directories, because a vendored
+  `syft` still reads those directories, because a vendored
   tree is what they exist to look at.
 - To scan a vendored directory with a SAST tool anyway, point JMo at it
   directly: `jmo scan --repo ./vendor/some-library`.
@@ -1986,7 +1985,7 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 ```csv
 priority,kev,epss,severity,ruleId,target,path,line,message,tool,detected_by,triaged
 8.5,NO,,CRITICAL,github,app-one,config.py,15,GitHub Personal Access Token detected,trufflehog,trufflehog,NO
-7.2,YES,45.32%,HIGH,CVE-2024-1234,app-one,package.json,0,Vulnerability in lodash,trivy,"trivy, grype",YES
+7.2,YES,45.32%,HIGH,CVE-2024-1234,app-one,package.json,0,Vulnerability in lodash,trivy,"trivy, osv-scanner",YES
 3.5,NO,0.12%,MEDIUM,python.lang.security.audit.dangerous-code-exec,app-two,app.py,42,Use of exec() detected,semgrep,semgrep,NO
 ```
 

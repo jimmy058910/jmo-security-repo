@@ -129,7 +129,7 @@ class ExclusionStyle(StrEnum):
     (`scripts/cli/scan_utils.py`) - see that function for why it is not the
     `(^|[\\/])NAME([\\/]|$)` shape trufflehog uses. `**` does not
     compile as a regex at all and is dropped without a word either way. syft
-    and grype reject a bare name outright (rc 1: "must start with one of:
+    rejects a bare name outright (rc 1: "must start with one of:
     './', '*/', or '**/'"), and `./results` covers only the root copy
     (measured 2026-09-25).
     """
@@ -154,13 +154,13 @@ class FlagGrammar(StrEnum):
 
     It decides which spellings of a reserved flag reach the tool, so a user's
     `per_tool.<tool>.flags` is checked against what that tool will read. One
-    list for every tool could not be: grype's `-f` is `--fail-on`, and trivy
+    list for every tool could not be: trivy
     reads `-qftable` as `-q -f table`, which matches no listed token (42
     findings to 0, rc 0, measured). Measured per parser, on the tools named
     beside each.
     """
 
-    PFLAG = "pflag"  # cobra's: trivy, grype, syft, gitleaks
+    PFLAG = "pflag"  # cobra's: trivy, syft, gitleaks
     KINGPIN = "kingpin"  # trufflehog
     CMDLINER = "cmdliner"  # opengrep
     GETOPT = "getopt"  # Haskell's GetOpt: shellcheck
@@ -1587,24 +1587,6 @@ def _native_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
-def _grype_repo(ctx: ScanContext) -> list[Invocation]:
-    return [
-        Invocation(
-            command=(
-                ctx.binary,
-                f"dir:{ctx.target}",
-                "-o",
-                "json",
-                *ctx.exclusion_args,
-                *ctx.flags,
-            ),
-            output_file=ctx.output,
-            capture_stdout=True,
-            ok_return_codes=(0, 1),
-        )
-    ]
-
-
 # zap's automation plan, beside the target's outputs. Dot-prefixed scratch, as
 # `.gitleaks.toml`: the report reads every `<tool>.json` there and nothing else.
 ZAP_PLAN = ".zap-plan.yaml"
@@ -2222,26 +2204,6 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             short_switches=frozenset({"-h"}),
         ),
         ToolDescriptor(
-            name="grype",
-            invocations={"repo": _grype_repo},
-            version_probe=VersionProbe(_VERSION, command=["grype", "version"]),
-            exclusion_style=ExclusionStyle.SEPARATE,
-            exclusion_flag="--exclude",
-            flag_grammar=FlagGrammar.PFLAG,
-            # As syft's: `-otable` took 7 findings to 0 (measured, 0.118.0).
-            # Its `-f` is `--fail-on`: rc 2 on a match at that severity, which
-            # the row does not accept (measured).
-            reserved_flags=_reserve(
-                OUTPUT=("-o", "--output", "--file"),
-                EXIT_CODE=("-f", "--fail-on"),
-            ),
-            short_switches=frozenset({"-h", "-q", "-v"}),
-            # Reads vendored trees (#1205) except a virtualenv: 104 findings on
-            # this repository were the dev machine's CPython (decided 2026-09-11).
-            excluded_vendored=(".venv", "venv"),
-            stub={"matches": []},
-        ),
-        ToolDescriptor(
             name="osv-scanner",
             invocations={"repo": _osv_scanner_repo},
             # `osv-scanner --version` prints `osv-scanner version: 2.6.0`, then
@@ -2332,12 +2294,14 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
 }
 
 
-# The seventeen tools v2.0.0 removed (docs/TOOLS.md), falco's companion, and
-# semgrep, which opengrep replaced.
+# The seventeen tools v2.0.0 removed (docs/TOOLS.md), falco's companion,
+# semgrep, which opengrep replaced, and grype, whose findings osv-scanner and
+# trivy report (Phase 6).
 REMOVED_TOOLS: frozenset[str] = frozenset(
     {
         "kubescape",
         "semgrep",
+        "grype",
         "semgrep-secrets",
         "bandit",
         "trivy-rbac",

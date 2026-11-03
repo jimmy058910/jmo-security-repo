@@ -208,14 +208,14 @@ env:
 jobs:
   scan:
     env:
-      GRYPE_VERSION: 0.118.0
+      SYFT_VERSION: 1.51.1
     steps:
       - run: GITLEAKS_VERSION=8.30.1 make thing
 """,
     )
     assert copies == [
         "synthetic.yml: top level: OPA_VERSION: 1.21.3",
-        "synthetic.yml: jobs.scan: GRYPE_VERSION: 0.118.0",
+        "synthetic.yml: jobs.scan: SYFT_VERSION: 1.51.1",
         "synthetic.yml: jobs.scan.steps[0]: GITLEAKS_VERSION=8.30.1",
     ]
 

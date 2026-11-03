@@ -178,6 +178,16 @@ All notable changes to JMo Security will be documented in this file.
   `--tools`, `--skip-tools` or `tools:` is now a usage error (exit 2) that says it was
   removed in v2.0.0; opengrep covers Go code. The Docker image no longer carries its binary
   (#1310).
+- **Breaking. grype leaves the matrix; a scan runs 14 scanners.** Measured on two real
+  applications, every dependency finding it made was also reported by OSV-Scanner or
+  Trivy, none by grype alone; on terragoat its whole margin was Maven packages it named by
+  artifactId where the others name `groupId:artifactId` (#1372). Its database was 3.2 GB.
+  Naming it in `--tools`, `--skip-tools` or `tools:` is a usage error (exit 2), and a
+  `per_tool` entry for any removed tool now logs one warning naming it, where only
+  `per_tool.semgrep` did. A dependency finding grype also reported was led by grype at
+  equal severity, so its consensus id changes once (UPGRADE.md). Known-vulnerable GitHub
+  Actions are not reported offline any more (docs/KNOWN_LIMITATIONS.md, #1507). The Docker
+  image no longer carries its binary or its cache volume.
 - **The twelve published Claude Code skills are retired.** `.claude/skills/` no longer
   ships `jmo-adapter-generator`, `jmo-ci-debugger`, `jmo-compliance-mapper`,
   `jmo-dashboard-builder`, `jmo-documentation-updater`, `jmo-e2e-verify`,

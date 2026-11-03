@@ -780,17 +780,11 @@ class TestExclusions:
         assert command.index("--skip-path") < command.index("--compact")
         assert command.index("--framework") < command.index("--compact")
 
-    def test_syft_reads_vendored_trees_and_grype_reads_all_but_a_virtualenv(
-        self, tmp_path
-    ):
-        """#1205: a vendored tree is syft's subject. grype's .venv/venv was
-        decided 2026-09-11 (104 findings were the dev machine's CPython)."""
-        _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["syft", "grype"])
+    def test_syft_reads_vendored_trees(self, tmp_path):
+        """#1205: a vendored tree is syft's subject."""
+        _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["syft"])
 
         assert "--exclude" not in defs["syft"].command
-        grype = defs["grype"].command
-        excluded = [grype[i + 1] for i, tok in enumerate(grype) if tok == "--exclude"]
-        assert excluded == ["**/.venv", "**/venv"]
 
     def test_every_descriptor_keeps_an_in_tree_results_directory_out(self, tmp_path):
         """B5 (#1235): the rendered command for every repository tool excludes

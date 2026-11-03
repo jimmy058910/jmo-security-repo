@@ -12,7 +12,7 @@ v1.0.0 Feature #1:
 - Software Bill of Materials (SBOM) generation
 - Container image and filesystem analysis
 - Package dependency enumeration
-- Cross-linkable context for vulnerability scanners (Grype, Trivy)
+- Cross-linkable context for vulnerability scanners (Trivy)
 
 Tool Version: 1.5.0+
 Output Format: JSON (native Syft format, CycloneDX, SPDX supported)
@@ -31,7 +31,6 @@ Finding Types Generated:
 - Vulnerability IDs: If vulnerabilities section present (varies severity)
 
 Cross-Tool Integration:
-- Syft SBOM feeds into Grype for vulnerability scanning
 - Package locations cross-linked with Trivy findings
 - CWE-1104: Use of Unmaintained Third Party Components
 
@@ -42,7 +41,6 @@ Example:
 
 See Also:
     - https://github.com/anchore/syft
-    - Grype (vulnerability scanner companion)
     - CycloneDX and SPDX SBOM standards
 """
 

@@ -25,7 +25,6 @@ To narrow the list:
 | zizmor | GitHub Actions flaws: template injection, unpinned actions, dangerous triggers, credential persistence | Repository, GitLab | Workflows, composite actions or a Dependabot config are present | Release binary |
 | jmo-native | Next.js, Supabase and Firebase mistakes: a server secret behind a public env prefix, the Supabase `service_role` key or an LLM key in browser code, tables without Row Level Security, open Firebase rules ([details](#jmo-native)) | Repository, GitLab | JS/TS source, `.env` files, Firebase rules or Supabase migrations are present | Nothing: it is part of JMo |
 | YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-python` via pip, plus a rule bundle |
-| Grype | Vulnerable dependencies (Anchore database) | Repository, GitLab | Always | Release binary or install script |
 | OSV-Scanner | Vulnerable dependencies, read from lockfiles against an offline OSV database | Repository, GitLab | A lockfile is present | Release binary |
 | ZAP | Web application vulnerabilities (DAST) | URL | Never: URL targets only | Extracted application, needs Java 17+ |
 | Nuclei | Template-based vulnerability probes (DAST) | URL | Never: URL targets only | Release binary |
@@ -89,7 +88,7 @@ so zap stops and reports before JMo's timeout. It runs with a ZAP home of JMo's 
 `~/.jmo/zap-home`, which starts each run without the settings the last one stored, so a
 scan neither reads nor changes your `~/ZAP`.
 
-The remaining repository tools (TruffleHog, Gitleaks, Syft, Trivy, YARA, Grype) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
+The remaining repository tools (TruffleHog, Gitleaks, Syft, Trivy, YARA) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
 
 Trivy's repository scan reads vulnerabilities (dev dependencies included, and offline: it never calls out to a package registry) and misconfigurations; its secret pass runs only on an image scan. A repository's secrets come from TruffleHog and Gitleaks, not Trivy.
 
@@ -130,7 +129,7 @@ Opengrep is JMo's code scanner. It replaced Semgrep in v2.0.0 ([upgrading](../UP
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Syft, Trivy, YARA, Grype; Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Syft, Trivy, YARA; Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
@@ -151,7 +150,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 | Tool | How `jmo tools install` installs it | Where it goes |
 |------|-------------------------------------|---------------|
 | TruffleHog, Gitleaks, Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
-| Syft, Trivy, Grype | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
+| Syft, Trivy | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
 | Checkov | Pinned PyPI package in a virtual environment of its own, so its dependencies cannot conflict with JMo's | `~/.jmo/tools/venvs/<tool>/` |
 | YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |
 | ZAP | Pinned cross-platform release archive, extracted | `~/.jmo/bin/zap/` |
@@ -183,7 +182,7 @@ See [POLICY_AS_CODE.md](POLICY_AS_CODE.md) for writing and applying policies.
 
 ## Removed in v2.0.0
 
-These tools are no longer installed, run or parsed. A `per_tool` block for one of them in `jmo.yml` has nothing left to configure. Naming one in `--tools`, `--skip-tools` or `tools:` is a usage error (exit code 2) that says it was removed.
+These tools are no longer installed, run or parsed. A `per_tool` block for one of them in `jmo.yml` has nothing left to configure, and loading the file logs one warning that names it. Naming one in `--tools`, `--skip-tools` or `tools:` is a usage error (exit code 2) that says it was removed.
 
 | Tool | What it did | Why it was removed |
 |------|-------------|--------------------|
@@ -193,6 +192,7 @@ These tools are no longer installed, run or parsed. A `per_tool` block for one o
 | bandit (as a scanner) | Python SAST | Its results were dominated by `.venv` noise; Opengrep's Python rules cover the ground |
 | trivy-rbac | Kubernetes RBAC checks | Its output was identical to Trivy's config scan |
 | gosec | Go SAST | It examined 0 files on every run: it loads packages through the `go` command, and neither the image nor `jmo tools install` provides Go. Providing it meant ~58-72 MB of Go in the image and module and toolchain downloads during a scan. Opengrep's Go rules cover Go |
+| grype | Vulnerable dependencies, against Anchore's database | On two real applications every dependency finding it made was also reported by OSV-Scanner or Trivy, none by grype alone, and its database is 3.2 GB on disk. Known-vulnerable GitHub Actions, which only grype reported, are not reported offline now: see [Known limitations](KNOWN_LIMITATIONS.md#a-known-vulnerable-github-action-is-not-reported-offline) |
 | checkov-cicd | Checkov on CI/CD pipelines | Folded into Checkov, which never actually read `.github/workflows` under JMo (its `.git` exclusion also matched `.github`, #1313); Checkov's repository run was then narrowed to Terraform and CloudFormation only ([above](#when-each-tool-runs)), dropping its other CI/CD and secrets frameworks there. zizmor now audits workflows |
 
 Each tool below was never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream:

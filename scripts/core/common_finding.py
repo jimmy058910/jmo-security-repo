@@ -239,8 +239,8 @@ def preferred_cvss(candidates: Iterable[Any]) -> dict[str, Any] | None:
     dict is skipped.
 
     A consensus finding takes its CVSS from here across all its members
-    (#1355); the trivy and grype adapters route their own per-vulnerability
-    selection through this same function (#1356), so the two cannot disagree.
+    (#1355); the trivy adapter routes its own per-vulnerability selection
+    through this same function (#1356), so the two cannot disagree.
     The SARIF importer's `security-severity` score never carries a version
     (measured on osv-scanner: neither `rules[].properties` nor `help`/
     `fullDescription` state one in a structured field), so it has nothing to

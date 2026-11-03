@@ -210,7 +210,7 @@ All adapters create findings and must include priority field:
 - ✅ `scripts/core/adapters/syft_adapter.py` - Add priority calculation
 - ✅ `scripts/core/adapters/checkov_adapter.py` - Add priority calculation
 - ✅ `scripts/core/adapters/hadolint_adapter.py` - Add priority calculation
-- ✅ `scripts/core/adapters/grype_adapter.py` - Add priority calculation
+- ✅ `scripts/core/adapters/trivy_adapter.py` - Add priority calculation
 - ✅ `scripts/core/adapters/zap_adapter.py` - Add priority calculation
 - ✅ `scripts/core/adapters/sarif_common.py` - One change covers the SARIF bindings
 - ✅ ... (and all other adapters in scripts/core/adapters/)

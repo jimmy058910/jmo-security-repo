@@ -161,19 +161,6 @@ brew install syft
 scoop install syft
 ```
 
-**Grype** (Vulnerability scanner, Anchore database):
-
-```bash
-# macOS
-brew install grype
-
-# Linux
-curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
-
-# Windows (Chocolatey)
-choco install grype -y
-```
-
 #### IaC Security
 
 **Checkov** (Infrastructure as Code):
@@ -284,7 +271,6 @@ java -version
 | Checkov | ✅ | ✅ | ✅ | ✅ |
 | Hadolint | ✅ | ✅ | ✅ | ✅ |
 | ShellCheck | ✅ | ✅ | ✅ | ✅ |
-| Grype | ✅ | ✅ | ✅ | ✅ |
 | YARA | ✅ | ✅ | ✅ | ✅ |
 | Nuclei | ✅ | ✅ | ✅ | ✅ |
 | OWASP ZAP | ✅ | ✅ | ✅ | ✅ |

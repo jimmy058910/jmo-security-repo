@@ -72,7 +72,7 @@ def test_every_golden_result_names_its_package():
         "aliases": ["GHSA-23c5-xmqv-rm74"],
     }
     assert not any(f.ruleId in f.dependency["aliases"] for f in findings)
-    # The id is keyed on the package, like trivy's and grype's.
+    # The id is keyed on the package, like trivy's.
     assert first.id == fingerprint(
         "osv-scanner",
         first.ruleId,

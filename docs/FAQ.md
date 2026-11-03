@@ -41,7 +41,7 @@ The tool installer uses isolated virtualenvs for pip-based tools (avoids conflic
 
 Docker users skip this step — all scanners are pre-installed in the image.
 
-### Do I need all 15 scanners?
+### Do I need all 14 scanners?
 
 No, and you rarely run them all. `jmo scan` considers every scanner, but the target's content decides which ones run: hadolint needs Dockerfiles, shellcheck needs shell scripts, zizmor needs GitHub Actions workflows or actions, or a Dependabot config, osv-scanner needs a dependency lockfile, jmo-native needs JS/TS source, `.env` files, Firebase rules or Supabase migrations, checkov needs Terraform or CloudFormation, and zap and nuclei only run on `--url` targets. To narrow the list yourself, use `--tools` (for example `jmo scan --repo . --tools trufflehog opengrep trivy`), `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
 
