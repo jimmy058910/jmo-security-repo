@@ -24,6 +24,16 @@ import pytest
 from scripts.cli.tool_commands import cmd_tools_uninstall
 from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
 
+
+@pytest.fixture
+def attended(monkeypatch):
+    """Clear the variables that mark a run unattended. Any of them skips the
+    install and update confirmations (test_closed_stdin_prompts.py), so a CI
+    runner's own ``CI=true`` would otherwise decide the tests that answer one."""
+    for var in ("CI", "JMO_NON_INTERACTIVE", "DOCKER_CONTAINER"):
+        monkeypatch.delenv(var, raising=False)
+
+
 # ========== Category 1: Colors Class ==========
 
 
@@ -1860,6 +1870,7 @@ class TestCmdToolsDebugComprehensive:
 class TestCmdToolsUpdateWithInstaller:
     """Tests for cmd_tools_update with actual installer logic."""
 
+    @pytest.mark.usefixtures("attended")
     def test_update_cancelled_by_user(self):
         """Test update cancelled via user input."""
         from scripts.cli.tool_commands import cmd_tools_update
@@ -2235,6 +2246,7 @@ class TestCmdToolsDebugSubprocessExecution:
 class TestCmdToolsInstallInteractive:
     """Test cmd_tools_install interactive confirmation paths."""
 
+    @pytest.mark.usefixtures("attended")
     def test_install_interactive_cancelled(self, capsys, monkeypatch):
         """Test install cancelled via interactive confirmation."""
         from scripts.cli.tool_commands import cmd_tools_install
@@ -2460,6 +2472,7 @@ class TestCmdToolsInstallInteractive:
 class TestCmdToolsUpdateInteractive:
     """Test cmd_tools_update interactive confirmation paths."""
 
+    @pytest.mark.usefixtures("attended")
     def test_update_interactive_cancelled(self, capsys, monkeypatch):
         """Test update cancelled via interactive confirmation."""
         from scripts.cli.tool_commands import cmd_tools_update

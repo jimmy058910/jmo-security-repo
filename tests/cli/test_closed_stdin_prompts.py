@@ -17,8 +17,13 @@ reminder with ``stream_is_tty`` (then private to ``jmo.py``, now
 * the ``jmo tools install`` and ``jmo tools update`` confirmations -- the same,
   before anything was installed.
 
-Each test closes a stream, stubs ``input`` to fail, and asserts the guard took
-the branch it takes for a pipe: the prompt was never shown. One control shows a
+Those two confirmations also honour ``JMO_NON_INTERACTIVE``, ``CI`` and
+``DOCKER_CONTAINER``, as ``jmo.py``'s prompts do: a terminal on stdin is not a
+reader when a wrapper sends the output to a log, and the question waited unseen.
+
+Each test closes a stream or marks the run unattended, stubs ``input`` to fail,
+and asserts the guard took the branch it takes for a pipe: the prompt was never
+shown. One control shows a
 terminal is still asked (the tools prompts have theirs in
 ``test_tool_commands.py``).
 """
@@ -117,7 +122,7 @@ def test_mcp_server_says_how_to_install_instead_of_asking(closed_stdin, capsys):
 
 
 @pytest.fixture
-def run_tools_command(closed_stdin):
+def run_tools_command(home, no_prompt):
     """Return ``run(command) -> (rc, installer)`` for ``jmo tools install|update``
     without ``--yes``, against a stubbed ToolManager and ToolInstaller: nothing
     is installed and nothing under the home is touched."""
@@ -164,18 +169,44 @@ def run_tools_command(closed_stdin):
     return run
 
 
-def test_tools_install_goes_ahead_without_asking(run_tools_command):
+def test_tools_install_goes_ahead_without_asking(closed_stdin, run_tools_command):
     rc, installer = run_tools_command(tool_commands.cmd_tools_install)
 
     assert rc == 0
     installer.install_tools_parallel.assert_called_once()
 
 
-def test_tools_update_goes_ahead_without_asking(run_tools_command):
+def test_tools_update_goes_ahead_without_asking(closed_stdin, run_tools_command):
     rc, installer = run_tools_command(tool_commands.cmd_tools_update)
 
     assert rc == 0
     installer.install_tool.assert_called_once_with("trivy", force=True)
+
+
+@pytest.mark.parametrize(
+    ("var", "value"),
+    [("JMO_NON_INTERACTIVE", "1"), ("CI", "true"), ("DOCKER_CONTAINER", "1")],
+    ids=["JMO_NON_INTERACTIVE", "CI", "DOCKER_CONTAINER"],
+)
+@pytest.mark.parametrize("command", ["install", "update"])
+def test_tools_prompts_go_ahead_when_the_run_is_marked_unattended(
+    command, var, value, run_tools_command, monkeypatch
+):
+    """A terminal on stdin, and the run says nobody is reading. A PowerShell
+    wrapper that sent the output to a log left its console on stdin, and
+    ``jmo tools install`` waited there, unseen, with ``JMO_NON_INTERACTIVE=1``
+    set."""
+    monkeypatch.setattr(sys, "stdin", _Tty())
+    monkeypatch.setenv(var, value)
+
+    rc, installer = run_tools_command(getattr(tool_commands, f"cmd_tools_{command}"))
+
+    assert rc == 0
+    installed = {
+        "install": installer.install_tools_parallel,
+        "update": installer.install_tool,
+    }[command]
+    installed.assert_called_once()
 
 
 @pytest.mark.parametrize(

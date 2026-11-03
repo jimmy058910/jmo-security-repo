@@ -539,6 +539,12 @@ All notable changes to JMo Security will be documented in this file.
   without the confirmation. A prompt that reads stdin without such a guard is unchanged and
   still fails on a closed stdin: `jmo tools uninstall`, `jmo history prune`,
   `jmo history repair`, `jmo schedule delete` and the wizard's prompts.
+- **`jmo tools install` and `jmo tools update` honour `JMO_NON_INTERACTIVE`.** Without
+  `--yes`, their confirmation was asked whenever stdin was a terminal, whatever the run
+  said about itself. A Windows PowerShell wrapper that sent the output to a log and left its
+  console on stdin hid the question, and `jmo tools install` waited for an answer with
+  `JMO_NON_INTERACTIVE=1` set. Both now go ahead without asking when `JMO_NON_INTERACTIVE`
+  or `CI` is set or `DOCKER_CONTAINER=1`, the test `jmo scan`'s prompts already use.
 - **A scan nobody is watching no longer rewrites `~/.jmo/config.yml`.** Every `jmo scan` and
   `jmo ci` created `~/.jmo`, read `config.yml`, bumped its `scan_count` and wrote it back,
   to decide whether to print the Ko-fi reminder shown every third scan, whether or not
