@@ -781,6 +781,16 @@ class TestARedirectOutOfTheScopeIsNamed:
         assert "http://zap-fixture.test/app/" in said[target]
         assert _ops(tmp_path, 1) == [("moved_redirect", 301)]
 
+    def test_the_question_names_who_asks(self, tmp_path, real_url_probe, redirecting):
+        """`http.client` sends no User-Agent, and a site behind a CDN or a WAF
+        may answer a request without one with a 403 instead of its redirect,
+        so the probe would miss the very redirect it asks about."""
+        _probed(tmp_path, redirecting.url + "/moved/")
+
+        _ops(tmp_path, 1)
+        (request,) = fx.read_log(tmp_path / "requests.jsonl")
+        assert "jmo-security" in request["ua"], request
+
     def test_the_other_loopback_spelling_is_in_the_scope_so_nothing_is_said(
         self, tmp_path, real_url_probe, redirecting
     ):

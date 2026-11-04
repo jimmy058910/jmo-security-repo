@@ -1727,8 +1727,12 @@ def url_redirect(url: str, timeout: float = 10.0) -> str | None:
     connection = None
     try:
         connection = connect(parts.hostname, parts.port, timeout=timeout)
+        # `http.client` sends no User-Agent, and a CDN or a WAF may answer a
+        # request without one with a 403 instead of the site's redirect.
         connection.request(
-            "GET", urlunsplit(("", "", parts.path or "/", parts.query, ""))
+            "GET",
+            urlunsplit(("", "", parts.path or "/", parts.query, "")),
+            headers={"User-Agent": "Mozilla/5.0 (compatible; jmo-security)"},
         )
         response = connection.getresponse()
         location = response.getheader("Location")
