@@ -192,9 +192,14 @@ def _parse_checkov_report(data: dict[str, Any]) -> list[dict[str, Any]]:
             # Line number may be provided as a list range, a scalar, or invalid; default to 0 on errors
             line_val = it.get("file_line_range")
             line = 0
+            # The resource's last line: a trivy finding on one container sits
+            # inside it, and dedup can only see that with both ends (#1354).
+            end_line: int | None = None
             try:
                 if isinstance(line_val, list) and line_val:
                     line = int(line_val[0])
+                    if len(line_val) > 1 and int(line_val[-1]) >= line:
+                        end_line = int(line_val[-1])
                 elif isinstance(line_val, (int, str)):
                     line = int(line_val)
                 else:
@@ -225,7 +230,11 @@ def _parse_checkov_report(data: dict[str, Any]) -> list[dict[str, Any]]:
                     "name": "checkov",
                     "version": str(data.get("checkov_version") or "unknown"),
                 },
-                "location": {"path": file_path, "startLine": line},
+                "location": {
+                    "path": file_path,
+                    "startLine": line,
+                    **({"endLine": end_line} if end_line is not None else {}),
+                },
                 "remediation": str(it.get("guideline") or "Review policy guidance"),
                 "tags": tags,  # Updated with CI/CD detection
                 "raw": it,

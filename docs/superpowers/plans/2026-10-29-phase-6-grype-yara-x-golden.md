@@ -286,7 +286,7 @@ reports are in `~/.cache/jmo-p6/premise/`.
 | #1371 | confirmed, sharper | a stale `trivy.json` (4 findings) in a reused results directory, then `--tools shellcheck` → `findings.json` 10 (shellcheck 6, trivy 4), `meta.tools` `['shellcheck']`, and **the history database stores all 10**. A stale `osv-scanner.json` under a row `failed:offline database missing` → 291 old findings reported; under a row that exited 127 before writing → 291. A requested tool that skips is clean (it writes a stub). Inferred, not run: `ToolRunner`'s `_wrote_nothing` (`tool_runner.py:349-352`) is `not output_file.exists()`, so a stale file also passes that check |
 | #1432 | confirmed; the body's fix is wrong twice | bad `osv-scanner.toml`: rc 130, row `failed`, `kept_findings` null, "No tool ran … not stored in history", and `findings.json` holds **6** findings (4 on 2.6.0). Correction 1: `collect_tool_diagnostics` reads each output's error channel, not a row's state; state is in `scan-timings.json`, which the report reads only for `root` (`normalize_and_report.py:188`). Correction 2: #1369 deliberately keeps a failed row's working runs (`ToolRun.kept_findings`, `scan_timings.py:140-150`), so "skip every failed row" would drop them. The rule is per row: `kept_findings` null → not a finding of this scan |
 | #1370 | confirmed, both halves | trivy tags are `vulnerability`, `secret`, `misconfig` (`trivy_adapter.py:261-265, 338`); `get_tool_category` (`compliance_mapper.py:893-933`) checks the tag `secrets` (`:906`) and maps `tool in ["trivy","syft"]` to `sca` (`:914`) before any content test. A real misconfiguration (DS-0002) gets `sca`: CIS 7.1-7.4, 16.11, NIST GV.SC-3, PCI 6.3.3 / 11.3.1, MITRE T1195. Six keys carry two wordings (`:556/:636`, `:650/:709`, `:655/:714`, `:662/:735`, `:781/:871`, `:797/:880`). Also: **shellcheck and zizmor findings get no category at all** (`None`) |
-| #1354 | partly | the four pairs are absent, and trivy 0.74.0 does emit `DS-0013` (`rule_equivalence.py:57`'s comment says it does not). Added in-process: **only `DS-0013`/`DL3003` merges** (43 → 42). No Kubernetes pair merges, **including the six already in the table** (`KSV-0017/CKV_K8S_16`, `KSV-0011/_11`, `KSV-0016/_12`, `KSV-0018/_13`, `KSV-0012/_23`, `KSV-0001/_20`): the checkov adapter keeps only the first element of `file_line_range` (`checkov_adapter.py:192-198, 228`), so checkov's finding is line 1 with no end, trivy's 7-10, and location similarity is 0; with the end supplied (Jaccard 0.4) still no merge. **2026-11-04:** the table holds eight Kubernetes trivy/checkov groups, not six (`KSV-0009`, `KSV-0010` too), and one Pod cannot fire them all: E1 uses two |
+| #1354 | partly | the four pairs are absent, and trivy 0.74.0 does emit `DS-0013` (`rule_equivalence.py:57`'s comment says it does not). Added in-process: **only `DS-0013`/`DL3003` merges** (43 → 42). No Kubernetes pair merges, **including the six already in the table** (`KSV-0017/CKV_K8S_16`, `KSV-0011/_11`, `KSV-0016/_12`, `KSV-0018/_13`, `KSV-0012/_23`, `KSV-0001/_20`): the checkov adapter keeps only the first element of `file_line_range` (`checkov_adapter.py:192-198, 228`), so checkov's finding is line 1 with no end, trivy's 7-10, and location similarity is 0; with the end supplied (Jaccard 0.4) still no merge. **2026-11-04:** the table holds eight Kubernetes trivy/checkov groups, not six (`KSV-0009`, `KSV-0010` too), and a plain Pod fires five of the eight: E1's Pod adds `hostPID`, `hostNetwork` and `privileged` |
 | #1380 | confirmed, 9 of 9 | every row reproduces with a planted input and a correct control; `native_checks.py` unchanged since `5847d94b`. Row 5 (`CLIENT_DIRS`, `:126`) sits beside `TODO(issue-#1381)`, the after-the-tag monorepo issue |
 | #1007 | partly; the live defect confirmed with corrected counts | the osv-scanner golden through `jmo report` with its Windows scan root: `findings.sarif` **1,896** (958 in `results[].properties.remediation`, 938 in the rules' `help` text and markdown from `sarif_common.py:320`), `findings.json` / `.yaml` / `dashboard.html` 1,249 each (958 `remediation` + 291 `raw` URIs), CSV and the Markdown reports 0. A real Linux scan (osv-scanner 2.7.0, 6 findings): SARIF 36, JSON 18. Across eight tools on the samples only `raw` carries the root (checkov 75, hadolint 10, shellcheck 17). A clustered finding nests its duplicates' `raw` in `context.duplicates[].raw`, so a guard must walk every string |
 | #1430 | confirmed | `_announce_own_config` (`tool_loop.py:278`) only logs; the row's `detail` stays null; nothing in the results directory or `findings.json` names the file, and the history table `scan_tool_runs` has no `detail` column. A repository whose `osv-scanner.toml` ignores one advisory and one package: 0 findings against 6, and one console line |
@@ -1057,18 +1057,18 @@ trivy/checkov pairs, not six), `scripts/core/adapters/checkov_adapter.py:193-198
 - [ ] **Step 1: Failing tests**, each from real tool output on one input (the table already
   spells trivy's hyphenated ids, `DS-0013`, `KSV-0013`, as the adapter reads them, so no
   normalisation is needed): `DS-0013` and hadolint `DL3003` on `RUN cd /x && make` → one
-  finding (0.587 today, under the 0.65 threshold). One Pod cannot fire every group, so two:
-  Pod 1 (`nginx:latest`, no CPU request, a writable root filesystem) fires the three new
-  Kubernetes pairs (`KSV-0015`/`CKV_K8S_10`, `KSV-0013`/`CKV_K8S_14`,
-  `KSV-0014`/`CKV_K8S_22`) and five existing ones (`KSV-0001`, `-0011`, `-0012`, `-0016`,
-  `-0018`); Pod 2 (`hostPID`, `hostNetwork`, `privileged`) fires the other three (`KSV-0009`,
-  `-0010`, `-0017`). Each pair → one finding. A negative (`KSV-0013` and an unrelated checkov
-  id on the same resource) → two.
-- [ ] **Step 2:** checkov findings carry `endLine` (checkov gives Pod 1 `[1,10]`, trivy the
+  finding (0.587 today, under the 0.65 threshold). One Pod (`hostPID`, `hostNetwork`,
+  `privileged`, `nginx:latest`, no requests or limits) fires all eleven Kubernetes pairs: the
+  eight in the table and the three new ones (`KSV-0015`/`CKV_K8S_10`, `KSV-0013`/`CKV_K8S_14`,
+  `KSV-0014`/`CKV_K8S_22`). (Corrected building E1: the measurement's plain Pod fired five of
+  the eight, so it read as needing two.) Each pair → one finding, and no other trivy finding
+  joins a checkov one. A negative (`KSV-0013` and an unrelated checkov id on the same
+  resource) → two.
+- [ ] **Step 2:** checkov findings carry `endLine` (checkov gives the plain Pod `[1,10]`, trivy the
   container's 7-10). For a pair the table names, location scores by containment (one range
   inside the other scores 1.0); every other pair keeps Jaccard × gap. Measured: `endLine`
   alone (Jaccard 0.4) leaves the pairs at 0.50-0.55; with containment an equivalent pair
-  scores at least 0.80, and none of the 360 trivy × checkov pairs on Pod 1 that the table
+  scores at least 0.80, and none of the 360 trivy × checkov pairs on the plain Pod that the table
   does not name reaches 0.65 (max 0.591). The margin is thin: containment stays scoped to
   the table's pairs.
 - [ ] **Step 3:** Add the four pairs; correct the `:57` comment. The checkov ids' meanings
@@ -1079,7 +1079,7 @@ trivy/checkov pairs, not six), `scripts/core/adapters/checkov_adapter.py:193-198
 A repository scan runs checkov with `--framework terraform terraform_json cloudformation`
 only (`tool_descriptors.py:1080-1092`, `docs/TOOLS.md:50`), so the Kubernetes pairs merge on
 `--k8s-manifest` alone, and the table's `CKV_DOCKER_*` rows meet no checkov finding on any
-scan today (inferred from the descriptors, not run). E7 scans the Pods with `--k8s-manifest`.
+scan today (inferred from the descriptors, not run). E7 scans the Pod with `--k8s-manifest`.
 
 ## Task E2: Compliance category by what a finding is (#1370) (P5)
 
@@ -1226,7 +1226,7 @@ bare hadolint hits 221, trivy 130, either **226 (93.4%)**; with the repository's
 ## Task E7: Gates, then PR E
 
 - [ ] Suite; for E1 a real hadolint + trivy run on one Dockerfile through `jmo scan --repo`,
-  and checkov + trivy on each of E1's two Pods through `jmo scan --k8s-manifest`, recording
+  and checkov + trivy on E1's Pod through `jmo scan --k8s-manifest`, recording
   which pairs merge; E4's redirect run; E6's table recorded. Push, open PR E.
 
 ## Task F1: Capture through `jmo scan` (P5)

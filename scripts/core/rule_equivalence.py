@@ -54,9 +54,11 @@ from __future__ import annotations
 # On 0.74.0's output no old id matched anything and three Titles did, and
 # eight old ids named another check entirely (`DS031` sat here as "open
 # ingress": it is the Dockerfile secrets check). Where 0.74.0 has no check for
-# a group, the trivy key was dropped, not translated: `DS013` is "'RUN cd ...'
-# to change directory", `DS015` is "'yum clean all' missing", and 0.74.0 ships
-# `DS-0024` ("'apt-get dist-upgrade' used") deprecated, so it never fires. That
+# a group, the trivy key was dropped, not translated: `DS015` is "'yum clean
+# all' missing", and 0.74.0 ships `DS-0024` ("'apt-get dist-upgrade' used")
+# deprecated, so it never fires. (`DS013`, "'RUN cd ...' to change directory",
+# was dropped with them, but 0.74.0 does fire it as `DS-0013`, measured on a
+# `RUN cd /x && make`: it pairs with hadolint DL3003 below, #1354.) That
 # left `dockerfile-apt-get-upgrade` (hadolint DL3005) and
 # `dockerfile-missing-version-pin` (hadolint DL3008) with one tool each, and a
 # one-tool group cannot deduplicate across tools, so both groups are gone.
@@ -140,6 +142,10 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # "Potentially sensitive data should not be used in the `ARG` or `ENV`
         # commands" -- new in hadolint 2.15, fired on the same ENV line.
         ("hadolint", "DL3064"),
+    ],
+    "dockerfile-run-cd": [
+        ("trivy", "DS-0013"),  # "'RUN cd ...' to change directory"
+        ("hadolint", "DL3003"),  # "Use WORKDIR to switch to a directory"
     ],
     # REMOVED (#1221): `dockerfile-hardcoded-secret` held trivy DS-0031 with
     # hadolint DL3059 ("Multiple consecutive `RUN` instructions"), checkov
@@ -226,6 +232,22 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     "k8s-no-memory-requests": [
         ("trivy", "KSV-0016"),  # "Memory requests not specified"
         ("checkov", "CKV_K8S_12"),  # "Memory requests should be set"
+    ],
+    # #1354's three, read from trivy 0.74.0 and checkov 3.3.29 on one Pod
+    # (tests/fixtures/rule_equivalence/); the Terraform framework gives these
+    # three numbers the same meanings.
+    "k8s-no-cpu-requests": [
+        ("trivy", "KSV-0015"),  # "CPU requests not specified"
+        ("checkov", "CKV_K8S_10"),  # "CPU requests should be set"
+    ],
+    "k8s-image-tag-latest": [
+        ("trivy", "KSV-0013"),  # 'Image tag ":latest" used'
+        ("checkov", "CKV_K8S_14"),  # "Image Tag should be fixed - not latest or blank"
+    ],
+    "k8s-root-filesystem-writable": [
+        ("trivy", "KSV-0014"),  # "Root file system is not read-only"
+        # "Use read-only filesystem for containers where possible"
+        ("checkov", "CKV_K8S_22"),
     ],
     # ===== Secret Detection =====
     # No opengrep rows: the bundle excludes `generic/secrets/` (secrets are

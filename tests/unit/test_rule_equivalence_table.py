@@ -31,10 +31,15 @@ gained; `_adapter_names()` reads the authority instead.
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import pytest
 
+from scripts.core.adapters.checkov_adapter import CheckovAdapter
+from scripts.core.adapters.hadolint_adapter import HadolintAdapter
+from scripts.core.adapters.trivy_adapter import TrivyAdapter
+from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
 from scripts.core.rule_equivalence import (
     RULE_EQUIVALENCE,
     are_rules_equivalent,
@@ -292,3 +297,85 @@ def test_every_group_still_has_members_and_no_duplicate_pairs():
                 clashes.append((pair, seen[pair], canonical))
             seen[pair] = canonical
     assert not clashes, f"one (tool, rule) mapped to two canonical ids: {clashes}"
+
+
+# Real output, clustered as a report clusters it (#1354). A pair the table
+# lists merges only if the two tools' locations also score: checkov reports a
+# Kubernetes resource's whole range, trivy one container's lines inside it.
+REAL_OUTPUT = Path(__file__).resolve().parents[1] / "fixtures" / "rule_equivalence"
+
+
+def _parsed(adapter: type, name: str) -> list[dict]:
+    return [finding.to_dict() for finding in adapter().parse(REAL_OUTPUT / name)]
+
+
+def _merged_pairs(findings: list[dict]) -> set[frozenset[tuple[str, str]]]:
+    """Each consensus finding that merged several, as its (tool, rule) members."""
+    member = {f["id"]: (f["tool"]["name"], f["ruleId"]) for f in findings}
+    merged = set()
+    for consensus in _cluster_cross_tool_duplicates(copy.deepcopy(findings)):
+        duplicates = (consensus.get("context") or {}).get("duplicates") or []
+        if duplicates:
+            lead = member[consensus["id"].removeprefix("cluster-")]
+            merged.add(frozenset({lead, *(member[d["id"]] for d in duplicates)}))
+    return merged
+
+
+def _pair(trivy_id: str, tool: str, rule_id: str) -> frozenset[tuple[str, str]]:
+    return frozenset({("trivy", trivy_id), (tool, rule_id)})
+
+
+def test_trivy_and_hadolint_merge_the_same_check_on_one_dockerfile():
+    """`RUN cd /x && make`: trivy's DS-0013 and hadolint's DL3003 are one
+    finding, as `USER root`'s DS-0002 and DL3002 already were."""
+    findings = _parsed(TrivyAdapter, "Dockerfile.trivy.json") + _parsed(
+        HadolintAdapter, "Dockerfile.hadolint.json"
+    )
+
+    assert _merged_pairs(findings) == {
+        _pair("DS-0013", "hadolint", "DL3003"),
+        _pair("DS-0002", "hadolint", "DL3002"),
+    }
+
+
+def test_every_kubernetes_pair_merges_and_nothing_else_does():
+    """All eleven trivy/checkov pairs on one Pod merge, and no other trivy
+    finding joins a checkov one: 20 and 22 findings share one resource, so a
+    location rule that ignored the table would merge unrelated checks."""
+    findings = _parsed(TrivyAdapter, "pod.trivy.json") + _parsed(
+        CheckovAdapter, "pod.checkov.json"
+    )
+
+    assert _merged_pairs(findings) == {
+        _pair("KSV-0017", "checkov", "CKV_K8S_16"),  # privileged
+        _pair("KSV-0001", "checkov", "CKV_K8S_20"),  # privilege escalation
+        _pair("KSV-0010", "checkov", "CKV_K8S_17"),  # host PID
+        _pair("KSV-0012", "checkov", "CKV_K8S_23"),  # runs as root
+        _pair("KSV-0009", "checkov", "CKV_K8S_19"),  # host network
+        _pair("KSV-0011", "checkov", "CKV_K8S_11"),  # CPU limits
+        _pair("KSV-0018", "checkov", "CKV_K8S_13"),  # memory limits
+        _pair("KSV-0016", "checkov", "CKV_K8S_12"),  # memory requests
+        _pair("KSV-0015", "checkov", "CKV_K8S_10"),  # CPU requests
+        _pair("KSV-0013", "checkov", "CKV_K8S_14"),  # image tag
+        _pair("KSV-0014", "checkov", "CKV_K8S_22"),  # read-only root filesystem
+    }
+
+
+def test_a_range_inside_another_counts_only_for_a_listed_pair():
+    """Every trivy finding on the Pod sits inside every checkov range, so
+    containment is no evidence by itself: an unlisted pair keeps its Jaccard
+    (4 shared lines of 12). The clustering test above cannot see this, since
+    on this Pod no unlisted pair would cross 0.65 either way (max 0.591)."""
+    from scripts.core.dedup_enhanced import SimilarityCalculator
+
+    trivy = {f["ruleId"]: f for f in _parsed(TrivyAdapter, "pod.trivy.json")}
+    checkov = {f["ruleId"]: f for f in _parsed(CheckovAdapter, "pod.checkov.json")}
+    image_tag, unlisted = trivy["KSV-0013"], checkov["CKV_K8S_37"]
+    calculator = SimilarityCalculator()
+
+    assert calculator.location_similarity(
+        image_tag["location"], unlisted["location"]
+    ) == pytest.approx(4 / 12)
+    assert calculator.calculate_similarity(
+        image_tag, checkov["CKV_K8S_14"]
+    ) > calculator.calculate_similarity(image_tag, unlisted)

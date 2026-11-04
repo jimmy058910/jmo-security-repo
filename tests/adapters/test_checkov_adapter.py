@@ -360,3 +360,34 @@ def test_checkov_list_with_non_dict_entries_is_tolerated(tmp_path: Path):
 
     assert len(findings) == 1
     assert findings[0].ruleId == "CKV_AWS_1"
+
+
+def test_a_checkov_finding_spans_the_resource_it_names(tmp_path: Path):
+    """checkov reports a resource's first and last line; the finding keeps both,
+    so a trivy finding on a container inside that resource can match it (#1354).
+    A single number has no end, and the finding claims none."""
+    sample = {
+        "check_type": "kubernetes",
+        "results": {
+            "failed_checks": [
+                {
+                    "check_id": "CKV_K8S_10",
+                    "check_name": "CPU requests should be set",
+                    "file_path": "/pod.yaml",
+                    "file_line_range": [1, 12],
+                },
+                {
+                    "check_id": "CKV_K8S_14",
+                    "check_name": "Image Tag should be fixed - not latest or blank",
+                    "file_path": "/pod.yaml",
+                    "file_line_range": 7,
+                },
+            ]
+        },
+    }
+    p = write(tmp_path, "checkov.json", json.dumps(sample))
+
+    spanned, scalar = (f.to_dict()["location"] for f in CheckovAdapter().parse(p))
+
+    assert spanned == {"path": "/pod.yaml", "startLine": 1, "endLine": 12}
+    assert scalar == {"path": "/pod.yaml", "startLine": 7}
