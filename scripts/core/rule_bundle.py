@@ -62,13 +62,20 @@ LANGUAGE_PATTERNS: dict[str, tuple[str, ...]] = {
     # `.edn` is data, which opengrep reads as Clojure.
     "clojure": ("*.clj", "*.cljs", "*.cljc", "*.edn"),
     "csharp": ("*.cs",),
-    # The first three are `DOCKERFILE_PATTERNS` without its `**/` (hadolint's
-    # row), which `tool_descriptors` cannot lend: it imports this module.
-    # opengrep scans `Dockerfile` and `*.Dockerfile` and their lowercase
-    # spellings, which a match that counts case does not fold into them, and
-    # scans no `Dockerfile.dev`, which `Dockerfile.*` still names.
+    # All but the last two are `DOCKERFILE_PATTERNS` without its `**/`
+    # (hadolint's row), which `tool_descriptors` cannot lend: it imports this
+    # module. opengrep 1.32.0 reads with its Dockerfile rules `Dockerfile` and
+    # any name ending `.Dockerfile`, `-Dockerfile` or `_Dockerfile`, and their
+    # lowercase spellings, which a match that counts case does not fold into
+    # them. It reads none of `Dockerfile.dev`, `Dockerfile-dev`,
+    # `Dockerfile_prod` or `Containerfile` (measured, #1410): they are listed
+    # so that the two rows stay one definition, and opengrep's generic rules
+    # read them.
     "dockerfile": (
         *("Dockerfile", "Dockerfile.*", "*.Dockerfile"),
+        *("Dockerfile-*", "Dockerfile_*", "*-Dockerfile", "*_Dockerfile"),
+        *("Containerfile", "Containerfile.*", "*.Containerfile"),
+        *("Containerfile-*", "Containerfile_*", "*-Containerfile", "*_Containerfile"),
         *("dockerfile", "*.dockerfile"),
     ),
     # generic.yaml is always loaded (below), so these choose nothing. They say

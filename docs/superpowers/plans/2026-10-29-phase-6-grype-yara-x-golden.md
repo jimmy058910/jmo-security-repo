@@ -1132,8 +1132,11 @@ PR D did not touch the definition (it added the walk's `max_files=None` and the 
   `Dockerfile.template`, `.dockerignore` stay False, and `Dockerfile.sh` → False (True
   today: the refusal list holds `py` but no shell).
 - [ ] **Step 2:** Widen both tables in one change (J12), so the drift test stays a test of
-  their agreement: opengrep's Dockerfile rules read the new spellings too. The TODO and
-  `TOOLS.md:148`'s "not read yet" sentence go with the fix.
+  their agreement. Measured building E3 (opengrep 1.32.0 in a scratch HOME): opengrep's
+  Dockerfile rules read `prod-Dockerfile` and `prod_Dockerfile`, which the bundle row lacked,
+  and none of `Dockerfile-dev`, `Dockerfile_prod` or `Containerfile`; the row lists those as
+  it lists `Dockerfile.*`, for agreement, and opengrep's generic rules read them. The TODO
+  and `TOOLS.md:148`'s "not read yet" sentence go with the fix.
 - [ ] **Step 3:** Commit `fix: Dockerfile-dev, Dockerfile_prod and Containerfile are Dockerfiles`, body `Closes #1410`.
 
 The wizard's own walk (`base_flow.py:139`, `**/Dockerfile*`) is #1411's.
@@ -1419,7 +1422,7 @@ Each corrects a task this plan wrote before measuring it; the evidence is in E1�
 | J9 | How zap knows a redirect left its scope | **A probe JMo makes before the scan, plus both loopback spellings in the context** (E4): zap's report holds neither detector the plan named |
 | J10 | KICS's Kubernetes samples | **Move to F6b**, measured first; checkov reads no manifest on a repository scan and whole-resource ranges make a line hit nearly meaningless. E6 keeps the Dockerfile half |
 | J11 | E2's loose ends | **`compliance_frameworks.py` is deleted**; shellcheck → `sast`, zizmor → `iac`; **yara-x stays uncategorised**: no category's controls (dependency patching, secret handling, IaC, DAST) describe a signature match, so mapping one would mislabel it. Veto in review |
-| J12 | E3's two Dockerfile tables | **Both widen together**, so `rule_bundle`'s Dockerfile row and hadolint's stay one definition; `Dockerfile.sh` stops counting |
+| J12 | E3's two Dockerfile tables | **Both widen together**, so `rule_bundle`'s Dockerfile row and hadolint's stay one definition; `Dockerfile.sh` stops counting. opengrep's own Dockerfile detection reads only some of the new names (measured in E3) |
 
 ## Unresolved (Jimmy)
 

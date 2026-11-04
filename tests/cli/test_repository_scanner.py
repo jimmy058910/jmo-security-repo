@@ -1086,6 +1086,17 @@ class TestADockerfileIsOneThing:
             ("Dockerfile.dev", True),
             ("Dockerfile.alpine", True),
             ("api.Dockerfile", True),
+            # The `-` and `_` spellings, and Podman's name, with the same
+            # variants (#1410). opengrep 1.32.0 reads `prod-Dockerfile` and
+            # `prod_Dockerfile` with its Dockerfile rules too (measured).
+            ("Dockerfile-dev", True),
+            ("Dockerfile_prod", True),
+            ("prod-Dockerfile", True),
+            ("prod_Dockerfile", True),
+            ("Containerfile", True),
+            ("Containerfile.dev", True),
+            ("app.Containerfile", True),
+            ("Dockerfile-dev.md", False),
             ("Dockerfile.md", False),
             ("Dockerfile.txt", False),
             ("Dockerfile.rst", False),
@@ -1104,9 +1115,11 @@ class TestADockerfileIsOneThing:
             ("Dockerfile.template", False),
             ("Dockerfile.in", False),
             ("Dockerfile.py", False),
+            ("Dockerfile.sh", False),
             ("dockerfile", False),
             ("dockerfile_utils.py", False),
             ("Dockerfiles", False),
+            ("Containerfiles", False),
         ],
     )
     def test_the_definition(self, name, is_one):
@@ -1140,6 +1153,28 @@ class TestADockerfileIsOneThing:
             if Path(arg).is_absolute() and repo in Path(arg).parents
         )
         assert read == ["Dockerfile", "Dockerfile.dev", "api.Dockerfile"]
+
+    def test_hadolint_reads_every_spelling_of_one(self, tmp_path):
+        """#1410: `Dockerfile-dev`, `Dockerfile_prod`, `prod-Dockerfile` and
+        Podman's `Containerfile` were left out of the walk, not only refused
+        by the definition: the glob never offered them."""
+        spellings = [
+            "Containerfile",
+            "Dockerfile-dev",
+            "Dockerfile_prod",
+            "prod-Dockerfile",
+        ]
+        repo = _repo(tmp_path, "app", dict.fromkeys(spellings, "FROM alpine\n"))
+
+        _, rows, defs = _scan(repo, tmp_path / "out", ["hadolint"])
+
+        assert rows["hadolint"].state is State.RAN, rows["hadolint"].label
+        read = sorted(
+            Path(arg).relative_to(repo).as_posix()
+            for arg in defs["hadolint"].command
+            if Path(arg).is_absolute() and repo in Path(arg).parents
+        )
+        assert read == sorted(spellings)
 
     def test_a_name_that_is_not_a_dockerfile_is_left_out_without_a_word(
         self, tmp_path, caplog

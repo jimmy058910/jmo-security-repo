@@ -307,13 +307,15 @@ def test_vendored_dirs_is_one_list() -> None:
     assert scan_utils.VENDORED_DIRS is VENDORED_DIRS
 
 
-def test_hadolints_patterns_are_the_dockerfile_rule_files_first_three() -> None:
+def test_hadolints_patterns_are_the_dockerfile_rule_files_but_its_lowercase_two() -> (
+    None
+):
     """The two tables say what a Dockerfile is, and `rule_bundle` cannot import
     this one (`tool_descriptors` imports it): they must not drift. The bundle
-    row's remaining two are the lowercase spellings opengrep also scans."""
+    row's last two are the lowercase spellings opengrep also scans."""
     from scripts.core.rule_bundle import LANGUAGE_PATTERNS
 
-    bundle_row = tuple("**/" + p for p in LANGUAGE_PATTERNS["dockerfile"][:3])
+    bundle_row = tuple("**/" + p for p in LANGUAGE_PATTERNS["dockerfile"][:-2])
     assert bundle_row == DOCKERFILE_PATTERNS
 
 
