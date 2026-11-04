@@ -1389,6 +1389,13 @@ def _osv_own_config_detail(path: Path) -> str:
     )
 
 
+def _gitleaks_own_config_detail(path: Path) -> str:
+    """JMo's own config extends a repository's `.gitleaks.toml` rather than
+    replacing it, so its rules and allowlists apply, as when gitleaks runs
+    alone (#1327)."""
+    return "its rules and allowlists apply"
+
+
 def _checkov_own_config_dirs(ctx: ScanContext) -> list[Path]:
     """checkov runs from its target (`-d .`), or from a single file's
     directory (`-f <name>`), and reads `.checkov.yaml` / `.checkov.yml` from the
@@ -2053,6 +2060,9 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             short_switches=frozenset({"-h", "-v"}),
             stub={"version": "2.1.0", "runs": []},
             reads_history=True,
+            # Read from the scan root alone (`_repository_gitleaks_config`).
+            own_config=(".gitleaks.toml",),
+            own_config_detail=_gitleaks_own_config_detail,
         ),
         ToolDescriptor(
             name="opengrep",

@@ -9,6 +9,7 @@ import os
 import time
 import traceback
 from pathlib import Path
+from typing import Any
 
 from scripts.core.config import load_config_with_env_overrides
 from scripts.core.exceptions import OPANotFoundException
@@ -232,6 +233,9 @@ def cmd_report(args, _log_fn) -> int:
     # not stored in history: a scan of 0 findings reads, to `jmo trends` and
     # `jmo diff`, as every earlier finding resolved.
     nothing_ran = False
+    # Which of a target's own config files each tool read, per target (#1430):
+    # the report then says why it may hold fewer findings.
+    own_config: list[dict[str, Any]] = []
     if scan_metadata_path.exists():
         try:
             scan_meta = json.loads(scan_metadata_path.read_text(encoding="utf-8"))
@@ -258,6 +262,21 @@ def cmd_report(args, _log_fn) -> int:
                     )
                 )
                 nothing_ran = bool(runs) and not tools_from_scan
+                own_config = [
+                    {
+                        "target": r.get("target"),
+                        "target_type": r.get("target_type"),
+                        "tool": r["tool"],
+                        "file": c.get("file"),
+                        "detail": c.get("detail"),
+                    }
+                    for r in runs
+                    if isinstance(r, dict)
+                    and "tool" in r
+                    and isinstance(r.get("own_config"), list)
+                    for c in r["own_config"]
+                    if isinstance(c, dict)
+                ]
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -289,6 +308,7 @@ def cmd_report(args, _log_fn) -> int:
         scan_id=scan_id,
         tools=sorted(tools_used),
         target_count=target_count,
+        own_config=own_config,
     )
 
     # Write reports (v1.0.0: with metadata wrapper)

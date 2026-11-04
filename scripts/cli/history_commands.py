@@ -371,6 +371,11 @@ def cmd_history_show(args) -> int:
                     sys.stdout.write(
                         f"  {run['target']:<24} {run['tool']:<11} {seconds}  {state}\n"
                     )
+                    # The target's own config shaped this row's findings (#1430).
+                    for config in run["own_config"] or ():
+                        safe_write(
+                            f"    reads its {config['file']} ({config['detail']})\n"
+                        )
                 hidden = len(tool_runs) - len(on_target)
                 if hidden:
                     sys.stdout.write(

@@ -26,7 +26,7 @@ import pytest
 
 from scripts.cli.history_commands import cmd_history_show
 from scripts.core.history_db import get_connection, get_scan_tool_runs, store_scan
-from scripts.core.scan_timings import Reason, State, ToolRun
+from scripts.core.scan_timings import OwnConfig, Reason, State, ToolRun
 from tests.unit.test_history_legacy_scans_columns import (
     LEGACY_SHAPES,
     _build_pre_v2_database,
@@ -329,3 +329,152 @@ def test_history_show_reads_a_database_that_has_no_table(tmp_path, capsys):
     assert "Tool Runs:" not in out
     assert "Tools:           1 (trivy)" in out, "the scan itself did not show"
     assert get_scan_tool_runs(get_connection(db, read_only=True), scan_id) == []
+
+
+# --- a target's own config, with its row (#1430) ------------------------------
+
+# `scan_tool_runs` as every database built from b451dc31 (2026-09-26) until
+# #1430 has it, frozen here rather than derived from the current DDL: the
+# column the next store writes is not in it, and `CREATE TABLE IF NOT EXISTS`
+# leaves an existing table as it is (measured: the INSERT then fails "table
+# scan_tool_runs has no column named own_config"). The shape never shipped in
+# a tag, but every dev database since has it.
+TABLE_WITHOUT_OWN_CONFIG = """
+CREATE TABLE scan_tool_runs (
+    scan_id TEXT NOT NULL,
+    target TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    tool TEXT NOT NULL,
+    state TEXT NOT NULL,
+    reason TEXT,
+    seconds REAL,
+    exit_code INTEGER,
+    attempts INTEGER NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (scan_id, target_type, target, tool),
+    FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE,
+    CHECK (state IN ('ran', 'skipped', 'failed')),
+    CHECK ((state = 'ran') = (reason IS NULL))
+);
+"""
+
+OSV_TOML = OwnConfig(
+    "osv-scanner.toml",
+    "1 ignored vulnerability and 0 ignored packages suppress findings",
+)
+WITH_OWN_CONFIG = [
+    ToolRun("osv-scanner", State.RAN, seconds=2.0, own_config=(OSV_TOML,)),
+    ROWS[0],
+]
+
+
+def _own_configs(db: Path) -> dict[str, str | None]:
+    con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        return dict(con.execute("SELECT tool, own_config FROM scan_tool_runs"))
+    finally:
+        con.close()
+
+
+def _without_the_column(tmp_path: Path) -> tuple[Path, str]:
+    """A database whose table predates the column, holding one earlier scan."""
+    db = tmp_path / "h.db"
+    scan_id = store_scan(
+        _results_dir(tmp_path / "earlier", None), tools=["trivy"], db_path=db
+    )
+    conn = get_connection(db)
+    conn.execute("DROP TABLE scan_tool_runs")
+    conn.execute(TABLE_WITHOUT_OWN_CONFIG)
+    conn.execute(
+        "INSERT INTO scan_tool_runs (scan_id, target, target_type, tool, state, "
+        "seconds, attempts) VALUES (?, 'proj', 'repo', 'trivy', 'ran', 1.0, 1)",
+        (scan_id,),
+    )
+    conn.commit()
+    conn.close()
+    return db, scan_id
+
+
+def test_the_own_config_is_stored_with_its_row_and_read_back(tmp_path):
+    """A later comparison in history sees fewer findings; the row says the
+    repository asked for it."""
+    db = tmp_path / "h.db"
+
+    scan_id = store_scan(
+        _results_dir(tmp_path, _entries(WITH_OWN_CONFIG)), tools=["trivy"], db_path=db
+    )
+
+    stored = _own_configs(db)
+    assert json.loads(stored["osv-scanner"]) == [OSV_TOML._asdict()]
+    assert stored["trivy"] is None, "a row with no config file stored one"
+    conn = get_connection(db, read_only=True)
+    by_tool = {r["tool"]: r for r in get_scan_tool_runs(conn, scan_id)}
+    conn.close()
+    assert by_tool["osv-scanner"]["own_config"] == [OSV_TOML._asdict()]
+    assert by_tool["trivy"]["own_config"] is None
+
+
+def test_a_table_from_before_the_column_takes_the_next_store_unmigrated(tmp_path):
+    """Migrations run only on `jmo history migrate`, and `store_scan` runs
+    `init_database` every time: without the column added there, every store
+    into a database built since b451dc31 failed. The earlier scan's row
+    survives, with no config."""
+    db, old_scan = _without_the_column(tmp_path)
+
+    store_scan(
+        _results_dir(tmp_path, _entries(WITH_OWN_CONFIG)), tools=["trivy"], db_path=db
+    )
+
+    conn = get_connection(db)
+    columns = [r[1] for r in conn.execute("PRAGMA table_info(scan_tool_runs)")]
+    assert columns.count("own_config") == 1, columns
+    earlier = conn.execute(
+        "SELECT tool, own_config FROM scan_tool_runs WHERE scan_id = ?", (old_scan,)
+    ).fetchall()
+    assert [tuple(r) for r in earlier] == [("trivy", None)]
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    conn.close()
+    assert json.loads(_own_configs(db)["osv-scanner"]) == [OSV_TOML._asdict()]
+
+    # And the store after that: the column is added once, not again.
+    store_scan(
+        _results_dir(tmp_path / "again", _entries(WITH_OWN_CONFIG)),
+        tools=["trivy"],
+        db_path=db,
+    )
+
+
+def test_history_show_reads_a_table_from_before_the_column(tmp_path, capsys):
+    """`history show` opens read-only and never runs `init_database`, so it
+    meets the old table as it is: the SELECT naming the column raised "no such
+    column", which the "no such table" guard did not catch."""
+    db, scan_id = _without_the_column(tmp_path)
+
+    rc, out = _show(db, scan_id, as_json=True, capsys=capsys)
+
+    assert rc == 0, out
+    (run,) = json.loads(out)["tool_runs"]
+    assert run["tool"] == "trivy" and run["own_config"] is None
+
+
+def test_history_show_names_the_config_under_its_row(tmp_path, capsys):
+    db = tmp_path / "h.db"
+    scan_id = store_scan(
+        _results_dir(tmp_path, _entries(WITH_OWN_CONFIG)), tools=["trivy"], db_path=db
+    )
+
+    rc, out = _show(db, scan_id, as_json=False, capsys=capsys)
+
+    assert rc == 0
+    lines = out.split("Tool Runs:\n", 1)[1].split("\n\n", 1)[0].splitlines()
+    at = next(i for i, ln in enumerate(lines) if "osv-scanner" in ln)
+    assert lines[at + 1].strip() == (
+        "reads its osv-scanner.toml "
+        "(1 ignored vulnerability and 0 ignored packages suppress findings)"
+    )
+    assert sum("reads its" in ln for ln in lines) == 1, lines
+
+    rc, out = _show(db, scan_id, as_json=True, capsys=capsys)
+    by_tool = {r["tool"]: r for r in json.loads(out)["tool_runs"]}
+    assert by_tool["osv-scanner"]["own_config"] == [OSV_TOML._asdict()]

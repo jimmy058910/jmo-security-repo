@@ -174,7 +174,9 @@ CREATE TABLE IF NOT EXISTS scan_metadata (
 # One row per target and tool (#722): what each requested tool did and how long
 # it took. `scans.duration_seconds` is one number for the whole scan, which
 # cannot answer "which tool made my scan slow". The state and reason vocabulary
-# is `scan_timings.State` / `Reason`.
+# is `scan_timings.State` / `Reason`. `own_config` is the JSON list of the
+# target's own configuration files the tool read (#1430), NULL when none; a
+# table built before it gains it in `init_database`.
 CREATE_SCAN_TOOL_RUNS_TABLE = """
 CREATE TABLE IF NOT EXISTS scan_tool_runs (
     scan_id TEXT NOT NULL,
@@ -186,6 +188,7 @@ CREATE TABLE IF NOT EXISTS scan_tool_runs (
     seconds REAL,
     exit_code INTEGER,
     attempts INTEGER NOT NULL DEFAULT 0,
+    own_config TEXT,
 
     PRIMARY KEY (scan_id, target_type, target, tool),
     FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE,
@@ -492,6 +495,30 @@ def _drop_legacy_target_type_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _has_own_config(conn: sqlite3.Connection) -> bool:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(scan_tool_runs)")}
+    return "own_config" in columns
+
+
+def _add_own_config_column(conn: sqlite3.Connection) -> bool:
+    """Add `scan_tool_runs.own_config` to a table built before it (#1430).
+
+    `CREATE TABLE IF NOT EXISTS` leaves an existing table as it is, and
+    migrations run only on `jmo history migrate`, so without this every store
+    into a database built since the table appeared (b451dc31) fails on the
+    INSERT naming the column. SQLite has no `ADD COLUMN IF NOT EXISTS` and a
+    second ADD raises, hence the check. An added column is NULL on every
+    earlier row, which is what an earlier row means: no config recorded.
+
+    Returns:
+        True when the column was absent and has been added.
+    """
+    if _has_own_config(conn):
+        return False
+    conn.execute("ALTER TABLE scan_tool_runs ADD COLUMN own_config TEXT")
+    return True
+
+
 def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
     """
     Initialize database schema.
@@ -519,6 +546,7 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute(CREATE_FINDINGS_TABLE)
             conn.execute(CREATE_SCAN_METADATA_TABLE)
             conn.execute(CREATE_SCAN_TOOL_RUNS_TABLE)
+            _add_own_config_column(conn)
 
             # Create indices
             for idx_sql in CREATE_INDICES:
@@ -997,25 +1025,40 @@ def _scan_tool_runs(results_dir: Path) -> list[tuple[Any, ...]]:
                 row.seconds,
                 row.exit_code,
                 row.attempts,
+                None
+                if row.own_config is None
+                else json.dumps([c._asdict() for c in row.own_config]),
             )
         )
     return values
 
 
 def get_scan_tool_runs(conn: sqlite3.Connection, scan_id: str) -> list[dict[str, Any]]:
-    """A scan's per-tool rows, or [] for a database written before they existed."""
+    """A scan's per-tool rows, or [] for a database written before they existed.
+
+    `own_config` is the list of the target's own config files the tool read,
+    or None. `jmo history show` opens read-only and never runs
+    `init_database`, so a table built before the column is read as it is."""
     try:
         cursor = conn.execute(
             "SELECT target, target_type, tool, state, reason, seconds, exit_code, "
-            "attempts FROM scan_tool_runs WHERE scan_id = ? "
-            "ORDER BY target_type, target, tool",
+            "attempts, own_config FROM scan_tool_runs WHERE scan_id = ? "
+            "ORDER BY target_type, target, tool"
+            if _has_own_config(conn)
+            else "SELECT target, target_type, tool, state, reason, seconds, "
+            "exit_code, attempts, NULL AS own_config FROM scan_tool_runs "
+            "WHERE scan_id = ? ORDER BY target_type, target, tool",
             (scan_id,),
         )
     except sqlite3.OperationalError as exc:
         if "no such table" in str(exc):
             return []
         raise
-    return [dict(row) for row in cursor.fetchall()]
+    runs = [dict(row) for row in cursor.fetchall()]
+    for run in runs:
+        if run["own_config"] is not None:
+            run["own_config"] = json.loads(run["own_config"])
+    return runs
 
 
 def _by_tool(findings: list[dict[str, Any]]) -> str:
@@ -1477,8 +1520,8 @@ def store_scan(
                     """
                     INSERT OR REPLACE INTO scan_tool_runs (
                         scan_id, target, target_type, tool, state, reason,
-                        seconds, exit_code, attempts
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        seconds, exit_code, attempts, own_config
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [(scan_id, *values) for values in tool_runs],
                 )

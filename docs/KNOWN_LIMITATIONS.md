@@ -206,8 +206,10 @@ runs alone (and the default rules, if it asks for them). Two consequences:
   is not reported by Gitleaks, and a config that does not ask for the default
   rules (`[extend] useDefault = true`) runs only its own. TruffleHog still reads
   everything. `.gitleaksignore` and inline `gitleaks:allow` comments already
-  worked this way. JMo logs at INFO that it extended the repository's config,
-  and a WARNING when that config leaves the default rules out.
+  worked this way. JMo says at WARNING that Gitleaks reads the repository's
+  `.gitleaks.toml`, records it on Gitleaks' row as `own_config` (in
+  `findings.json`'s metadata and in history too), and warns again when that
+  config leaves the default rules out.
 - **One level of extension is lost.** Gitleaks follows `[extend]` only so deep,
   and JMo's config is one level above the repository's. If the repository's
   config extends another file that itself extends further (the default rules, or

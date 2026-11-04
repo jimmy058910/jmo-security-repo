@@ -45,6 +45,7 @@ from ...core import rule_bundle
 from ...core.config import RetryConfig
 from ...core.scan_timings import (
     OUTCOME_FAILED_BEFORE_TOOLS,
+    OwnConfig,
     Reason,
     State,
     TargetRows,
@@ -301,9 +302,12 @@ def _repository_gitleaks_config(root: Path) -> Path | None:
         return None
 
 
-# TODO(issue-#1430): own-config announced on the console only, not in results
-def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
-    """Say which of the repository's own files `d` reads as its configuration.
+def _announce_own_config(
+    d: ToolDescriptor, ctx: ScanContext
+) -> tuple[OwnConfig, ...] | None:
+    """Say which of the repository's own files `d` reads as its configuration,
+    and return them for its row, which carries them into every artifact
+    (#1430); None when it reads none.
 
     The repository then decides part of its own audit (zizmor: a
     `.github/zizmor.yml` disabling two audits took a sample from 3 rule ids to
@@ -315,17 +319,22 @@ def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
 
     The directories are the scan root, or where `d` says it looks (osv-scanner:
     beside each lockfile it is handed). Python 3.12 raises from a probe where
-    3.11 returned False (#1163), hence the guard."""
+    3.11 returned False (#1163), hence the guard.
+
+    The row names a file relative to the target, or by its name when it
+    resolves outside it (a symlink to a shared config): never a host path,
+    which the log line may print but an artifact must not keep (#1007)."""
     if not d.own_config:
-        return
+        return None
     if d.own_config_dirs is not None:
         dirs = d.own_config_dirs(ctx)
     elif ctx.target_type == "repo":
         dirs = [Path(scan_root(ctx.target))]
     else:
-        return
+        return None
     target = Path(scan_root(ctx.target))
     anchor = target if target.is_dir() else target.parent
+    found_all: list[OwnConfig] = []
     for directory in dirs:
         for name in d.own_config:
             found = directory / name
@@ -336,8 +345,9 @@ def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
                 continue
             try:
                 shown = found.resolve().relative_to(anchor).as_posix()
+                kept = shown
             except (ValueError, OSError):
-                shown = str(found)
+                shown, kept = str(found), found.name
             detail = (
                 d.own_config_detail(found)
                 if d.own_config_detail is not None
@@ -346,6 +356,8 @@ def _announce_own_config(d: ToolDescriptor, ctx: ScanContext) -> None:
             logger.warning(
                 "%s: %s reads its %s (%s)", anchor.name, d.name, shown, detail
             )
+            found_all.append(OwnConfig(kept, detail))
+    return tuple(found_all) or None
 
 
 def _exclusions(
@@ -372,12 +384,7 @@ def _exclusions(
         if repo_config is not None:
             # The scanned repository's config now shapes gitleaks' run: its
             # rules and allowlists apply, as when gitleaks runs alone. Said,
-            # since the repository decides part of its own audit (#1327).
-            logger.info(
-                "%s: gitleaks extends its .gitleaks.toml (its rules and "
-                "allowlists apply)",
-                root.name,
-            )
+            # and recorded on the row, by `_announce_own_config` (#1327, #1430).
             warning = gitleaks_config_warning(repo_config, root)
             if warning:
                 logger.warning("%s: %s", root.name, warning)
@@ -764,6 +771,7 @@ def run_tools(
     planned: dict[str, tuple[ToolDescriptor, list[Invocation]]] = {}
     shortfalls: dict[str, Shortfall] = {}
     partly: dict[str, str] = {}  # tool -> what of its files it reads in part
+    own_configs: dict[str, tuple[OwnConfig, ...]] = {}  # tool -> its target's own
     definitions: list[ToolDefinition] = []
     for tool in ordered:
         d = _descriptor(tool)
@@ -884,7 +892,9 @@ def run_tools(
                 ctx = replace(ctx, files=shortfall.files)
                 shortfalls[tool] = shortfall
 
-        _announce_own_config(d, ctx)
+        own = _announce_own_config(d, ctx)
+        if own:
+            own_configs[tool] = own
         invocations = builder(ctx)
         refusal = _batch_refusal(invocations)
         if refusal:
@@ -1001,6 +1011,9 @@ def run_tools(
             row = replace(
                 row, detail="; ".join(filter(None, (row.detail, partly[tool])))
             )
+        if tool in own_configs:
+            # Read before the run, so true whatever the run did (#1430).
+            row = replace(row, own_config=own_configs[tool])
         if row.state is State.FAILED:
             row = replace(row, kept_findings=_kept_findings(d, by_tool.get(tool, [])))
         rows[tool] = row

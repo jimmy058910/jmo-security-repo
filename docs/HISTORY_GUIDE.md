@@ -800,7 +800,7 @@ The history database uses SQLite with the following schema:
 
 - `scans` - Scan metadata (timestamp, branch, tools, the targets scanned, severity counts, CI metadata). Each target's type is on its `scan_tool_runs` rows: a scan can hold several types
 - `findings` - Individual findings (fingerprint, severity, rule, location, message, full CommonFinding JSON)
-- `scan_tool_runs` - One row per target and tool: state (`ran` / `skipped` / `failed`), reason, seconds, exit code, attempts. Keyed by scan, target type, target and tool; created on the first store into an older database
+- `scan_tool_runs` - One row per target and tool: state (`ran` / `skipped` / `failed`), reason, seconds, exit code, attempts, and `own_config`, a JSON list of the target's own config files the tool read (NULL when none). Keyed by scan, target type, target and tool; created, or given a missing column, on the first store into an older database
 - `compliance_mappings` - Framework mappings (OWASP, CWE, CIS, NIST, PCI-DSS, MITRE ATT&CK)
 - `schema_version` - Database schema version for migrations
 

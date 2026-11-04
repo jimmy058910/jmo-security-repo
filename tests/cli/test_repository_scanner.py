@@ -373,7 +373,7 @@ class TestRepositoryScanner:
             (tmp_path / "out" / "rows-repo" / "scan-timings.json").read_bytes()
         )
 
-        assert doc["schema_version"] == 4
+        assert doc["schema_version"] == 5
         assert [r["tool"] for r in doc["tools"]] == list(TOOL_MATRIX)
         by_tool = {r["tool"]: r for r in doc["tools"]}
         assert by_tool["hadolint"]["state"] == "skipped"

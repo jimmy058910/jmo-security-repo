@@ -817,7 +817,10 @@ def query_findings_db(
     Views: latest_scan_by_branch, finding_history
 
     `scan_tool_runs` has one row per scan, target and requested tool: its
-    `state` (ran, skipped, failed), `reason`, `seconds` and `exit_code`.
+    `state` (ran, skipped, failed), `reason`, `seconds` and `exit_code`, and
+    `own_config`, a JSON list of the target's own config files the tool read
+    (`file`, and what it suppresses as `detail`), NULL when it read none: a
+    row with one may report fewer findings because the target asked it to.
 
     Args:
         query: Read-only SQL query string.
@@ -836,6 +839,7 @@ def query_findings_db(
         - "SELECT sql FROM sqlite_master WHERE type='table'"
         - "PRAGMA table_info(findings)"
         - "SELECT tool, COUNT(*) AS runs, SUM(reason IS 'timed out') AS timeouts FROM scan_tool_runs WHERE state != 'skipped' GROUP BY tool"
+        - "SELECT target, tool, own_config FROM scan_tool_runs WHERE scan_id = ? AND own_config IS NOT NULL"
     """
     from scripts.core.history_db import (
         DEFAULT_DB_PATH,

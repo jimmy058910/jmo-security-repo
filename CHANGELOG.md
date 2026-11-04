@@ -520,6 +520,17 @@ All notable changes to JMo Security will be documented in this file.
   are one host in the scope, so a local site that redirects from one to the other is now
   attacked: measured on ZAP 2.17.0, the fixture's reflected XSS is found where it was
   missed.
+- **A repository's own scanner config is recorded with its results (#1430).** A
+  `zizmor.yml`, `osv-scanner.toml` or `.checkov.yaml` in the scanned repository can switch
+  rules off or ignore vulnerabilities, and the scan said so only in a console WARNING, so a
+  report or a history comparison with fewer findings gave no hint why. The tool's row now
+  carries `own_config`, each file it read (relative to the target, never a host path) with
+  what it says, in `scan-timings.json` (schema 5), `.scan_metadata.json`, `findings.json`'s
+  `meta.own_config` (absent when none was read) and history's `scan_tool_runs`, which
+  `jmo history show` prints under the row. Gitleaks' `.gitleaks.toml` joins them, and its
+  line moves from INFO, which a default scan hides, to WARNING. A history database built
+  before the column gains it on the next store, without `jmo history migrate`. The HTML
+  dashboard does not show it yet.
 - **A GitLab URL without a scheme clones from that host, never from gitlab.com, and a
   self-hosted instance's token no longer reaches gitlab.com.** `scan_gitlab_repo` replaced
   every `--gitlab-url` that did not start with `http` by `https://gitlab.com`, so
