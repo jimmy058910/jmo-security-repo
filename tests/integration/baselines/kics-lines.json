@@ -1,0 +1,794 @@
+{
+  "source": {
+    "repository": "Checkmarx/kics",
+    "commit": "453066aa9c66014ad7aee7dd0149ba1944c78050",
+    "path": "assets/queries/dockerfile"
+  },
+  "tools": [
+    "hadolint",
+    "trivy"
+  ],
+  "versions": {
+    "trivy": "0.74.0",
+    "hadolint": "2.15.1"
+  },
+  "counted": "one target per positive sample, written as Dockerfile; one jmo scan --tools hadolint trivy; a line is hit when a finding in that target's hadolint or trivy output, parsed by JMo's adapter, spans it (startLine..endLine, end defaulting to start); before the report's merging of same-check pairs",
+  "entries": 242,
+  "entries_hit": 226,
+  "distinct": 230,
+  "distinct_hit": 214,
+  "distinct_hit_in_findings_json": 214,
+  "lines": {
+    "add_instead_of_copy/positive1.dockerfile:8": [
+      "hadolint",
+      "trivy"
+    ],
+    "add_instead_of_copy/positive2.dockerfile:8": [
+      "hadolint",
+      "trivy"
+    ],
+    "apk_add_using_local_cache_path/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apk_add_using_local_cache_path/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apk_add_using_local_cache_path/positive3.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive1.dockerfile:5": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive1.dockerfile:8": [
+      "hadolint"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive1.dockerfile:12": [
+      "hadolint"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive3.dockerfile:2": [
+      "hadolint"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive3.dockerfile:5": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive3.dockerfile:8": [
+      "hadolint"
+    ],
+    "apt_get_install_lists_were_not_deleted/positive3.dockerfile:12": [
+      "hadolint"
+    ],
+    "apt_get_install_pin_version_not_defined/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive1.dockerfile:6": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive1.dockerfile:9": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive2.dockerfile:6": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive2.dockerfile:9": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive3.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive3.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive3.dockerfile:6": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_install_pin_version_not_defined/positive3.dockerfile:9": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive1.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive2.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive3.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive4.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive4.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive5.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive5.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive6.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive6.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive7.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive7.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive8.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive8.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_missing_flags_to_avoid_manual_input/positive8.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_not_avoiding_additional_packages/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_not_avoiding_additional_packages/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_not_avoiding_additional_packages/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "apt_get_not_avoiding_additional_packages/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "changing_default_shell_using_run_command/positive1.dockerfile:5": [
+      "hadolint"
+    ],
+    "changing_default_shell_using_run_command/positive2.dockerfile:5": [
+      "hadolint"
+    ],
+    "changing_default_shell_using_run_command/positive3.dockerfile:5": [
+      "hadolint"
+    ],
+    "chown_flag_exists/positive1.dockerfile:4": [],
+    "chown_flag_exists/positive2.dockerfile:4": [],
+    "copy_from_references_current_from_alias/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "copy_from_references_current_from_alias/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "copy_with_more_than_two_arguments_not_ending_with_slash/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "copy_with_more_than_two_arguments_not_ending_with_slash/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "copy_with_more_than_two_arguments_not_ending_with_slash/positive3.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "copy_with_more_than_two_arguments_not_ending_with_slash/positive4.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "curl_or_wget_instead_of_add/positive1.dockerfile:3": [],
+    "curl_or_wget_instead_of_add/positive2.dockerfile:3": [],
+    "exposing_port_22/positive1.dockerfile:3": [
+      "trivy"
+    ],
+    "exposing_port_22/positive2.dockerfile:3": [
+      "trivy"
+    ],
+    "gem_install_without_version/positive1.dockerfile:3": [
+      "hadolint"
+    ],
+    "gem_install_without_version/positive1.dockerfile:4": [
+      "hadolint"
+    ],
+    "gem_install_without_version/positive1.dockerfile:5": [
+      "hadolint"
+    ],
+    "gem_install_without_version/positive2.dockerfile:3": [
+      "hadolint"
+    ],
+    "gem_install_without_version/positive2.dockerfile:4": [
+      "hadolint"
+    ],
+    "gem_install_without_version/positive2.dockerfile:5": [
+      "hadolint"
+    ],
+    "healthcheck_instruction_missing/positive1.dockerfile:1": [],
+    "healthcheck_instruction_missing/positive2.dockerfile:7": [
+      "hadolint",
+      "trivy"
+    ],
+    "healthcheck_instruction_missing/positive3.dockerfile:1": [],
+    "image_version_not_explicit/positive1.dockerfile:1": [
+      "hadolint",
+      "trivy"
+    ],
+    "image_version_not_explicit/positive2.dockerfile:7": [
+      "hadolint",
+      "trivy"
+    ],
+    "image_version_not_explicit/positive3.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "image_version_not_explicit/positive3.dockerfile:7": [
+      "hadolint",
+      "trivy"
+    ],
+    "image_version_not_explicit/positive4.dockerfile:7": [
+      "hadolint"
+    ],
+    "image_version_not_explicit/positive4.dockerfile:10": [
+      "hadolint"
+    ],
+    "image_version_not_explicit/positive5.dockerfile:1": [
+      "hadolint",
+      "trivy"
+    ],
+    "image_version_using_latest/positive1.dockerfile:1": [
+      "hadolint",
+      "trivy"
+    ],
+    "image_version_using_latest/positive2.dockerfile:1": [
+      "hadolint",
+      "trivy"
+    ],
+    "last_user_is_root/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "last_user_is_root/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "last_user_is_root/positive3.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "last_user_is_root/positive4.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "last_user_is_root/positive5.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "maintainer_instruction_being_used/positive1.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "maintainer_instruction_being_used/positive2.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_dnf_clean_all/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_dnf_clean_all/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_flag_from_dnf_install/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "missing_flag_from_dnf_install/positive1.dockerfile:10": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_flag_from_dnf_install/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "missing_flag_from_dnf_install/positive2.dockerfile:10": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_flag_from_dnf_install/positive3.dockerfile:2": [
+      "hadolint"
+    ],
+    "missing_flag_from_dnf_install/positive4.dockerfile:21": [
+      "trivy"
+    ],
+    "missing_flag_from_dnf_install/positive5.dockerfile:2": [
+      "hadolint"
+    ],
+    "missing_flag_from_dnf_install/positive5.dockerfile:10": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_user_instruction/positive1.dockerfile:1": [],
+    "missing_user_instruction/positive2.dockerfile:7": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_user_instruction/positive3.dockerfile:1": [],
+    "missing_version_specification_in_dnf_install/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "missing_version_specification_in_dnf_install/positive1.dockerfile:3": [
+      "hadolint"
+    ],
+    "missing_version_specification_in_dnf_install/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "missing_version_specification_in_dnf_install/positive2.dockerfile:3": [
+      "hadolint"
+    ],
+    "missing_zypper_clean/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_zypper_clean/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "missing_zypper_non_interactive_switch/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "missing_zypper_non_interactive_switch/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "multiple_cmd_instructions_listed/positive1.dockerfile:11": [],
+    "multiple_cmd_instructions_listed/positive2.dockerfile:11": [],
+    "multiple_entrypoint_instructions_listed/positive1.dockerfile:11": [],
+    "multiple_entrypoint_instructions_listed/positive2.dockerfile:11": [],
+    "multiple_run_add_copy_instructions_listed/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "multiple_run_add_copy_instructions_listed/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "multiple_run_add_copy_instructions_listed/positive3.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "multiple_run_add_copy_instructions_listed/positive4.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "not_using_json_in_cmd_and_entrypoint_arguments/positive1.dockerfile:10": [
+      "hadolint"
+    ],
+    "not_using_json_in_cmd_and_entrypoint_arguments/positive1.dockerfile:11": [
+      "hadolint"
+    ],
+    "not_using_json_in_cmd_and_entrypoint_arguments/positive2.dockerfile:10": [
+      "hadolint"
+    ],
+    "not_using_json_in_cmd_and_entrypoint_arguments/positive2.dockerfile:11": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive1.dockerfile:3": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive1.dockerfile:4": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive1.dockerfile:5": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive1.dockerfile:6": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive1.dockerfile:7": [],
+    "npm_install_without_pinned_version/positive1.dockerfile:8": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive2.dockerfile:3": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive2.dockerfile:4": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive2.dockerfile:5": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive2.dockerfile:6": [
+      "hadolint"
+    ],
+    "npm_install_without_pinned_version/positive2.dockerfile:7": [],
+    "npm_install_without_pinned_version/positive2.dockerfile:8": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive1.dockerfile:8": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive1.dockerfile:9": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive1.dockerfile:10": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive1.dockerfile:11": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive2.dockerfile:8": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive2.dockerfile:9": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive2.dockerfile:10": [
+      "hadolint"
+    ],
+    "pip_install_keeping_cached_packages/positive2.dockerfile:11": [
+      "hadolint"
+    ],
+    "run_command_cd_instead_of_workdir/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_command_cd_instead_of_workdir/positive1.dockerfile:9": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_command_cd_instead_of_workdir/positive1.dockerfile:15": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_command_cd_instead_of_workdir/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_command_cd_instead_of_workdir/positive2.dockerfile:9": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_command_cd_instead_of_workdir/positive2.dockerfile:15": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_using_apt/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "run_using_apt/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "run_using_sudo/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_using_sudo/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_using_sudo/positive3.dockerfile:3": [
+      "hadolint"
+    ],
+    "run_using_sudo/positive4.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_using_sudo/positive4.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_using_sudo/positive5.dockerfile:3": [
+      "hadolint"
+    ],
+    "run_using_sudo/positive5.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "run_using_wget_and_curl/positive1.dockerfile:3": [
+      "hadolint"
+    ],
+    "run_using_wget_and_curl/positive1.dockerfile:7": [
+      "hadolint"
+    ],
+    "run_using_wget_and_curl/positive1.dockerfile:8": [
+      "hadolint"
+    ],
+    "run_using_wget_and_curl/positive2.dockerfile:3": [
+      "hadolint"
+    ],
+    "run_using_wget_and_curl/positive2.dockerfile:7": [
+      "hadolint"
+    ],
+    "run_using_wget_and_curl/positive2.dockerfile:8": [
+      "hadolint"
+    ],
+    "run_utilities_and_posix_commands/positive1.dockerfile:4": [
+      "hadolint"
+    ],
+    "run_utilities_and_posix_commands/positive1.dockerfile:5": [
+      "hadolint"
+    ],
+    "run_utilities_and_posix_commands/positive2.dockerfile:4": [
+      "hadolint"
+    ],
+    "run_utilities_and_posix_commands/positive2.dockerfile:5": [
+      "hadolint"
+    ],
+    "same_alias_in_different_froms/positive1.dockerfile:4": [
+      "trivy"
+    ],
+    "same_alias_in_different_froms/positive1.dockerfile:7": [
+      "hadolint"
+    ],
+    "same_alias_in_different_froms/positive2.dockerfile:4": [
+      "trivy"
+    ],
+    "same_alias_in_different_froms/positive2.dockerfile:7": [
+      "hadolint"
+    ],
+    "shell_running_a_pipe_without_pipefail_flag/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "shell_running_a_pipe_without_pipefail_flag/positive1.dockerfile:3": [
+      "hadolint"
+    ],
+    "shell_running_a_pipe_without_pipefail_flag/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "shell_running_a_pipe_without_pipefail_flag/positive2.dockerfile:3": [
+      "hadolint"
+    ],
+    "unix_ports_out_of_range/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "unix_ports_out_of_range/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive1.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive1.dockerfile:13": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive1.dockerfile:14": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive1.dockerfile:16": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive1.dockerfile:18": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive2.dockerfile:2": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive2.dockerfile:13": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive2.dockerfile:14": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive2.dockerfile:16": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_apk_add/positive2.dockerfile:18": [
+      "hadolint",
+      "trivy"
+    ],
+    "unpinned_package_version_in_pip_install/positive1.dockerfile:3": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive1.dockerfile:4": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive1.dockerfile:15": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive1.dockerfile:18": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive2.dockerfile:3": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive2.dockerfile:12": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive3.dockerfile:3": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive4.dockerfile:3": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive5.dockerfile:3": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive5.dockerfile:4": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive5.dockerfile:15": [
+      "hadolint"
+    ],
+    "unpinned_package_version_in_pip_install/positive5.dockerfile:18": [
+      "hadolint"
+    ],
+    "update_instruction_alone/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "update_instruction_alone/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "update_instruction_alone/positive3.dockerfile:3": [
+      "hadolint"
+    ],
+    "update_instruction_alone/positive4.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "update_instruction_alone/positive5.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "update_instruction_alone/positive6.dockerfile:3": [
+      "hadolint"
+    ],
+    "update_instruction_alone/positive7.dockerfile:3": [
+      "hadolint"
+    ],
+    "update_instruction_alone/positive8.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "using_platform_with_from/positive1.dockerfile:6": [
+      "hadolint",
+      "trivy"
+    ],
+    "using_platform_with_from/positive2.dockerfile:6": [
+      "hadolint",
+      "trivy"
+    ],
+    "using_unnamed_build_stages/positive1.dockerfile:10": [],
+    "using_unnamed_build_stages/positive2.dockerfile:10": [],
+    "workdir_path_not_absolute/positive1.dockerfile:5": [
+      "hadolint",
+      "trivy"
+    ],
+    "workdir_path_not_absolute/positive2.dockerfile:5": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_clean_all_missing/positive1.dockerfile:12": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_clean_all_missing/positive2.dockerfile:12": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_install_allows_manual_input/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_install_allows_manual_input/positive1.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_install_allows_manual_input/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_install_allows_manual_input/positive2.dockerfile:4": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_install_without_version/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "yum_install_without_version/positive1.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "yum_install_without_version/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "yum_install_without_version/positive2.dockerfile:3": [
+      "hadolint",
+      "trivy"
+    ],
+    "zypper_install_without_version/positive1.dockerfile:2": [
+      "hadolint"
+    ],
+    "zypper_install_without_version/positive1.dockerfile:3": [
+      "hadolint"
+    ],
+    "zypper_install_without_version/positive2.dockerfile:2": [
+      "hadolint"
+    ],
+    "zypper_install_without_version/positive2.dockerfile:3": [
+      "hadolint"
+    ]
+  }
+}
