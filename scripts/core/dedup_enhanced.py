@@ -441,11 +441,17 @@ class FindingCluster:
         }
 
 
-def _listed_as_one_check(
+def _a_resource_range_pair(
     tool1: str, rule_id1: str | None, tool2: str, rule_id2: str | None
 ) -> bool:
-    """Whether the equivalence table names these two tools' rules as one check."""
+    """Whether one finding's range inside the other's is one place for these
+    two: the table names their rules as one check, and one is checkov's, which
+    reports a whole resource (#1354). Nowhere else is containment evidence:
+    gitleaks reports a private key's whole PEM and trufflehog its first line,
+    and merging those broke one finding per key per tool."""
     if not (tool1 and tool2 and rule_id1 and rule_id2):
+        return False
+    if "checkov" not in (tool1, tool2):
         return False
     from scripts.core.rule_equivalence import are_rules_equivalent
 
@@ -551,7 +557,7 @@ class SimilarityCalculator:
         loc_sim = self.location_similarity(
             finding1.get("location", {}),
             finding2.get("location", {}),
-            nested_is_same=_listed_as_one_check(
+            nested_is_same=_a_resource_range_pair(
                 tool1_name, finding1.get("ruleId"), tool2_name, finding2.get("ruleId")
             ),
         )
@@ -595,9 +601,9 @@ class SimilarityCalculator:
             5. Apply distance penalty for gaps
 
         ``nested_is_same`` is for two findings the equivalence table calls one
-        check (#1354). checkov reports a Kubernetes resource's whole range and
-        trivy one container's lines inside it, so their Jaccard is 0.4 and the
-        pair cannot cluster. Containment is not evidence for any other pair: on
+        check, one of them checkov's (#1354). checkov reports a Kubernetes
+        resource's whole range and trivy one container's lines inside it, so
+        their Jaccard is 0.4 and the pair cannot cluster. Containment is not evidence for any other pair: on
         one measured Pod, 20 trivy and 22 checkov findings all nest, and only
         the table's eleven pairs are the same check.
         """

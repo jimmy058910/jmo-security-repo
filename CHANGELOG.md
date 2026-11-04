@@ -495,12 +495,13 @@ All notable changes to JMo Security will be documented in this file.
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,
   so a trivy finding on a container inside the resource never overlapped it. checkov
-  findings now carry `endLine`, and for a pair the table lists, a range inside the other
-  counts as the same place; for any other pair it counts as before, since every trivy
-  finding on a Pod sits inside every checkov range. Four pairs join the table: trivy
-  `DS-0013` with hadolint `DL3003` (`RUN cd` instead of `WORKDIR`), and trivy `KSV-0015`,
-  `KSV-0013` and `KSV-0014` with checkov `CKV_K8S_10`, `CKV_K8S_14` and `CKV_K8S_22` (CPU
-  requests, the image tag, a read-only root filesystem). Measured through `jmo scan
+  findings now carry `endLine`, and for a checkov pair the table lists, a range inside the
+  other counts as the same place; for any other pair it counts as before, since every
+  trivy finding on a Pod sits inside every checkov range, and a private key's whole PEM
+  (gitleaks) holds trufflehog's line without the two being one finding. Four pairs join
+  the table: trivy `DS-0013` with hadolint `DL3003` (`RUN cd` instead of `WORKDIR`), and
+  trivy `KSV-0015`, `KSV-0013` and `KSV-0014` with checkov `CKV_K8S_10`, `CKV_K8S_14` and
+  `CKV_K8S_22` (CPU requests, the image tag, a read-only root filesystem). Measured through `jmo scan
   --k8s-manifest` on one Pod: 11 trivy/checkov pairs merge, 0 before. checkov reads
   Kubernetes manifests only when given one with `--k8s-manifest`, so a repository scan has
   none to merge.

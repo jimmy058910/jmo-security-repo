@@ -384,3 +384,34 @@ def test_a_range_inside_another_counts_only_for_a_listed_pair():
     assert calculator.calculate_similarity(
         image_tag, checkov["CKV_K8S_14"]
     ) > calculator.calculate_similarity(image_tag, unlisted)
+
+
+def test_a_secret_inside_another_tools_range_stays_a_finding_each():
+    """gitleaks reports a private key's whole PEM (lines 1-27), trufflehog its
+    first line, and the table lists the two rules as one check. Counting any
+    listed pair's nested range as one place folded trufflehog's finding into
+    gitleaks', against the git-history contract of one finding per key per
+    tool (`tests/integration/test_git_history_secrets.py`, which needs both
+    binaries, so only CI's contract job saw it). A nested range is evidence
+    of one place only where checkov reports a whole resource."""
+
+    def finding(tool: str, rule_id: str, location: dict) -> dict:
+        return {
+            "id": f"{tool}-1",
+            "tool": {"name": tool, "version": "1"},
+            "ruleId": rule_id,
+            "severity": "HIGH",
+            "message": "Private key found",
+            "location": {"path": "keys/live.pem", **location},
+            "target": {"type": "repo", "name": "app"},
+        }
+
+    gitleaks = finding("gitleaks", "private-key", {"startLine": 1, "endLine": 27})
+    trufflehog = finding("trufflehog", "PrivateKey", {"startLine": 1})
+    assert are_rules_equivalent("gitleaks", "private-key", "trufflehog", "PrivateKey")[
+        0
+    ], "the table no longer pairs them, so this guards nothing"
+
+    kept = _cluster_cross_tool_duplicates(copy.deepcopy([gitleaks, trufflehog]))
+
+    assert sorted(f["tool"]["name"] for f in kept) == ["gitleaks", "trufflehog"]
