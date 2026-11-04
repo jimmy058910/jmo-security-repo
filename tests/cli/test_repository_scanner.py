@@ -1097,6 +1097,11 @@ class TestADockerfileIsOneThing:
             ("Containerfile.dev", True),
             ("app.Containerfile", True),
             ("Dockerfile-dev.md", False),
+            # A `-` or `_` variant is a name, not a suffix: code and config
+            # about a Dockerfile spell themselves that way.
+            ("Dockerfile_test.go", False),
+            ("Dockerfile-lint.yml", False),
+            ("Containerfile_build.rb", False),
             ("Dockerfile.md", False),
             ("Dockerfile.txt", False),
             ("Dockerfile.rst", False),
@@ -1245,6 +1250,37 @@ class TestTheWalkSpellsANameAsItIsOnDisk:
         assert [Path(f).relative_to(repo).as_posix() for f in read] == [exact]
         # Every candidate, before the name test: each named as on disk.
         assert all(Path(f).name in os.listdir(Path(f).parent) for f in found), found
+
+    def test_only_a_name_it_would_read_is_named_as_miscased(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        """Where the glob ignores case (Windows), `**/Dockerfile_*` also finds
+        `dockerfile_utils.py`. hadolint refuses it, as it should, and the
+        WARNING about a miscased file is for one it would read spelled as its
+        pattern spells it (`sub/dockerfile`), not for code that handles
+        Dockerfiles, which read as missed Dockerfiles (#1410)."""
+        from scripts.core import rule_bundle
+
+        monkeypatch.setattr(rule_bundle, "GLOB_CASE_SENSITIVE", False)
+        files = ["Dockerfile", "sub/dockerfile", "dockerfile_utils.py"]
+        files += ["dockerfile-parser.ts", "containerfile_gen.py", "dockerfile.py"]
+        repo = _repo(tmp_path, files=dict.fromkeys(files, "x\n"))
+        descriptor = DESCRIPTORS["hadolint"]
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            read = collect_files(
+                repo,
+                descriptor.file_patterns,
+                "hadolint",
+                accepts_name=descriptor.accepts_name,
+            )
+
+        assert [Path(f).relative_to(repo).as_posix() for f in read] == ["Dockerfile"]
+        warned = [
+            r.getMessage() for r in caplog.records if "NOT scanned" in r.getMessage()
+        ]
+        assert len(warned) == 1, warned
+        assert warned[0].endswith("NOT scanned: sub/dockerfile"), warned
 
     def test_the_walk_never_leaves_its_glob_to_the_interpreters_default(self, tmp_path):
         """Each glob is given the platform's own rule (case ignored on Windows

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import replace
@@ -128,6 +129,24 @@ def iter_repo_files(repo: Path, skip_tree: Path | None = None) -> Iterator[Path]
             yield base / filename
 
 
+def _spelled_as(name: str, pattern: str) -> str | None:
+    """``name`` with ``pattern``'s literal parts spelled as the pattern spells
+    them, when the two match ignoring case (``dockerfile_utils.py`` against
+    ``Dockerfile_*`` is ``Dockerfile_utils.py``); otherwise None."""
+    parts = [part for part in re.split(r"([*?])", pattern) if part]
+    regex = "".join(
+        "(.*)" if part == "*" else "(.)" if part == "?" else f"({re.escape(part)})"
+        for part in parts
+    )
+    match = re.fullmatch(regex, name, re.IGNORECASE | re.DOTALL)
+    if match is None:
+        return None
+    return "".join(
+        match.group(i) if part in ("*", "?") else part
+        for i, part in enumerate(parts, start=1)
+    )
+
+
 def collect_files(
     repo: Path,
     patterns: tuple[str, ...],
@@ -145,9 +164,11 @@ def collect_files(
     decides by the exact name: on Windows the glob ignores case, so it found
     `Requirements.txt` and `Package-Lock.json` for osv-scanner, which rejects
     both and then read nothing at all. A file it refuses is left out, and
-    named when the patterns match it only by ignoring case. One they match as
-    spelled is a name the test refuses on purpose (`Dockerfile.md` is no
-    Dockerfile), and a WARNING beside every run read as a missed file.
+    named when the patterns match it only by ignoring case and the test
+    accepts it spelled as the pattern spells it. One they match as spelled is
+    a name the test refuses on purpose (`Dockerfile.md` is no Dockerfile), and
+    so is code the case-blind glob finds (`dockerfile_utils.py` for
+    `Dockerfile_*`): a WARNING beside every run read as a missed file.
 
     `max_files` is the cap for a tool's command line; `None` is no cap, for a
     caller that reads the files itself.
@@ -171,7 +192,14 @@ def collect_files(
         seen.difference_update(refused)
         names = [pattern.rsplit("/", 1)[-1] for pattern in patterns]
         miscased = [
-            p for p in refused if not any(fnmatchcase(p.name, n) for n in names)
+            p
+            for p in refused
+            if not any(fnmatchcase(p.name, n) for n in names)
+            and any(
+                (spelled := _spelled_as(p.name, n)) is not None
+                and accepts_name(spelled)
+                for n in names
+            )
         ]
         if miscased:
             logger.warning(

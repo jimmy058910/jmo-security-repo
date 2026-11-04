@@ -1437,14 +1437,18 @@ def is_dockerfile(name: str) -> bool:
     Dockerfile (`Dockerfile.md`) and reported a DL1000 at error level on
     `Dockerfile.dockerignore` and a `Dockerfile.j2` template, and discovery
     read `From the root...` and `FROM {{ base }}` as images to pull
-    (measured); a `Dockerfile.sh` is a build script."""
+    (measured); a `Dockerfile.sh` is a build script. A `-` or `_` variant is a
+    name with no suffix of its own (`Dockerfile-dev`): `Dockerfile_test.go`
+    and `Dockerfile-lint.yml` are code and config about one."""
     for base in _DOCKERFILE_NAMES:
         if name == base or name.endswith(
             tuple(sep + base for sep in _VARIANT_SEPARATORS)
         ):
             return True
-        if name.startswith(tuple(base + sep for sep in _VARIANT_SEPARATORS)):
+        if name.startswith(base + "."):
             return name.rsplit(".", 1)[-1].lower() not in _NOT_DOCKERFILE_SUFFIXES
+        if name.startswith((base + "-", base + "_")):
+            return "." not in name[len(base) + 1 :]
     return False
 
 

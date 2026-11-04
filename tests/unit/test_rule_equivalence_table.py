@@ -376,6 +376,11 @@ def test_a_range_inside_another_counts_only_for_a_listed_pair():
     assert calculator.location_similarity(
         image_tag["location"], unlisted["location"]
     ) == pytest.approx(4 / 12)
+    # Through the score a report uses: containment is decided per pair, so
+    # an unlisted pair keeps 0.2024 (it would be 0.70 with location 1.0).
+    assert calculator.calculate_similarity(image_tag, unlisted) == pytest.approx(
+        0.2024, abs=1e-3
+    )
     assert calculator.calculate_similarity(
         image_tag, checkov["CKV_K8S_14"]
     ) > calculator.calculate_similarity(image_tag, unlisted)

@@ -128,3 +128,41 @@ def test_every_compliance_key_has_one_wording():
         )
 
     assert two_wordings == {}
+
+
+def test_a_nuclei_misconfiguration_stays_dast(tmp_path: Path):
+    """nuclei copies a template's own tags onto its finding, and its web
+    misconfiguration templates are tagged `misconfig`: what a running site
+    exposes, found by requesting it, keeps the DAST controls."""
+    finding = {
+        "template-id": "http-missing-security-headers",
+        "info": {
+            "name": "HTTP Missing Security Headers",
+            "severity": "info",
+            "tags": ["misconfig", "headers", "generic"],
+        },
+        "matched-at": "http://127.0.0.1:8080/",
+        "host": "127.0.0.1:8080",
+        "type": "http",
+    }
+
+    findings = _gathered(tmp_path, {"nuclei.json": [finding]})
+
+    assert [(f["tool"]["name"], _category(f)) for f in findings] == [("nuclei", "dast")]
+
+
+def test_a_yara_x_finding_has_no_category(tmp_path: Path):
+    """J11: no category's controls (dependency patching, secret handling,
+    IaC, DAST) describe a signature match, so a yara-x finding carries none."""
+    match = {
+        "rule": "JMO_Canary",
+        "namespace": "default",
+        "tags": ["tc_detection"],
+        "meta": {"author": "JMo Security", "description": "canary"},
+        "strings": [],
+        "file": "node_modules/pkg/index.js",
+    }
+
+    findings = _gathered(tmp_path, {"yara-x.json": [match]})
+
+    assert [(f["tool"]["name"], _category(f)) for f in findings] == [("yara-x", None)]

@@ -912,8 +912,10 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
     if tool == "trufflehog" or "secrets" in tags or "secret" in tags:
         return "secrets"
 
-    # A misconfiguration is configuration, whichever tool reported it
-    if "misconfig" in tags:
+    # A misconfiguration in a file is configuration, whichever tool read it.
+    # nuclei's web templates are tagged `misconfig` too: what a running site
+    # exposes, found by requesting it, stays DAST.
+    if "misconfig" in tags and "dast" not in tags:
         return "iac"
 
     # SAST tools

@@ -2691,7 +2691,7 @@ Permission denied on scripts
 
 Hadolint shows no results
 
-- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile` or `Containerfile`, alone or with a variant joined by `.`, `-` or `_`, such as `Dockerfile.dev`, `Dockerfile-dev` or `prod-Dockerfile`, at any depth, spelled with that case; a document such as `Dockerfile.md`, a template such as `Dockerfile.j2`, a script such as `Dockerfile.sh` and `Dockerfile.dockerignore` are not one); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
+- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile` or `Containerfile`, alone or with a variant joined by `.`, `-` or `_`, such as `Dockerfile.dev`, `Dockerfile-dev` or `prod-Dockerfile`, at any depth, spelled with that case; a document such as `Dockerfile.md`, a template such as `Dockerfile.j2`, a script such as `Dockerfile.sh` or `Dockerfile_test.go` and `Dockerfile.dockerignore` are not one); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
 
 TruffleHog output looks empty
 
