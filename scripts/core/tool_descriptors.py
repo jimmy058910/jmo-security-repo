@@ -25,6 +25,7 @@ import http.client
 import json
 import logging
 import re
+import ssl
 import subprocess
 import sys
 import tomllib
@@ -1700,8 +1701,10 @@ def _zap_scope(target: str) -> tuple[list[str], str]:
 def _in_zap_scope(target: str, url: str) -> bool:
     """Whether `url` is inside the scope `_zap_context` builds for `target`,
     for both of ZAP's readers: as the spider requests it, and as the active
-    scan names its node. Matched as ZAP matches, with the query cut off."""
+    scan names its node. Matched as ZAP matches: with the query cut off, and
+    case ignored (a redirect from `/Shop` to `/shop/` is attacked)."""
     spellings, tail = _zap_scope(target)
+    lowered = [s.lower() for s in spellings]
     parts = urlsplit(url)
     names = (
         f"{parts.scheme}://{parts.netloc}{parts.path}",
@@ -1709,9 +1712,10 @@ def _in_zap_scope(target: str, url: str) -> bool:
     )
 
     def inside(name: str) -> bool:
+        name = name.lower()
         return any(
             name.startswith(s) and (tail == ".*" or name == s or name[len(s)] in "/?#")
-            for s in spellings
+            for s in lowered
         )
 
     return all(inside(name) for name in names)
@@ -1721,19 +1725,31 @@ def url_redirect(url: str, timeout: float = 10.0) -> str | None:
     """Where `url` sends a client that asks for it, when it answers with a
     redirect: its `Location`, made absolute. Asked once, with no redirect
     followed. None for any other answer, and when it cannot be asked (a name
-    that does not resolve, a refused connection, a timeout, a certificate):
-    the tool that scans it says what it could not reach."""
+    that does not resolve, a refused connection, a timeout): the tool that
+    scans it says what it could not reach.
+
+    A certificate is not verified. JMo passes ZAP no certificate setting, so a
+    staging host whose certificate no public CA signed is scanned, and a probe
+    that refused it hid the redirect (review of #1431). The probe sends no
+    credential and reads one header."""
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https") or not parts.hostname:
         return None
-    connect = (
-        http.client.HTTPSConnection
-        if parts.scheme == "https"
-        else http.client.HTTPConnection
-    )
-    connection = None
+    connection: http.client.HTTPConnection | None = None
     try:
-        connection = connect(parts.hostname, parts.port, timeout=timeout)
+        # Handed no port, `http.client` reads the last `:1` of `::1` as one.
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        if parts.scheme == "https":
+            unverified = ssl.create_default_context()
+            unverified.check_hostname = False
+            unverified.verify_mode = ssl.CERT_NONE
+            connection = http.client.HTTPSConnection(
+                parts.hostname, port, timeout=timeout, context=unverified
+            )
+        else:
+            connection = http.client.HTTPConnection(
+                parts.hostname, port, timeout=timeout
+            )
         # `http.client` sends no User-Agent, and a CDN or a WAF may answer a
         # request without one with a 403 instead of the site's redirect.
         connection.request(
@@ -1771,8 +1787,11 @@ def _zap_partly_read(ctx: ScanContext) -> dict[str, str]:
     moved = url_redirect(target)
     if moved is None or _in_zap_scope(target, moved):
         return {}
+    # Without its query: a sign-on redirect carries its request and state
+    # there, and the row reaches the artifacts people paste into issues.
+    place = urlunsplit(urlsplit(moved)._replace(query="", fragment=""))
     return {
-        target: f"it redirects to {moved}, outside the scan's scope, and "
+        target: f"it redirects to {place}, outside the scan's scope, and "
         "what is there was not attacked"
     }
 

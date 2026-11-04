@@ -282,6 +282,12 @@ def test_kics_dockerfile_lines_are_a_floor_through_jmo_scan(
     gained = sorted(k for k, tools in hit.items() if tools and not recorded["lines"][k])
     if gained:
         print(f"newly hit ({len(gained)}), record them with {RECORD}=1:", *gained)
+    # The report merges a same-check pair into one finding with one location
+    # (E1); a change there that hides a partner's line shows here.
+    assert in_report >= recorded["distinct_hit_in_findings_json"], (
+        f"findings.json covers {in_report} of the lines, "
+        f"{recorded['distinct_hit_in_findings_json']} when recorded"
+    )
     assert not lost, (
         f"{len(lost)} line(s) hit before are missed now: {lost} (recorded with "
         f"{recorded.get('versions')}, now {measured['versions']})"

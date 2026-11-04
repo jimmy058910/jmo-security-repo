@@ -1427,7 +1427,7 @@ All formats include consistent metadata:
 When a tool read a configuration file of the scanned target's own (`zizmor.yml`,
 `osv-scanner.toml`, `.checkov.yaml`, `.gitleaks.toml`), which can switch rules off or
 ignore vulnerabilities, `meta.own_config` lists each one, so fewer findings can be told
-apart from a cleaner target. The key is absent when no tool read one:
+apart from a cleaner target. The key is absent when no tool read one of those four:
 
 ```json
 "own_config": [

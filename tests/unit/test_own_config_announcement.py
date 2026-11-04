@@ -430,7 +430,6 @@ class TestTheRowRecordsIt:
             found = tool_loop._announce_own_config(DESCRIPTORS["zizmor"], ctx)
 
         assert found == (OwnConfig("zizmor.yml", "its audit settings apply"),)
-        assert str(tmp_path) not in json.dumps([c._asdict() for c in found])
 
     @pytest.mark.parametrize(
         ("tool", "files", "expected"),

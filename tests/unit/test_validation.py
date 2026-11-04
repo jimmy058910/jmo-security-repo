@@ -315,6 +315,20 @@ class TestURLValidation:
         """Invalid or dangerous URLs should fail."""
         assert validate_url(url) is False
 
+    @pytest.mark.parametrize(
+        ("url", "valid"),
+        [
+            ("http://localhost:65535/", True),
+            ("http://localhost:65536/", False),
+            ("http://localhost:99999/", False),
+        ],
+    )
+    def test_a_port_tcp_has_not_is_refused(self, url, valid):
+        """The pattern let any five digits through, and the first reader to ask
+        the URL for its port raised: zap's plan, which then failed every tool
+        on the target (review of #1431)."""
+        assert validate_url(url) is valid
+
 
 class TestContainerImageValidation:
     """Test container image reference validation."""

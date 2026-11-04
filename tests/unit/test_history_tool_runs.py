@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 
 from scripts.cli.history_commands import cmd_history_show
+from scripts.core import history_db
 from scripts.core.history_db import get_connection, get_scan_tool_runs, store_scan
 from scripts.core.scan_timings import OwnConfig, Reason, State, ToolRun
 from tests.unit.test_history_legacy_scans_columns import (
@@ -478,3 +479,21 @@ def test_history_show_names_the_config_under_its_row(tmp_path, capsys):
     rc, out = _show(db, scan_id, as_json=True, capsys=capsys)
     by_tool = {r["tool"]: r for r in json.loads(out)["tool_runs"]}
     assert by_tool["osv-scanner"]["own_config"] == [OSV_TOML._asdict()]
+
+
+def test_a_column_another_store_added_first_is_not_an_error(tmp_path, monkeypatch):
+    """Two first stores into one database: both saw no column, the first added
+    it, and the second's ALTER raised "duplicate column name", so its scan was
+    not recorded (measured with two connections; review of #1430). Here the
+    second store's look is replayed against a table that has the column."""
+    db = tmp_path / "h.db"
+    store_scan(
+        _results_dir(tmp_path / "first", _entries()), tools=["trivy"], db_path=db
+    )
+    monkeypatch.setattr(history_db, "_has_own_config", lambda conn: False)
+
+    store_scan(
+        _results_dir(tmp_path, _entries(WITH_OWN_CONFIG)), tools=["trivy"], db_path=db
+    )
+
+    assert json.loads(_own_configs(db)["osv-scanner"]) == [OSV_TOML._asdict()]

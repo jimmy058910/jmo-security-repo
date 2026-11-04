@@ -144,6 +144,17 @@ All notable changes to JMo Security will be documented in this file.
   carries `THIRD_PARTY_LICENSES.md`, the licenses of those sources. A scan reads the
   bundle, through opengrep, which replaced Semgrep (below). What is in it, what is left
   out and how to rebuild or replace it: [docs/RULE_BUNDLE.md](docs/RULE_BUNDLE.md).
+- **A repository's own scanner config is recorded with its results (#1430).** A
+  `zizmor.yml`, `osv-scanner.toml` or `.checkov.yaml` in the scanned repository can switch
+  rules off or ignore vulnerabilities, and the scan said so only in a console WARNING, so a
+  report or a history comparison with fewer findings gave no hint why. The tool's row now
+  carries `own_config`, each file it read (relative to the target, never a host path) with
+  what it says, in `scan-timings.json` (schema 5), `.scan_metadata.json`, `findings.json`'s
+  `meta.own_config` (absent when none was read) and history's `scan_tool_runs`, which
+  `jmo history show` prints under the row. Gitleaks' `.gitleaks.toml` joins them, and its
+  line moves from INFO, which a default scan hides, to WARNING. A history database built
+  before the column gains it on the next store, without `jmo history migrate`. The HTML
+  dashboard does not show it yet.
 
 ### Removed
 
@@ -515,22 +526,12 @@ All notable changes to JMo Security will be documented in this file.
 - **A ZAP scan of a site that redirects out of its scope says so (#1431).** A URL that
   answered with a redirect to another host or scheme was spidered to the redirect and
   attacked by nothing, and the ZAP row read `ran`, rc 0. JMo now asks the URL once before a
-  spidering scan, following no redirect; a redirect outside the scope leaves the row
-  `partly audited`, naming where the site went, with a WARNING. `127.0.0.1` and `localhost`
+  spidering scan, following no redirect and whatever the site's certificate; a redirect
+  outside the scope leaves the row `partly audited`, naming where the site went (without
+  its query), with a WARNING. `127.0.0.1` and `localhost`
   are one host in the scope, so a local site that redirects from one to the other is now
   attacked: measured on ZAP 2.17.0, the fixture's reflected XSS is found where it was
   missed.
-- **A repository's own scanner config is recorded with its results (#1430).** A
-  `zizmor.yml`, `osv-scanner.toml` or `.checkov.yaml` in the scanned repository can switch
-  rules off or ignore vulnerabilities, and the scan said so only in a console WARNING, so a
-  report or a history comparison with fewer findings gave no hint why. The tool's row now
-  carries `own_config`, each file it read (relative to the target, never a host path) with
-  what it says, in `scan-timings.json` (schema 5), `.scan_metadata.json`, `findings.json`'s
-  `meta.own_config` (absent when none was read) and history's `scan_tool_runs`, which
-  `jmo history show` prints under the row. Gitleaks' `.gitleaks.toml` joins them, and its
-  line moves from INFO, which a default scan hides, to WARNING. A history database built
-  before the column gains it on the next store, without `jmo history migrate`. The HTML
-  dashboard does not show it yet.
 - **A GitLab URL without a scheme clones from that host, never from gitlab.com, and a
   self-hosted instance's token no longer reaches gitlab.com.** `scan_gitlab_repo` replaced
   every `--gitlab-url` that did not start with `http` by `https://gitlab.com`, so

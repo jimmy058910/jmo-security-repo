@@ -515,7 +515,14 @@ def _add_own_config_column(conn: sqlite3.Connection) -> bool:
     """
     if _has_own_config(conn):
         return False
-    conn.execute("ALTER TABLE scan_tool_runs ADD COLUMN own_config TEXT")
+    try:
+        conn.execute("ALTER TABLE scan_tool_runs ADD COLUMN own_config TEXT")
+    except sqlite3.OperationalError as exc:
+        # Another store's first ALTER landed between the look and this one:
+        # DDL commits at once, so the look cannot hold the table.
+        if "duplicate column name" in str(exc):
+            return False
+        raise
     return True
 
 

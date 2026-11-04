@@ -508,9 +508,10 @@ and `localhost` counted as one host. A site that redirects elsewhere, say from
 follows the redirect out of its scope and has nothing to test. JMo asks the URL
 once before the scan, following no redirect, and when the answer is a redirect
 outside the scope, the ZAP row reads `partly audited` and names where the site
-went. JMo does not ask when it cannot reach the URL itself (behind a proxy only
-ZAP is told about, or with a certificate it cannot verify), nor for an
-`--api-spec` scan, which crawls nothing.
+went, without the redirect's query. It asks whatever the site's certificate, as
+ZAP is given no certificate setting either. JMo gets no answer when it cannot
+reach the URL itself (behind a proxy only ZAP is told about), and does not ask
+for an `--api-spec` scan, which crawls nothing.
 
 **What to do:** scan the address the row names.
 
