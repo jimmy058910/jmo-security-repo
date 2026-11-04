@@ -86,7 +86,11 @@ definition and sends its operations to `--url`; then it waits for the passive sc
 the active scan and writes `zap.json`. `per_tool.zap.timeout` is the plan's whole budget,
 so zap stops and reports before JMo's timeout. It runs with a ZAP home of JMo's own,
 `~/.jmo/zap-home`, which starts each run without the settings the last one stored, so a
-scan neither reads nor changes your `~/ZAP`.
+scan neither reads nor changes your `~/ZAP`. The scan stays inside the URL you give, its
+path included; `127.0.0.1` and `localhost` are one host there. Before a run that spiders,
+JMo asks the URL once, following no redirect: when it answers with a redirect outside that
+scope, zap still runs, and its row reads `partly audited` and names where the site went,
+which zap did not attack ([Known limitations](KNOWN_LIMITATIONS.md#zap-does-not-follow-a-site-to-another-host-or-scheme)).
 
 The remaining repository tools (TruffleHog, Gitleaks, Syft, Trivy, YARA-X) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
 

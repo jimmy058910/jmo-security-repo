@@ -498,6 +498,20 @@ and this does not apply.
 **What to do:** JMo has no setting for ZAP's heap yet. For a site too large for
 512 MB, run ZAP outside JMo.
 
+### ZAP does not follow a site to another host or scheme
+
+A ZAP scan is confined to the URL you give, its path included, with `127.0.0.1`
+and `localhost` counted as one host. A site that redirects elsewhere, say from
+`http://example.com` to `https://www.example.com`, is not attacked there: ZAP
+follows the redirect out of its scope and has nothing to test. JMo asks the URL
+once before the scan, following no redirect, and when the answer is a redirect
+outside the scope, the ZAP row reads `partly audited` and names where the site
+went. JMo does not ask when it cannot reach the URL itself (behind a proxy only
+ZAP is told about, or with a certificate it cannot verify), nor for an
+`--api-spec` scan, which crawls nothing.
+
+**What to do:** scan the address the row names.
+
 ### jmo-native reads one application, at the repository root
 
 jmo-native decides what it reads by path from the scanned root

@@ -1164,10 +1164,16 @@ scope pair.
   redirect and for the same-origin `/app` → `/app/`.
 - [ ] **Step 2: Failing test** (`requires_tools`): the fixture answers `/app/` with 301 to
   `http://localhost:<port>/app/` while zap is given `http://127.0.0.1:<port>/app/` → the
-  row's detail names the redirect target, and the scan still finds the fixture's XSS, since
-  the context holds both spellings of the loopback host. A same-origin redirect and a run
-  with none stay a plain `ran`. `www.` and scheme changes are unmeasured (no external host is
-  scanned): the detail names them, and the scope does not widen for them.
+  scan finds the fixture's XSS, since the context holds both spellings of the loopback host,
+  and the row stays a plain `ran`: a redirect the scope holds is attacked, so naming it
+  would be false (corrected building E4; this step first said the detail names it). A
+  redirect outside the scope (the fixture's `/moved/` to another host it serves) leaves the
+  row `ran` with `partly audited` naming the target, through the descriptor's existing
+  `partly_read` hook. A same-origin redirect and a run with none stay a plain `ran`, and an
+  `--api-spec` run is not asked. `www.` and scheme changes are unmeasured (no external host
+  is scanned): the detail names them, and the scope does not widen for them. Every test
+  stubs the probe (`tests/conftest.py`) unless it requests `real_url_probe`: 24 tests drove
+  a URL such as `https://example.com` through the scan loop and would each make a request.
 - [ ] **Step 3:** Commit `fix: a zap run that a redirect sent out of scope says so`, body `Closes #1431`.
 
 ## Task E5: A target's own tool config travels with the row (#1430) (P5)

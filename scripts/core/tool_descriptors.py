@@ -21,6 +21,7 @@ and handed in through `ScanContext`, so a builder only splices them.
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import re
@@ -32,7 +33,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
 from typing import Any
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import yaml
 
@@ -1666,7 +1667,105 @@ def _zap_node_name(scheme: str, netloc: str, path: str) -> str:
     return f"{scheme}://{netloc}{unquote(path)}"
 
 
-# TODO(issue-#1431): a redirect to another host spelling is attacked by nothing
+# One host, two names: a site served on one and redirecting to the other was
+# attacked by nothing, scoped to the name typed (#1431, measured on ZAP 2.17.0).
+_LOOPBACK_NAMES = ("127.0.0.1", "localhost")
+
+
+def _zap_scope(target: str) -> tuple[list[str], str]:
+    """The spellings the scan's scope begins with, and the regex of what may
+    follow them: the target as typed and as ZAP names its node, each also with
+    the other name of the loopback host when it is one of them (`_zap_context`).
+    """
+    parts = urlsplit(target)
+    netlocs = [parts.netloc]
+    host = (parts.hostname or "").lower()
+    if host in _LOOPBACK_NAMES and "@" not in parts.netloc:
+        other = next(name for name in _LOOPBACK_NAMES if name != host)
+        netlocs.append(f"{other}:{parts.port}" if parts.port else other)
+    spellings: dict[str, None] = {}
+    for netloc in netlocs:
+        spellings[f"{parts.scheme}://{netloc}{parts.path}"] = None
+        spellings[_zap_node_name(parts.scheme, netloc, parts.path)] = None
+    return list(spellings), (".*" if parts.path else "(?:[/?#].*)?")
+
+
+def _in_zap_scope(target: str, url: str) -> bool:
+    """Whether `url` is inside the scope `_zap_context` builds for `target`,
+    for both of ZAP's readers: as the spider requests it, and as the active
+    scan names its node. Matched as ZAP matches, with the query cut off."""
+    spellings, tail = _zap_scope(target)
+    parts = urlsplit(url)
+    names = (
+        f"{parts.scheme}://{parts.netloc}{parts.path}",
+        _zap_node_name(parts.scheme, parts.netloc, parts.path),
+    )
+
+    def inside(name: str) -> bool:
+        return any(
+            name.startswith(s) and (tail == ".*" or name == s or name[len(s)] in "/?#")
+            for s in spellings
+        )
+
+    return all(inside(name) for name in names)
+
+
+def url_redirect(url: str, timeout: float = 10.0) -> str | None:
+    """Where `url` sends a client that asks for it, when it answers with a
+    redirect: its `Location`, made absolute. Asked once, with no redirect
+    followed. None for any other answer, and when it cannot be asked (a name
+    that does not resolve, a refused connection, a timeout, a certificate):
+    the tool that scans it says what it could not reach."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    connect = (
+        http.client.HTTPSConnection
+        if parts.scheme == "https"
+        else http.client.HTTPConnection
+    )
+    connection = None
+    try:
+        connection = connect(parts.hostname, parts.port, timeout=timeout)
+        connection.request(
+            "GET", urlunsplit(("", "", parts.path or "/", parts.query, ""))
+        )
+        response = connection.getresponse()
+        location = response.getheader("Location")
+        if 300 <= response.status < 400 and location:
+            return urljoin(url, location)
+    except (OSError, ValueError, http.client.HTTPException) as exc:
+        logger.debug("could not ask %s whether it redirects: %s", url, exc)
+    finally:
+        if connection is not None:
+            connection.close()
+    return None
+
+
+def _zap_partly_read(ctx: ScanContext) -> dict[str, str]:
+    """A spider run whose target redirects outside the scan's scope (#1431).
+    zap followed the 301 out of its scope and attacked nothing, rc 0, and the
+    row read a plain `ran` (measured on ZAP 2.17.0). A redirect the scope
+    holds (the target's own path, the other loopback name) is attacked and
+    needs no word. An `--api-spec` run crawls nothing, so it is not asked."""
+    if ctx.plan is None:
+        return {}
+    try:
+        jobs = yaml.safe_load(ctx.plan.read_bytes())["jobs"]
+    except (OSError, yaml.YAMLError, KeyError, TypeError):
+        return {}
+    if not jobs or jobs[0].get("type") != "spider":
+        return {}
+    target = str(ctx.target)
+    moved = url_redirect(target)
+    if moved is None or _in_zap_scope(target, moved):
+        return {}
+    return {
+        target: f"it redirects to {moved}, outside the scan's scope, and "
+        "what is there was not attacked"
+    }
+
+
 def _zap_context(target: str) -> dict[str, Any]:
     """The context the spider and the active scan are confined to: `target`,
     however ZAP spells it, and nothing wider.
@@ -1689,7 +1788,8 @@ def _zap_context(target: str) -> dict[str, Any]:
 
     - `includePaths`: the target without its query and fragment, as typed or
       as ZAP names it, quoted, then anything (a target with no path: anything
-      after a `/`, `?` or `#`).
+      after a `/`, `?` or `#`). A target on `127.0.0.1` or `localhost` also
+      takes the other name, with the same port and path (#1431).
     - `excludePaths`: every URL that does not match that, so the loose regex
       ZAP makes of the entry below adds nothing.
     - `urls` (ZAP requires one, and requests it): the target without its query,
@@ -1702,10 +1802,7 @@ def _zap_context(target: str) -> dict[str, Any]:
     """
     parts = urlsplit(target)
     origin = f"{parts.scheme}://{parts.netloc}"
-    tail = ".*" if parts.path else "(?:[/?#].*)?"
-    spellings = dict.fromkeys(
-        (origin + parts.path, _zap_node_name(parts.scheme, parts.netloc, parts.path))
-    )
+    spellings, tail = _zap_scope(target)
     scope = "(?:" + "|".join(_java_quote(s) for s in spellings) + ")" + tail
     path = "".join(
         f"%{ord(c):02X}" if c in _REGEX_CHARACTERS else c for c in parts.path
@@ -2298,6 +2395,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
             precheck=_zap_launch,
+            partly_read=_zap_partly_read,
             automation_plan=True,
             # The plan's whole budget (`zap_minutes`).
             timeout_floor=900,

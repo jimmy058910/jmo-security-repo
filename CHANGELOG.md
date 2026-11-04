@@ -512,6 +512,14 @@ All notable changes to JMo Security will be documented in this file.
   `Dockerfile_test.go` or `Dockerfile-lint.yml`. On Windows, a file such as
   `dockerfile_utils.py` that the case-blind walk finds is no longer reported as a Dockerfile
   hadolint did not scan.
+- **A ZAP scan of a site that redirects out of its scope says so (#1431).** A URL that
+  answered with a redirect to another host or scheme was spidered to the redirect and
+  attacked by nothing, and the ZAP row read `ran`, rc 0. JMo now asks the URL once before a
+  spidering scan, following no redirect; a redirect outside the scope leaves the row
+  `partly audited`, naming where the site went, with a WARNING. `127.0.0.1` and `localhost`
+  are one host in the scope, so a local site that redirects from one to the other is now
+  attacked: measured on ZAP 2.17.0, the fixture's reflected XSS is found where it was
+  missed.
 - **A GitLab URL without a scheme clones from that host, never from gitlab.com, and a
   self-hosted instance's token no longer reaches gitlab.com.** `scan_gitlab_repo` replaced
   every `--gitlab-url` that did not start with `http` by `https://gitlab.com`, so

@@ -27,7 +27,9 @@ The real-binary gates are `tests/integration/test_zap_scans.py`.
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
 from pathlib import Path
 from urllib.parse import unquote, urlsplit, urlunsplit
 
@@ -47,6 +49,7 @@ from scripts.core.tool_descriptors import (
     zap_plan,
 )
 from scripts.core.tool_runner import ToolResult
+from tests.fixtures.samples.zap import fixture_server as fx
 
 TARGET = "http://127.0.0.1:8080"
 REPORT = Path("/results/individual-web/127.0.0.1_8080/zap.json")
@@ -347,6 +350,23 @@ SCOPES = [
         "http://h.test/caf%C3%A9/",
         ["http://h.test/caf%C3%A9/x", "http://h.test/café/x"],
         ["http://h.test/", "http://h.test/cafe/x", "http://h.test/caf%C3%A9x"],
+    ),
+    # 127.0.0.1 and localhost name one host: a site that redirects from one to
+    # the other was attacked by nothing (#1431). Port, scheme and path stay.
+    (
+        "http://127.0.0.1:8080/app/",
+        ["http://localhost:8080/app/x", "http://127.0.0.1:8080/app/x"],
+        [
+            "http://localhost:8080/",
+            "http://localhost:8081/app/",
+            "https://localhost:8080/app/",
+            "http://localhost.evil.test:8080/app/",
+        ],
+    ),
+    (
+        "http://localhost:8080",
+        ["http://127.0.0.1:8080/x", "http://localhost:8080/x"],
+        ["http://127.0.0.1:8081/", "http://127.0.0.2:8080/"],
     ),
 ]
 
@@ -712,3 +732,90 @@ def test_the_tracked_definitions_are_the_ones_the_fixture_serves(tmp_path):
     for name in ("openapi.json", "openapi-v1.json"):
         written = json.loads((tmp_path / name).read_bytes())
         assert written == json.loads((tracked / name).read_bytes())
+
+
+# --- a redirect out of the scope (#1431) ----------------------------------------
+
+
+@pytest.fixture
+def redirecting(tmp_path):
+    """The fixture's `redirect` site: `/app/` asked as 127.0.0.1 moves to
+    localhost, `/moved/` to another host."""
+    f = fx.start("redirect", tmp_path / "requests.jsonl")
+    yield f
+    f.close()
+
+
+def _probed(tmp_path: Path, target: str, api_spec: str = "") -> dict[str, str]:
+    plan = tmp_path / ZAP_PLAN
+    plan.write_bytes(zap_plan(target, tmp_path / "zap.json", 900, api_spec).encode())
+    partly_read = DESCRIPTORS["zap"].partly_read
+    assert partly_read is not None
+    return partly_read(_ctx(tmp_path, target=target))
+
+
+def _ops(tmp_path: Path, expected: int) -> list[tuple[str, int]]:
+    """The fixture's log, once it holds `expected` lines: it writes a line
+    after its answer is sent, so the probe can return first."""
+    log = tmp_path / "requests.jsonl"
+    deadline = time.monotonic() + 5
+    while len(fx.read_log(log)) < expected and time.monotonic() < deadline:
+        time.sleep(0.02)
+    return [(r["op"], r["status"]) for r in fx.read_log(log)]
+
+
+class TestARedirectOutOfTheScopeIsNamed:
+    """A URL that redirects off the scan's scope was spidered to the 301 and
+    attacked by nothing, and the row read a plain `ran`, rc 0 (#1431,
+    measured on ZAP 2.17.0). JMo asks the URL once, without following, and
+    names a redirect the scope leaves out."""
+
+    def test_a_site_that_moved_to_another_host_is_named(
+        self, tmp_path, real_url_probe, redirecting
+    ):
+        target = redirecting.url + "/moved/"
+
+        said = _probed(tmp_path, target)
+
+        assert list(said) == [target]
+        assert "http://zap-fixture.test/app/" in said[target]
+        assert _ops(tmp_path, 1) == [("moved_redirect", 301)]
+
+    def test_the_other_loopback_spelling_is_in_the_scope_so_nothing_is_said(
+        self, tmp_path, real_url_probe, redirecting
+    ):
+        assert _probed(tmp_path, redirecting.url + "/app/") == {}
+        assert _ops(tmp_path, 1) == [("app_loopback_redirect", 301)]
+
+    def test_a_redirect_inside_the_target_is_not_named(
+        self, tmp_path, real_url_probe, redirecting
+    ):
+        """`/app` to `/app/`, as a static server answers for a directory."""
+        assert _probed(tmp_path, redirecting.url + "/app") == {}
+        assert _ops(tmp_path, 1) == [("app_redirect", 301)]
+
+    def test_a_spec_scan_is_not_asked(self, tmp_path, real_url_probe, redirecting):
+        """An `--api-spec` scan imports its operations and crawls nothing."""
+        target = redirecting.url + "/moved/"
+
+        assert _probed(tmp_path, target, api_spec="/specs/openapi.json") == {}
+        assert _ops(tmp_path, 0) == []
+
+    def test_a_target_that_does_not_answer_gets_no_note(self, tmp_path, real_url_probe):
+        """zap says what it could not reach; the probe adds nothing to it."""
+        closed = fx.start("redirect", tmp_path / "requests.jsonl")
+        closed.close()
+
+        assert _probed(tmp_path, closed.url + "/moved/") == {}
+
+    def test_the_row_and_the_log_name_it(
+        self, tmp_path, monkeypatch, caplog, real_url_probe, redirecting
+    ):
+        target = redirecting.url + "/moved/"
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            rows, _, _ = _run(tmp_path, monkeypatch, ["zap"], target=target)
+
+        assert rows["zap"].state is State.RAN
+        assert "http://zap-fixture.test/app/" in (rows["zap"].detail or "")
+        assert "http://zap-fixture.test/app/" in caplog.text
