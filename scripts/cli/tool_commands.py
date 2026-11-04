@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -463,6 +464,21 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
     return 0
 
 
+def _nobody_to_answer() -> bool:
+    """Whether a confirmation would wait on no one: jmo.py's prompts' test.
+
+    A terminal on stdin is not enough. A wrapper that sends the output to a log
+    and leaves its console on stdin hides the question, and the command waits
+    unseen, so a run that says it is unattended is believed.
+    """
+    return (
+        not stream_is_tty(sys.stdin)
+        or bool(os.environ.get("JMO_NON_INTERACTIVE"))
+        or bool(os.environ.get("CI"))
+        or os.environ.get("DOCKER_CONTAINER") == "1"
+    )
+
+
 def cmd_tools_install(args: argparse.Namespace) -> int:
     """
     Install missing tools.
@@ -567,9 +583,10 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     # ran and raised an unhandled EOFError with a traceback - making `jmo tools
     # install` unusable from CI, cron, Docker builds and any scan runner.
     # EOF means nobody is there to answer, which is the same situation as a
-    # non-tty, so it takes the same branch: proceed. (The uninstall prompt below
-    # defaults the other way on purpose - it is destructive.)
-    if not yes and stream_is_tty(sys.stdin):
+    # non-tty, so it takes the same branch: proceed. So does a run marked
+    # unattended (_nobody_to_answer). (The uninstall prompt below defaults the
+    # other way on purpose - it is destructive.)
+    if not yes and not _nobody_to_answer():
         try:
             response = input("Proceed with installation? [Y/n] ").strip().lower()
         except EOFError:
@@ -730,7 +747,7 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
 
     # Interactive confirmation
     # See cmd_tools_install: isatty() can be True with stdin already at EOF.
-    if not yes and stream_is_tty(sys.stdin):
+    if not yes and not _nobody_to_answer():
         try:
             response = input("Proceed with updates? [Y/n] ").strip().lower()
         except EOFError:
