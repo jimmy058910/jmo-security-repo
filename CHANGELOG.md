@@ -480,6 +480,38 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
+  Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
+  merged: checkov reports a resource's whole range and its finding kept only the first line,
+  so a trivy finding on a container inside the resource never overlapped it. checkov
+  findings now carry `endLine`, and for a pair the table lists, a range inside the other
+  counts as the same place; for any other pair it counts as before, since every trivy
+  finding on a Pod sits inside every checkov range. Four pairs join the table: trivy
+  `DS-0013` with hadolint `DL3003` (`RUN cd` instead of `WORKDIR`), and trivy `KSV-0015`,
+  `KSV-0013` and `KSV-0014` with checkov `CKV_K8S_10`, `CKV_K8S_14` and `CKV_K8S_22` (CPU
+  requests, the image tag, a read-only root filesystem). Measured through `jmo scan
+  --k8s-manifest` on one Pod: 11 trivy/checkov pairs merge, 0 before. checkov reads
+  Kubernetes manifests only when given one with `--k8s-manifest`, so a repository scan has
+  none to merge.
+- **A finding's compliance controls follow what it is, not only which tool found it
+  (#1370).** Every trivy finding was filed as supply chain, so a leaked token and a writable
+  root filesystem carried the dependency-patching controls (CIS 7.x, NIST GV.SC-3, MITRE
+  T1195). A secret is now filed as secrets and a misconfiguration in a file as
+  infrastructure as code, whichever tool reported it; a nuclei finding stays DAST. shellcheck
+  findings are SAST and zizmor findings infrastructure as code: both carried no CIS, NIST or
+  PCI control before. yara-x findings carry none: no category's controls describe a
+  signature match. Six controls that read two ways, depending on which table matched first,
+  read one way. `scripts/core/compliance_frameworks.py`, an unused second copy of the
+  tables, is gone.
+- **`Dockerfile-dev`, `Dockerfile_prod`, `prod-Dockerfile` and Podman's `Containerfile` are
+  Dockerfiles (#1410).** hadolint and GitLab image discovery read `Dockerfile`,
+  `Dockerfile.<variant>` and `<variant>.Dockerfile` only, so a repository whose Dockerfile
+  was spelled another way was "skipped: no Dockerfiles" and the images it named were never
+  scanned. A variant now joins `Dockerfile` or `Containerfile` with `.`, `-` or `_`. A
+  `Dockerfile.sh` is a build script and is not read, nor are code and config named like
+  `Dockerfile_test.go` or `Dockerfile-lint.yml`. On Windows, a file such as
+  `dockerfile_utils.py` that the case-blind walk finds is no longer reported as a Dockerfile
+  hadolint did not scan.
 - **A GitLab URL without a scheme clones from that host, never from gitlab.com, and a
   self-hosted instance's token no longer reaches gitlab.com.** `scan_gitlab_repo` replaced
   every `--gitlab-url` that did not start with `http` by `https://gitlab.com`, so
