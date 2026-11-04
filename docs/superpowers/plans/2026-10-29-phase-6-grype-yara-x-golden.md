@@ -1103,10 +1103,12 @@ two-worded keys (NIST GV.SC-3 `:554/:634`; PCI 8.3.2 `:648/:707,:719`; PCI 8.2.1
 - [ ] **Step 2:** Categorise from the finding's tags (`secret`, `misconfig`,
   `vulnerability`) before the tool name; shellcheck `sast`, zizmor `iac`. A misconfiguration
   recategorised to `iac` loses MITRE T1195, since MITRE has no `iac` key: correct, a
-  misconfiguration is not a supply-chain compromise. One wording per key, the framework's own
-  title for it; per-row content that differs on purpose (T1059's PowerShell subtechnique on
-  the injection row) stays per row. `first_entry_per_key` (`4f253e24`) already keeps one entry
-  per key, so only the wording varies today.
+  misconfiguration is not a supply-chain compromise. One wording per key: the fuller of its
+  existing wordings (the framework documents were not re-read; two entries whose content
+  looks wrong are routed below). MITRE keys an entry by technique alone, so T1059's injection
+  row drops its PowerShell subtechnique (an injection names no interpreter) to match the
+  CWE-78 row. `first_entry_per_key` (`4f253e24`) already keeps one entry per key, so only the
+  wording varied.
 - [ ] **Step 3:** Delete `compliance_frameworks.py` (J11): a second copy of the mapper's
   tables, imported only by its own test, omitted from coverage, and already drifted (its
   `CWE_TO_OWASP_TOP10_2021` lacks CWE-540).
@@ -1384,6 +1386,7 @@ cache), `tests/integration/test_benchproctor.py`
 | No known-vulnerable GitHub Actions check once grype leaves | github-actions-goat: 7 advisories; OSV `GitHub Actions/all.zip`, 56 advisories | after the tag: a `jmo-native` reader of `uses:` against that database, offline |
 | `install_config.py:75-95` gives two false reasons for ReversingLabs | GitHub repo size with history; DRL unrecognised | none: Task Y1 removes the comment |
 | signature-base reports two `WEBSHELL_PHP_Generic_Eval` findings on JMo's own yara tests | `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py` hold webshell-like strings | none: Y6 decides whether a self-scan excludes them; not a product defect |
+| Two compliance entries carry text from another version of their framework: PCI "8.2.1" reads "User identity is verified before modifying authentication credentials", which is PCI DSS 4.0's 8.3.3 (3.2.1's 8.2.2); NIST "GV.SC-3" reads as CSF 1.1's ID.SC-1, while CSF 2.0's GV.SC-03 is integrating supply-chain risk management into enterprise risk processes (found building E2, 2026-11-04) | `scripts/core/compliance_mapper.py` (`PCI_DSS_4_0`, `CWE_TO_PCI_DSS_4_0`, `NIST_CSF_2_0`, `CWE_TO_NIST_CSF_2_0`); checked against secondary sources only, not the PCI SSC or NIST documents | **unfiled**: an issue on Jimmy's word, whose fix re-reads every table entry against the framework documents |
 | The dashboard shows nothing a tool run recorded, so #1430's own-config note cannot reach it: `write_html` receives findings only (found by PR E's premise pass, 2026-11-04) | `scripts/core/reporters/html_reporter.py` (`write_html(findings, out, roots)`); the React app reads `window.__FINDINGS__` or `dashboard-data.json`; CI's freshness gate on `scripts/dashboard/dist/index.html` (`ci.yml:1180-1202`) | **unfiled** (J8): its own issue on Jimmy's word, rostered by the PR that files it |
 
 Found by the premise pass and folded into a task rather than filed: the Kubernetes halves of
@@ -1430,5 +1433,6 @@ Each corrects a task this plan wrote before measuring it; the evidence is in E1â
 2. **#1506's placement** (2026-10-30, after PR B merged): Task A6 in PR A, so it leaves `dev`
    before F4's gate counts errors. The alternative is beside T5, which makes the e2e tests
    scan for real. Veto in review.
-3. **#1430's dashboard half** (2026-11-04, J8): unfiled. Filing it needs your word, a phase,
-   and a roster in the PR that files it.
+3. **#1430's dashboard half** (2026-11-04, J8) and **the two compliance entries with another
+   version's text** (found building E2): both unfiled. Filing either needs your word, a
+   phase, and a roster in the PR that files it.
