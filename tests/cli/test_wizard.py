@@ -1268,7 +1268,8 @@ def test_the_emitted_script_keeps_a_path_whole():
     """
     import shlex
 
-    script = generate_shell_script(None, generate_command(_config_with_awkward_path()))
+    config = _config_with_awkward_path()
+    script = generate_shell_script(config, generate_command(config))
     line = script.strip().splitlines()[-1]
 
     argv = shlex.split(line)
@@ -1288,9 +1289,8 @@ def test_the_emitted_makefile_keeps_a_path_whole():
     """
     import shlex
 
-    makefile = generate_makefile_target(
-        None, generate_command(_config_with_awkward_path())
-    )
+    config = _config_with_awkward_path()
+    makefile = generate_makefile_target(config, generate_command(config))
     recipe = next(ln for ln in makefile.splitlines() if ln.startswith("\tjmo "))
 
     assert "$" not in recipe.replace("$$", ""), f"make would expand a `$` in {recipe!r}"

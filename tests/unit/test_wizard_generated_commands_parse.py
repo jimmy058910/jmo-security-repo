@@ -38,6 +38,7 @@ import shlex
 import sys
 from contextlib import redirect_stderr
 from dataclasses import dataclass, field
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -562,3 +563,106 @@ def test_an_iac_file_outside_the_checkout_is_refused(use_docker, tmp_path, monke
     with pytest.raises(ValueError, match="outside") as refused:
         generate_github_actions(config)
     assert str(tmp_path) not in str(refused.value)
+
+
+# --------------------------------------------------------------------------
+# Docker artifacts create the directories they mount (#1307)
+# --------------------------------------------------------------------------
+
+# Stands in for docker: names every `-v` source that does not exist yet, as a
+# Linux engine would create it, owned by root, where the image's user cannot
+# write. Then records that it ran.
+_FAKE_DOCKER = """#!/bin/sh
+while [ $# -gt 0 ]; do
+  if [ "$1" = "-v" ]; then
+    src="${2%%:*}"
+    [ -e "$src" ] || echo "missing: $src" >> "$FAKE_DOCKER_LOG"
+    shift
+  fi
+  shift
+done
+echo ran >> "$FAKE_DOCKER_LOG"
+"""
+
+
+def _docker_config(tmp_path, repo_mode: str):
+    from scripts.cli.wizard_flows.config_models import WizardConfig
+
+    (tmp_path / "repo").mkdir()
+    (tmp_path / "repos.tsv").write_text("url\n", encoding="utf-8")
+    config = WizardConfig()
+    config.use_docker = True
+    config.results_dir = str(tmp_path / "out" / "results")
+    config.target.type = "repo"
+    config.target.repo_mode = repo_mode
+    config.target.repo_path = str(tmp_path / "repo")
+    config.target.tsv_path = str(tmp_path / "repos.tsv")
+    config.target.tsv_dest = str(tmp_path / "clones")
+    return config
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="runs the artifact under sh")
+@pytest.mark.parametrize("repo_mode", ["repo", "tsv"])
+@pytest.mark.parametrize("artifact", ["script", "make"])
+def test_docker_artifacts_create_the_directories_they_mount(
+    artifact, repo_mode, tmp_path
+):
+    """Run as emitted, with the results directory (and tsv's clone destination)
+    absent: every mount source must exist by the time docker runs."""
+    import os
+    import shutil
+    import subprocess
+
+    from scripts.cli.wizard import generate_command
+
+    config = _docker_config(tmp_path, repo_mode)
+    command = generate_command(config)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text(_FAKE_DOCKER, encoding="utf-8")
+    docker.chmod(0o755)
+    log = tmp_path / "docker.log"
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "FAKE_DOCKER_LOG": str(log),
+    }
+
+    if artifact == "script":
+        path = tmp_path / "scan.sh"
+        path.write_bytes(generate_shell_script(config, command).encode("utf-8"))
+        argv = ["sh", str(path)]
+    else:
+        if shutil.which("make") is None:
+            pytest.skip("make is not installed")
+        path = tmp_path / "Makefile.security"
+        path.write_bytes(generate_makefile_target(config, command).encode("utf-8"))
+        argv = ["make", "-f", str(path), "security-scan"]
+
+    done = subprocess.run(
+        argv, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60
+    )
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert log.read_text(encoding="utf-8").splitlines() == ["ran"]
+
+
+def test_the_printed_docker_command_says_to_create_its_directories(tmp_path, capsys):
+    """Declined at "Execute now?", the wizard prints the command to run later;
+    run by hand, the directories it mounts must come first."""
+    import shlex
+
+    from scripts.cli import wizard
+
+    config = _docker_config(tmp_path, "tsv")
+    with patch.object(wizard, "_prompt_yes_no", return_value=False):
+        assert wizard.execute_scan(config) == 0
+
+    later = capsys.readouterr().out.split("run it later:")[1].splitlines()
+    lines = [line.strip() for line in later if line.strip()]
+    # Resolved, as the mounts are: /var is a symlink on macOS.
+    dirs = [Path(config.results_dir).resolve(), (tmp_path / "clones").resolve()]
+    expected = shlex.join(["mkdir", "-p", *map(str, dirs)])
+    assert lines[0] == expected, lines
+    assert lines[1].startswith("docker run"), lines

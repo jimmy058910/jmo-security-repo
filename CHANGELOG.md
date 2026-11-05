@@ -539,6 +539,12 @@ All notable changes to JMo Security will be documented in this file.
   `--k8s-namespace` or `--k8s-all-namespaces` as the wizard was told (native mode had
   dropped both); and every value is shell-quoted, so a URL holding `&` no longer puts the scan in the
   background and one holding `$(...)` no longer runs a command.
+- **The wizard's Docker script and Makefile create the directories they mount (#1307).**
+  On a Linux engine, a missing bind-mount source is created owned by root, which the
+  image's user cannot write, so `--emit-script` and `--emit-make` produced a scan that
+  failed at its first write. Both now run `mkdir -p` on the results directory (and tsv's
+  clone destination) before `docker run`, and the command the wizard prints to run later
+  starts with the same line. The wizard's own run already did this.
 - **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,
