@@ -306,6 +306,21 @@ scan above went from 0 files to 1, and the row from `failed` to `ran`. The flag 
 gitignored files for every repository that config scans, so set it for the one scan that
 needs it.
 
+### JMo installs only where YARA-X has a wheel
+
+YARA-X, the engine behind the yara-x scanner, is a required dependency, and it is
+published only as prebuilt wheels: Linux with glibc 2.28 or newer on x86_64 and arm64,
+macOS 14 or newer, and Windows x64. There is no source package, so on any other
+platform `pip install jmo-security` (or `uv tool install`, or pipx) finds no `yara-x`
+it can install and installs nothing: Alpine and other musl-based Linux, Python running
+natively on Windows ARM64, Linux with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and
+macOS 13 or older. A platform condition on the dependency cannot help, since Python's
+markers can tell neither musl from glibc nor one glibc or macOS version from another.
+Making YARA-X optional is
+[#1577](https://github.com/jimmy058910/jmo-security-repo/issues/1577).
+
+**What to do:** on those platforms, run JMo from its Docker image.
+
 ### YARA-X runs only the rules JMo may redistribute
 
 signature-base is under the Detection Rule License 1.1, but not all of it: some
@@ -333,7 +348,8 @@ other variables, `filename`, `filepath`, `extension` and `owner`, are set for
 every file; `owner` is empty on Windows.
 
 **What to do:** read a clean YARA-X result as saying nothing about scripts
-renamed to look like images.
+renamed to look like images. Reading the PHP, JSP and VBS entries is
+[#1578](https://github.com/jimmy058910/jmo-security-repo/issues/1578).
 
 ### YARA-X does not follow symlinks
 
