@@ -532,6 +532,9 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **An exported schedule workflow mounts a checkout whose path holds a space.** Its
+  `docker run -v $(pwd):/workspace` left the substitution unquoted, so the shell split
+  such a path into two arguments; it is now `-v "$(pwd)":/workspace`.
 - **The wizard's GitHub Actions workflow scans the target it was given (#1554).** In
   Docker mode it named a target only for a repository, an image or a URL, so a GitLab,
   IaC or Kubernetes workflow ran `jmo scan` on nothing. Both modes now build the target

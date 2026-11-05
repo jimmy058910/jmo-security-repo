@@ -12,6 +12,7 @@ Tests cover:
 """
 
 import shutil
+import sys
 
 import pytest
 import yaml
@@ -333,3 +334,39 @@ def test_actionlint_validation(basic_schedule):
         )
     finally:
         temp_file.unlink()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="runs the step under sh")
+def test_the_scan_step_mounts_a_checkout_whose_path_has_a_space(tmp_path):
+    """`-v $(pwd):/workspace` left the substitution unquoted, so the shell split
+    a checkout path holding a space into two arguments (shellcheck SC2046)."""
+    import os
+    import subprocess
+
+    schedule = ScanSchedule.from_simple_args(
+        name="nightly", cron="0 2 * * *", image="nginx:1.27"
+    )
+    workflow = yaml.safe_load(GitHubActionsGenerator().generate(schedule))
+    (step,) = [
+        s for s in workflow["jobs"]["security-scan"]["steps"] if "JMo" in s["name"]
+    ]
+    checkout = tmp_path / "my repo"
+    checkout.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n', encoding="utf-8")
+    docker.chmod(0o755)
+
+    done = subprocess.run(
+        ["sh", "-c", step["run"]],
+        cwd=checkout,
+        env={**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    args = done.stdout.splitlines()
+    assert done.returncode == 0, done.stderr
+    assert args[args.index("-v") + 1] == f"{checkout}:/workspace"

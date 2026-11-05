@@ -125,7 +125,7 @@ class GitHubActionsGenerator:
         if not gitlab.get("token"):
             return {
                 "name": "Run JMo Security Scan",
-                "run": f"docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest {args}",
+                "run": f'docker run --rm -v "$(pwd)":/workspace ghcr.io/jimmy058910/jmo-security:latest {args}',
             }
         # The token reaches the container by environment, never argv, where the
         # process list shows it: GitHub sets it on the step and `-e` forwards it
@@ -134,7 +134,7 @@ class GitHubActionsGenerator:
         return {
             "name": "Run JMo Security Scan",
             "env": {"GITLAB_TOKEN": "${{ secrets.GITLAB_TOKEN }}"},  # nosec B105 - a secret reference, not a password
-            "run": f"docker run --rm -v $(pwd):/workspace -e GITLAB_TOKEN ghcr.io/jimmy058910/jmo-security:latest {args}",
+            "run": f'docker run --rm -v "$(pwd)":/workspace -e GITLAB_TOKEN ghcr.io/jimmy058910/jmo-security:latest {args}',
         }
 
     def _build_scan_args(self, schedule: ScanSchedule) -> str:
