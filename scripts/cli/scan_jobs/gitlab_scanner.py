@@ -571,6 +571,7 @@ def _scan_named_images(
     image this job claimed gets rows, since no other target will scan it.
     """
     mine: list[str] = []
+    error = "its scan did not finish"
     try:
         found = sorted(_discover_container_images(clone_path, full_path))
         if not any("image" in DESCRIPTORS[tool].invocations for tool in tools):
@@ -660,10 +661,16 @@ def _scan_named_images(
                     )
             images.add(full_path, image, rows)
     except Exception as e:
+        error = f"{type(e).__name__}: {e}"
         logger.error(
-            f"Container image discovery failed for {full_path}: {type(e).__name__}: {e}",
+            f"Container image discovery failed for {full_path}: {error}",
             exc_info=True,
         )
+    finally:
+        # Each image claimed and not yet recorded gets failed rows here, not in
+        # the handler above: a fault inside that handler left every image after
+        # it with none, and the report said nothing of them (#1557). After a
+        # scan that worked, every one is recorded and this adds nothing.
         recorded = {image for image, _rows in images.found_in(full_path)}
         for image in mine:
             if image not in recorded:
@@ -671,10 +678,7 @@ def _scan_named_images(
                     full_path,
                     image,
                     rows_without_running(
-                        tools,
-                        "image",
-                        Reason.SCANNER_ERROR,
-                        detail=f"{type(e).__name__}: {e}",
+                        tools, "image", Reason.SCANNER_ERROR, detail=error
                     ),
                 )
 
