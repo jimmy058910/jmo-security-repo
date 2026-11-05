@@ -2242,7 +2242,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="gitleaks",
-            memory_mb=350,  # 328 MB for its two runs
+            memory_mb=350,  # 328 MB with both its runs at once
             invocations={"repo": _gitleaks_repo},
             # `gitleaks version` prints the bare version (measured, 8.30.1).
             version_probe=VersionProbe(
