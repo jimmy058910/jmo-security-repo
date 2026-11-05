@@ -172,6 +172,115 @@ class TestOsvScannerDiscovery:
             assert "suppress" not in line
             assert "it ignores no vulnerability and no package" in line
 
+    @pytest.mark.parametrize(
+        ("toml", "expected"),
+        [
+            # Measured with osv-scanner 2.7.0 on the frozen database: a past
+            # date kept left-pad's advisory, a future one dropped it.
+            (
+                b'[[IgnoredVulns]]\nid = "JMO-TEST-2026-0001"\n'
+                b"ignoreUntil = 2020-01-01\n",
+                None,
+            ),
+            (
+                b'[[IgnoredVulns]]\nid = "JMO-TEST-2026-0001"\n'
+                b"ignoreUntil = 2020-01-01T00:00:00Z\n",
+                None,
+            ),
+            (
+                b'[[IgnoredVulns]]\nid = "JMO-TEST-2026-0001"\n'
+                b"ignoreUntil = 2999-01-01\n",
+                "1 ignored vulnerability and 0 ignored packages suppress findings",
+            ),
+            (
+                b'[[PackageOverrides]]\nname = "left-pad"\necosystem = "npm"\n'
+                b"ignore = true\neffectiveUntil = 2020-01-01\n",
+                None,
+            ),
+            (
+                b'[[PackageOverrides]]\nname = "left-pad"\necosystem = "npm"\n'
+                b"ignore = true\neffectiveUntil = 2999-01-01\n",
+                "0 ignored vulnerabilities and 1 ignored package suppress findings",
+            ),
+        ],
+        ids=[
+            "ignore-expired",
+            "ignore-expired-datetime",
+            "ignore-active",
+            "override-expired",
+            "override-active",
+        ],
+    )
+    def test_an_entry_counts_only_until_its_date(
+        self, tmp_path, caplog, toml, expected
+    ) -> None:
+        """An expired `ignoreUntil` or `effectiveUntil` was counted as
+        suppressing while osv-scanner kept the finding (#1433)."""
+        said = _osv(
+            tmp_path,
+            {"package-lock.json": NPM_LOCK, "osv-scanner.toml": toml},
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        if expected is None:
+            assert "suppress" not in line, line
+            assert "it ignores no vulnerability and no package" in line
+        else:
+            assert line.endswith(f"({expected})"), line
+
+    @pytest.mark.parametrize(
+        ("selectors", "scope"),
+        [
+            (b'ecosystem = "npm"\n', "an override that ignores every npm package"),
+            (b"", "an override that ignores every package"),
+            (
+                b'ecosystem = "Maven"\ngroup = "org.example"\n',
+                "an override that ignores every Maven package matching its "
+                "version or group",
+            ),
+        ],
+        ids=["ecosystem", "everything", "group"],
+    )
+    def test_an_override_without_a_name_says_what_it_ignores(
+        self, tmp_path, caplog, selectors, scope
+    ) -> None:
+        """Without `name` an override selects every package its other fields
+        do: osv-scanner 2.7.0 dropped left-pad's advisory for `ecosystem =
+        "npm"` and for no selector at all. It was announced as "1 ignored
+        package" (#1433)."""
+        toml = b"[[PackageOverrides]]\n" + selectors + b"ignore = true\n"
+        said = _osv(
+            tmp_path,
+            {"package-lock.json": NPM_LOCK, "osv-scanner.toml": toml},
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        assert line.endswith(
+            f"(0 ignored vulnerabilities, 0 ignored packages and {scope} "
+            "suppress findings)"
+        ), line
+
+    def test_nameless_overrides_with_one_scope_are_counted_together(
+        self, tmp_path, caplog
+    ) -> None:
+        override = b'[[PackageOverrides]]\necosystem = "npm"\nignore = true\n'
+        said = _osv(
+            tmp_path,
+            {
+                "package-lock.json": NPM_LOCK,
+                "osv-scanner.toml": override + b"\n" + override,
+            },
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        assert "and 2 overrides that ignore every npm package suppress" in line
+
     def test_a_file_that_ignores_nothing_is_named_but_suppresses_nothing(
         self, tmp_path, caplog
     ) -> None:

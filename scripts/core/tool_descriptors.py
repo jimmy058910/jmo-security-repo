@@ -29,8 +29,10 @@ import ssl
 import subprocess
 import sys
 import tomllib
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -1369,6 +1371,35 @@ def _osv_own_config_dirs(ctx: ScanContext) -> list[Path]:
     return list(dict.fromkeys((root / f).parent for f in lockfiles))
 
 
+def _osv_active(until: object) -> bool:
+    """Whether an entry still applies: osv-scanner keeps it until its
+    `ignoreUntil` / `effectiveUntil` passes (measured, 2.7.0: a past date kept
+    the finding, a future one dropped it). A date is midnight UTC; a value that
+    is not a date is counted, as before (#1433)."""
+    if isinstance(until, datetime):
+        moment = until if until.tzinfo else until.replace(tzinfo=UTC)
+    elif isinstance(until, date):
+        moment = datetime(until.year, until.month, until.day, tzinfo=UTC)
+    else:
+        return True
+    return moment > datetime.now(UTC)
+
+
+def _osv_override_scope(override: dict[str, Any]) -> str:
+    """What a `[[PackageOverrides]]` entry without a `name` ignores: every
+    package its other fields select (measured, 2.7.0: `ecosystem = "npm"` and
+    no selector at all both dropped an npm advisory)."""
+    ecosystem = override.get("ecosystem")
+    scope = (
+        f"every {ecosystem} package"
+        if isinstance(ecosystem, str) and ecosystem
+        else "every package"
+    )
+    if "version" in override or "group" in override:
+        scope += " matching its version or group"
+    return scope
+
+
 def _osv_own_config_detail(path: Path) -> str:
     """What an `osv-scanner.toml` suppresses: its `[[IgnoredVulns]]` entries,
     and the `[[PackageOverrides]]` entries that ignore a package
@@ -1377,7 +1408,10 @@ def _osv_own_config_detail(path: Path) -> str:
     override with `ignore = false` or only a license kept it, and was
     announced as suppressing. A file that ignores nothing is still named, as
     read, without the word. A file that does not parse is said to be
-    unreadable here, not a crash."""
+    unreadable here, not a crash.
+
+    An entry counts only while its date has not passed, and an override with
+    no `name` is said to ignore the scope it selects, not "1 package" (#1433)."""
     try:
         document = tomllib.loads(path.read_bytes().decode("utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
@@ -1397,16 +1431,27 @@ def _osv_own_config_detail(path: Path) -> str:
             isinstance(vulnerability, dict) and vulnerability.get("ignore") is True
         )
 
-    n_ignored = len(tables("IgnoredVulns"))
-    # TODO(issue-#1433): expired ignores and nameless overrides overstated
-    n_packages = sum(ignores(o) for o in tables("PackageOverrides"))
-    if not n_ignored and not n_packages:
+    n_ignored = sum(_osv_active(v.get("ignoreUntil")) for v in tables("IgnoredVulns"))
+    overrides = [
+        o
+        for o in tables("PackageOverrides")
+        if ignores(o) and _osv_active(o.get("effectiveUntil"))
+    ]
+    n_packages = sum("name" in o for o in overrides)
+    scopes = Counter(_osv_override_scope(o) for o in overrides if "name" not in o)
+    if not n_ignored and not overrides:
         return "it ignores no vulnerability and no package"
-    return (
-        f"{n_ignored} ignored {'vulnerability' if n_ignored == 1 else 'vulnerabilities'}"
-        f" and {n_packages} ignored {'package' if n_packages == 1 else 'packages'}"
-        " suppress findings"
-    )
+    pieces = [
+        f"{n_ignored} ignored {'vulnerability' if n_ignored == 1 else 'vulnerabilities'}",
+        f"{n_packages} ignored {'package' if n_packages == 1 else 'packages'}",
+        *(
+            f"an override that ignores {scope}"
+            if n == 1
+            else f"{n} overrides that ignore {scope}"
+            for scope, n in scopes.items()
+        ),
+    ]
+    return f"{', '.join(pieces[:-1])} and {pieces[-1]} suppress findings"
 
 
 def _gitleaks_own_config_detail(path: Path) -> str:
