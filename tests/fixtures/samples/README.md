@@ -49,7 +49,7 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 | python-vulnerable/ | Semgrep, Trivy (CVEs), OSV-Scanner (against `tests/fixtures/osv-db`, a frozen database of three synthetic advisories) |
 | dockerfile-issues/ | Hadolint, Trivy (misconfig) |
 | terraform-misconfig/ | Checkov, Trivy (config) |
-| credential-patterns/ | TruffleHog, Trivy (secrets) |
+| credential-patterns/ | gitleaks. TruffleHog reports none of these shapes (each is one it refuses), so its golden scans a key generated at capture time |
 | shell-issues/ | ShellCheck |
 | github-actions/ | zizmor |
 | native/ | jmo-native (JMo's own check pack; see `native/README.md`) |
@@ -57,13 +57,9 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 
 ## Usage
 
-These samples are used by `scripts/dev/generate_golden.py` to create golden test fixtures:
+`scripts/dev/generate_golden.py` scans them through `jmo scan` to capture the golden fixtures (its `CAPTURES` table names each tool's samples; see `tests/fixtures/golden/README.md`):
 
 ```bash
-# Generate golden files for all tools
-python scripts/dev/generate_golden.py --all
-
-# Generate for specific tool
 python scripts/dev/generate_golden.py --tool trivy
 ```
 
@@ -73,5 +69,5 @@ When adding new sample vulnerabilities:
 
 1. Add code with clear, intentional vulnerabilities
 2. Document which tools should detect each issue (with rule IDs if known)
-3. Regenerate golden files: `python scripts/dev/generate_golden.py --update`
+3. Re-capture the golden files of the tools that read it: `python scripts/dev/generate_golden.py --tool <tool> --update`
 4. Verify tests pass: `pytest tests/adapters/test_adapter_golden.py -v`
