@@ -308,7 +308,7 @@ def _rewrite(raw: bytes, work: Path, home: Path | None = None) -> bytes:
     """The capture HOME as `PLACEHOLDER/home`, then the work directory as
     PLACEHOLDER, each in its plain and its JSON spelling. The HOME goes first:
     one given with --home is outside the work directory (syft records its Go
-    and Maven caches under it), and the default one is inside it."""
+    and Maven caches under it), and the default one sits beside each tool's."""
     text = raw.decode("utf-8")
     # The HOME as given and as resolved: a symlink, or a Windows short name
     # (RUNNER~1), spells it two ways, and the scan writes the one it was given.
@@ -368,19 +368,21 @@ class Captured:
     metadata_extra: dict[str, Any] = field(default_factory=dict)
 
 
+UNKNOWN = "unknown"
+
+
 def _version(tool: str, env: dict[str, str], work: Path) -> tuple[str, Path | None]:
     """The version and binary `jmo tools check` finds under the capture's
-    HOME: the tool the scan ran, not the pin."""
+    HOME: the tool the scan ran, not the pin. UNKNOWN when the probe names
+    none (zap's starts a JVM, and once timed out on a busy machine): the scan
+    itself ran, so --check still grades it, and write_fixture refuses it."""
     done = run_jmo(["tools", "check", tool, "--json"], env=env, cwd=work, timeout=120)
     try:
         info = json.loads(done.stdout)["tools"][tool]
-    except (ValueError, KeyError) as e:
-        raise CaptureError(f"{tool}: `jmo tools check` named no version ({e})") from e
-    version = info.get("installed_version")
-    if not version:
-        raise CaptureError(f"{tool}: `jmo tools check` found it with no version")
+    except (ValueError, KeyError):
+        return UNKNOWN, None
     binary = Path(info["binary_path"]) if info.get("binary_path") else None
-    return str(version), binary
+    return str(info.get("installed_version") or UNKNOWN), binary
 
 
 def _start_fixture(work: Path) -> tuple[subprocess.Popen[bytes], int]:
@@ -543,6 +545,8 @@ def write_fixture(
 ) -> Path:
     """Write the three files under `<golden>/<adapter>/v<version>/`; an
     existing version is left as it is unless `update`."""
+    if captured.version == UNKNOWN:
+        raise CaptureError(f"{tool}: `jmo tools check` named no version, so no fixture")
     out = golden_dir / fixture_dir_name(tool) / f"v{captured.version}"
     if out.exists() and not update:
         raise CaptureError(f"{out} exists: pass --update to replace it")

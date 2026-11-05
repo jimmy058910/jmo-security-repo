@@ -162,16 +162,17 @@ All notable changes to JMo Security will be documented in this file.
   command) under `tests/fixtures/golden/<adapter>/v<version>/`. All 14 tools now have one;
   the golden test fails when a matrix tool has none, when a fixture is empty or partial,
   or when an adapter cannot be found, where it used to skip (#1097). `--check` captures
-  every tool again and fails when one does not run or parses to no finding; the nightly
-  contract job runs it. A capture writes the work directory as `/golden`, and replaces
+  every tool again and fails when one does not run or parses to no finding; the scheduled
+  contract job (04:00 UTC, weekdays) runs it. A capture writes the work directory as `/golden`, and replaces
   trufflehog's credential fields, so no fixture carries a host path or a key.
-- **Answer keys run every night.** The contract job fetches them and runs juice-shop's
+- **Answer keys run on schedule.** The contract job (04:00 UTC, weekdays) fetches them and runs juice-shop's
   and WebGoat's baselines and juice-shop's marked lines, sca-kitchen-sink's lockfile
   formats, KICS's Dockerfile and (new) Kubernetes line floors, vibeproof's native-pack
   key, (new) zizmor's own snapshots (69 of 69 inputs match) and (new) BenchProctor's
   TypeScript and JavaScript scores for the rule bundle, a gate on a drop of Youden's J.
-  None ran in any job before. A pytest step there that passes nothing, or an answer-key
-  step that skips, fails (`scripts/dev/require_passed.py`).
+  None ran in any job before. A pytest step there, in the PR-time contract job or in the
+  real-tool scans that passes nothing, or an answer-key step that skips, fails
+  (`scripts/dev/require_passed.py`).
 
 ### Removed
 

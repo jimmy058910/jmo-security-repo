@@ -104,7 +104,9 @@ it through the real loader. `CONTRIBUTING.md` has the template.
   HIGH. PR C, which wired it into scans, decided (Jimmy, 2026-09-26) that a secret is
   HIGH verified or not, TruffleHog's included, so `--fail-on HIGH` stops on a leak with
   verification off. `tests/fixtures/golden/gitleaks/` was re-derived from its raw output
-  then, through `generate_golden.run_adapter` (it has no gitleaks entry of its own).
+  then, through `generate_golden.run_adapter`. Since Phase 6's PR F the script captures
+  every matrix tool through `jmo scan` (its `CAPTURES` table); gitleaks' committed fixture
+  is still the juice-shop one, and `--check` captures gitleaks on `credential-patterns`.
 - **gitleaks' binding does more than delegate.** It pops `region.snippet` (the matched
   secret, unredacted) out of `raw`, digests it for pairing, and fills `secretContext`
   from `partialFingerprints` when `commitSha` is set (git mode). It also sets `risk` to

@@ -346,14 +346,18 @@ def test_kics_dockerfile_lines_are_a_floor_through_jmo_scan(
     )
 
 
-def _stage(queries: Path, kind: str, stage: Path) -> None:
-    """Each `kind` (positive, negative) sample as a target of its own."""
+def _stage(queries: Path, kind: str, stage: Path) -> list[str]:
+    """Each `kind` (positive, negative) sample as a target of its own; the
+    targets' names, sorted."""
+    staged = []
     for sample in sorted(queries.glob(f"*/test/{kind}*")):
         if sample.name == EXPECTED or not sample.name.endswith(K8S_SUFFIXES):
             continue
         target = stage / target_of(sample.parent.parent.name, sample.name)
         target.mkdir(parents=True)
         (target / f"manifest{sample.suffix}").write_bytes(sample.read_bytes())
+        staged.append(target.name)
+    return sorted(staged)
 
 
 def _trivy_by_target(jmo_runner, stage: Path, results: Path) -> dict[str, list]:
@@ -401,10 +405,17 @@ def test_kics_kubernetes_lines_are_a_floor_through_jmo_scan(
         pytest.skip("trivy is not installed")
     entries = expected_entries(kubernetes_queries, K8S_SUFFIXES)
     lines = sorted(set(entries))
-    for kind in ("positive", "negative"):
-        _stage(kubernetes_queries, kind, tmp_path / kind)
+    staged = {
+        kind: _stage(kubernetes_queries, kind, tmp_path / kind)
+        for kind in ("positive", "negative")
+    }
     positives = _trivy_by_target(jmo_runner, tmp_path / "positive", tmp_path / "rp")
     negatives = _trivy_by_target(jmo_runner, tmp_path / "negative", tmp_path / "rn")
+    # A negative that went unscanned would leave its query's checks unsubtracted
+    # and the floor easier to meet, silently.
+    assert sorted(positives) == staged["positive"], "a positive sample was not scanned"
+    assert sorted(negatives) == staged["negative"], "a negative sample was not scanned"
+    assert (len(staged["positive"]), len(staged["negative"])) == (271, 262)
     negative_rules: dict[str, set[str]] = {}
     for target, found in negatives.items():
         negative_rules.setdefault(target.split("--")[0], set()).update(

@@ -51,10 +51,13 @@ class FakeJmo:
     """Stands in for `jmo scan` and `jmo tools check --json`: writes the one
     target directory a repo scan writes, its row and the tool's output."""
 
-    def __init__(self, raw=None, state: str = "ran", reason: str | None = None):
+    def __init__(
+        self, raw=None, state: str = "ran", reason: str | None = None, version="9.9.9"
+    ):
         self.raw = raw
         self.state = state
         self.reason = reason
+        self.version = version
         self.calls: list[list[str]] = []
 
     def __call__(self, args, *, env, cwd, timeout):
@@ -65,7 +68,10 @@ class FakeJmo:
             binary.write_bytes(b"#!/bin/sh\n")
             out = {
                 "tools": {
-                    tool: {"installed_version": "9.9.9", "binary_path": str(binary)}
+                    tool: {
+                        "installed_version": self.version,
+                        "binary_path": str(binary),
+                    }
                 }
             }
             return subprocess.CompletedProcess(args, 0, json.dumps(out), "")
@@ -483,3 +489,29 @@ def test_a_real_shellcheck_capture_parses_to_findings(tmp_path) -> None:
     assert len(captured.findings) > 0
     assert str(work) not in captured.raw.decode()
     assert all(f["tool"]["name"] == "shellcheck" for f in captured.findings)
+
+
+def test_a_version_probe_that_names_none_fails_no_check(
+    tmp_path, monkeypatch, golden, capsys
+) -> None:
+    # zap's probe starts a JVM and once read NOT READY on a busy machine: the
+    # version only picks the fixture to compare with, so --check reports it.
+    monkeypatch.setattr(gg, "run_jmo", FakeJmo(_hadolint_raw, version=None))
+
+    rc = gg.check(
+        ["hadolint"], home=tmp_path / "home", golden_dir=golden, scratch=tmp_path
+    )
+
+    assert rc == 0
+    assert "vunknown, 2 findings" in capsys.readouterr().out
+
+
+def test_a_capture_with_no_version_is_never_written(
+    tmp_path, monkeypatch, golden
+) -> None:
+    # A fixture's directory is its version: one cannot be named without it.
+    captured, _ = _capture(tmp_path, monkeypatch, FakeJmo(_hadolint_raw, version=None))
+
+    with pytest.raises(gg.CaptureError, match="no version"):
+        gg.write_fixture("hadolint", captured, golden_dir=golden)
+    assert not (golden / "hadolint").exists()

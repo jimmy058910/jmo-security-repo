@@ -30,7 +30,6 @@ import os
 import re
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -132,7 +131,6 @@ def test_benchproctor_scores_the_rule_bundle_no_worse_than_recorded(
     config = tmp_path / "jmo.yml"
     config.write_bytes(b"outputs:\n  - json\n  - sarif\n")
     results = tmp_path / "results"
-    started = time.perf_counter()
     run = jmo_runner(
         [
             "scan",
@@ -148,7 +146,6 @@ def test_benchproctor_scores_the_rule_bundle_no_worse_than_recorded(
         ],
         timeout=1500,
     )
-    seconds = round(time.perf_counter() - started, 1)
     assert run.returncode == 0, run.stderr[-2000:]
     rows = json.loads(
         (results / "individual-repos" / framework / "scan-timings.json").read_bytes()
@@ -170,16 +167,14 @@ def test_benchproctor_scores_the_rule_bundle_no_worse_than_recorded(
     )
     assert scored.returncode == 0, scored.stderr[-2000:]
     score = parse_score(scored.stdout)
-    print(f"{framework}: {score} in {seconds} s")
+    print(f"{framework}: {score}")
 
     recorded = json.loads(BASELINE.read_bytes()) if BASELINE.is_file() else {}
     if os.environ.get(RECORD):
         frameworks = recorded.setdefault("frameworks", {})
-        frameworks[framework] = {
-            **frameworks.get(framework, {}),
-            **score,
-            "seconds": seconds,
-        }
+        # The time and peak memory each framework took stay the measurement's
+        # (F7 Step 1): one sample here would measure the runner (#742).
+        frameworks[framework] = {**frameworks.get(framework, {}), **score}
         BASELINE.write_bytes((json.dumps(recorded, indent=2) + "\n").encode())
         pytest.skip(f"recorded {framework} in {BASELINE.name}: J {score['j']}%")
 

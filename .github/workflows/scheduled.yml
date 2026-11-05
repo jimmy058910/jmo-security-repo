@@ -1022,9 +1022,15 @@ jobs:
             -m "requires_tools" \
             --tb=short \
             --maxfail=3 \
-            --timeout=300
+            --timeout=300 \
+            --junitxml=tool-integration-junit.xml
         env:
           CI: "true"
+
+      - name: Fail if the real-tool scans passed nothing
+        # Each test skips without its scanner, and pytest exits 0 for a run of
+        # skips (#1349's class).
+        run: python3 scripts/dev/require_passed.py tool-integration-junit.xml
 
       - name: Upload test results on failure
         if: failure()
@@ -1186,17 +1192,23 @@ jobs:
           shellcheck --version || echo "shellcheck not available"
           syft version || echo "syft not available"
 
-      - name: Install zap and nuclei where jmo finds them
-        # Only the golden re-capture below runs them: each scans
-        # fixture_server.py's site. zap runs on the runner's JDK 17, as in
-        # e2e-ubuntu. Its download is 232 MiB from github.com and the installer
-        # does not retry, so neither install does a failure on the first try.
+      - name: Install zap, nuclei, checkov and yara-x where jmo finds them
+        # zap and nuclei: the golden re-capture scans fixture_server.py's site
+        # with them; zap runs on the runner's JDK 17, as in e2e-ubuntu.
+        # checkov: an isolated venv under ~/.jmo/tools, which jmo prefers to
+        # PATH (#1101). The `pip install` above lands under ~/.local (a user
+        # install), and the re-capture runs in a HOME of its own, where that
+        # checkov cannot import itself.
+        # yara-x: fetches the pinned signature-base rules into ~/.jmo/yara-rules,
+        # which juice-shop's baseline needs (yara-x reports 2 there).
+        # zap's download is 232 MiB from github.com and the installer does not
+        # retry, so no install fails on its first try.
         run: |
           : "${JAVA_HOME_17_X64:?the runner image has no JDK 17}"
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
           export PATH="$JAVA_HOME_17_X64/bin:$PATH"
-          for tool in zap nuclei; do
+          for tool in zap nuclei checkov yara-x; do
             installed=false
             for attempt in 1 2 3; do
               if jmo tools install "$tool" --yes; then

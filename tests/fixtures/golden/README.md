@@ -2,7 +2,8 @@
 
 One real output per tool, what JMo's adapter reads from it, and how it was made.
 `tests/adapters/test_adapter_golden.py` replays each through the adapter and fails
-when the findings change. The samples they scan are in `tests/fixtures/samples/`.
+when the findings' count or ids change (an id hashes the tool, rule, path, line and
+message; a changed severity alone does not move it). The samples they scan are in `tests/fixtures/samples/`.
 
 ## Structure
 
@@ -30,7 +31,8 @@ python scripts/dev/generate_golden.py --check                    # capture all a
 ```
 
 `--check` fails when a tool does not run or its output parses to no finding, and
-reports a count that moved from the committed fixture's. The nightly runs it.
+reports a count that moved from the committed fixture's. The scheduled contract job
+(04:00 UTC, weekdays) runs it.
 
 A capture changes two things in a tool's output, and its `metadata.json` says so:
 
