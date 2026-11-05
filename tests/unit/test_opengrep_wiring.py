@@ -1331,3 +1331,79 @@ def test_a_scan_leaves_no_log_in_the_home_directory(tmp_path, monkeypatch) -> No
     assert "src/a.py" in log.read_text(encoding="utf-8", errors="replace")
     # Nothing was left in the repository either.
     assert sorted(p.name for p in repo.iterdir()) == ["src"]
+
+
+# Planted values: what the test asserts is that none of them reaches a file.
+SECRET_SHAPES = {
+    "jwt_inline": "planted-inline-jwt-u7y6t5",
+    "session": "planted-session-l1k2j3",
+    "rds": "planted-rds-pass-a1s2d3",
+    "logged": "planted-logtoken-1585-hh88",
+}
+
+
+@pytest.mark.requires_tools
+def test_a_secret_a_rule_matched_reaches_no_finding_output_or_log(
+    tmp_path, monkeypatch
+) -> None:
+    """#1585 through the real binary, on the shapes its review measured
+    leaking: opengrep reports several rules for one region, so another rule's
+    result over a secret (a JWT signed inside a function, an express session,
+    an RDS block) carried it, and the logger rule's message renders a `%` call
+    as written. The report's reading must leave the secret in no finding, in
+    opengrep.json, nor in the log the row writes beside it."""
+    from scripts.core.normalize_and_report import gather_results
+
+    monkeypatch.delenv("SEMGREP_LOG_FILE", raising=False)
+    s = SECRET_SHAPES
+    repo = tmp_path / "app"
+    repo.mkdir()
+    (repo / "index.js").write_bytes(
+        (
+            'const jwt = require("jsonwebtoken");\n'
+            'const session = require("express-session");\n'
+            "const app = require('express')();\n"
+            "function issue(user) {\n"
+            f'  return jwt.sign(user, "{s["jwt_inline"]}");\n'
+            "}\n"
+            f"app.use(session({{\n  secret: '{s['session']}',\n  resave: false\n}}));\n"
+        ).encode()
+    )
+    (repo / "main.tf").write_bytes(
+        (
+            'resource "aws_db_instance" "default" {\n'
+            '  engine   = "mysql"\n'
+            '  username = "foo"\n'
+            f'  password = "{s["rds"]}"\n'
+            "}\n"
+        ).encode()
+    )
+    (repo / "app.py").write_bytes(
+        (
+            "import logging\nlogger = logging.getLogger(__name__)\n"
+            f'logger.info("token={s["logged"]} for %s" % "x")\n'
+        ).encode()
+    )
+    out = tmp_path / "results" / "individual-repos" / "app"
+
+    row = _real_scan(repo, out)
+
+    assert row.state is State.RAN, row
+    rules = {rule for rule, _, _ in _hits(out)}
+    # Meta-guard: secret-class rules fired, and other rules over the same code.
+    assert {
+        "hardcoded-jwt-secret",
+        "express-session-hardcoded-secret",
+        "rds-insecure-password-storage-in-source-code",
+        "python-logger-credential-disclosure",
+        "aws-db-instance-no-logging",
+    } <= rules, rules
+    findings = gather_results(tmp_path / "results")
+    leaked = {
+        "findings": [n for n, v in s.items() if v in json.dumps(findings)],
+        **{
+            path.name: [n for n, v in s.items() if v.encode() in path.read_bytes()]
+            for path in (out / "opengrep.json", out / ".opengrep" / "semgrep.log")
+        },
+    }
+    assert {where: names for where, names in leaked.items() if names} == {}
