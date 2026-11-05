@@ -3,23 +3,16 @@
 Tests cover:
 - TargetDetector detection methods (repos, images, IaC, web apps, packages, locks)
 - PromptHelper colored output and prompting
-- BaseWizardFlow execution template method
 
 Architecture Note:
 - Uses tmp_path fixture for file operations
-- Mocks subprocess for command execution
 - Mocks input() for user prompts
-- Tests concrete implementations of abstract methods
 """
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from scripts.cli.wizard_flows.base_flow import (
-    BaseWizardFlow,
-    PromptHelper,
-    TargetDetector,
-)
+from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
 
 # ========== Category 1: TargetDetector ==========
 
@@ -548,172 +541,6 @@ def test_prompter_confirm_yes():
         assert result is True
 
 
-# ========== Category 3: BaseWizardFlow ==========
-
-
-class ConcreteWizardFlow(BaseWizardFlow):
-    """Concrete implementation for testing."""
-
-    def detect_targets(self):
-        return {"repos": [Path("/repo1"), Path("/repo2")]}
-
-    def prompt_user(self):
-        return {"emit_artifacts": False}
-
-    def build_command(self, targets, options):
-        return ["jmo", "scan", "--repos-dir", "."]
-
-
-def test_base_wizard_flow_execute_success():
-    """Test BaseWizardFlow execute with successful scan."""
-    flow = ConcreteWizardFlow()
-
-    with (
-        patch.object(flow.prompter, "confirm", return_value=True),
-        patch("subprocess.run") as mock_run,
-    ):
-        mock_run.return_value = MagicMock(returncode=0)
-
-        result = flow.execute()
-
-        assert result == 0
-        mock_run.assert_called_once()
-
-
-def test_base_wizard_flow_execute_cancelled():
-    """Test BaseWizardFlow execute when user cancels."""
-    flow = ConcreteWizardFlow()
-
-    with patch.object(flow.prompter, "confirm", return_value=False):
-        result = flow.execute()
-
-        assert result == 0  # Cancellation is not an error
-
-
-def test_base_wizard_flow_execute_no_targets():
-    """Test BaseWizardFlow execute with no targets detected."""
-
-    class EmptyTargetsFlow(BaseWizardFlow):
-        def detect_targets(self):
-            return {}
-
-        def prompt_user(self):
-            return {}
-
-        def build_command(self, targets, options):
-            return []
-
-    flow = EmptyTargetsFlow()
-    result = flow.execute()
-
-    assert result == 1  # No targets is an error
-
-
-def test_base_wizard_flow_execute_scan_failure():
-    """Test BaseWizardFlow execute with scan failure."""
-    flow = ConcreteWizardFlow()
-
-    with (
-        patch.object(flow.prompter, "confirm", return_value=True),
-        patch("subprocess.run") as mock_run,
-    ):
-        mock_run.return_value = MagicMock(returncode=2)
-
-        result = flow.execute()
-
-        assert result == 2
-
-
-def test_base_wizard_flow_execute_exception():
-    """Test BaseWizardFlow execute handles exceptions."""
-    flow = ConcreteWizardFlow()
-
-    with (
-        patch.object(flow.prompter, "confirm", return_value=True),
-        patch("subprocess.run") as mock_run,
-    ):
-        mock_run.side_effect = Exception("Command failed")
-
-        result = flow.execute()
-
-        assert result == 1
-
-
-def test_base_wizard_flow_estimate_time_sums_the_matrix():
-    """Without --tools the scan considers every TOOL_MATRIX tool, so the estimate
-    is the matrix's, computed by the same helpers the interactive wizard uses."""
-    from scripts.cli.wizard_flows.ui_helpers import (
-        calculate_time_estimate,
-        format_time_range,
-    )
-    from scripts.core.tool_registry import TOOL_MATRIX
-
-    flow = ConcreteWizardFlow()
-
-    expected = format_time_range(*calculate_time_estimate(list(TOOL_MATRIX)))
-    assert flow._estimate_time(["jmo", "scan", "--repos-dir", "."]) == expected
-
-
-def test_base_wizard_flow_estimate_time_honours_tools():
-    """`--tools a b` narrows the estimate to those tools, up to the next flag."""
-    from scripts.cli.wizard_flows.ui_helpers import (
-        calculate_time_estimate,
-        format_time_range,
-    )
-
-    flow = ConcreteWizardFlow()
-    command = ["jmo", "scan", "--tools", "syft", "trivy", "--repo", "."]
-
-    expected = format_time_range(*calculate_time_estimate(["syft", "trivy"]))
-    assert flow._estimate_time(command) == expected
-    # Narrowing must actually change the answer, or the test proves nothing
-    assert expected != flow._estimate_time(["jmo", "scan", "--repo", "."])
-
-
-def test_base_wizard_flow_estimate_time_empty_tools_falls_back_to_matrix():
-    """A bare `--tools` names nothing, so the whole matrix is still estimated."""
-    flow = ConcreteWizardFlow()
-
-    assert flow._estimate_time(["jmo", "scan", "--tools", "--repo", "."]) == (
-        flow._estimate_time(["jmo", "scan", "--repo", "."])
-    )
-
-
-def test_base_wizard_flow_preflight_names_no_profile():
-    """The preflight box shows the command and an estimate, and no profile line."""
-    flow = ConcreteWizardFlow()
-
-    with (
-        patch.object(flow.prompter, "print_summary_box") as mock_box,
-        patch.object(flow.prompter, "confirm", return_value=False),
-    ):
-        flow.execute()
-
-    items = mock_box.call_args[0][1]
-    assert items[0] == "Command: jmo scan --repos-dir ."
-    assert items[1].startswith("Estimated time: ")
-    assert not any("profile" in item.lower() for item in items)
-
-
-def test_base_wizard_flow_execute_all_empty_lists():
-    """Test BaseWizardFlow execute with targets that have empty lists."""
-
-    class EmptyListsFlow(BaseWizardFlow):
-        def detect_targets(self):
-            return {"repos": [], "images": [], "iac": []}
-
-        def prompt_user(self):
-            return {}
-
-        def build_command(self, targets, options):
-            return []
-
-    flow = EmptyListsFlow()
-    result = flow.execute()
-
-    assert result == 1  # All empty lists = no targets
-
-
 def test_prompter_prompt_choice_text_input():
     """Test PromptHelper prompt_choice with text input (case-insensitive)."""
     prompter = PromptHelper()
@@ -894,16 +721,6 @@ def test_get_terminal_width_clamping():
         mock_size.return_value = MagicMock(columns=200)
         result = base_flow._get_terminal_width()
         assert result == 120  # Maximum
-
-
-def test_base_wizard_flow_abstract_methods():
-    """Test BaseWizardFlow abstract methods are enforced."""
-
-    # Verify abstract methods are defined
-    abstract_methods = BaseWizardFlow.__abstractmethods__
-    assert "detect_targets" in abstract_methods
-    assert "prompt_user" in abstract_methods
-    assert "build_command" in abstract_methods
 
 
 def test_prompter_colorize_ansi_not_supported(monkeypatch):

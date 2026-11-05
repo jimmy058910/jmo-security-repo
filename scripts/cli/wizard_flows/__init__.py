@@ -56,22 +56,17 @@ Public API:
         - run_diff_wizard_impl: Diff wizard implementation
         - policy_evaluation_menu: Policy evaluation flow
 
-    Flow Classes:
-        - BaseWizardFlow: Base class for wizard flows
-        - RepoFlow, EntireStackFlow, CICDFlow, DeploymentFlow, DependencyFlow
+    Shared helpers:
+        - PromptHelper, TargetDetector
 """
 
 from __future__ import annotations
 
 # ==============================================================================
-# Flow Classes (existing)
+# Shared helpers
 # ==============================================================================
-# TODO(issue-#1301): `jmo wizard` never constructs the five scan-flow classes
-# below (RepoFlow ... DependencyFlow); only tests do.
-from .base_flow import BaseWizardFlow as BaseWizardFlow
 from .base_flow import PromptHelper as PromptHelper
 from .base_flow import TargetDetector as TargetDetector
-from .cicd_flow import CICDFlow as CICDFlow
 
 # ==============================================================================
 # Command Builder (existing - newly exported)
@@ -83,8 +78,6 @@ from .command_builder import build_command_parts as build_command_parts
 # ==============================================================================
 from .config_models import TargetConfig as TargetConfig
 from .config_models import WizardConfig as WizardConfig
-from .dependency_flow import DependencyFlow as DependencyFlow
-from .deployment_flow import DeploymentFlow as DeploymentFlow
 
 # ==============================================================================
 # Phase 4: Diff Flow
@@ -99,8 +92,6 @@ from .policy_flow import (
     display_policy_violations_interactive as display_policy_violations_interactive,
 )
 from .policy_flow import policy_evaluation_menu as policy_evaluation_menu
-from .repo_flow import RepoFlow as RepoFlow
-from .stack_flow import EntireStackFlow as EntireStackFlow
 
 # ==============================================================================
 # Target Configurators (existing - newly exported)
@@ -178,15 +169,9 @@ from .validators import validate_url as validate_url
 # __all__ - Public API
 # ==============================================================================
 __all__ = [
-    # Flow Classes
-    "BaseWizardFlow",
+    # Shared helpers
     "TargetDetector",
     "PromptHelper",
-    "RepoFlow",
-    "EntireStackFlow",
-    "CICDFlow",
-    "DeploymentFlow",
-    "DependencyFlow",
     # Validators
     "validate_path",
     "validate_url",

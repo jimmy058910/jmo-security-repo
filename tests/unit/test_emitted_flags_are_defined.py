@@ -29,7 +29,8 @@ guard could not reach: the cron installer and `scripts/cli/wizard_flows/`.
 argparse has nowhere to put, and the command **exits 2**. `cicd_flow` and
 `deployment_flow` built exactly that, showed it to the user in a preflight box,
 and `base_flow.run()` then executed it with `subprocess.run`. That half was
-never filed; #1019 named the two schedule generators only.
+never filed; #1019 named the two schedule generators only. (Both flows were
+unreachable from `jmo wizard` and are deleted, issue #1301.)
 
 ## Why this is derived rather than restated
 
@@ -46,7 +47,6 @@ import re
 import shlex
 import sys
 from argparse import ArgumentParser
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -54,15 +54,10 @@ import pytest
 sys.argv = ["jmo"]
 
 from scripts.cli.jmo import build_parser  # noqa: E402
-from scripts.cli.wizard_flows.cicd_flow import CICDFlow  # noqa: E402
 from scripts.cli.wizard_flows.command_builder import (  # noqa: E402
     build_command_parts,
 )
 from scripts.cli.wizard_flows.config_models import WizardConfig  # noqa: E402
-from scripts.cli.wizard_flows.dependency_flow import DependencyFlow  # noqa: E402
-from scripts.cli.wizard_flows.deployment_flow import DeploymentFlow  # noqa: E402
-from scripts.cli.wizard_flows.repo_flow import RepoFlow  # noqa: E402
-from scripts.cli.wizard_flows.stack_flow import EntireStackFlow  # noqa: E402
 from scripts.core.cron_installer import CronInstaller  # noqa: E402
 from scripts.core.schedule_manager import (  # noqa: E402
     JobTemplateSpec,
@@ -142,34 +137,6 @@ def _cron_argv() -> list[str]:
     return tokens[tokens.index("jmo") :]
 
 
-def _repo_flow_argv() -> list[str]:
-    return RepoFlow().build_command({"repos": [Path(".")], "images": []}, {})
-
-
-def _stack_flow_argv() -> list[str]:
-    return EntireStackFlow().build_command(
-        {"repos": [Path(".")], "images": [], "iac": [], "web": []}, {}
-    )
-
-
-def _dependency_flow_argv() -> list[str]:
-    return DependencyFlow().build_command({"repos": [Path(".")], "images": []}, {})
-
-
-def _cicd_flow_argv() -> list[str]:
-    return CICDFlow().build_command(
-        {"repos": [Path(".")], "pipeline_images": []},
-        {"scan_files": True, "scan_images": False},
-    )
-
-
-def _deployment_flow_argv() -> list[str]:
-    return DeploymentFlow().build_command(
-        {"repos": [Path(".")], "images": [], "iac": [], "web": []},
-        {"fail_on": "HIGH"},
-    )
-
-
 def _wizard_native_argv() -> list[str]:
     config = _wizard_config(use_docker=False)
     return build_command_parts(config)
@@ -190,11 +157,6 @@ def _wizard_docker_argv() -> list[str]:
 
 EMITTERS = {
     "cron_installer": _cron_argv,
-    "wizard_flows/repo_flow": _repo_flow_argv,
-    "wizard_flows/stack_flow": _stack_flow_argv,
-    "wizard_flows/dependency_flow": _dependency_flow_argv,
-    "wizard_flows/cicd_flow": _cicd_flow_argv,
-    "wizard_flows/deployment_flow": _deployment_flow_argv,
     "wizard_flows/command_builder[native]": _wizard_native_argv,
     "wizard_flows/command_builder[docker]": _wizard_docker_argv,
 }
@@ -228,7 +190,7 @@ def test_every_emitted_command_actually_parses(name: str) -> None:
     executed.
 
     Confirmed by mutation, and it is why both assertions exist rather than one.
-    Reverting `cicd_flow` to `--profile` leaves the name check above GREEN --
+    Reverting `cicd_flow` (since deleted, issue #1301) to `--profile` leaves the name check above GREEN --
     `jmo ci` genuinely DEFINES `--profile`, just as a boolean -- and only this
     test goes red. A guard that checked names alone would have been blind to the
     more severe of the two defects.
@@ -242,15 +204,10 @@ def test_every_emitted_command_actually_parses(name: str) -> None:
 
 # One flag each emitter must carry for the inputs above. `--profile-name` used
 # to be the one flag every emitter shared; v2.0.0 removed it, so each now names
-# the flag its own inputs guarantee. The three `jmo ci` emitters carry the CI
-# threshold (`jmo scan` has no `--fail-on`, which is why they emit `ci`).
+# the flag its own inputs guarantee. The cron installer's `jmo ci` carries the
+# CI threshold (`jmo scan` has no `--fail-on`, which is why it emits `ci`).
 MUST_EMIT = {
     "cron_installer": "--fail-on",
-    "wizard_flows/repo_flow": "--repo",
-    "wizard_flows/stack_flow": "--repos-dir",
-    "wizard_flows/dependency_flow": "--tools",
-    "wizard_flows/cicd_flow": "--fail-on",
-    "wizard_flows/deployment_flow": "--fail-on",
     "wizard_flows/command_builder[native]": "--results-dir",
     "wizard_flows/command_builder[docker]": "--results-dir",
 }
