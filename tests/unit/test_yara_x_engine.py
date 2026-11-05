@@ -1,8 +1,8 @@
 """yara-x is a dependency of JMo, not an installed tool (v2.0.0 Phase 6, PR Y,
-Task Y2, J2).
+Task Y2, J2), and since #1577 the optional one: the `yara` extra.
 
-The engine arrives with `pip install jmo-security`, so there is no versions.yaml
-row and nothing for `jmo tools install` to download for it. What that command
+The engine arrives with `pip install "jmo-security[yara]"`, so there is no
+versions.yaml row and nothing for `jmo tools install` to download for it. What that command
 still provides is the pinned rule bundle, and an engine with no rules reports
 every scan clean (#1282). So "installed" stays "the engine imports", and the
 rules are a readiness question that both install paths act on.
@@ -11,6 +11,7 @@ rules are a readiness question that both install paths act on.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -92,15 +93,118 @@ def test_a_default_install_picks_up_missing_rules(tmp_path: Path) -> None:
     assert [s.name for s in missing] == ["yara-x"]
 
 
-def test_every_dependency_tool_is_a_declared_dependency() -> None:
+def _names(requirements: list[str]) -> set[str]:
+    return {re.split(r"[=<>!~\[;\s]", req, maxsplit=1)[0] for req in requirements}
+
+
+def test_the_engine_is_the_yara_extra_not_a_hard_dependency() -> None:
+    # yara-x publishes wheels only, so as a hard dependency it failed the whole
+    # JMo install on Alpine, Windows ARM64, glibc < 2.28 and macOS 13 (#1577).
     pyproject = tomllib.loads((REPO / "pyproject.toml").read_bytes().decode("utf-8"))
-    declared = {
-        dep.split("==")[0].split(">=")[0].strip()
-        for dep in pyproject["project"]["dependencies"]
-    }
 
     assert DEPENDENCY_TOOLS == {"yara-x": "yara-x"}
-    assert set(DEPENDENCY_TOOLS.values()) <= declared
+    assert "yara-x" not in _names(pyproject["project"]["dependencies"])
+    assert _names(pyproject["project"]["optional-dependencies"]["yara"]) == {"yara-x"}
+    # The dev environment, and so every CI job, still has the engine.
+    assert "jmo-security[yara]" in pyproject["dependency-groups"]["dev"]
+
+
+def test_a_missing_engine_is_reported_with_the_extra_that_adds_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # As on a platform yara-x has no wheel for: the module cannot be imported.
+    monkeypatch.setitem(sys.modules, "yara_x", None)
+
+    status = ToolManager().check_tool("yara-x")
+
+    assert not status.installed
+    assert 'install "jmo-security[yara]"' in status.install_hint
+    assert status.execution_warning == status.install_hint
+
+
+def test_a_scan_without_the_engine_says_which_extra_adds_it(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The scan's own row and log, not only `jmo tools check`, give the reason
+    # (#1577): "its executable could not be found" says nothing about an extra.
+    from scripts.cli.scan_jobs.repository_scanner import scan_repository
+    from scripts.core.scan_timings import Reason, State
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_bytes(b"import os\n")
+
+    with (
+        caplog.at_level(logging.ERROR),
+        patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner"),
+    ):
+        _, rows = scan_repository(
+            repo=repo,
+            results_dir=tmp_path / "out",
+            tools=["yara-x"],
+            timeout=60,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=lambda _tool: None,
+        )
+
+    row = rows["yara-x"]
+    assert row.state is State.FAILED and row.reason is Reason.NOT_INSTALLED
+    assert 'install "jmo-security[yara]"' in (row.detail or "")
+    assert 'install "jmo-security[yara]"' in caplog.text
+
+
+def test_a_skipped_row_without_the_engine_says_which_extra_adds_it(
+    tmp_path: Path,
+) -> None:
+    # --allow-missing-tools records an empty result instead of failing; the
+    # row still says why the tool did not run.
+    from scripts.cli.scan_jobs.repository_scanner import scan_repository
+    from scripts.core.scan_timings import Reason, State
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_bytes(b"import os\n")
+
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner"):
+        _, rows = scan_repository(
+            repo=repo,
+            results_dir=tmp_path / "out",
+            tools=["yara-x"],
+            timeout=60,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=lambda _tool: None,
+        )
+
+    row = rows["yara-x"]
+    assert row.state is State.SKIPPED and row.reason is Reason.NOT_INSTALLED
+    assert 'install "jmo-security[yara]"' in (row.detail or "")
+
+
+def test_a_default_install_leaves_out_an_engine_it_cannot_add(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Decided 2026-11-05: a bare install works everywhere, so a default `jmo
+    # tools install` cannot fail on the one tool it can never install where the
+    # yara extra has no wheel (Alpine). `tools check` still reports it.
+    monkeypatch.setitem(sys.modules, "yara_x", None)
+    manager = ToolManager()
+
+    assert manager.get_missing_tools(["yara-x"]) == []
+    assert not manager.check_tool("yara-x").installed
+
+
+def test_the_image_installs_the_yara_extra() -> None:
+    # The image is the way on the platforms the extra cannot reach, so it must
+    # carry the engine; docker-smoke's `import yara_x` checks it only when the
+    # Dockerfile changes.
+    dockerfile = (REPO / "Dockerfile").read_bytes().decode("utf-8")
+    (extras,) = re.findall(r'-e "/opt/jmo-security\[([^\]]*)\]"', dockerfile)
+
+    assert "yara" in extras.split(",")
 
 
 def test_an_attestation_records_the_engine_version() -> None:

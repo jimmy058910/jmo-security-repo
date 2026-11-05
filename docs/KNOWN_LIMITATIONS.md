@@ -317,20 +317,21 @@ scan above went from 0 files to 1, and the row from `failed` to `ran`. The flag 
 gitignored files for every repository that config scans, so set it for the one scan that
 needs it.
 
-### JMo installs only where YARA-X has a wheel
+### The yara-x scanner runs only where YARA-X has a wheel
 
-YARA-X, the engine behind the yara-x scanner, is a required dependency, and it is
-published only as prebuilt wheels: Linux with glibc 2.28 or newer on x86_64 and arm64,
-macOS 14 or newer, and Windows x64. There is no source package, so on any other
-platform `pip install jmo-security` (or `uv tool install`, or pipx) finds no `yara-x`
-it can install and installs nothing: Alpine and other musl-based Linux, Python running
-natively on Windows ARM64, Linux with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and
-macOS 13 or older. A platform condition on the dependency cannot help, since Python's
-markers can tell neither musl from glibc nor one glibc or macOS version from another.
-Making YARA-X optional is
-[#1577](https://github.com/jimmy058910/jmo-security-repo/issues/1577).
+YARA-X, the engine behind the yara-x scanner, is published only as prebuilt wheels:
+Linux with glibc 2.28 or newer on x86_64 and arm64, macOS 14 or newer, and Windows
+x64. There is no source package, so it is the optional extra `jmo-security[yara]`,
+which the documented install includes. On any other platform that install fails:
+Alpine and other musl-based Linux, Python running natively on Windows ARM64, Linux
+with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and macOS 13 or older. Python's
+platform markers cannot tell musl from glibc, nor one glibc or macOS version from
+another, so the extra cannot be skipped there automatically. Installed without it,
+`jmo-security` works on those platforms: `jmo tools check`, `jmo tools install
+yara-x` and a scan's yara-x row say the engine is missing and why.
 
-**What to do:** on those platforms, run JMo from its Docker image.
+**What to do:** on those platforms, install `jmo-security` without `[yara]`, and run
+the image when you need yara-x: it carries the engine and its rules.
 
 ### YARA-X runs only the rules JMo may redistribute
 
@@ -348,19 +349,23 @@ nobody has reviewed fails the fetch, naming the file, rather than installing it.
 use, put them in a directory of your own beside the bundle's and point
 `per_tool.yara-x.rules_path` at it.
 
-### YARA-X knows a file's type only for executables, ELF, RTF and minidumps
+### YARA-X cannot tell a Mach-O binary, a Python script or an LSASS dump by its type
 
 signature-base is written for LOKI, which sets a `filetype` variable from a
-table of file signatures. JMo sets it from the table's four binary entries (EXE,
-ELF, RTF and MDMP), read from a file's first bytes. The text entries (PHP, JSP,
-ASP, VBS and batch) are not read, so a rule that needs one of them does not
-fire: a `.jpg` that is really a PHP script is not reported as disguised. LOKI's
-other variables, `filename`, `filepath`, `extension` and `owner`, are set for
-every file; `owner` is empty on Windows.
+table of file signatures. JMo sets it as LOKI does, from a file's first bytes,
+for every entry of that table whose type a rule JMo installs tests: EXE, ELF,
+RTF, minidumps, PHP, JSP, VBS, batch files and base64-encoded executables. So a
+PHP, JSP or VBS script renamed to `.jpg` is reported as disguised. One rule
+also tests for Mach-O binaries, Python scripts, LSASS dumps and PowerShell
+scripts, which the table has no entry for, so neither LOKI nor JMo sets those,
+and a `.jpg` that is really one of them is not reported. (An ASP page is
+labelled JSP, as LOKI labels it, since the table's `<%` comes before its ASP
+signatures; renamed, it is still reported.) LOKI's other variables, `filename`, `filepath`,
+`extension` and `owner`, are set for every file; `owner` is empty on Windows.
 
-**What to do:** read a clean YARA-X result as saying nothing about scripts
-renamed to look like images. Reading the PHP, JSP and VBS entries is
-[#1578](https://github.com/jimmy058910/jmo-security-repo/issues/1578).
+**What to do:** read a clean YARA-X result as saying nothing about Mach-O
+binaries, Python or PowerShell scripts, or LSASS dumps renamed to look like
+images.
 
 ### YARA-X does not follow symlinks
 

@@ -43,6 +43,8 @@ htmlcov/
 *.md
 !README.md
 docs/
+# The report validates findings against this schema (#1350).
+!docs/schemas/
 CHANGELOG.md
 CONTRIBUTING.md
 CONTRIBUTORS.md

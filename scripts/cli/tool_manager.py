@@ -21,6 +21,7 @@ from pathlib import Path
 from scripts.core.tool_descriptors import DESCRIPTORS, VersionProbe
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
+    DEPENDENCY_MISSING,
     TOOL_EXECUTION_COMMANDS,
     TOOL_MATRIX,
     ToolRegistry,
@@ -188,7 +189,7 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
     },
     "yara-x": {
         "install": {
-            # The engine ships with JMo; this fetches its rules.
+            # The engine is the yara extra (#1577); this fetches its rules.
             "linux": "jmo tools install yara-x",
             "macos": "jmo tools install yara-x",
             "windows": "jmo tools install yara-x",
@@ -346,8 +347,8 @@ class ToolStatus:
 
 
 # A missing dependency that `jmo tools install <tool>` itself provides: yara-x's
-# pinned rule bundle. Its engine ships with JMo, so it is always installed, and
-# only this puts it on an install list.
+# pinned rule bundle. Where its engine (the yara extra) is installed, only this
+# puts it on an install list.
 INSTALLED_BY_JMO = "yara-rules"
 
 
@@ -491,7 +492,9 @@ class ToolManager:
         if tool_info:
             install_hint = get_install_hint(tool_info, self.platform)
         else:
-            install_hint = f"See JMo documentation for {tool_name}"
+            install_hint = DEPENDENCY_MISSING.get(
+                tool_name, f"See JMo documentation for {tool_name}"
+            )
 
         # Check execution readiness (Fix 1.4 - Issue #4)
         execution_ready = True
@@ -534,7 +537,9 @@ class ToolManager:
                 )
         else:
             execution_ready = False
-            execution_warning = "Tool binary not found"
+            execution_warning = DEPENDENCY_MISSING.get(
+                tool_name, "Tool binary not found"
+            )
             # Pre-install dependency check: detect missing deps BEFORE install
             # This allows wizard to prompt for dependency installation first
             missing_deps = self._check_preinstall_deps(tool_name)
@@ -617,7 +622,17 @@ class ToolManager:
             List of ToolStatus for missing tools
         """
         statuses = self.check_matrix(tools)
-        return [s for s in statuses.values() if needs_install(s)]
+        # A dependency tool's engine is an extra of JMo, which `jmo tools
+        # install` cannot add. Absent, it stays off the default list, so a bare
+        # install's `jmo tools install` succeeds where the extra has no wheel
+        # (decided 2026-11-05, #1577); `tools check`, the scan's row and
+        # `jmo tools install <tool>` named still say why.
+        return [
+            s
+            for s in statuses.values()
+            if needs_install(s)
+            and not (s.name in DEPENDENCY_MISSING and not s.installed)
+        ]
 
     def get_outdated_tools(
         self,
@@ -862,8 +877,8 @@ class ToolManager:
                 if zap_path.exists():
                     return str(zap_path)
 
-        # yara-x's engine is a Python library and a dependency of JMo
-        # (Phase 6, J2), not a CLI binary: check that it imports.
+        # yara-x's engine is a Python library, the yara extra of JMo (Phase 6,
+        # J2; #1577), not a CLI binary: check that it imports.
         if binary_name == "yara-x":
             try:
                 import importlib.util

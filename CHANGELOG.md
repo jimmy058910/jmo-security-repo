@@ -270,6 +270,15 @@ All notable changes to JMo Security will be documented in this file.
   not DETECT, and `jmo diff` against a scan stored before this shows those findings'
   compliance as changed. The PCI DSS entries are not yet checked against the PCI SSC's
   document.
+- **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
+  publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
+  dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
+  macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
+  image includes it, and the dev environment pulls it in through its group. Without it,
+  JMo installs and runs everywhere, and `jmo tools check`, `jmo tools install yara-x` and a
+  scan's yara-x row say the engine is missing and name the extra, where they said "See JMo
+  documentation", raised a traceback and "its executable could not be found". A default
+  `jmo tools install` leaves yara-x out while its engine is absent, so it succeeds there.
 - **Breaking. A finding names its target, and the same finding in two repositories is two
   findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
   `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a
@@ -574,6 +583,27 @@ All notable changes to JMo Security will be documented in this file.
   failed at its first write. Both now run `mkdir -p` on the results directory (and tsv's
   clone destination) before `docker run`, and the command the wizard prints to run later
   starts with the same line. The wizard's own run already did this.
+- **A PHP, JSP, VBS or batch script renamed to `.jpg` is reported as disguised
+  (#1578).** yara-x's `filetype` variable, which signature-base's rules read as LOKI
+  sets it, was set for EXE, ELF, RTF and minidumps only, from 4 bytes. It is now set
+  for every entry of signature-base's type table whose type an installed rule tests,
+  in the table's order, as LOKI does. Measured with signature-base's own
+  `SUSP_Known_Type_Cloaked_as_JPG` at the pin: 1 of 6 renamed samples reported before,
+  6 of 6 after, and a real JPEG in neither.
+- **An installed JMo validates findings against the CommonFinding schema (#1350).** The
+  validator looked for the schema under `docs/schemas/`, which only a source checkout
+  has, and `jsonschema` was the `reporting` extra, so an install made the documented way
+  skipped validation, silently. The build copies the schema into the wheel beside the
+  validator, `.dockerignore` lets `docs/schemas/` into the image, whose build now fails
+  if the schema cannot be loaded, and `jsonschema` is a dependency. **Breaking:** the
+  `reporting` extra is gone; `jmo-security[reporting]` installs the base package and pip
+  warns that the extra does not exist.
+- **A JMo installed from its wheel can install and check tools (#1511).** The wheel
+  (`uv tool install`, pipx, pip) carried no `versions.yaml`, so every `jmo tools` command,
+  `tools check` included, raised `FileNotFoundError`. The build now copies the pins into
+  the wheel (`setup.py`, with `MANIFEST.in` for the sdist the release builds from), and
+  `tests/integration/test_wheel_install.py` builds the wheel the release's way, installs it
+  and runs `jmo tools` from it.
 - **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,

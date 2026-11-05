@@ -68,6 +68,8 @@ def test_a_dockerfile_matching_the_registry_passes(sync) -> None:
         ('RUN GRYPE_VERSION="0.87.0" && curl -fsSL "x/${GRYPE_VERSION}"\n', "GRYPE"),
         ("RUN python3 -m pip install yara-python==4.5.4\n", "yara-python"),
         ("RUN apt-get update && apt-get install -y yara && rm -rf /x\n", "yara"),
+        # An extra beside it does not hide the bare package.
+        ('RUN python3 -m pip install "jmo-security[yara,reporting]" yara\n', "yara"),
     ],
 )
 def test_a_tool_versions_yaml_does_not_list_fails_sync(
@@ -76,6 +78,16 @@ def test_a_tool_versions_yaml_does_not_list_fails_sync(
     ok, errors = sync(IN_SYNC + leftover, dry_run=dry_run)
     assert not ok
     assert named in errors, errors
+
+
+def test_an_extra_named_like_a_removed_tool_is_not_a_tool(sync) -> None:
+    """`jmo-security[yara]` installs JMo's yara extra (#1577), not apt's removed
+    `yara`: the bracket names an extra of the package before it."""
+    ok, errors = sync(
+        IN_SYNC + 'RUN python3 -m pip install -e "/opt/jmo-security[yara]"\n'
+    )
+    assert ok, errors
+    assert errors == ""
 
 
 def test_the_real_dockerfile_installs_nothing_versions_yaml_dropped(capsys) -> None:

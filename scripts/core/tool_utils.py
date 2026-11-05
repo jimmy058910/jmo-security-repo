@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from scripts.core.paths import get_isolated_tool_path
-from scripts.core.tool_registry import BUILTIN_TOOLS
+from scripts.core.tool_registry import BUILTIN_TOOLS, DEPENDENCY_MISSING
 
 # Module-level warning tracker for deduplication (Fix 1.3 - Issue #3)
 _warned_tools: set[str] = set()
@@ -31,7 +31,14 @@ TOOL_INSTALL_HINTS = {
     "hadolint": "Install: brew install hadolint (macOS) or see https://github.com/hadolint/hadolint#install",
     "nuclei": "Install: brew install nuclei (macOS) or see https://docs.projectdiscovery.io/tools/nuclei/install",
     "zap": "Install: Docker image ghcr.io/zaproxy/zaproxy:stable",
+    **DEPENDENCY_MISSING,
 }
+
+
+def missing_reason(tool_name: str) -> str:
+    """Why a scan found no executable for `tool_name`, as its row and log say
+    it: a dependency tool's engine names the extra that adds it (#1577)."""
+    return DEPENDENCY_MISSING.get(tool_name, "its executable could not be found")
 
 
 def clear_tool_warnings() -> None:
@@ -163,7 +170,7 @@ def find_tool(tool_name: str) -> str | None:
         if zap_launcher is not None:
             return str(zap_launcher)
 
-    # yara-x's engine is a Python wheel and a dependency of JMo, not a CLI:
+    # yara-x's engine is a Python wheel, JMo's yara extra, not a CLI:
     # the installed artifact is a compiled extension with no main() and no
     # console script. JMo drives it through scripts/core/yara_runner.py, so the
     # executable that runs yara-x *is* this interpreter - the same shape the

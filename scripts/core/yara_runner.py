@@ -5,8 +5,8 @@ Invoked as a subprocess, exactly like every other scanner::
 
     python -m scripts.core.yara_runner --rules <dir|file> --target <dir> --output <file>
 
-yara-x, VirusTotal's rewrite of YARA, is a runtime dependency of JMo: its wheel
-is the engine and its pin is `uv.lock`'s (v2.0.0 Phase 6, PR Y). The wheel
+yara-x, VirusTotal's rewrite of YARA, is JMo's `yara` extra: its wheel is the
+engine and its pin is `uv.lock`'s (v2.0.0 Phase 6, PR Y; an extra since #1577). The wheel
 has no command line of JMo's shape, so this module supplies one and the walk.
 Keeping it a subprocess rather than an in-process call preserves the uniform
 ToolRunner model - timeouts, retries, ``ok_return_codes``, and the accounting
@@ -64,25 +64,43 @@ MAX_REPORTED_FILE_ERRORS = 10
 # (`filename matches /.../`, `filepath == "/var/log"`, `extension == ".jpg"`).
 EXTERNALS = ("filename", "filepath", "extension", "filetype", "owner")
 
-# The binary entries of signature-base's `misc/file-type-signatures.txt`, the
-# table LOKI sets `filetype` from. Two kept rules read it: one guards on
-# `not filetype == "EXE"` beside a test for `MZ`, so with no label it fires on
-# every such executable. Its text types (PHP, JSP, ASP, VBS, BATCH) are not
-# read: a `.jpg` that is really one of those is not reported as cloaked.
+# The entries of signature-base's `misc/file-type-signatures.txt`, the table
+# LOKI sets `filetype` from, whose type a kept rule tests (at the pin of
+# 2026-10-29). One rule guards on `not filetype == "EXE"` beside a test for
+# `MZ`, so with no label it fires on every such executable; another,
+# SUSP_Known_Type_Cloaked_as_JPG, reports a `.jpg` whose type is one of these.
+#
+# LOKI compares each signature at offset 0 and takes the first match in the
+# table's order (Loki lib/helpers.py `get_file_type`), so the order here is the
+# table's. Two consequences, kept: `<%` (JSP) precedes every ASP signature, so
+# LOKI never sets ASP and neither does this; `@ech` precedes `@echo`. No table
+# entry left out shares a prefix with one kept before it, so for these types
+# the label is LOKI's. The table has no MACH-O, Python or LSASS dump entry,
+# which that rule also tests (#1578).
 FILE_TYPES: tuple[tuple[bytes, str], ...] = (
-    (b"MZ", "EXE"),
-    (b"\x7fE", "ELF"),
+    (b"Function", "VBS"),
     (b"{\\rt", "RTF"),
+    (b"<?php", "PHP"),
+    (b"@ech", "BATCH"),
+    (b"@ECH", "BATCH"),
     (b"MDMP", "MDMP"),
+    (b"\xff\xfe<\x00%\x00", "JSP"),
+    (b"\xfe\xff\x00<\x00%", "JSP"),
+    (b"\x7fE", "ELF"),
+    (b"<%", "JSP"),
+    (b"MZ", "EXE"),
+    (b"On Error Resume", "VBS"),
+    (b"TV", "Base64 EXE"),
 )
+FILE_TYPE_HEAD = max(len(magic) for magic, _ in FILE_TYPES)
 
 
 def _import_yara_x() -> Any | None:
     """Return the yara_x module, or None if this interpreter cannot import it.
 
-    It ships with JMo, so None means a broken install. Isolated into a function
-    so tests can force that case: it must fail as loudly as any other way of
-    scanning nothing.
+    None means the yara extra is not installed (#1577), or is broken. Isolated
+    into a function so tests can force that case: it must fail as loudly as
+    any other way of scanning nothing.
     """
     try:
         # Deferred deliberately: this import IS the availability probe.
@@ -217,7 +235,7 @@ def loki_externals(path: Path) -> dict[str, str]:
     `path`: its name, its directory, its lower-case suffix with the dot, the
     type its first bytes name, and its owner."""
     with path.open("rb") as handle:
-        head = handle.read(4)
+        head = handle.read(FILE_TYPE_HEAD)
     return {
         "filename": path.name,
         "filepath": str(path.absolute().parent),
@@ -329,10 +347,13 @@ def main(argv: list[str] | None = None) -> int:
 def _scan(args: argparse.Namespace, out_path: Path) -> int:
     yara_x = _import_yara_x()
     if yara_x is None:
+        # Deferred: the registry is heavier than this runner, and only this
+        # failure reads it.
+        from scripts.core.tool_registry import DEPENDENCY_MISSING
+
         _log(
-            "yara-x: the yara-x engine cannot be imported by this interpreter "
-            f"({sys.executable}), so nothing was scanned. It ships with JMo: "
-            "reinstall jmo-security"
+            f"yara-x: nothing was scanned, because {DEPENDENCY_MISSING['yara-x']} "
+            f"(interpreter: {sys.executable})"
         )
         return EXIT_ERROR
 

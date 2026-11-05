@@ -67,6 +67,7 @@ from ...core.tool_descriptors import (
     scan_root,
 )
 from ...core.tool_runner import ToolDefinition, ToolResult
+from ...core.tool_utils import missing_reason
 from ..scan_utils import (
     batch_argv_refusal,
     find_tool,
@@ -788,20 +789,26 @@ def run_tools(
                 # An explicit, user-requested empty result - not a silent one:
                 # the row says it did not run.
                 stub(tool, out_dir / f"{tool}.json")
-                rows[tool] = ToolRun(tool, State.SKIPPED, Reason.NOT_INSTALLED)
+                rows[tool] = ToolRun(
+                    tool,
+                    State.SKIPPED,
+                    Reason.NOT_INSTALLED,
+                    detail=missing_reason(tool),
+                )
             else:
                 logger.error(
-                    "%s: requested but its executable could not be found - it "
+                    "%s: requested but %s - it "
                     "did NOT run and its findings are MISSING from this scan. "
                     "Run `jmo tools check` to confirm installation, or pass "
                     "--allow-missing-tools to record an explicit empty result.",
                     tool,
+                    missing_reason(tool),
                 )
                 rows[tool] = ToolRun(
                     tool,
                     State.FAILED,
                     Reason.NOT_INSTALLED,
-                    detail="its executable could not be found",
+                    detail=missing_reason(tool),
                 )
             continue
 

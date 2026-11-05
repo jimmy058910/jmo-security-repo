@@ -1,0 +1,4 @@
+# Files setup.py copies into the wheel from outside the package. The sdist must
+# carry them, because the release builds its wheel from the sdist.
+include versions.yaml
+include docs/schemas/common_finding.v1.json

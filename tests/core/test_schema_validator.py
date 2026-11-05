@@ -50,6 +50,24 @@ def make_valid_finding(**overrides: Any) -> dict[str, Any]:
 class TestLoadSchema:
     """Tests for load_schema()."""
 
+    def test_an_installed_wheel_reads_the_schema_it_carries(
+        self, tmp_path, monkeypatch
+    ):
+        """A wheel install has no docs/: the build copies the schema in beside
+        the validator (#1350). Laid out as site-packages is, with nothing at
+        the docs/ path a source checkout has."""
+        import scripts.core.schema_validator as schema_validator
+
+        core = tmp_path / "site-packages" / "scripts" / "core"
+        packaged = core / "schemas" / "common_finding.v1.json"
+        packaged.parent.mkdir(parents=True)
+        packaged.write_bytes(b"{}")
+        monkeypatch.setattr(
+            schema_validator, "__file__", str(core / "schema_validator.py")
+        )
+
+        assert schema_validator._schema_path() == packaged
+
     def test_load_default_schema(self):
         """Test loading the default schema from docs/schemas/."""
         from scripts.core.schema_validator import SCHEMA_PATH, load_schema

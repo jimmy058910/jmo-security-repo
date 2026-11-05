@@ -255,9 +255,10 @@ COPY . /opt/jmo-security/
 # Copy default config to WORKDIR
 RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
-# Install JMo Security Suite with optional reporting dependencies
+# Install JMo Security Suite with the yara extra, the YARA engine (#1577): the
+# image is the way on platforms yara-x publishes no wheel for.
 # Clean up pip cache and bytecode immediately after install (Phase 1: 40 MB savings)
-RUN python3 -m pip install --no-cache-dir --break-system-packages -e "/opt/jmo-security[reporting]" && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages -e "/opt/jmo-security[yara]" && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -281,6 +282,7 @@ RUN HOME=/tmp/jmo-rules-home jmo tools install yara-x && \
 RUN echo "=== Verifying tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
+    python3 -c "from scripts.core.schema_validator import load_schema; load_schema()" && \
     jmo tools --help > /dev/null && \
     trufflehog --version && \
     XDG_CACHE_HOME=/tmp/opengrep-cache opengrep --version && \
