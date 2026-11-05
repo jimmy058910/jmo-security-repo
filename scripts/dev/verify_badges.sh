@@ -63,7 +63,10 @@ main() {
   local_version=$(get_local_version)
   echo "📦 Local version (pyproject.toml): $local_version"
 
-  pypi_version=$(get_pypi_version)
+  # `|| true` on both reads: under pipefail an answer with no version (an
+  # outage page) failed the pipeline and `set -e` ended the script on the
+  # assignment, before the message below could say why (#1417).
+  pypi_version=$(get_pypi_version || true)
   if [[ -n $pypi_version ]]; then
     echo "🐍 PyPI version: $pypi_version"
   else
@@ -71,9 +74,7 @@ main() {
     exit 1
   fi
 
-  # TODO(issue-#1417): under `set -euo pipefail` a grep miss kills the script
-  # here, so the "Could not parse" fallback below never runs.
-  badge_version=$(get_badge_version)
+  badge_version=$(get_badge_version || true)
   if [[ -n $badge_version ]]; then
     echo "🏷️  Badge version (shields.io): $badge_version"
   else
