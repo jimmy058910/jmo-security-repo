@@ -195,8 +195,9 @@ def test_each_kind_of_input_lands_where_jmo_reads_it() -> None:
 
 
 def test_jmo_hands_zizmor_no_pre_commit_config() -> None:
-    # The exclusion below rests on this: when JMo starts reading pre-commit
-    # configs, their three cases come into scope.
+    """The exclusion in the scan test rests on this. It fails by design when
+    issue #1592 lands (zizmor's row reads pre-commit configs): then delete this
+    test, and the three pre-commit cases come into scope on their own."""
     assert not jmo_reads(placement("archived-uses/pre-commit/.pre-commit-config.yaml"))
 
 
