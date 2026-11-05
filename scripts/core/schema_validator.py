@@ -29,10 +29,22 @@ except ImportError:
     Draft202012Validator = None
     ValidationError = Exception
 
-# Schema file path relative to project root
-SCHEMA_PATH = (
-    Path(__file__).parent.parent.parent / "docs" / "schemas" / "common_finding.v1.json"
-)
+
+def _schema_path() -> Path:
+    """The schema beside this module in a wheel, else the repository's.
+
+    An installed wheel has no docs/: setup.py copies the schema in as package
+    data (#1350). A source checkout, the editable install and the Docker image
+    read docs/schemas/ itself.
+    """
+    here = Path(__file__).parent
+    packaged = here / "schemas" / "common_finding.v1.json"
+    if packaged.is_file():
+        return packaged
+    return here.parent.parent / "docs" / "schemas" / "common_finding.v1.json"
+
+
+SCHEMA_PATH = _schema_path()
 
 
 def load_schema(schema_path: Path | None = None) -> dict[str, Any]:

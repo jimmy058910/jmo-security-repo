@@ -283,6 +283,7 @@ RUN HOME=/tmp/jmo-rules-home jmo tools install yara-x && \
 RUN echo "=== Verifying tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
+    python3 -c "from scripts.core.schema_validator import load_schema; load_schema()" && \
     jmo tools --help > /dev/null && \
     trufflehog --version && \
     XDG_CACHE_HOME=/tmp/opengrep-cache opengrep --version && \
