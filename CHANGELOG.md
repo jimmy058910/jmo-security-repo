@@ -499,6 +499,13 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A PHP, JSP, VBS or batch script renamed to `.jpg` is reported as disguised
+  (#1578).** yara-x's `filetype` variable, which signature-base's rules read as LOKI
+  sets it, was set for EXE, ELF, RTF and minidumps only, from 4 bytes. It is now set
+  for every entry of signature-base's type table whose type an installed rule tests,
+  in the table's order, as LOKI does. Measured with signature-base's own
+  `SUSP_Known_Type_Cloaked_as_JPG` at the pin: 1 of 6 renamed samples reported before,
+  6 of 6 after, and a real JPEG in neither.
 - **A JMo installed from its wheel can install and check tools (#1511).** The wheel
   (`uv tool install`, pipx, pip) carried no `versions.yaml`, so every `jmo tools` command,
   `tools check` included, raised `FileNotFoundError`. The build now copies the pins into

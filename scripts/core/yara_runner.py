@@ -64,17 +64,35 @@ MAX_REPORTED_FILE_ERRORS = 10
 # (`filename matches /.../`, `filepath == "/var/log"`, `extension == ".jpg"`).
 EXTERNALS = ("filename", "filepath", "extension", "filetype", "owner")
 
-# The binary entries of signature-base's `misc/file-type-signatures.txt`, the
-# table LOKI sets `filetype` from. Two kept rules read it: one guards on
-# `not filetype == "EXE"` beside a test for `MZ`, so with no label it fires on
-# every such executable. Its text types (PHP, JSP, ASP, VBS, BATCH) are not
-# read: a `.jpg` that is really one of those is not reported as cloaked.
+# The entries of signature-base's `misc/file-type-signatures.txt`, the table
+# LOKI sets `filetype` from, whose type a kept rule tests (at the pin of
+# 2026-10-29). One rule guards on `not filetype == "EXE"` beside a test for
+# `MZ`, so with no label it fires on every such executable; another,
+# SUSP_Known_Type_Cloaked_as_JPG, reports a `.jpg` whose type is one of these.
+#
+# LOKI compares each signature at offset 0 and takes the first match in the
+# table's order (Loki lib/helpers.py `get_file_type`), so the order here is the
+# table's. Two consequences, kept: `<%` (JSP) precedes every ASP signature, so
+# LOKI never sets ASP and neither does this; `@ech` precedes `@echo`. No table
+# entry left out shares a prefix with one kept before it, so for these types
+# the label is LOKI's. The table has no MACH-O, Python or LSASS dump entry,
+# which that rule also tests (#1578).
 FILE_TYPES: tuple[tuple[bytes, str], ...] = (
-    (b"MZ", "EXE"),
-    (b"\x7fE", "ELF"),
+    (b"Function", "VBS"),
     (b"{\\rt", "RTF"),
+    (b"<?php", "PHP"),
+    (b"@ech", "BATCH"),
+    (b"@ECH", "BATCH"),
     (b"MDMP", "MDMP"),
+    (b"\xff\xfe<\x00%\x00", "JSP"),
+    (b"\xfe\xff\x00<\x00%", "JSP"),
+    (b"\x7fE", "ELF"),
+    (b"<%", "JSP"),
+    (b"MZ", "EXE"),
+    (b"On Error Resume", "VBS"),
+    (b"TV", "Base64 EXE"),
 )
+FILE_TYPE_HEAD = max(len(magic) for magic, _ in FILE_TYPES)
 
 
 def _import_yara_x() -> Any | None:
@@ -217,7 +235,7 @@ def loki_externals(path: Path) -> dict[str, str]:
     `path`: its name, its directory, its lower-case suffix with the dot, the
     type its first bytes name, and its owner."""
     with path.open("rb") as handle:
-        head = handle.read(4)
+        head = handle.read(FILE_TYPE_HEAD)
     return {
         "filename": path.name,
         "filepath": str(path.absolute().parent),
