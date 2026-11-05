@@ -2199,6 +2199,18 @@ class TestCtrlCReachesEveryRun:
     """Review of PR 7b: a run that starts as Ctrl-C arrives, and one waiting
     out a retry's backoff, end with the scan."""
 
+    @staticmethod
+    def _ends_within(seconds: float, call) -> list:
+        """Run `call` on a daemon thread; what it returned, or [] when it was
+        still running after `seconds` (whether it ends, not how fast)."""
+        import threading
+
+        out: list = []
+        worker = threading.Thread(target=lambda: out.append(call()), daemon=True)
+        worker.start()
+        worker.join(timeout=seconds)
+        return [] if worker.is_alive() else out
+
     def test_a_process_started_after_the_stop_is_killed_at_once(self):
         """`request_stop` kills the runs it finds registered; one whose
         `Popen` had not registered yet would run to its timeout."""
@@ -2207,21 +2219,23 @@ class TestCtrlCReachesEveryRun:
         from scripts.core import tool_runner
 
         tool_runner.request_stop()
-        start = time.perf_counter()
         try:
-            result = tool_runner.run_bounded(
-                [sys.executable, "-c", "import time; time.sleep(30)"],
-                env=dict(os.environ),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                encoding=None,
-                errors=None,
-                timeout=60,
+            done = self._ends_within(
+                10,
+                lambda: tool_runner.run_bounded(
+                    [sys.executable, "-c", "import time; time.sleep(30)"],
+                    env=dict(os.environ),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    encoding=None,
+                    errors=None,
+                    timeout=60,
+                ),
             )
         finally:
             tool_runner.clear_stop()
-        assert time.perf_counter() - start < 10, "it ran on after the stop"
-        assert result.returncode != 0
+        assert done, "it ran on after the stop"
+        assert done[0].returncode != 0
 
     def test_ctrl_c_ends_a_retrys_backoff(self):
         import threading
@@ -2238,13 +2252,12 @@ class TestCtrlCReachesEveryRun:
             retries=RetryConfig(max_attempts=3, backoff_base=30, backoff_max=30),
         )
         threading.Timer(1.0, tool_runner.request_stop).start()
-        start = time.perf_counter()
         try:
-            result = ToolRunner([tool]).run_tool(tool)
+            done = self._ends_within(10, lambda: ToolRunner([tool]).run_tool(tool))
         finally:
             tool_runner.clear_stop()
-        assert time.perf_counter() - start < 10, "it slept out a 30 s backoff"
-        assert result.failure == "interrupted"
+        assert done, "it slept out a 30 s backoff"
+        assert done[0].failure == "interrupted"
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="reads /proc for the pid's state")
