@@ -112,6 +112,43 @@ def _by_tool(findings: list[dict]) -> dict[str, list[tuple[str, str | None]]]:
     return {t: sorted(v, key=str) for t, v in out.items()}
 
 
+def _raw_records(tmp_path: Path) -> str:
+    """What each secret scanner wrote, a line per record, for an assertion
+    message: where, which rule or detector, which commit, and which secret by
+    the stand-in the report put in its place, never the secret. A flake that
+    reported one key twice (#1561) left nothing to tell a duplicate record
+    from two distinct ones."""
+    lines = []
+    for path in sorted(tmp_path.glob("results-*/individual-repos/*/*.json")):
+        tool = path.name.split(".", 1)[0]
+        if tool == "trufflehog":
+            for text in path.read_text(encoding="utf-8").splitlines():
+                if not text.strip():
+                    continue
+                r = json.loads(text)
+                data = r.get("SourceMetadata", {}).get("Data", {})
+                where = data.get("Git") or data.get("Filesystem") or {}
+                lines.append(
+                    f"{path.name}: {where.get('file')}:{where.get('line')} "
+                    f"{r.get('DetectorName')}/{r.get('DecoderName')} "
+                    f"commit={str(where.get('commit', ''))[:12]} raw={r.get('Raw')}"
+                )
+        elif tool == "gitleaks":
+            document = json.loads(path.read_bytes())
+            for run in document.get("runs", []):
+                for r in run.get("results", []):
+                    for loc in r.get("locations", []):
+                        phys = loc.get("physicalLocation", {})
+                        region = phys.get("region", {})
+                        lines.append(
+                            f"{path.name}: {phys.get('artifactLocation', {}).get('uri')}"
+                            f":{region.get('startLine')} {r.get('ruleId')} "
+                            f"commit={r.get('partialFingerprints', {}).get('commitSha', '')[:12]} "
+                            f"snippet={region.get('snippet', {}).get('text')}"
+                        )
+    return "raw records:\n" + "\n".join(lines)
+
+
 def _key_text(pem: bytes) -> str:
     """A stretch of the key's body: if it appears in a report, the key leaked."""
     return pem.decode().splitlines()[3]
@@ -137,7 +174,7 @@ def test_a_key_only_in_history_is_reported_with_its_commit(tmp_path, scan) -> No
     expected = sorted(
         [("keys/live.pem", added_live), ("old/gone.pem", added_gone)], key=str
     )
-    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected)
+    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected), _raw_records(tmp_path)
     for f in findings:
         context = f["secretContext"]
         assert set(context) == {"commit", "author", "date"}, context
@@ -212,7 +249,9 @@ def test_a_line_inserted_above_a_committed_key_still_leaves_one(tmp_path, scan) 
 
     findings, _ = scan(repo)
 
-    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
     # It keeps the tree's location.
     assert {f["location"]["startLine"] for f in findings} == {2}
 
@@ -241,7 +280,9 @@ def test_a_shallow_clone_names_no_commit_rather_than_the_wrong_one(
 
     findings, rows = scan(clone)
 
-    assert _by_tool(findings) == {tool: [("keys/live.pem", None)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("keys/live.pem", None)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
     for row in rows:
         assert (row["state"], row["invocations"]) == ("ran", 1), row
         assert row["detail"].startswith("history not read: a shallow clone,"), row
@@ -258,7 +299,9 @@ def test_a_path_a_url_would_misread_still_reads_history(tmp_path, scan) -> None:
 
     findings, rows = scan(repo)
 
-    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
     assert {(r["tool"], r["state"], r["invocations"]) for r in rows} == {
         (tool, "ran", 2) for tool in TOOLS
     }
@@ -291,7 +334,9 @@ def test_history_is_excluded_like_the_tree(tmp_path, scan) -> None:
 
     findings, _ = scan(repo)
 
-    assert _by_tool(findings) == {tool: [("kept.pem", added)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("kept.pem", added)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
 
 
 def test_a_key_rotated_in_place_is_two_findings(tmp_path, scan) -> None:
@@ -313,5 +358,5 @@ def test_a_key_rotated_in_place_is_two_findings(tmp_path, scan) -> None:
     findings, _ = scan(repo)
 
     expected = sorted([("keys/live.pem", first), ("keys/live.pem", None)], key=str)
-    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected)
+    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected), _raw_records(tmp_path)
     assert len({f["id"] for f in findings}) == len(findings)
