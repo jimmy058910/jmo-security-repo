@@ -194,6 +194,12 @@ npm start
 
 ```
 
+**Automated test** (Node's own test runner; no key or network needed):
+
+```bash
+npm ci && npm test
+```
+
 **Test subscription:**
 
 ```bash
