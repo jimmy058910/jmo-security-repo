@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -205,6 +206,29 @@ def test_the_capture_home_reads_as_the_placeholder_home(tmp_path, monkeypatch) -
 
     assert str(home) not in captured.raw.decode()
     assert f"{gg.PLACEHOLDER}/home" in captured.raw.decode()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a symlink may be refused there")
+def test_the_home_is_rewritten_in_the_spelling_the_scan_used_too(
+    tmp_path, monkeypatch
+) -> None:
+    # A HOME spelled another way than its resolved path (a symlink here; a
+    # short name, RUNNER~1, on a Windows runner) is written by the scan as
+    # given: rewriting only the resolved spelling left it in the fixture.
+    real = tmp_path / "real-home"
+    real.mkdir()
+    home = tmp_path / "home-link"
+    home.symlink_to(real, target_is_directory=True)
+
+    def raw(work: Path) -> list[dict]:
+        found = _hadolint_raw(work)
+        found[0]["message"] = f"cache {home / 'go'}"
+        return found
+
+    monkeypatch.setattr(gg, "run_jmo", FakeJmo(raw))
+    captured = gg.capture("hadolint", home=home, work=(tmp_path / "work").resolve())
+
+    assert str(home) not in captured.raw.decode()
 
 
 def test_a_capture_naming_the_developers_own_home_is_refused(

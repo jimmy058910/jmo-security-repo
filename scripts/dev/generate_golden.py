@@ -310,7 +310,12 @@ def _rewrite(raw: bytes, work: Path, home: Path | None = None) -> bytes:
     one given with --home is outside the work directory (syft records its Go
     and Maven caches under it), and the default one is inside it."""
     text = raw.decode("utf-8")
-    pairs = [(home.resolve(), f"{PLACEHOLDER}/home")] if home else []
+    # The HOME as given and as resolved: a symlink, or a Windows short name
+    # (RUNNER~1), spells it two ways, and the scan writes the one it was given.
+    homes = {home.absolute(), home.resolve()} if home else set()
+    pairs = [
+        (h, f"{PLACEHOLDER}/home") for h in sorted(homes, key=lambda h: -len(str(h)))
+    ]
     for path, placeholder in [*pairs, (work, PLACEHOLDER)]:
         plain = str(path)
         for spelling in (json.dumps(plain)[1:-1], plain):
