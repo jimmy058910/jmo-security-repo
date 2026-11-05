@@ -569,6 +569,13 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **`jmo wizard --yes` and `--target DIR` scan a project as one target.** A directory
+  with no `.git` was read as a directory of repositories, and `--yes` with no target
+  always read the working directory that way, so a project (or a repository, under
+  `--yes`) was scanned subdirectory by subdirectory and its own root files never. A
+  directory is now scanned as a directory of repositories only when its subdirectories
+  are repositories (its own files, if it has any, are then not scanned, as before);
+  anything else is one target.
 - **The wizard reads its history where its scans write it (#1484).** It read
   `~/.jmo/history.db` while the scan it launched stored to the working directory's
   `.jmo/history.db`, so its trend step found no history unless it ran from the home

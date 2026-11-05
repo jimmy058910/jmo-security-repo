@@ -199,15 +199,15 @@ def _apply_target_preset(
             target_config.repo_mode = "targets"
             target_config.repo_path = str(path)
         elif path.is_dir():
-            # Check if it's a git repo or a directory of repos
-            if (path / ".git").exists():
-                # Single repo
+            # A directory of repositories only when its subdirectories are
+            # repositories. Anything else is one target: an unpacked project has
+            # no .git, and scanned as a directory of repositories its own root
+            # files went unscanned.
+            if (path / ".git").exists() or not _detector.detect_repos(path):
                 target_config.repo_mode = "repo"
-                target_config.repo_path = str(path)
             else:
-                # Directory containing repos
                 target_config.repo_mode = "repos-dir"
-                target_config.repo_path = str(path)
+            target_config.repo_path = str(path)
         else:
             # Path doesn't exist yet - treat as repos-dir
             target_config.repo_mode = "repos-dir"
@@ -834,10 +834,10 @@ def run_wizard(
             if target_type and target:
                 _apply_target_preset(config.target, target_type, target)
             else:
-                # Default to repo scanning with current directory
-                config.target.type = "repo"
-                config.target.repo_mode = "repos-dir"
-                config.target.repo_path = str(Path.cwd())
+                # The working directory, read as a preset is: a repository or a
+                # project is one target, and only a directory of repositories is
+                # scanned as one. It was repos-dir whatever it held.
+                _apply_target_preset(config.target, "repo", str(Path.cwd()))
 
             # Advanced settings: use presets or defaults
             config.results_dir = results_dir or "results"
