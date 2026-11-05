@@ -1207,7 +1207,7 @@ class ScanOrchestrator:
         Returns:
             (target type, target name, rows by tool) for every scanned target
         """
-        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, wait
 
         from scripts.cli.scan_jobs import (
             scan_gitlab_repo,
@@ -1225,6 +1225,7 @@ class ScanOrchestrator:
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
         from scripts.cli.scan_jobs.url_scanner import url_folder_name
         from scripts.cli.scan_session import found_image_id
+        from scripts.core.tool_runner import stop_requested
 
         all_results: list[tuple[str, str, dict[str, ToolRun]]] = []
         futures = []
@@ -1518,7 +1519,20 @@ class ScanOrchestrator:
                 )
 
             # Collect results as they complete
+            def _await(pending) -> None:
+                """Wait in slices: on Windows a blocking wait keeps Ctrl-C's
+                handler from running. Once a stop is requested, a target not
+                yet started never starts (B4)."""
+                while not wait([pending], timeout=0.5).done:
+                    if stop_requested():
+                        for *_, queued in futures:
+                            queued.cancel()
+
             for target_type, target_id, out_dir, future in futures:
+                _await(future)
+                if future.cancelled():
+                    # Stopped before it started: `--resume` scans it.
+                    continue
                 try:
                     name, rows, elapsed = future.result()
                 except Exception as e:
@@ -1565,6 +1579,10 @@ class ScanOrchestrator:
                     continue
 
                 all_results.append((target_type, name, rows))
+                if stop_requested():
+                    # Ctrl-C cut its runs short: not a completed target, so
+                    # it is not checkpointed and `--resume` scans it again.
+                    continue
                 # What runs after a scan that worked is not the scan: a step
                 # that raises is logged, and the target stays recorded once,
                 # with its rows. One `try` around both appended it again as

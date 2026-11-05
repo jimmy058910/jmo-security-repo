@@ -3390,18 +3390,29 @@ def cmd_scan(args) -> int:
             scan_session.register_target("k8s", f"{ctx}:{ns}", tools)
         save_session(scan_session, session_path)
 
-    # Setup signal handling for graceful shutdown
-    stop_flag = {"stop": False}
+    # Ctrl-C and SIGTERM stop the scan (v2.0.0 Phase 7, B4). The scanners run
+    # in sessions of their own, so the signal never reaches them: measured, the
+    # handler here only logged it, and 5 s later jmo and 5 scanners were still
+    # running; the scan then finished, reported and exited 0. Now no tool run
+    # starts after it and every running process tree is killed. Decided
+    # 2026-11-05: exit 130 with no report, the session saved for
+    # `jmo scan --resume` (after the scan returns, not here, where it could
+    # land mid-checkpoint). A second signal exits at once.
+    from scripts.core.tool_runner import clear_stop, request_stop, stop_requested
+
+    clear_stop()
+    signals_seen = [0]
 
     def _handle_stop(signum, frame):
-        stop_flag["stop"] = True
-        # Save checkpoint before exiting
-        if scan_session is not None:
-            save_session(scan_session, session_path)
+        signals_seen[0] += 1
+        killed = request_stop()
+        if signals_seen[0] > 1:
+            os._exit(130)
         _log(
             args,
             "WARN",
-            "Received stop signal. Saving checkpoint, then exiting...",
+            f"Stopping the scan: {killed} running tool(s) stopped. Press Ctrl-C "
+            "again to quit at once.",
         )
 
     import signal
@@ -3507,6 +3518,21 @@ def cmd_scan(args) -> int:
             if not scan_config.allow_missing_tools:
                 raise
             return 1
+
+    if stop_requested():
+        if not use_rich_progress:
+            progress.stop()
+        if scan_session is not None:
+            save_session(scan_session, session_path)
+        done = scan_session.completed_count if scan_session is not None else 0
+        _log(
+            args,
+            "WARN",
+            f"Scan stopped by Ctrl-C: {done} of {total_targets} target(s) "
+            "completed, and no report was written. Run `jmo scan --resume` with "
+            "the same arguments to finish it.",
+        )
+        return 130
 
     # A target whose every tool failed contributed nothing to this scan. That
     # was reported correctly by each scanner, recorded correctly in

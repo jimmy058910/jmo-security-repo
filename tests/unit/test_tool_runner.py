@@ -63,8 +63,9 @@ def test_duration_is_measured_with_perf_counter() -> None:
             "Use time.perf_counter() -- see this test's docstring for measurements."
         )
 
-    assert text.count("time.perf_counter()") == 6, (
-        "Expected 6 perf_counter() calls (1 start_time + 5 duration subtractions). "
+    assert text.count("time.perf_counter()") == 7, (
+        "Expected 7 perf_counter() calls (1 start_time + 6 duration subtractions, "
+        "the sixth a run Ctrl-C stopped). "
         "If a return path was added or removed, update this count -- but every "
         "elapsed-time measurement in the file must use the same clock."
     )

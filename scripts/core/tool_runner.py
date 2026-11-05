@@ -14,6 +14,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -160,6 +161,36 @@ def _terminate_tree(proc: subprocess.Popen) -> None:
         pass
 
 
+# Ctrl-C (v2.0.0 Phase 7, B4). The scanners run in sessions of their own, so a
+# terminal's SIGINT never reaches them: measured, 5 s after one jmo and 5
+# scanner processes were still running, and the scan finished, reported and
+# exited 0. `request_stop` is what the signal handler calls: no run starts after
+# it, and every running process tree is killed.
+_STOP = threading.Event()
+_LIVE: dict[int, subprocess.Popen] = {}
+_LIVE_LOCK = threading.Lock()
+
+
+def request_stop() -> int:
+    """Stop the scan: no tool run starts after this, and every one running is
+    killed with its whole process tree. Returns how many were running."""
+    _STOP.set()
+    with _LIVE_LOCK:
+        running = list(_LIVE.values())
+    for proc in running:
+        _terminate_tree(proc)
+    return len(running)
+
+
+def stop_requested() -> bool:
+    return _STOP.is_set()
+
+
+def clear_stop() -> None:
+    """For a new scan in the same process (tests, the MCP server)."""
+    _STOP.clear()
+
+
 def _run_bounded(
     command: list[str],
     *,
@@ -195,6 +226,19 @@ def _run_bounded(
         # its descendants. Not valid on Windows, where taskkill /T is used.
         start_new_session=(sys.platform != "win32"),
     )
+    with _LIVE_LOCK:
+        _LIVE[proc.pid] = proc
+    try:
+        return _finish(proc, command, timeout)
+    finally:
+        with _LIVE_LOCK:
+            _LIVE.pop(proc.pid, None)
+
+
+def _finish(
+    proc: subprocess.Popen, command: list[str], timeout: float | None
+) -> subprocess.CompletedProcess:
+    """Wait for `proc`; on a timeout, kill its tree and raise TimeoutExpired."""
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -264,7 +308,8 @@ class ToolResult:
         returncode: Process return code: the last one a crash exited with, or
             -1 when there was none (a timeout, a spawn failure).
         failure: Which kind of failure ended the run, from `_classify_failure`:
-            "crash", "timeout", "missing_tool", "system_error", "unknown", or ""
+            "crash", "timeout", "missing_tool", "system_error", "unknown",
+            "interrupted" (Ctrl-C killed it or kept it from starting), or ""
             when it did not fail. The scan's accounting row maps it to a
             reason; matching `error_message` text for it was load-bearing prose.
         stdout: Standard output (empty if not captured)
@@ -536,6 +581,8 @@ class ToolRunner:
             child_env.update(tool.env)
 
         while True:
+            if _STOP.is_set():
+                return self._interrupted(tool, attempt, start_time)
             attempt += 1
 
             try:
@@ -725,6 +772,9 @@ class ToolRunner:
                     continue
                 break
 
+        # A run Ctrl-C killed failed because it was killed, not on its own.
+        if _STOP.is_set():
+            return self._interrupted(tool, attempt, start_time)
         # All retries exhausted for the last failure type
         duration = time.perf_counter() - start_time
         return ToolResult(
@@ -739,6 +789,23 @@ class ToolRunner:
             error_message=last_error,
             timed_out=last_failure_was_timeout,
             failure=last_failure,
+        )
+
+    @staticmethod
+    def _interrupted(
+        tool: ToolDefinition, attempt: int, start_time: float
+    ) -> ToolResult:
+        """The result of a run Ctrl-C stopped, or kept from starting."""
+        return ToolResult(
+            tool=tool.name,
+            status="error",
+            returncode=-1,
+            attempts=attempt,
+            duration=time.perf_counter() - start_time,
+            output_file=tool.output_file,
+            capture_stdout=tool.capture_stdout,
+            error_message="stopped by Ctrl-C",
+            failure="interrupted",
         )
 
     def run_all_parallel(self) -> list[ToolResult]:
