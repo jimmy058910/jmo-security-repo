@@ -15,6 +15,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from scripts.core.install_config import ISOLATED_TOOLS
 from scripts.core.paths import get_isolated_tool_path
 from scripts.core.tool_registry import BUILTIN_TOOLS, DEPENDENCY_MISSING
 
@@ -144,13 +145,18 @@ def find_tool(tool_name: str) -> str | None:
     # Measured: `jmo tools install bandit prowler` reported [OK], the executables
     # existed in `.venv/Scripts/`, and `jmo tools check` still said MISSING -- so
     # a tool JMo had just installed itself was invisible to its own scanner.
-    scripts_dir = Path(sys.executable).parent
-    for candidate in (
-        scripts_dir / tool_name,
-        scripts_dir / f"{tool_name}.exe",
-    ):
-        if candidate.is_file():
-            return str(candidate)
+    #
+    # Only for a pip-installed tool (#1288). For any other name this answered
+    # whatever sat beside the interpreter: under a system Python in /usr/bin,
+    # `find_tool("docker")` found /usr/bin/docker whatever PATH said.
+    if tool_name in ISOLATED_TOOLS:
+        scripts_dir = Path(sys.executable).parent
+        for candidate in (
+            scripts_dir / tool_name,
+            scripts_dir / f"{tool_name}.exe",
+        ):
+            if candidate.is_file():
+                return str(candidate)
 
     # Check JMo special installation paths
     home = Path.home()
