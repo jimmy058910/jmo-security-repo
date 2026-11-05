@@ -710,6 +710,11 @@ All notable changes to JMo Security will be documented in this file.
   failed at its first write. Both now run `mkdir -p` on the results directory (and tsv's
   clone destination) before `docker run`, and the command the wizard prints to run later
   starts with the same line. The wizard's own run already did this.
+- **A tool beside the Python interpreter is found only if pip installed it (#1288).**
+  `find_tool` looked in the interpreter's directory for every name, so under a system
+  Python in `/usr/bin` it found `docker`, `curl` or `wget` there whatever `PATH` said, and
+  six tests that hide those tools failed. The lookup now covers only the pip-installed
+  scanners (`ISOLATED_TOOLS`: checkov), which is what it was for.
 - **`jmo tools install yara-x` retries its download, and pins what the commit holds
   (#1573).** The rules download ran once, so one transient GitHub error failed an image
   build or an install; it now tries four times, 5 s apart, as every Dockerfile download
