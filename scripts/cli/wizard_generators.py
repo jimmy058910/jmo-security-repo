@@ -13,6 +13,7 @@ Functions:
 from __future__ import annotations
 
 import shlex
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from scripts.cli.jmo import __version__
@@ -234,6 +235,75 @@ def _gitlab_url_to_pass(raw: str | None) -> str | None:
     return None if url == GITLAB_DEFAULT_URL else url
 
 
+def _checkout_path(path: str) -> str:
+    """`path` as the workflow's checkout names it: relative to the repository.
+
+    The wizard stores the IaC file resolved, an absolute path on this machine,
+    and the workflow runs on a fresh checkout elsewhere. A path under the
+    working directory (where the wizard runs, normally the repository root)
+    becomes relative to it.
+
+    Raises:
+        ValueError: The file is outside the working directory, so the runner's
+            checkout cannot hold it. The message never repeats the path: it is
+            this machine's, and would otherwise reach a committed workflow.
+    """
+    cwd = Path.cwd().resolve()
+    try:
+        return (cwd / path).resolve().relative_to(cwd).as_posix()
+    except ValueError:
+        raise ValueError(
+            "the IaC file is outside the working directory, and the workflow "
+            "runs on a checkout of this repository: run the wizard from the "
+            "repository that holds the file"
+        ) from None
+
+
+def _workflow_target_flags(target: Any) -> list[str]:
+    """The flags naming the wizard's target in a workflow, each value quoted.
+
+    One list for both modes: the Docker workflow runs `jmo` in the image as the
+    job's container, on the same checkout, so its target flags are the native
+    ones. Docker mode had its own list, which named only repo, image and url
+    targets, so a GitLab, IaC or K8s workflow scanned nothing (#1554). Every
+    value is `shlex.quote`d: it lands in a `run:` block, where an unquoted `&`
+    in a URL put the scan in the background and `$(...)` ran a command.
+    """
+    q = shlex.quote
+    if target.type == "repo":
+        # The checkout, whatever the local repo_mode was: that describes the
+        # wizard user's disk, not the one repository this workflow runs on.
+        # `--repos-dir .` scanned each subdirectory as its own repository
+        # and never the root's files; targets and tsv emitted no target.
+        return ["--repo ."]
+    if target.type == "image":
+        return [f"--image {q(target.image_name)}"] if target.image_name else []
+    if target.type == "url":
+        return [f"--url {q(target.url)}"] if target.url else []
+    if target.type == "iac":
+        flag = {
+            "terraform": "--terraform-state",
+            "cloudformation": "--cloudformation",
+            "k8s-manifest": "--k8s-manifest",
+        }[target.iac_type]
+        return [f"{flag} {q(_checkout_path(target.iac_path))}"]
+    flags: list[str] = []
+    if target.type == "gitlab":
+        gitlab_url = _gitlab_url_to_pass(target.gitlab_url)
+        if gitlab_url:
+            flags.append(f"--gitlab-url {q(gitlab_url)}")
+        if target.gitlab_repo:
+            flags.append(f"--gitlab-repo {q(target.gitlab_repo)}")
+    elif target.type == "k8s":
+        if target.k8s_context:
+            flags.append(f"--k8s-context {q(target.k8s_context)}")
+        if target.k8s_all_namespaces:
+            flags.append("--k8s-all-namespaces")
+        elif target.k8s_namespace:
+            flags.append(f"--k8s-namespace {q(target.k8s_namespace)}")
+    return flags
+
+
 def generate_github_actions(config: Any) -> str:
     """
     Generate a GitHub Actions workflow for security scanning.
@@ -292,17 +362,10 @@ def generate_github_actions(config: Any) -> str:
         # Docker-based workflow
         scan_cmd_lines = [
             f"jmo {subcommand} --results-dir results",
+            *_workflow_target_flags(config.target),
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]
-
-        # Add target-specific flags
-        if config.target.type == "repo":
-            scan_cmd_lines.insert(1, "--repo .")
-        elif config.target.type == "image" and config.target.image_name:
-            scan_cmd_lines.insert(1, f"--image {config.target.image_name}")
-        elif config.target.type == "url" and config.target.url:
-            scan_cmd_lines.insert(1, f"--url {config.target.url}")
 
         if config.fail_on:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")
@@ -345,44 +408,11 @@ jobs:
         # Native workflow
         scan_cmd_lines = [
             f"jmo {subcommand}",
+            *_workflow_target_flags(config.target),
             f"--threads {threads}",
             f"--timeout {timeout}",
+            "--results-dir results",
         ]
-
-        # Add target-specific flags
-        if config.target.type == "repo":
-            # The checkout, whatever the local repo_mode was: that describes the
-            # wizard user's disk, not the one repository this workflow runs on.
-            # `--repos-dir .` scanned each subdirectory as its own repository
-            # and never the root's files; targets and tsv emitted no target.
-            scan_cmd_lines.insert(1, "--repo .")
-        elif config.target.type == "image":
-            if config.target.image_name:
-                scan_cmd_lines.insert(1, f"--image {config.target.image_name}")
-        elif config.target.type == "url":
-            if config.target.url:
-                scan_cmd_lines.insert(1, f"--url {config.target.url}")
-        elif config.target.type == "iac":
-            iac_flag_map = {
-                "terraform": "--terraform-state",
-                "cloudformation": "--cloudformation",
-                "k8s-manifest": "--k8s-manifest",
-            }
-            # Note: File must exist in repo
-            scan_cmd_lines.insert(
-                1, f"{iac_flag_map[config.target.iac_type]} infrastructure"
-            )
-        elif config.target.type == "gitlab":
-            if config.target.gitlab_repo:
-                scan_cmd_lines.insert(1, f"--gitlab-repo {config.target.gitlab_repo}")
-            gitlab_url = _gitlab_url_to_pass(config.target.gitlab_url)
-            if gitlab_url:
-                scan_cmd_lines.insert(1, f"--gitlab-url {shlex.quote(gitlab_url)}")
-        elif config.target.type == "k8s":
-            if config.target.k8s_context:
-                scan_cmd_lines.insert(1, f"--k8s-context {config.target.k8s_context}")
-
-        scan_cmd_lines.append("--results-dir results")
 
         if config.fail_on:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")

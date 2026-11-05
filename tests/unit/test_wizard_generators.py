@@ -46,9 +46,12 @@ class MockTarget:
     image_name: str | None = None
     url: str | None = None
     iac_type: str | None = None
+    iac_path: str = ""
     gitlab_repo: str | None = None
     gitlab_url: str = "https://gitlab.com"
     k8s_context: str | None = None
+    k8s_namespace: str = ""
+    k8s_all_namespaces: bool = False
 
 
 @dataclass
@@ -375,10 +378,11 @@ def test_generate_github_actions_native_mode_iac_terraform(mock_config):
     mock_config.use_docker = False
     mock_config.target.type = "iac"
     mock_config.target.iac_type = "terraform"
+    mock_config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(mock_config)
 
-    assert "--terraform-state infrastructure" in result
+    assert "--terraform-state infra/stack.yaml" in result
 
 
 def test_generate_github_actions_native_mode_iac_cloudformation(mock_config):
@@ -386,10 +390,11 @@ def test_generate_github_actions_native_mode_iac_cloudformation(mock_config):
     mock_config.use_docker = False
     mock_config.target.type = "iac"
     mock_config.target.iac_type = "cloudformation"
+    mock_config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(mock_config)
 
-    assert "--cloudformation infrastructure" in result
+    assert "--cloudformation infra/stack.yaml" in result
 
 
 def test_generate_github_actions_native_mode_iac_k8s_manifest(mock_config):
@@ -397,10 +402,11 @@ def test_generate_github_actions_native_mode_iac_k8s_manifest(mock_config):
     mock_config.use_docker = False
     mock_config.target.type = "iac"
     mock_config.target.iac_type = "k8s-manifest"
+    mock_config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(mock_config)
 
-    assert "--k8s-manifest infrastructure" in result
+    assert "--k8s-manifest infra/stack.yaml" in result
 
 
 def test_generate_github_actions_native_mode_gitlab(mock_config):

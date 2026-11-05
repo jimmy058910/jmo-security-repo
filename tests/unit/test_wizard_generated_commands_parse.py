@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import io
 import re
+import shlex
 import sys
 from contextlib import redirect_stderr
 from dataclasses import dataclass, field
@@ -465,3 +466,99 @@ def test_a_known_bad_command_is_actually_rejected():
         "the parser accepted `ci --profile fast`, so the guard proves nothing"
     )
     assert "unrecognized arguments" in err.lower(), err
+
+
+# --------------------------------------------------------------------------
+# The wizard's GitHub Actions workflow names its target, in both modes (#1554)
+# --------------------------------------------------------------------------
+
+_URL_WITH_METACHARACTERS = "https://app.example.test/search?q=1&next=$(id)"
+
+# target type -> (fields set on the wizard's TargetConfig, {parsed dest: value})
+_WORKFLOW_TARGETS: dict[str, tuple[dict[str, object], dict[str, object]]] = {
+    "repo": ({"repo_mode": "repo", "repo_path": "."}, {"repo": "."}),
+    "image": (
+        {"image_name": "registry.example.test/app:1.0"},
+        {"image": "registry.example.test/app:1.0"},
+    ),
+    "url": (
+        {"url": _URL_WITH_METACHARACTERS},
+        {"url": _URL_WITH_METACHARACTERS},
+    ),
+    "iac": (
+        {"iac_type": "terraform", "iac_path": "infra/prod.tfstate"},
+        {"terraform_state": "infra/prod.tfstate"},
+    ),
+    "gitlab": (
+        {"gitlab_repo": "team/app", "gitlab_url": "https://gitlab.example.test"},
+        {"gitlab_repo": "team/app", "gitlab_url": "https://gitlab.example.test"},
+    ),
+    "k8s": (
+        {"k8s_context": "prod", "k8s_namespace": "payments"},
+        {"k8s_context": "prod", "k8s_namespace": "payments"},
+    ),
+}
+
+
+def _workflow_jmo_line(target_type: str, use_docker: bool) -> str:
+    """The one `jmo scan` line of the wizard's workflow, continuations joined."""
+    from scripts.cli.wizard_flows.config_models import WizardConfig
+
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.target.type = target_type
+    for name, value in _WORKFLOW_TARGETS[target_type][0].items():
+        setattr(config.target, name, value)
+    lines = [
+        line.strip()
+        for line in _logical_lines(generate_github_actions(config))
+        if re.match(r"\s*jmo (scan|ci)\b", line)
+    ]
+    assert len(lines) == 1, lines
+    return lines[0]
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+@pytest.mark.parametrize("target_type", sorted(_WORKFLOW_TARGETS))
+def test_the_workflow_scans_the_wizards_target(target_type, use_docker):
+    """Docker mode named a target only for repo, image and url: a GitLab, IaC
+    or K8s workflow ran `jmo scan` on nothing. Read through the shell and the
+    real parser, so a dropped flag or a value the shell splits both fail."""
+    words = shlex.split(_workflow_jmo_line(target_type, use_docker))
+    parsed = jmo.build_parser().parse_args(words[1:])
+    for dest, value in _WORKFLOW_TARGETS[target_type][1].items():
+        got = getattr(parsed, dest)
+        assert (got[-1] if isinstance(got, list) else got) == value, (dest, words)
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+def test_workflow_values_reach_the_shell_quoted(use_docker):
+    """`&` backgrounded the scan and `$(...)` ran a command: the URL went into
+    the `run:` block bare. Tokenised as a shell does, no operator may appear."""
+    line = _workflow_jmo_line("url", use_docker)
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    words = list(lexer)
+    operators = [w for w in words if w and set(w) <= set("();<>|&")]
+    assert operators == [], (operators, line)
+    assert _URL_WITH_METACHARACTERS in words
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+def test_an_iac_file_outside_the_checkout_is_refused(use_docker, tmp_path, monkeypatch):
+    """The workflow runs on a checkout of the repository the wizard ran in. A
+    file outside it cannot exist on the runner, and its absolute path would be
+    this machine's, written into a committed workflow."""
+    from scripts.cli.wizard_flows.config_models import WizardConfig
+
+    (tmp_path / "repo").mkdir()
+    monkeypatch.chdir(tmp_path / "repo")
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.target.type = "iac"
+    config.target.iac_type = "terraform"
+    config.target.iac_path = str(tmp_path / "elsewhere" / "prod.tfstate")
+
+    with pytest.raises(ValueError, match="outside") as refused:
+        generate_github_actions(config)
+    assert str(tmp_path) not in str(refused.value)

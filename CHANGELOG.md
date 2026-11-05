@@ -530,6 +530,15 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **The wizard's GitHub Actions workflow scans the target it was given (#1554).** In
+  Docker mode it named a target only for a repository, an image or a URL, so a GitLab,
+  IaC or Kubernetes workflow ran `jmo scan` on nothing. Both modes now build the target
+  flags one way: an IaC workflow names the wizard's file relative to the checkout (native
+  mode named a fixed `infrastructure` path), and refuses a file outside the working
+  directory, which the runner's checkout cannot hold; a Kubernetes one carries
+  `--k8s-namespace` or `--k8s-all-namespaces` as the wizard was told (native mode had
+  dropped both); and every value is shell-quoted, so a URL holding `&` no longer puts the scan in the
+  background and one holding `$(...)` no longer runs a command.
 - **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,
