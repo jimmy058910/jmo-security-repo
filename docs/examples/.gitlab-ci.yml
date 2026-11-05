@@ -37,7 +37,7 @@ security:pr-scan:
   variables:
     JMO_FAIL_ON: ""  # Don't fail pipeline, just report
   script:
-    - jmo scan --repo . --tools trufflehog semgrep trivy --results-dir results --human-logs
+    - jmo scan --repo . --tools trufflehog opengrep trivy --results-dir results --human-logs
     - jmo report results --profile --human-logs
   only:
     - branches

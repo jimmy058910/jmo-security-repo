@@ -519,6 +519,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **The Docker guide's and the example files' `jmo` commands run.** 37 of the 100 `jmo`
+  commands in `docs/DOCKER_README.md` and `docs/examples/*.yml` were rejected by jmo's own
+  parser: `jmo trends export html|json|csv|prometheus` and `jmo trends velocity`, which do
+  not exist (`trends analyze --export-html` and its siblings do the exports), `--format
+  text`, `--limit` and `--scan-id-1` on trends subcommands that take none of them, and
+  `semgrep` in `--tools` in three CI examples (opengrep replaced it). Each is rewritten
+  from the parser, and `tests/unit/test_docs_example_commands_parse.py` asks the parser
+  about every one.
 - **`jmo tools install` downloads trivy, nuclei and hadolint on macOS, and trivy, nuclei
   and opa on Windows ARM64.** Their URLs named assets the releases do not have: trivy and
   nuclei call macOS `macOS` and hadolint `macos`, not `Darwin`, and none of the three

@@ -746,7 +746,7 @@ docker run --rm \
 docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends analyze --days 30 --format text
+  trends analyze --days 30
 ```
 
 **Output includes:**
@@ -764,17 +764,17 @@ docker run --rm \
 docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends show --limit 10 --format text
+  history list --limit 10
 ```
 
 #### Check for Regressions
 
 ```bash
-# Detect new HIGH/CRITICAL findings in last 7 days
+# New HIGH/CRITICAL findings across the last 7 scans
 docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends regressions --days 7 --format text
+  trends regressions --last 7
 ```
 
 #### View Security Score
@@ -784,18 +784,18 @@ docker run --rm \
 docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends score --format text
+  trends score
 ```
 
 #### Compare Two Scans
 
 ```bash
-# Interactive diff between two scans
+# Two scans side by side: their ids are the ones `jmo history list` shows
 docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends compare --scan-id-1 latest --scan-id-2 previous --format text
+  trends compare SCAN_ID_1 SCAN_ID_2
 ```
 
 #### Developer Attribution (Requires .git Mount)
@@ -807,7 +807,7 @@ docker run --rm \
   -v "$(pwd)/.git:/scan/.git:ro" \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends developers --limit 10 --format text
+  trends developers --top 10
 ```
 
 **Important:** Developer attribution requires mounting `.git` directory for git blame integration.
@@ -821,7 +821,7 @@ docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends export html --output /results/trends-report.html
+  trends analyze --export-html /results/trends-report.html
 ```
 
 **Features:**
@@ -839,7 +839,7 @@ docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends export json --output /results/trends-data.json
+  trends analyze --export-json /results/trends-data.json
 ```
 
 #### Export CSV (Excel/BI Tools)
@@ -849,7 +849,7 @@ docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends export csv --output /results/trends-data.csv
+  trends analyze --export-csv /results/trends-data.csv
 ```
 
 #### Export Prometheus Metrics
@@ -859,7 +859,7 @@ docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends export prometheus --output /results/metrics.prom
+  trends analyze --export-prometheus /results/metrics.prom
 ```
 
 **Metrics exposed:**
@@ -943,7 +943,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}/.jmo:/scan/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
-            trends regressions --format terminal
+            trends regressions
 
       # Export trend report
       - name: Export trend report
@@ -952,7 +952,7 @@ jobs:
             -v ${{ github.workspace }}/.jmo:/scan/.jmo \
             -v ${{ github.workspace }}/results:/results \
             ghcr.io/jimmy058910/jmo-security:latest \
-            trends analyze --export html --export-file /results/trends-report.html
+            trends analyze --export-html /results/trends-report.html
 
       # Upload reports
       - name: Upload trend report
@@ -997,14 +997,14 @@ security-scan-with-trends:
       docker run --rm \
         -v $PWD/.jmo:/scan/.jmo \
         ghcr.io/jimmy058910/jmo-security:latest \
-        trends regressions --format terminal
+        trends regressions
     # Export HTML report
     - |
       docker run --rm \
         -v $PWD/.jmo:/scan/.jmo \
         -v $PWD/results:/results \
         ghcr.io/jimmy058910/jmo-security:latest \
-        trends analyze --export html --export-file /results/trends-report.html
+        trends analyze --export-html /results/trends-report.html
   artifacts:
     paths:
       - results/trends-report.html
@@ -1068,7 +1068,7 @@ docker run --rm \
   -v "$(pwd)/.git:/scan/.git:ro" \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  trends developers --limit 10
+  trends developers --top 10
 ```
 
 #### Trend data persists after removing container
