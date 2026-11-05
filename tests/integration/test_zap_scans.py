@@ -240,3 +240,56 @@ def test_a_url_with_a_query_is_scanned_as_typed(jmo_scan, tmp_path, query) -> No
     reached = Counter(r["op"] for r in fx.read_log(log))
     # `/` links to the same page: reaching it would mean the scope widened.
     assert "root" not in reached, reached
+
+
+def _zap_row(out: Path) -> dict:
+    timings = json.loads((out / "scan-timings.json").read_bytes())
+    (row,) = [r for r in timings["tools"] if r["tool"] == "zap"]
+    return row
+
+
+def test_a_redirect_to_the_other_loopback_spelling_is_attacked(
+    jmo_scan, tmp_path, real_url_probe
+) -> None:
+    """#1431: `http://127.0.0.1:P/app/` answering 301 to `localhost` was
+    spidered to the 301 and attacked by nothing, the row a plain `ran`, rc 0
+    (measured, ZAP 2.17.0: 5 passive alerts, no XSS). Both spellings of the
+    loopback host are the scan's scope, so the site is attacked there, and
+    the row has nothing to add."""
+    log = tmp_path / "requests.jsonl"
+    f = fx.start("redirect", log)
+    try:
+        rc, out = jmo_scan(
+            "--url", f.url + "/app/", flags=tuple(fx.proxy_flags(f.port))
+        )
+    finally:
+        f.close()
+
+    assert rc == 0
+    found = [a["pluginid"] for a in _alerts(out / "zap.json")]
+    assert REFLECTED_XSS in found, found
+    attacked = Counter(r["host"] for r in fx.read_log(log) if r["payload"])
+    assert attacked[f"localhost:{f.port}"], attacked
+    row = _zap_row(out)
+    assert (row["state"], row["detail"]) == ("ran", None), row
+
+
+def test_a_redirect_out_of_the_scope_is_named_on_the_row(
+    jmo_scan, tmp_path, real_url_probe
+) -> None:
+    """A site that moved to another host is outside the scope: zap still
+    runs, and the row says where the site went instead of reading as an audit
+    of it. The fixture serves the new host as itself (`DEFAULT_PORT`), as a
+    real one would answer."""
+    f = fx.start("redirect", tmp_path / "requests.jsonl", aliases=DEFAULT_PORT)
+    try:
+        rc, out = jmo_scan(
+            "--url", f.url + "/moved/", flags=tuple(fx.proxy_flags(f.port))
+        )
+    finally:
+        f.close()
+
+    assert rc == 0
+    row = _zap_row(out)
+    assert row["state"] == "ran", row
+    assert "http://zap-fixture.test/app/" in (row["detail"] or ""), row

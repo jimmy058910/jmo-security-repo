@@ -206,8 +206,10 @@ runs alone (and the default rules, if it asks for them). Two consequences:
   is not reported by Gitleaks, and a config that does not ask for the default
   rules (`[extend] useDefault = true`) runs only its own. TruffleHog still reads
   everything. `.gitleaksignore` and inline `gitleaks:allow` comments already
-  worked this way. JMo logs at INFO that it extended the repository's config,
-  and a WARNING when that config leaves the default rules out.
+  worked this way. JMo says at WARNING that Gitleaks reads the repository's
+  `.gitleaks.toml`, records it on Gitleaks' row as `own_config` (in
+  `findings.json`'s metadata and in history too), and warns again when that
+  config leaves the default rules out.
 - **One level of extension is lost.** Gitleaks follows `[extend]` only so deep,
   and JMo's config is one level above the repository's. If the repository's
   config extends another file that itself extends further (the default rules, or
@@ -497,6 +499,21 @@ and this does not apply.
 
 **What to do:** JMo has no setting for ZAP's heap yet. For a site too large for
 512 MB, run ZAP outside JMo.
+
+### ZAP does not follow a site to another host or scheme
+
+A ZAP scan is confined to the URL you give, its path included, with `127.0.0.1`
+and `localhost` counted as one host. A site that redirects elsewhere, say from
+`http://example.com` to `https://www.example.com`, is not attacked there: ZAP
+follows the redirect out of its scope and has nothing to test. JMo asks the URL
+once before the scan, following no redirect, and when the answer is a redirect
+outside the scope, the ZAP row reads `partly audited` and names where the site
+went, without the redirect's query. It asks whatever the site's certificate, as
+ZAP is given no certificate setting either. JMo gets no answer when it cannot
+reach the URL itself (behind a proxy only ZAP is told about), and does not ask
+for an `--api-spec` scan, which crawls nothing.
+
+**What to do:** scan the address the row names.
 
 ### jmo-native reads one application, at the repository root
 

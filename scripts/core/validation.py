@@ -474,6 +474,14 @@ def validate_url(url: str) -> bool:
         logger.error(f"Invalid URL format: '{url}'")
         return False
 
+    # The pattern takes any five digits, and a port TCP has not made the
+    # first reader to ask for it raise (zap's plan failed every tool).
+    try:
+        _ = urlsplit(url).port  # raises ValueError for a port out of range
+    except ValueError:
+        logger.error(f"Invalid port in URL: '{url}'")
+        return False
+
     return True
 
 

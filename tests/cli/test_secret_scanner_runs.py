@@ -551,6 +551,10 @@ class TestHistoryCanBeTurnedOff:
         assert probed == []
 
 
+# The line every repository config a tool reads gets (#1430), at WARNING.
+_ANNOUNCED = "gitleaks reads its .gitleaks.toml"
+
+
 class TestTheRepositorysGitleaksConfig:
     """#1327 item 3: JMo passes `--config <its own>` to carry its exclusions,
     and gitleaks then never read the repository's `.gitleaks.toml` (measured:
@@ -588,9 +592,14 @@ class TestTheRepositorysGitleaksConfig:
         assert config["extend"] == {"path": str(own.resolve())}
         # JMo's exclusions still ride along.
         assert config["allowlists"][0]["paths"], config
-        # The scanned repository shapes its own audit, so the run says so.
-        said = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
-        assert any("extends its .gitleaks.toml" in m for m in said), said
+        # The scanned repository shapes its own audit, so the run says so, at
+        # WARNING as for the other tools' own configs (INFO, which a default
+        # scan hides, until #1430), and its row records it.
+        said = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any(_ANNOUNCED in m for m in said), said
+        assert scan.row("gitleaks")["own_config"] == [
+            {"file": ".gitleaks.toml", "detail": "its rules and allowlists apply"}
+        ]
 
     def test_one_that_extends_a_further_config_is_warned_about(self, scan, caplog):
         """gitleaks follows extensions only so deep, and JMo's config adds a
@@ -665,7 +674,9 @@ class TestTheRepositorysGitleaksConfig:
         warnings = [
             r.getMessage()
             for r in caplog.records
-            if r.levelname == "WARNING" and ".gitleaks.toml" in r.getMessage()
+            if r.levelname == "WARNING"
+            and ".gitleaks.toml" in r.getMessage()
+            and _ANNOUNCED not in r.getMessage()
         ]
         assert len(warnings) == 1, [r.getMessage() for r in caplog.records]
         assert "default rules" in warnings[0]
@@ -676,8 +687,12 @@ class TestTheRepositorysGitleaksConfig:
 
         assert scan.run("--tools", "gitleaks") == 0
 
+        # Only the announcement every own config gets, never the warning that
+        # the defaults are left out.
         assert not [
             r
             for r in caplog.records
-            if ".gitleaks.toml" in r.getMessage() and r.levelname == "WARNING"
+            if ".gitleaks.toml" in r.getMessage()
+            and r.levelname == "WARNING"
+            and _ANNOUNCED not in r.getMessage()
         ]

@@ -23,7 +23,7 @@ fi
 # 2. Quick import check for critical modules
 echo "  Checking critical Python imports..."
 critical_modules=(
-  "scripts.core.compliance_frameworks"
+  "scripts.core.compliance_mapper"
   "scripts.core.exceptions"
   "scripts.core.tool_runner"
 )

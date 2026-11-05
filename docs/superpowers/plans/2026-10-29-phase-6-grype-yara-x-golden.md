@@ -39,7 +39,8 @@ model is the Phase 5 task plan, `2026-10-23-phase-5-rule-bundle.md`.
   `scan_timings.py`, `generate_golden.py`, `jmo.yml`, `tests/conftest.py`,
   `test_adapter_golden.py`, `test_docker_workflows.py`, `test_tool_smoke.py`, the packaging
   files, `.gitignore`, `UPGRADE.md`, `CHANGELOG.md` and `docs/TOOLS.md`. Every line number this plan cites
-  is at `c05aef28`; in a P5 file, re-read it on `dev` before editing.
+  is at `c05aef28`, except Tasks E1–E7 and F6b, re-measured at `e6858cc1` on 2026-11-04; in a
+  P5 file, re-read it on `dev` before editing.
 - **Backward compatibility is NOT a constraint.** No users. The tool name is hashed into
   every finding id (`fingerprint()`, `scripts/core/common_finding.py:276`), so renaming
   `yara` to `yara-x` changes every yara finding id once, deliberately; `UPGRADE.md` says so.
@@ -259,7 +260,7 @@ sha256, download URL, target and command (`tests/fixtures/golden/gitleaks/v8.30.
 | juice-shop's `// vuln-code-snippet vuln-line` markers (MIT) | `1618a611` (T2's pin) | **40** marked lines in 17 files: 10 TypeScript, 3 Solidity, 2 Terraform, 2 YAML (Phase 4's research said 38 in 16). B's archived registry-rule runs hit **5 of 40** (semgrep 137 results, opengrep 129) | yes, T3 |
 | QuackatronHQ/sca-kitchen-sink (MIT) | `eeddfe4d92fddb749915a98a7b02956eae33af22` (2025-06-19) | 15 lockfiles in 14 formats, every one in `LOCKFILE_ECOSYSTEMS`. Through `jmo scan --tools osv-scanner trivy`, adapter findings per lockfile (osv / trivy): `packages.lock.json` 4/4, `packages.config` 2/2, `go.mod` 108/66, `gradle.lockfile` 108/108, `pom.xml` 94/94, `bun.lock` 44/44, `package-lock.json` 44/44, `pnpm-lock.yaml` 44/44, `yarn.lock` (yarn 4) 44/44, `composer.lock` 29/28, `poetry.lock` 89/44, `requirements.txt` 168/98, `uv.lock` 89/44, `Gemfile.lock` 58/58, `Cargo.lock` 8/4. No format is silent today. trivy also reads `csharp/API.deps.json` (7), which JMo does not hand osv-scanner | yes, T4: a per-format wiring oracle, not a quality score (a "real" frozen snapshot needs a matcher, and osv-scanner would be grading itself) |
 | TheAuditorTool/BenchProctor (Apache-2.0) | release 2026.07.22 (releases halted, so the pin cannot move); repository `ad70ff85` | quicktest bundles: TypeScript 6,571,432 bytes, sha256 `80f417b0d7aa…59c4`; JavaScript 5,726,494 bytes, `ce18f02c168f…3a3e`; a standard-library `score_sarif.py` and `expectedresults-2026.07.22.csv` per framework; the scorer reads CWE from `ruleId`, `properties`/`tags` or `taxa`. Not run: it grades Phase 5's bundle | yes, F7, after PR B |
-| Checkmarx/kics `assets/queries` (Apache-2.0) | v2.2.0 `453066aa9c66014ad7aee7dd0149ba1944c78050` | Dockerfile: 48 queries, 131 positive and 154 negative samples, **242** expected (file, line). hadolint 2.15.1 and trivy 0.74.0 (bare binaries) put some finding on 176 and 112 of those lines, **181 (74%)** either. "Some finding on the line" is not "the same check", so this is a floor, not recall. Negatives are unusable without an id mapping: 250 of 308 (tool, negative sample) pairs report something, because a negative for one query still breaks others. Kubernetes: 142 queries (same `positive*.yaml` + `positive_expected_result.json` layout), not run | yes, E6: Dockerfile and Kubernetes; Terraform (340 AWS queries alone) and CloudFormation (262) after the tag |
+| Checkmarx/kics `assets/queries` (Apache-2.0) | v2.2.0 `453066aa9c66014ad7aee7dd0149ba1944c78050` | Dockerfile: 48 queries, 131 positive and 154 negative samples, **242** expected (file, line). hadolint 2.15.1 and trivy 0.74.0 (bare binaries) put some finding on 176 and 112 of those lines, **181 (74%)** either. "Some finding on the line" is not "the same check", so this is a floor, not recall. Negatives are unusable without an id mapping: 250 of 308 (tool, negative sample) pairs report something, because a negative for one query still breaks others. Kubernetes: 142 queries (same `positive*.yaml` + `positive_expected_result.json` layout), not run. **Re-measured 2026-11-04: the 181 does not reproduce** (its script is gone): 133 positive samples, 242 entries = 230 distinct (file, line); hadolint 221, trivy 130, either **226 (93.4%)**. Kubernetes: 271 positives (261 `.yaml`, 10 `.json`), 430 entries | yes, E6: Dockerfile; Kubernetes moved to F6b (2026-11-04); Terraform (340 AWS queries alone) and CloudFormation (262) after the tag |
 | Samsung/CredData | — | now 73,842 labelled lines, 4,583 true, from 19.5 M lines in 297 repositories (Phase 4 recorded 67,564 / 15,714: the labels were revised); `download_data.py` clones all 297 | **no: after the tag** (J7) |
 
 ### Issue premises (22 open; #1426 and #1472 closed 2026-10-24)
@@ -285,11 +286,11 @@ reports are in `~/.cache/jmo-p6/premise/`.
 | #1371 | confirmed, sharper | a stale `trivy.json` (4 findings) in a reused results directory, then `--tools shellcheck` → `findings.json` 10 (shellcheck 6, trivy 4), `meta.tools` `['shellcheck']`, and **the history database stores all 10**. A stale `osv-scanner.json` under a row `failed:offline database missing` → 291 old findings reported; under a row that exited 127 before writing → 291. A requested tool that skips is clean (it writes a stub). Inferred, not run: `ToolRunner`'s `_wrote_nothing` (`tool_runner.py:349-352`) is `not output_file.exists()`, so a stale file also passes that check |
 | #1432 | confirmed; the body's fix is wrong twice | bad `osv-scanner.toml`: rc 130, row `failed`, `kept_findings` null, "No tool ran … not stored in history", and `findings.json` holds **6** findings (4 on 2.6.0). Correction 1: `collect_tool_diagnostics` reads each output's error channel, not a row's state; state is in `scan-timings.json`, which the report reads only for `root` (`normalize_and_report.py:188`). Correction 2: #1369 deliberately keeps a failed row's working runs (`ToolRun.kept_findings`, `scan_timings.py:140-150`), so "skip every failed row" would drop them. The rule is per row: `kept_findings` null → not a finding of this scan |
 | #1370 | confirmed, both halves | trivy tags are `vulnerability`, `secret`, `misconfig` (`trivy_adapter.py:261-265, 338`); `get_tool_category` (`compliance_mapper.py:893-933`) checks the tag `secrets` (`:906`) and maps `tool in ["trivy","syft"]` to `sca` (`:914`) before any content test. A real misconfiguration (DS-0002) gets `sca`: CIS 7.1-7.4, 16.11, NIST GV.SC-3, PCI 6.3.3 / 11.3.1, MITRE T1195. Six keys carry two wordings (`:556/:636`, `:650/:709`, `:655/:714`, `:662/:735`, `:781/:871`, `:797/:880`). Also: **shellcheck and zizmor findings get no category at all** (`None`) |
-| #1354 | partly | the four pairs are absent, and trivy 0.74.0 does emit `DS-0013` (`rule_equivalence.py:57`'s comment says it does not). Added in-process: **only `DS-0013`/`DL3003` merges** (43 → 42). No Kubernetes pair merges, **including the six already in the table** (`KSV-0017/CKV_K8S_16`, `KSV-0011/_11`, `KSV-0016/_12`, `KSV-0018/_13`, `KSV-0012/_23`, `KSV-0001/_20`): the checkov adapter keeps only the first element of `file_line_range` (`checkov_adapter.py:192-198, 228`), so checkov's finding is line 1 with no end, trivy's 7-10, and location similarity is 0; with the end supplied (Jaccard 0.4) still no merge |
+| #1354 | partly | the four pairs are absent, and trivy 0.74.0 does emit `DS-0013` (`rule_equivalence.py:57`'s comment says it does not). Added in-process: **only `DS-0013`/`DL3003` merges** (43 → 42). No Kubernetes pair merges, **including the six already in the table** (`KSV-0017/CKV_K8S_16`, `KSV-0011/_11`, `KSV-0016/_12`, `KSV-0018/_13`, `KSV-0012/_23`, `KSV-0001/_20`): the checkov adapter keeps only the first element of `file_line_range` (`checkov_adapter.py:192-198, 228`), so checkov's finding is line 1 with no end, trivy's 7-10, and location similarity is 0; with the end supplied (Jaccard 0.4) still no merge. **2026-11-04:** the table holds eight Kubernetes trivy/checkov groups, not six (`KSV-0009`, `KSV-0010` too), and a plain Pod fires five of the eight: E1's Pod adds `hostPID`, `hostNetwork` and `privileged` |
 | #1380 | confirmed, 9 of 9 | every row reproduces with a planted input and a correct control; `native_checks.py` unchanged since `5847d94b`. Row 5 (`CLIENT_DIRS`, `:126`) sits beside `TODO(issue-#1381)`, the after-the-tag monorepo issue |
 | #1007 | partly; the live defect confirmed with corrected counts | the osv-scanner golden through `jmo report` with its Windows scan root: `findings.sarif` **1,896** (958 in `results[].properties.remediation`, 938 in the rules' `help` text and markdown from `sarif_common.py:320`), `findings.json` / `.yaml` / `dashboard.html` 1,249 each (958 `remediation` + 291 `raw` URIs), CSV and the Markdown reports 0. A real Linux scan (osv-scanner 2.7.0, 6 findings): SARIF 36, JSON 18. Across eight tools on the samples only `raw` carries the root (checkov 75, hadolint 10, shellcheck 17). A clustered finding nests its duplicates' `raw` in `context.duplicates[].raw`, so a guard must walk every string |
 | #1430 | confirmed | `_announce_own_config` (`tool_loop.py:278`) only logs; the row's `detail` stays null; nothing in the results directory or `findings.json` names the file, and the history table `scan_tool_runs` has no `detail` column. A repository whose `osv-scanner.toml` ignores one advisory and one package: 0 findings against 6, and one console line |
-| #1431 | confirmed statically | `_zap_context` (`tool_descriptors.py:1467-1515`) scopes to the typed origin and path; nothing handles a redirect; the "examined nothing" hook (`scanned_count`, `:494`) exists only for semgrep. Not run |
+| #1431 | confirmed statically | `_zap_context` (`tool_descriptors.py:1467-1515`) scopes to the typed origin and path; nothing handles a redirect; the "examined nothing" hook (`scanned_count`, `:494`) exists only for semgrep. Not run. **Run 2026-11-04** (E4): zap's report cannot show the redirect; see E4 |
 | #1097 | partly | 15 adapters, 15 matrix tools, 10 `ADAPTER_REGISTRY` entries (`test_adapter_golden.py:45-91`; syft, jmo-native, yara, zap, nuclei have none), 4 fixture directories. The six registered tools with no directory do not skip: they generate **no test**; 15 collected, 15 passed. Neither guard exists (`:382-391` checks directory → registry only; `0 == 0` passes semgrep's empty fixture). The directory is `osv_scanner`, the matrix name `osv-scanner`. Installed here behind the pin: checkov 3.3.29 (3.3.30), syft 1.51.1 (1.55.0), trufflehog 3.97.1 (3.99.7) |
 
 ## Program-plan and spec corrections (land in PR A, Task A1)
@@ -1043,110 +1044,201 @@ image-owned path.
 
 ## Task E1: Equivalence pairs that can actually merge (#1354) (P5)
 
-**Files:** `scripts/core/rule_equivalence.py:57` (the false "DS013 absent" comment), `:75`
-(`RULE_EQUIVALENCE`), `:77-143` (Dockerfile groups), `:187-228` (Kubernetes groups),
-`scripts/core/adapters/checkov_adapter.py:192-198, 228` (carry `endLine` from
-`file_line_range`), `scripts/core/dedup_enhanced.py:560-590` (location similarity),
-`tests/unit/test_rule_equivalence_table.py`, `tests/adapters/test_checkov_adapter.py`
+Re-measured 2026-11-04 at `e6858cc1` (trivy 0.74.0, hadolint 2.15.1, checkov 3.3.29), as
+are E2–E7. Evidence: `~/.cache/jmo-p6e/MEASURED-e-premises.md` (not backed up).
 
-- [ ] **Step 1: Failing tests**, each from real tool output on one input (trivy 0.74.0
-  emits the hyphenated ids `DS-0013`, `KSV-0013/14/15`, measured): `DS-0013` and hadolint
-  `DL3003` on `RUN cd /x && make` → one finding; on a Pod with `nginx:latest`, no CPU
-  request and a writable root filesystem, each of the four new pairs and the six existing
-  Kubernetes pairs → one finding each; a negative (`KSV-0013` and an unrelated checkov id on
-  the same lines) → two.
-- [ ] **Step 2:** checkov findings carry `endLine`. The location rule for an equivalence
-  pair becomes containment (trivy's container range inside checkov's resource range scores
-  as a match), not Jaccard × gap. Measure the Pod before choosing; record the scores.
-- [ ] **Step 3:** Add the four pairs; check each checkov id's meaning in the Kubernetes
-  framework (`checkov --list --framework kubernetes`: `CKV_K8S_10` CPU requests, `_14`
-  image tag, `_22` read-only filesystem; Terraform reuses the numbers for other checks).
+**Files:** `scripts/core/rule_equivalence.py:57` (the false "DS013 absent" comment), `:75`
+(`RULE_EQUIVALENCE`), `:76-149` (Dockerfile groups), `:183-229` (Kubernetes groups: eight
+trivy/checkov pairs, not six), `scripts/core/adapters/checkov_adapter.py:193-198, 228` (carry
+`endLine` from `file_line_range`), `scripts/core/dedup_enhanced.py:570-601`
+(`location_similarity`), `tests/unit/test_rule_equivalence_table.py`,
+`tests/adapters/test_checkov_adapter.py`
+
+- [ ] **Step 1: Failing tests**, each from real tool output on one input (the table already
+  spells trivy's hyphenated ids, `DS-0013`, `KSV-0013`, as the adapter reads them, so no
+  normalisation is needed): `DS-0013` and hadolint `DL3003` on `RUN cd /x && make` → one
+  finding (0.587 today, under the 0.65 threshold). One Pod (`hostPID`, `hostNetwork`,
+  `privileged`, `nginx:latest`, no requests or limits) fires all eleven Kubernetes pairs: the
+  eight in the table and the three new ones (`KSV-0015`/`CKV_K8S_10`, `KSV-0013`/`CKV_K8S_14`,
+  `KSV-0014`/`CKV_K8S_22`). (Corrected building E1: the measurement's plain Pod fired five of
+  the eight, so it read as needing two.) Each pair → one finding, and no other trivy finding
+  joins a checkov one. A negative (`KSV-0013` and an unrelated checkov id on the same
+  resource) → two.
+- [ ] **Step 2:** checkov findings carry `endLine` (checkov gives the plain Pod `[1,10]`, trivy the
+  container's 7-10). For a pair the table names, location scores by containment (one range
+  inside the other scores 1.0); every other pair keeps Jaccard × gap. Measured: `endLine`
+  alone (Jaccard 0.4) leaves the pairs at 0.50-0.55; with containment an equivalent pair
+  scores at least 0.80, and none of the 360 trivy × checkov pairs on the plain Pod that the table
+  does not name reaches 0.65 (max 0.591). The margin is thin: containment stays scoped to
+  the table's pairs.
+- [ ] **Step 3:** Add the four pairs; correct the `:57` comment. The checkov ids' meanings
+  are confirmed (`--list --framework kubernetes`: `_10` CPU requests, `_14` image tag, `_22`
+  read-only filesystem; Terraform shares these three and swaps only `_12`/`_13`).
 - [ ] **Step 4:** Commit `fix: same-check trivy, checkov and hadolint findings merge, Kubernetes included`, body `Closes #1354`.
+
+A repository scan runs checkov with `--framework terraform terraform_json cloudformation`
+only (`tool_descriptors.py:1080-1092`, `docs/TOOLS.md:50`), so the Kubernetes pairs merge on
+`--k8s-manifest` alone, and the table's `CKV_DOCKER_*` rows meet no checkov finding on any
+scan today (inferred from the descriptors, not run). E7 scans the Pod with `--k8s-manifest`.
 
 ## Task E2: Compliance category by what a finding is (#1370) (P5)
 
-**Files:** `scripts/core/compliance_mapper.py:893-933` (`get_tool_category`), the six
-two-worded keys (`:556/:636`, `:650/:709,:721`, `:655/:714`, `:662/:735,:742,:749`,
-`:781/:871`, `:797/:880`), `scripts/core/compliance_frameworks.py:274-290` (a second copy of
-some tables: check for the same drift), tests
+**Files:** `scripts/core/compliance_mapper.py:891-929` (`get_tool_category`), the six
+two-worded keys (NIST GV.SC-3 `:554/:634`; PCI 8.3.2 `:648/:707,:719`; PCI 8.2.1
+`:653/:712`; PCI 6.2.4 `:660/:733,:740,:747`; MITRE T1059 `:779/:869`; MITRE T1195
+`:795/:878`), `scripts/core/compliance_frameworks.py` and
+`tests/unit/test_compliance_frameworks_simple.py` (deleted), `pyproject.toml:250`,
+`tests/unit/test_compliance_mapper_direct.py` (19 direct calls; it pins trivy with
+`["container"]` as `sca`)
 
-- [ ] **Step 1: Failing tests** through `gather_results` on a real trivy document with one
-  vulnerability, one misconfiguration, one secret: categories `sca`, `iac`, `secrets`; a
-  shellcheck and a zizmor finding get a category (today `None`); every key has one wording.
-- [ ] **Step 2:** Categorise from the finding's tags and fields (`secret`, `misconfig`,
-  `vulnerability`, `dependency`) before the tool name; give shellcheck and zizmor theirs.
-- [ ] **Step 3:** Commit `fix: a trivy secret or misconfiguration is not filed as supply chain`, body `Closes #1370`.
+- [ ] **Step 1: Failing tests** through `gather_results` (`normalize_and_report.py:656`) on
+  one trivy document holding one vulnerability, one misconfiguration and one secret. No
+  recorded fixture holds all three (`tests/fixtures/samples/trivy/vuln-0.74.json` has 3
+  vulnerabilities, `misconfig-0.74.json` 47 misconfigurations, none a secret; a repository
+  target's trivy no longer scans for secrets, `tool_descriptors.py:2013`, an image's still
+  does, `:2031`), so the test builds it from those two and one secret result in trivy
+  0.74.0's shape, its match masked as trivy masks it → categories `sca`, `iac`, `secrets`
+  (today all three `sca`). A shellcheck finding → `sast` and a zizmor finding → `iac`
+  (today `None`); a yara-x finding stays `None` (J11). Every key has one wording.
+- [ ] **Step 2:** Categorise from the finding's tags (`secret`, `misconfig`,
+  `vulnerability`) before the tool name; shellcheck `sast`, zizmor `iac`. A misconfiguration
+  recategorised to `iac` loses MITRE T1195, since MITRE has no `iac` key: correct, a
+  misconfiguration is not a supply-chain compromise. One wording per key: the fuller of its
+  existing wordings (the framework documents were not re-read; two entries whose content
+  looks wrong are routed below). MITRE keys an entry by technique alone, so T1059's injection
+  row drops its PowerShell subtechnique (an injection names no interpreter) to match the
+  CWE-78 row. `first_entry_per_key` (`4f253e24`) already keeps one entry per key, so only the
+  wording varied.
+- [ ] **Step 3:** Delete `compliance_frameworks.py` (J11): a second copy of the mapper's
+  tables, imported only by its own test, omitted from coverage, and already drifted (its
+  `CWE_TO_OWASP_TOP10_2021` lacks CWE-540).
+- [ ] **Step 4:** Commit `fix: a trivy secret or misconfiguration is not filed as supply chain`, body `Closes #1370`.
 
 ## Task E3: Dockerfile spellings (#1410, its Dockerfile row) (P5)
 
-**Files:** `scripts/core/tool_descriptors.py:1207-1232` (`DOCKERFILE_PATTERNS`, the walk's
-glob, and `is_dockerfile`), `tests/cli/test_repository_scanner.py:1028-1067`, `docs/TOOLS.md`,
-`docs/USER_GUIDE.md`
+**Files:** `scripts/core/tool_descriptors.py:1405-1433` (`DOCKERFILE_PATTERNS`,
+`_NOT_DOCKERFILE_SUFFIXES`, `is_dockerfile`), `scripts/core/rule_bundle.py:65-73`
+(`LANGUAGE_PATTERNS["dockerfile"]`, which `tests/unit/test_tool_descriptors.py:310` keeps
+equal to hadolint's row), `scripts/cli/scan_jobs/gitlab_scanner.py:425` (the `TODO(issue-#1410)`),
+`tests/cli/test_repository_scanner.py:1076-1177` (`TestADockerfileIsOneThing`),
+`docs/TOOLS.md:40-41, 148`, `docs/USER_GUIDE.md:183, 2694`
+
+PR D did not touch the definition (it added the walk's `max_files=None` and the TODO).
 
 - [ ] **Step 1: Failing test:** `Dockerfile-dev`, `Dockerfile_prod`, `prod-Dockerfile`,
-  `Containerfile` → True, and the walk collects each (the glob, not only the predicate);
-  `Dockerfile.md`, `Dockerfile.j2`, `Dockerfile.template`, `.dockerignore` → False.
-- [ ] **Step 2:** Implement both; hadolint and image discovery both use them.
+  `Containerfile` → True, and both walks collect each: hadolint's
+  (`collect_files(..., accepts_name=is_dockerfile)`, `tool_loop.py:776`) and image
+  discovery's (`gitlab_scanner.py:429-434`). `Dockerfile.md`, `Dockerfile.j2`,
+  `Dockerfile.template`, `.dockerignore` stay False, and `Dockerfile.sh` → False (True
+  today: the refusal list holds `py` but no shell).
+- [ ] **Step 2:** Widen both tables in one change (J12), so the drift test stays a test of
+  their agreement. Measured building E3 (opengrep 1.32.0 in a scratch HOME): opengrep's
+  Dockerfile rules read `prod-Dockerfile` and `prod_Dockerfile`, which the bundle row lacked,
+  and none of `Dockerfile-dev`, `Dockerfile_prod` or `Containerfile`; the row lists those as
+  it lists `Dockerfile.*`, for agreement, and opengrep's generic rules read them. The TODO
+  and `TOOLS.md:148`'s "not read yet" sentence go with the fix.
 - [ ] **Step 3:** Commit `fix: Dockerfile-dev, Dockerfile_prod and Containerfile are Dockerfiles`, body `Closes #1410`.
+
+The wizard's own walk (`base_flow.py:139`, `**/Dockerfile*`) is #1411's.
 
 ## Task E4: zap names an off-origin redirect (#1431) (P5)
 
-**Files:** `scripts/core/tool_descriptors.py:1466-1515` (`_zap_context`), `:1518-1587`
-(`zap_plan`), a zap `scanned_count`-style hook (`:494` holds semgrep's), `tests/fixtures/samples/zap/fixture_server.py`
-(a redirecting mode), `tests/integration/test_zap_scans.py`
+**Files:** `scripts/core/tool_descriptors.py:1651-1700` (`_zap_context`, the
+`TODO(issue-#1431)` above it), `:1702-1777` (`zap_plan`), `scripts/cli/scan_jobs/tool_loop.py`
+(where a `ran` row's `detail` is set today: `:544`, `:956-975`),
+`tests/fixtures/samples/zap/fixture_server.py` (an off-origin redirect mode; its modes are
+`{api, spider}`), `tests/integration/test_zap_scans.py` (`requires_tools`, nightly only)
 
-- [ ] **Step 1: Failing test** (`requires_tools`): the fixture server answers `/app/` with
-  301 to `http://localhost:<port>/app/` while zap is given `http://127.0.0.1:<port>/app/` →
-  the row is not a plain `ran`: its detail names the redirect target, and the active scan's
-  request count is recorded. A non-redirecting run stays `ran` with no detail.
-- [ ] **Step 2:** Implement detection from zap's report (the spider's first response, or
-  0 active-scan requests in scope); whether to add `www.`, scheme and `127.0.0.1`/`localhost`
-  spellings to the scope is measured in the test before it is chosen.
+Measured 2026-11-04 with zap 2.17.0 against the fixture server in a scratch ZAP home:
+**neither of this task's first two detectors exists.** zap's `traditional-json` holds no
+spider response, and the run whose redirect left scope still sent 92 active-scan requests
+from 16 plugins (22 to the 301 node), against 323 from 41 in scope. Per-plugin counts are
+only in `zap.log`, in a home shared and cumulative across runs (#1422). The report's
+insights (`code.3xx`, `endpoint.total`) also fire on the fixture's same-origin `/app` →
+`/app/`. Adding the redirect's `localhost` spelling to the context made the scan reach the
+app and find the fixture's XSS (202 payload requests). Decided (J9): a probe, plus that
+scope pair.
+
+- [ ] **Step 1: Measure the probe first.** JMo requests the target once without following
+  redirects (a bounded timeout), and reads `Location`. Record what it sees for an off-origin
+  redirect and for the same-origin `/app` → `/app/`.
+- [ ] **Step 2: Failing test** (`requires_tools`): the fixture answers `/app/` with 301 to
+  `http://localhost:<port>/app/` while zap is given `http://127.0.0.1:<port>/app/` → the
+  scan finds the fixture's XSS, since the context holds both spellings of the loopback host,
+  and the row stays a plain `ran`: a redirect the scope holds is attacked, so naming it
+  would be false (corrected building E4; this step first said the detail names it). A
+  redirect outside the scope (the fixture's `/moved/` to another host it serves) leaves the
+  row `ran` with `partly audited` naming the target, through the descriptor's existing
+  `partly_read` hook. A same-origin redirect and a run with none stay a plain `ran`, and an
+  `--api-spec` run is not asked. `www.` and scheme changes are unmeasured (no external host
+  is scanned): the detail names them, and the scope does not widen for them. Every test
+  stubs the probe (`tests/conftest.py`) unless it requests `real_url_probe`: 24 tests drove
+  a URL such as `https://example.com` through the scan loop and would each make a request.
 - [ ] **Step 3:** Commit `fix: a zap run that a redirect sent out of scope says so`, body `Closes #1431`.
 
 ## Task E5: A target's own tool config travels with the row (#1430) (P5)
 
-**Files:** `scripts/cli/scan_jobs/tool_loop.py:277-321, 830` (`_announce_own_config` returns
-what it found), `scripts/core/scan_timings.py:130-160` (the row's `detail`; schema v4),
-`scripts/cli/scan_orchestrator.py` (`.scan_metadata.json` `tool_runs`),
-`scripts/cli/report_orchestrator.py` and `scripts/core/reporters/basic_reporter.py`
-(`findings.json` meta), `html_reporter.py`, `scripts/core/history_db.py` (`scan_tool_runs`
-gains `detail`: a schema migration, tested on every historical shape)
+**Files:** `scripts/cli/scan_jobs/tool_loop.py:277-321, 859` (`_announce_own_config`, which
+returns nothing today) and `:343-355` (gitleaks' `.gitleaks.toml`, a second path, in
+`_exclusions`), `scripts/core/scan_timings.py` (`ToolRun` gains `own_config`;
+`SCAN_TIMINGS_SCHEMA_VERSION` is already 4, so 5), `scripts/core/reporters/basic_reporter.py:43`
+(`_generate_metadata`) and `scripts/cli/report_orchestrator.py:287` (`findings.json` meta,
+per target), `scripts/core/history_db.py` (`scan_tool_runs` gains `own_config`: the DDL, an
+idempotent `ALTER TABLE ... ADD COLUMN` in `init_database`, the INSERT, `_scan_tool_runs`
+`:965-1002`, `get_scan_tool_runs`), `jmo history show`, the MCP docstring and its pinning test
 
-- [ ] **Step 1: Failing test:** #1430's repository (a lockfile plus an `osv-scanner.toml`
-  ignoring one advisory and one package) → the row's detail names the file and what it
-  suppresses, `findings.json` meta carries it per target, the dashboard shows it, the history
-  row stores it; a repository with no such file has none.
-- [ ] **Step 2:** Implement for every descriptor with `own_config` (checkov, zizmor,
-  osv-scanner) and gitleaks' `.gitleaks.toml` path.
+Decided (J8): **a dedicated field, not `detail`.** `scan_tool_runs` keeps no `detail` on
+purpose (`scan_timings.py:144-147`: "on a secret scanner, stdout *is* the secrets"); the new
+field holds the target's config file and what it suppresses, which JMo reads itself, never
+what a tool printed. `.scan_metadata.json` needs no change (`jmo.py:3537` writes
+`**row.to_dict()`). **The dashboard half of #1430 moves to its own issue**: `write_html`
+receives findings only, and the React app, its tests and the committed `dist/index.html` that
+CI's freshness gate checks are a PR's worth alone (unfiled; see Unresolved 3). Migrations run
+only on `jmo history migrate` while `store_scan` runs `init_database` every time, and
+`CREATE TABLE IF NOT EXISTS` adds no column, so without the `ALTER` the next INSERT fails on
+any database built since `b451dc31`.
+
+- [ ] **Step 1: Failing tests:** #1430's repository (a lockfile plus an `osv-scanner.toml`
+  ignoring one advisory and one package) → the row's `own_config` names the file and what it
+  suppresses; `scan-timings.json` and `.scan_metadata.json` carry it; `findings.json` meta
+  carries it per target; the history row stores it. A repository with no such file has none.
+  History, both shapes `scan_tool_runs` has had (absent; present without the column, which
+  never shipped in a tag): the next `store_scan` succeeds without `jmo history migrate`.
+- [ ] **Step 2:** Implement for checkov, zizmor and osv-scanner (`own_config`,
+  `tool_descriptors.py:2054, 2157, 2240`) and gitleaks' `.gitleaks.toml`.
 - [ ] **Step 3:** Commit `feat: a repository's own scanner config is recorded with its results`, body `Closes #1430`.
 
-## Task E6: KICS's Dockerfile and Kubernetes samples, line by line (J7) (P5)
+## Task E6: KICS's Dockerfile samples, line by line (J7) (P5)
 
-**Files:** the answer-key fetch script (KICS v2.2.0
-`453066aa9c66014ad7aee7dd0149ba1944c78050`, a sparse fetch of `assets/queries/dockerfile/`
-and `assets/queries/k8s/` into the answer-key cache), `tests/integration/test_kics_line_floor.py`
-(new, `requires_tools`), `tests/integration/baselines/kics-lines.json` (new: per query, each
-expected line hit or missed, and by which tool)
+**Files:** `scripts/dev/fetch_answer_keys.py` (gains KICS; today it fetches single raw files,
+each pinned by sha256: KICS v2.2.0 `453066aa9c66014ad7aee7dd0149ba1944c78050`,
+`assets/queries/dockerfile/` only), `tests/integration/test_kics_line_floor.py` (new,
+`requires_tools`), `tests/integration/baselines/kics-lines.json` (new)
 
-- [ ] **Step 1:** Stage each positive sample as its own target so the walk finds it: a
-  Dockerfile sample is written as `Dockerfile` (the sample names, `positive1.dockerfile`,
-  are not Dockerfile spellings even after E3), a Kubernetes sample keeps its `.yaml` name.
-- [ ] **Step 2: Failing test** through `jmo scan --tools hadolint trivy checkov` per
-  target: for every expected (file, line) in `positive_expected_result.json`, whether any
-  finding covers that line, using `endLine` (E1 gives checkov one). Record the table. The
-  test fails when a line hit before is missed, and prints newly hit lines. Negative samples
-  are not used (no id mapping; measured, 250 of 308 tool/negative pairs report something).
-- [ ] **Step 3:** Record the floor in the PR: Dockerfile 181 of 242 (74%) with the bare
-  binaries on 2026-10-29; the `jmo scan` number and the Kubernetes number are new. A line
-  hit is not the same check, so the PR names it a floor, never recall.
-- [ ] **Step 4:** Commit `test: KICS's expected Dockerfile and Kubernetes lines, graded through jmo scan`.
+Re-measured 2026-11-04: 48 queries, 133 positive samples, 242 expected entries = 230
+distinct (file, line). **"181 of 242 (74%)" does not reproduce**, and its script is gone:
+bare hadolint hits 221, trivy 130, either **226 (93.4%)**; with the repository's
+`.hadolint.yaml`, 217. checkov reads no Dockerfile on a repository scan, so
+`--tools hadolint trivy` is the whole set. The Kubernetes half moves to F6b (J10).
+
+- [ ] **Step 1:** Stage each positive sample as its own target, written as `Dockerfile`
+  (`positive1.dockerfile` is not a Dockerfile spelling, even after E3).
+- [ ] **Step 2: Failing test** through `jmo scan --tools hadolint trivy` per target: for
+  every expected (file, line), whether any finding covers that line, using `endLine` where
+  the tool gives one. The key's traps, measured: the file key is spelled `fileName`,
+  `filename` or `fineName`; an entry naming no file belongs to its query's only positive;
+  a duplicate (file, line) counts once. Record the table and how it counted. The test fails
+  when a line hit before is missed, and prints newly hit lines.
+- [ ] **Step 3:** Record the floor in the PR: the bare binaries' 226 of 242 (2026-11-04) and
+  the `jmo scan` number. A line hit is not the same check, so the PR names it a floor, never
+  recall.
+- [ ] **Step 4:** Commit `test: KICS's expected Dockerfile lines, graded through jmo scan`.
 
 ## Task E7: Gates, then PR E
 
-- [ ] Suite; for E1 a real hadolint + trivy run on one Dockerfile and checkov + trivy on
-  one manifest through `jmo scan`, recording which pairs merge; E6's table recorded. Push,
-  open PR E.
+- [ ] Suite; for E1 a real hadolint + trivy run on one Dockerfile through `jmo scan --repo`,
+  and checkov + trivy on E1's Pod through `jmo scan --k8s-manifest`, recording
+  which pairs merge; E4's redirect run; E6's table recorded. Push, open PR E.
 
 ## Task F1: Capture through `jmo scan` (P5)
 
@@ -1226,6 +1318,25 @@ The job is deleted, not rebuilt (J6).
   `tests/fixtures/osv-db`, the wiring oracle.
 - [ ] **Step 3:** Commit `test: zizmor and osv-scanner graded against their own answer keys`.
 
+## Task F6b: KICS's Kubernetes samples (moved from E6, J10) (P5)
+
+Measured 2026-11-04 at `e6858cc1`: 142 queries, 271 positive samples (261 `.yaml`, 10
+`.json`), 430 expected entries = 409 distinct (file, line); 132 entries name no file. Two
+facts break E6's method here. checkov reads no Kubernetes manifest on a repository scan
+(`--framework terraform terraform_json cloudformation`), and `--k8s-manifest` takes one
+file, so grading checkov through `jmo scan` is 271 scans. And a "line hit" barely means a
+check: checkov's range is the whole resource, `[1,N]`, so it range-hits 335 of 430 lines
+(5 by start line), trivy 254 (28 by start line).
+
+- [ ] **Step 1: Measure first:** decide what counts as a hit (start line, range, or the
+  query's id mapped to the tools') on a sample of queries, through `jmo scan --k8s-manifest`
+  with `--history-db` and `--results-dir` in scratch, and record the rule's numbers.
+- [ ] **Step 2:** If one rule tells a check from "something on this resource", grade every
+  positive the way E6 grades Dockerfiles and record the table; if none does, drop the key and
+  say why in J7's row. Either is acceptance (J10).
+- [ ] **Step 3:** Commit `test: KICS's expected Kubernetes lines, graded through jmo scan`, or
+  the plan edit that drops it.
+
 ## Task F7: BenchProctor grades the rule bundle on TypeScript and JavaScript (J7) (P5)
 
 **Files:** the answer-key fetch script (BenchProctor release 2026.07.22,
@@ -1265,8 +1376,9 @@ cache), `tests/integration/test_benchproctor.py`
 - Golden = 14 / 14, every `finding_count` > 0, each meta-guard mutation-tested.
 - Seven answer keys run (J7): vibeproof (N2); zizmor's and osv-scanner's own fixtures (F6);
   juice-shop's 40 marked lines with a recorded detection table (T3); the 15 sca-kitchen-sink
-  lockfiles giving exactly their 15 synthetic advisories offline (T4); KICS's Dockerfile and
-  Kubernetes line floors recorded through `jmo scan` (E6); BenchProctor's TypeScript and
+  lockfiles giving exactly their 15 synthetic advisories offline (T4); KICS's Dockerfile line
+  floor recorded through `jmo scan` (E6), and its Kubernetes samples graded the same way or
+  the key dropped with its reason (F6b, J10); BenchProctor's TypeScript and
   JavaScript Youden's J recorded per framework (F7). Each fails on a regression from its
   recorded table.
 - No CI job reads green on all skips.
@@ -1283,6 +1395,8 @@ cache), `tests/integration/test_benchproctor.py`
 | No known-vulnerable GitHub Actions check once grype leaves | github-actions-goat: 7 advisories; OSV `GitHub Actions/all.zip`, 56 advisories | after the tag: a `jmo-native` reader of `uses:` against that database, offline |
 | `install_config.py:75-95` gives two false reasons for ReversingLabs | GitHub repo size with history; DRL unrecognised | none: Task Y1 removes the comment |
 | signature-base reports two `WEBSHELL_PHP_Generic_Eval` findings on JMo's own yara tests | `tests/unit/test_yara_runner.py`, `tests/adapters/test_yara_adapter.py` hold webshell-like strings | none: Y6 decides whether a self-scan excludes them; not a product defect |
+| Two compliance entries carry text from another version of their framework: PCI "8.2.1" reads "User identity is verified before modifying authentication credentials", which is PCI DSS 4.0's 8.3.3 (3.2.1's 8.2.2); NIST "GV.SC-3" reads as CSF 1.1's ID.SC-1, while CSF 2.0's GV.SC-03 is integrating supply-chain risk management into enterprise risk processes (found building E2, 2026-11-04) | `scripts/core/compliance_mapper.py` (`PCI_DSS_4_0`, `CWE_TO_PCI_DSS_4_0`, `NIST_CSF_2_0`, `CWE_TO_NIST_CSF_2_0`); checked against secondary sources only, not the PCI SSC or NIST documents | **unfiled**: an issue on Jimmy's word, whose fix re-reads every table entry against the framework documents |
+| The dashboard shows nothing a tool run recorded, so #1430's own-config note cannot reach it: `write_html` receives findings only (found by PR E's premise pass, 2026-11-04) | `scripts/core/reporters/html_reporter.py` (`write_html(findings, out, roots)`); the React app reads `window.__FINDINGS__` or `dashboard-data.json`; CI's freshness gate on `scripts/dashboard/dist/index.html` (`ci.yml:1180-1202`) | **unfiled** (J8): its own issue on Jimmy's word, rostered by the PR that files it |
 
 Found by the premise pass and folded into a task rather than filed: the Kubernetes halves of
 the equivalence table never merge (E1); shellcheck and zizmor findings carry no compliance
@@ -1304,6 +1418,18 @@ WebGoat unpinned (T2).
 | J6 | #1349's juice-shop smoke job: rebuild or delete | **Delete** (F4); F1's re-capture `--check` in the nightly does its job on tracked samples, so nothing needs a key-bearing fixture |
 | J7 | Which of decision 9's other answer keys join Phase 6 | **Four join:** juice-shop's markers (T3), sca-kitchen-sink as a per-format wiring oracle (T4), KICS Dockerfile and Kubernetes as a line-level floor (E6), BenchProctor TypeScript and JavaScript quicktest (F7). **After the tag:** CredData, and KICS Terraform and CloudFormation. With vibeproof (N2) and zizmor's and osv-scanner's own fixtures (F6), Phase 6 carries seven keys |
 
+## Decisions taken 2026-11-04 (Jimmy), from PR E's premise pass
+
+Each corrects a task this plan wrote before measuring it; the evidence is in E1–E6 and F6b.
+
+| # | Question | Decision |
+|---|---|---|
+| J8 | Where #1430's own-config note lives | **A dedicated `own_config` field on the row, in `scan-timings.json`, `findings.json` meta and `scan_tool_runs`; never `detail`**, which history keeps out because a secret scanner's output is the secrets. The dashboard half goes to its own issue (E5) |
+| J9 | How zap knows a redirect left its scope | **A probe JMo makes before the scan, plus both loopback spellings in the context** (E4): zap's report holds neither detector the plan named |
+| J10 | KICS's Kubernetes samples | **Move to F6b**, measured first; checkov reads no manifest on a repository scan and whole-resource ranges make a line hit nearly meaningless. E6 keeps the Dockerfile half |
+| J11 | E2's loose ends | **`compliance_frameworks.py` is deleted**; shellcheck → `sast`, zizmor → `iac`; **yara-x stays uncategorised**: no category's controls (dependency patching, secret handling, IaC, DAST) describe a signature match, so mapping one would mislabel it. Veto in review |
+| J12 | E3's two Dockerfile tables | **Both widen together**, so `rule_bundle`'s Dockerfile row and hadolint's stay one definition; `Dockerfile.sh` stops counting. opengrep's own Dockerfile detection reads only some of the new names (measured in E3) |
+
 ## Unresolved (Jimmy)
 
 1. **Filing.** #1502 (the e2e URL tests and gate) was filed 2026-10-29 on your word and
@@ -1316,3 +1442,6 @@ WebGoat unpinned (T2).
 2. **#1506's placement** (2026-10-30, after PR B merged): Task A6 in PR A, so it leaves `dev`
    before F4's gate counts errors. The alternative is beside T5, which makes the e2e tests
    scan for real. Veto in review.
+3. **#1430's dashboard half** (2026-11-04, J8) and **the two compliance entries with another
+   version's text** (found building E2): both unfiled. Filing either needs your word, a
+   phase, and a roster in the PR that files it.

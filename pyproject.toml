@@ -246,8 +246,6 @@ pythonpath = ["."]
 branch = true
 source = ["scripts"]
 omit = [
-    # Data-only files with no executable logic
-    "scripts/core/compliance_frameworks.py",
     # CLI entry points (tested via integration tests)
     "scripts/cli/jmo.py",
     "scripts/cli/clone_from_tsv.py",

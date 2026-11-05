@@ -435,6 +435,26 @@ def _keep_opengrep_log_out_of_the_home(tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def _no_url_redirect_probe(request, monkeypatch):
+    """No test asks a URL target whether it redirects unless it requests
+    `real_url_probe`. The scan loop asks before every zap spider run (#1431),
+    and dozens of tests drive URL targets such as `https://example.com`
+    through the loop with a fake runner: each would make a real request."""
+    if "real_url_probe" in request.fixturenames:
+        return
+    from scripts.core import tool_descriptors
+
+    monkeypatch.setattr(
+        tool_descriptors, "url_redirect", lambda url, timeout=10.0: None
+    )
+
+
+@pytest.fixture
+def real_url_probe():
+    """The real `tool_descriptors.url_redirect`, for the tests of it."""
+
+
+@pytest.fixture(autouse=True)
 def _guard_real_zap_home(request):
     """Fail the test that created the real `~/.jmo/zap-home`.
 

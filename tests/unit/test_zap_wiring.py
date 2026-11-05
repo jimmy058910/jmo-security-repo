@@ -26,8 +26,16 @@ The real-binary gates are `tests/integration/test_zap_scans.py`.
 
 from __future__ import annotations
 
+import http.client
+import http.server
 import json
+import logging
 import re
+import ssl
+import threading
+import time
+from datetime import UTC, datetime, timedelta
+from ipaddress import IPv4Address
 from pathlib import Path
 from urllib.parse import unquote, urlsplit, urlunsplit
 
@@ -42,11 +50,14 @@ from scripts.core.tool_descriptors import (
     DESCRIPTORS,
     ZAP_PLAN,
     ScanContext,
+    _in_zap_scope,
+    url_redirect,
     zap_home,
     zap_minutes,
     zap_plan,
 )
 from scripts.core.tool_runner import ToolResult
+from tests.fixtures.samples.zap import fixture_server as fx
 
 TARGET = "http://127.0.0.1:8080"
 REPORT = Path("/results/individual-web/127.0.0.1_8080/zap.json")
@@ -347,6 +358,23 @@ SCOPES = [
         "http://h.test/caf%C3%A9/",
         ["http://h.test/caf%C3%A9/x", "http://h.test/café/x"],
         ["http://h.test/", "http://h.test/cafe/x", "http://h.test/caf%C3%A9x"],
+    ),
+    # 127.0.0.1 and localhost name one host: a site that redirects from one to
+    # the other was attacked by nothing (#1431). Port, scheme and path stay.
+    (
+        "http://127.0.0.1:8080/app/",
+        ["http://localhost:8080/app/x", "http://127.0.0.1:8080/app/x"],
+        [
+            "http://localhost:8080/",
+            "http://localhost:8081/app/",
+            "https://localhost:8080/app/",
+            "http://localhost.evil.test:8080/app/",
+        ],
+    ),
+    (
+        "http://localhost:8080",
+        ["http://127.0.0.1:8080/x", "http://localhost:8080/x"],
+        ["http://127.0.0.1:8081/", "http://127.0.0.2:8080/"],
     ),
 ]
 
@@ -712,3 +740,247 @@ def test_the_tracked_definitions_are_the_ones_the_fixture_serves(tmp_path):
     for name in ("openapi.json", "openapi-v1.json"):
         written = json.loads((tmp_path / name).read_bytes())
         assert written == json.loads((tracked / name).read_bytes())
+
+
+# --- a redirect out of the scope (#1431) ----------------------------------------
+
+
+@pytest.fixture
+def redirecting(tmp_path):
+    """The fixture's `redirect` site: `/app/` asked as 127.0.0.1 moves to
+    localhost, `/moved/` to another host."""
+    f = fx.start("redirect", tmp_path / "requests.jsonl")
+    yield f
+    f.close()
+
+
+def _probed(tmp_path: Path, target: str, api_spec: str = "") -> dict[str, str]:
+    plan = tmp_path / ZAP_PLAN
+    plan.write_bytes(zap_plan(target, tmp_path / "zap.json", 900, api_spec).encode())
+    partly_read = DESCRIPTORS["zap"].partly_read
+    assert partly_read is not None
+    return partly_read(_ctx(tmp_path, target=target))
+
+
+def _ops(tmp_path: Path, expected: int) -> list[tuple[str, int]]:
+    """The fixture's log, once it holds `expected` lines: it writes a line
+    after its answer is sent, so the probe can return first."""
+    log = tmp_path / "requests.jsonl"
+    deadline = time.monotonic() + 5
+    while len(fx.read_log(log)) < expected and time.monotonic() < deadline:
+        time.sleep(0.02)
+    return [(r["op"], r["status"]) for r in fx.read_log(log)]
+
+
+class TestARedirectOutOfTheScopeIsNamed:
+    """A URL that redirects off the scan's scope was spidered to the 301 and
+    attacked by nothing, and the row read a plain `ran`, rc 0 (#1431,
+    measured on ZAP 2.17.0). JMo asks the URL once, without following, and
+    names a redirect the scope leaves out."""
+
+    def test_a_site_that_moved_to_another_host_is_named(
+        self, tmp_path, real_url_probe, redirecting
+    ):
+        target = redirecting.url + "/moved/"
+
+        said = _probed(tmp_path, target)
+
+        assert list(said) == [target]
+        assert "http://zap-fixture.test/app/" in said[target]
+        assert _ops(tmp_path, 1) == [("moved_redirect", 301)]
+
+    def test_the_question_names_who_asks(self, tmp_path, real_url_probe, redirecting):
+        """`http.client` sends no User-Agent, and a site behind a CDN or a WAF
+        may answer a request without one with a 403 instead of its redirect,
+        so the probe would miss the very redirect it asks about."""
+        _probed(tmp_path, redirecting.url + "/moved/")
+
+        _ops(tmp_path, 1)
+        (request,) = fx.read_log(tmp_path / "requests.jsonl")
+        assert "jmo-security" in request["ua"], request
+
+    def test_the_other_loopback_spelling_is_in_the_scope_so_nothing_is_said(
+        self, tmp_path, real_url_probe, redirecting
+    ):
+        assert _probed(tmp_path, redirecting.url + "/app/") == {}
+        assert _ops(tmp_path, 1) == [("app_loopback_redirect", 301)]
+
+    def test_a_redirect_inside_the_target_is_not_named(
+        self, tmp_path, real_url_probe, redirecting
+    ):
+        """`/app` to `/app/`, as a static server answers for a directory."""
+        assert _probed(tmp_path, redirecting.url + "/app") == {}
+        assert _ops(tmp_path, 1) == [("app_redirect", 301)]
+
+    def test_a_spec_scan_is_not_asked(self, tmp_path, real_url_probe, redirecting):
+        """An `--api-spec` scan imports its operations and crawls nothing."""
+        target = redirecting.url + "/moved/"
+
+        assert _probed(tmp_path, target, api_spec="/specs/openapi.json") == {}
+        assert _ops(tmp_path, 0) == []
+
+    def test_a_target_that_does_not_answer_gets_no_note(self, tmp_path, real_url_probe):
+        """zap says what it could not reach; the probe adds nothing to it."""
+        closed = fx.start("redirect", tmp_path / "requests.jsonl")
+        closed.close()
+
+        assert _probed(tmp_path, closed.url + "/moved/") == {}
+
+    def test_the_row_and_the_log_name_it(
+        self, tmp_path, monkeypatch, caplog, real_url_probe, redirecting
+    ):
+        target = redirecting.url + "/moved/"
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            rows, _, _ = _run(tmp_path, monkeypatch, ["zap"], target=target)
+
+        assert rows["zap"].state is State.RAN
+        assert "http://zap-fixture.test/app/" in (rows["zap"].detail or "")
+        assert "http://zap-fixture.test/app/" in caplog.text
+
+
+# --- the probe reads what zap reads (review of #1431) ---------------------------
+
+
+def _cased(url: str) -> str:
+    parts = urlsplit(url)
+    return urlunsplit(
+        (parts.scheme, parts.netloc.upper(), parts.path.upper(), parts.query, "")
+    )
+
+
+@pytest.mark.parametrize(("target", "inside", "outside"), SCOPES)
+def test_the_probe_reads_the_scope_as_zap_does(target, inside, outside):
+    """The probe and the plan's context share `_zap_scope`, but the probe does
+    its own matching, and ZAP's ignores case (`_in_context`): matched with case,
+    a redirect from `/Shop` to `/shop/` was named as unattacked though ZAP
+    attacked it. Every row of the table, and each URL with its host and path
+    upper-cased, reads the same to both."""
+    for url in [*inside, *outside, *(_cased(u) for u in [*inside, *outside])]:
+        assert _in_zap_scope(target, url) == _in_scope(_context(target), url), url
+
+
+@pytest.mark.parametrize(
+    ("target", "url"),
+    [
+        ("http://h.test/Shop", "http://h.test/shop/"),
+        ("http://h.test/app/", "http://H.TEST/app/x"),
+        ("http://localhost:8080/", "http://LOCALHOST:8080/x"),
+    ],
+)
+def test_a_redirect_that_only_changes_case_is_inside(target, url):
+    assert _in_scope(_context(target), url), "the model of ZAP disagrees"
+    assert _in_zap_scope(target, url)
+
+
+def _self_signed(directory: Path) -> tuple[Path, Path]:
+    """A certificate for 127.0.0.1 and its key, minted here: a committed key
+    would trip the detect-private-key hook."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    now = datetime.now(UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=5))
+        .not_valid_after(now + timedelta(hours=1))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.IPAddress(IPv4Address("127.0.0.1"))]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    cert_path, key_path = directory / "cert.pem", directory / "key.pem"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return cert_path, key_path
+
+
+SSO = "https://sso.test/login?SAMLRequest=fixture-request&state=fixture-state"
+
+
+@pytest.fixture
+def self_signed_redirect(tmp_path):
+    """An HTTPS site no CA vouches for, as a staging host's often is, that
+    sends every request to a single sign-on page with its request in the
+    query. Yields its URL."""
+
+    class Moved(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", SSO)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(*_self_signed(tmp_path))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Moved)
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"https://127.0.0.1:{server.server_address[1]}/app/"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_site_with_a_certificate_no_ca_signed_is_asked(
+    real_url_probe, self_signed_redirect
+):
+    """JMo passes ZAP no certificate setting, and the probe verified the
+    certificate, so on a self-signed staging host it saw nothing and the row
+    read a plain `ran` again (review of #1431). It reads one header and sends
+    nothing secret, so a certificate it cannot verify costs nothing."""
+    assert url_redirect(self_signed_redirect) == SSO
+
+
+def test_the_note_names_where_the_site_went_without_its_query(
+    tmp_path, real_url_probe, self_signed_redirect
+):
+    """A sign-on redirect carries its request and state in the query, and the
+    row's detail reaches `scan-timings.json`, which people paste into issues.
+    The scope ignores the query; so does the note."""
+    said = _probed(tmp_path, self_signed_redirect)
+
+    (note,) = said.values()
+    assert "https://sso.test/login" in note
+    assert "fixture-request" not in note and "state=" not in note
+
+
+@pytest.mark.parametrize(
+    ("url", "port"), [("http://[::1]/", 80), ("https://[::1]/", 443)]
+)
+def test_an_ipv6_literal_is_asked_at_its_schemes_port(
+    monkeypatch, real_url_probe, url, port
+):
+    """Handed no port, `http.client` reads the last `:1` of `::1` as one."""
+    asked = []
+
+    class Recording:
+        def __init__(self, host, port=None, **kwargs):
+            asked.append((host, port))
+            raise OSError("recorded")
+
+    monkeypatch.setattr(http.client, "HTTPConnection", Recording)
+    monkeypatch.setattr(http.client, "HTTPSConnection", Recording)
+
+    assert url_redirect(url) is None
+    assert asked == [("::1", port)]

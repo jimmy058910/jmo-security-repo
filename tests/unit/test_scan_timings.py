@@ -29,6 +29,7 @@ from scripts.core.scan_timings import (
     SCAN_TIMINGS_FILENAME,
     SCAN_TIMINGS_SCHEMA_VERSION,
     SKIP_REASONS,
+    OwnConfig,
     Reason,
     State,
     ToolRun,
@@ -63,6 +64,8 @@ EXPECTED_ROW_KEYS = {
     "detail",
     # Schema 4 (#1369): what a failed row's runs that worked still found.
     "kept_findings",
+    # Schema 5 (#1430): the target's own config files the tool read.
+    "own_config",
 }
 
 
@@ -106,10 +109,10 @@ def test_row_keys_are_pinned(tmp_path: Path) -> None:
 def test_schema_version_is_pinned_to_a_literal() -> None:
     """The version is only useful if it moves when the shape does. Version 3
     (v2.0.0 Phase 3) replaced ToolRunner's result fields with the row; 4 added
-    the row's `kept_findings`."""
-    assert SCAN_TIMINGS_SCHEMA_VERSION == 4
+    the row's `kept_findings`; 5 its `own_config`."""
+    assert SCAN_TIMINGS_SCHEMA_VERSION == 5
     assert len(EXPECTED_TOP_LEVEL_KEYS) == 8
-    assert len(EXPECTED_ROW_KEYS) == 9
+    assert len(EXPECTED_ROW_KEYS) == 10
 
 
 def test_a_row_round_trips(tmp_path: Path) -> None:
@@ -129,6 +132,44 @@ def test_a_row_round_trips(tmp_path: Path) -> None:
     assert ToolRun.from_dict(doc["tools"][0]) == row
     assert doc["tools"][0]["state"] == "failed"
     assert doc["tools"][0]["reason"] == "unaccepted exit code"
+
+
+def test_a_rows_own_config_round_trips(tmp_path: Path) -> None:
+    """#1430: the files of the target's own that the tool read travel with
+    its row, each with what it says, so a reader without the console log can
+    tell "clean" from "told to look away"."""
+    row = ToolRun(
+        "osv-scanner",
+        State.RAN,
+        own_config=(
+            OwnConfig("osv-scanner.toml", "1 ignored vulnerability suppress findings"),
+            OwnConfig("api/osv-scanner.toml", "it ignores no vulnerability"),
+        ),
+    )
+
+    doc = _write(tmp_path, [row])
+
+    assert doc["tools"][0]["own_config"] == [
+        {
+            "file": "osv-scanner.toml",
+            "detail": "1 ignored vulnerability suppress findings",
+        },
+        {"file": "api/osv-scanner.toml", "detail": "it ignores no vulnerability"},
+    ]
+    assert ToolRun.from_dict(doc["tools"][0]) == row
+
+
+def test_a_row_without_own_config_says_null_and_an_older_row_reads_as_none(
+    tmp_path: Path,
+) -> None:
+    """Absent means no file was read: null on the row, never an empty list a
+    reader could take for "looked and found none" on a tool that does not
+    look. A row written before schema 5 has no key and reads the same."""
+    doc = _write(tmp_path, [ToolRun("trivy", State.RAN)])
+
+    assert doc["tools"][0]["own_config"] is None
+    older = {k: v for k, v in doc["tools"][0].items() if k != "own_config"}
+    assert ToolRun.from_dict(older).own_config is None
 
 
 def test_never_serializes_tool_stdout_or_stderr(tmp_path: Path) -> None:

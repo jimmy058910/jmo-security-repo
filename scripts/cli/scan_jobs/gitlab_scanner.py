@@ -422,9 +422,6 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     # each named an image to pull from Docker Hub (measured: `os`, `the`), and
     # a vendored tree's Dockerfile too. No cap: it is for a tool's command
     # line, and nothing here is put on one.
-    # TODO(issue-#1410): misses `Containerfile`, `Dockerfile-dev`,
-    # `Dockerfile_prod` and `prod-Dockerfile`: neither `is_dockerfile` nor
-    # `DOCKERFILE_PATTERNS` knows them.
     dockerfiles = [
         Path(found)
         for found in collect_files(

@@ -39,7 +39,7 @@ from scripts.cli.scan_orchestrator import (
     classify_target_outcome,
     summarize_target,
 )
-from scripts.core.scan_timings import Reason, State, ToolRun
+from scripts.core.scan_timings import OwnConfig, Reason, State, ToolRun
 
 
 def row(tool: str, label: str) -> ToolRun:
@@ -398,6 +398,50 @@ class TestScanStoresHistory:
             (tmp_path / "results" / "summaries" / "findings.json").read_bytes()
         )
         assert findings["meta"]["tools"] == ["trufflehog"]
+        assert "own_config" not in findings["meta"], "no config file was read"
+
+    def test_a_targets_own_config_reaches_the_report_and_the_handoff(
+        self, scan_env, tmp_path
+    ):
+        """#1430: the repository's own config shaped the results, so the
+        report says which file, per target and tool, and `.scan_metadata.json`
+        carries it to history."""
+        db = tmp_path / "history.db"
+        args = self._args(scan_env, tmp_path, db, "--tools", "trufflehog,osv-scanner")
+        toml = OwnConfig(
+            "osv-scanner.toml", "it ignores no vulnerability and no package"
+        )
+        result = {
+            "trufflehog": ToolRun("trufflehog", State.RAN, attempts=1, invocations=1),
+            "osv-scanner": ToolRun(
+                "osv-scanner",
+                State.RAN,
+                attempts=1,
+                invocations=1,
+                own_config=(toml,),
+            ),
+        }
+
+        self._scan(args, result)
+
+        findings = json.loads(
+            (tmp_path / "results" / "summaries" / "findings.json").read_bytes()
+        )
+        assert findings["meta"]["own_config"] == [
+            {
+                "target": "proj",
+                "target_type": "repo",
+                "tool": "osv-scanner",
+                "file": "osv-scanner.toml",
+                "detail": "it ignores no vulnerability and no package",
+            }
+        ]
+        handoff = json.loads(
+            (tmp_path / "results" / ".scan_metadata.json").read_bytes()
+        )
+        by_tool = {r["tool"]: r for r in handoff["tool_runs"]}
+        assert by_tool["osv-scanner"]["own_config"] == [toml._asdict()]
+        assert by_tool["trufflehog"]["own_config"] is None
 
     def test_a_scan_in_which_no_tool_ran_is_not_stored(
         self, scan_env, tmp_path, caplog

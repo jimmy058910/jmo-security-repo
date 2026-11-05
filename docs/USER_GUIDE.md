@@ -180,7 +180,7 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 | **Trivy** | Checks Python dependencies for known CVEs |
 | **Checkov** | Scans any IaC files if present (Terraform, CloudFormation) |
 | **YARA-X** | Matches malware patterns (web shells, hack tools, compromised npm packages) across the tree, `node_modules` and virtual environments included |
-| **Hadolint** | Lints Dockerfiles — only fires if a `Dockerfile` exists in the repo |
+| **Hadolint** | Lints Dockerfiles — only fires if a Dockerfile (or a `Containerfile`) exists in the repo |
 | **ShellCheck** | Analyses shell scripts — only fires if `.sh` files exist |
 | **zizmor** | Audits GitHub Actions workflows — only fires if the repo has `.github/workflows`, an `action.yml` or a Dependabot config |
 | **OSV-Scanner** | Checks the dependencies its lockfiles pin against an offline OSV database — only fires if the repo has a lockfile |
@@ -2691,7 +2691,7 @@ Permission denied on scripts
 
 Hadolint shows no results
 
-- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile`, `Dockerfile.*` or `*.Dockerfile`, at any depth, spelled with that case; a document such as `Dockerfile.md`, a template such as `Dockerfile.j2` and `Dockerfile.dockerignore` are not one); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
+- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile` or `Containerfile`, alone or with a variant joined by `.`, `-` or `_`, such as `Dockerfile.dev`, `Dockerfile-dev` or `prod-Dockerfile`, at any depth, spelled with that case; a document such as `Dockerfile.md`, a template such as `Dockerfile.j2`, a script such as `Dockerfile.sh` or `Dockerfile_test.go` and `Dockerfile.dockerignore` are not one); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
 
 TruffleHog output looks empty
 

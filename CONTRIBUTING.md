@@ -774,7 +774,7 @@ git revert -m 1 HEAD
 A pre-push git hook is installed in `.git/hooks/pre-push` that automatically checks for:
 
 1. **Untracked Python files** in `scripts/` directory
-2. **Missing critical modules** (compliance_frameworks, exceptions, tool_runner, etc.)
+2. **Missing critical modules** (compliance_mapper, exceptions, tool_runner, etc.)
 3. *(Lockfile freshness is no longer checked here — the `uv-lock` pre-commit hook catches it earlier, at commit time.)*
 
 The hook runs automatically before every push and takes ~5 seconds. To bypass in emergencies:

@@ -373,7 +373,7 @@ class TestRepositoryScanner:
             (tmp_path / "out" / "rows-repo" / "scan-timings.json").read_bytes()
         )
 
-        assert doc["schema_version"] == 4
+        assert doc["schema_version"] == 5
         assert [r["tool"] for r in doc["tools"]] == list(TOOL_MATRIX)
         by_tool = {r["tool"]: r for r in doc["tools"]}
         assert by_tool["hadolint"]["state"] == "skipped"
@@ -1086,6 +1086,22 @@ class TestADockerfileIsOneThing:
             ("Dockerfile.dev", True),
             ("Dockerfile.alpine", True),
             ("api.Dockerfile", True),
+            # The `-` and `_` spellings, and Podman's name, with the same
+            # variants (#1410). opengrep 1.32.0 reads `prod-Dockerfile` and
+            # `prod_Dockerfile` with its Dockerfile rules too (measured).
+            ("Dockerfile-dev", True),
+            ("Dockerfile_prod", True),
+            ("prod-Dockerfile", True),
+            ("prod_Dockerfile", True),
+            ("Containerfile", True),
+            ("Containerfile.dev", True),
+            ("app.Containerfile", True),
+            ("Dockerfile-dev.md", False),
+            # A `-` or `_` variant is a name, not a suffix: code and config
+            # about a Dockerfile spell themselves that way.
+            ("Dockerfile_test.go", False),
+            ("Dockerfile-lint.yml", False),
+            ("Containerfile_build.rb", False),
             ("Dockerfile.md", False),
             ("Dockerfile.txt", False),
             ("Dockerfile.rst", False),
@@ -1104,9 +1120,11 @@ class TestADockerfileIsOneThing:
             ("Dockerfile.template", False),
             ("Dockerfile.in", False),
             ("Dockerfile.py", False),
+            ("Dockerfile.sh", False),
             ("dockerfile", False),
             ("dockerfile_utils.py", False),
             ("Dockerfiles", False),
+            ("Containerfiles", False),
         ],
     )
     def test_the_definition(self, name, is_one):
@@ -1140,6 +1158,28 @@ class TestADockerfileIsOneThing:
             if Path(arg).is_absolute() and repo in Path(arg).parents
         )
         assert read == ["Dockerfile", "Dockerfile.dev", "api.Dockerfile"]
+
+    def test_hadolint_reads_every_spelling_of_one(self, tmp_path):
+        """#1410: `Dockerfile-dev`, `Dockerfile_prod`, `prod-Dockerfile` and
+        Podman's `Containerfile` were left out of the walk, not only refused
+        by the definition: the glob never offered them."""
+        spellings = [
+            "Containerfile",
+            "Dockerfile-dev",
+            "Dockerfile_prod",
+            "prod-Dockerfile",
+        ]
+        repo = _repo(tmp_path, "app", dict.fromkeys(spellings, "FROM alpine\n"))
+
+        _, rows, defs = _scan(repo, tmp_path / "out", ["hadolint"])
+
+        assert rows["hadolint"].state is State.RAN, rows["hadolint"].label
+        read = sorted(
+            Path(arg).relative_to(repo).as_posix()
+            for arg in defs["hadolint"].command
+            if Path(arg).is_absolute() and repo in Path(arg).parents
+        )
+        assert read == sorted(spellings)
 
     def test_a_name_that_is_not_a_dockerfile_is_left_out_without_a_word(
         self, tmp_path, caplog
@@ -1210,6 +1250,37 @@ class TestTheWalkSpellsANameAsItIsOnDisk:
         assert [Path(f).relative_to(repo).as_posix() for f in read] == [exact]
         # Every candidate, before the name test: each named as on disk.
         assert all(Path(f).name in os.listdir(Path(f).parent) for f in found), found
+
+    def test_only_a_name_it_would_read_is_named_as_miscased(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        """Where the glob ignores case (Windows), `**/Dockerfile_*` also finds
+        `dockerfile_utils.py`. hadolint refuses it, as it should, and the
+        WARNING about a miscased file is for one it would read spelled as its
+        pattern spells it (`sub/dockerfile`), not for code that handles
+        Dockerfiles, which read as missed Dockerfiles (#1410)."""
+        from scripts.core import rule_bundle
+
+        monkeypatch.setattr(rule_bundle, "GLOB_CASE_SENSITIVE", False)
+        files = ["Dockerfile", "sub/dockerfile", "dockerfile_utils.py"]
+        files += ["dockerfile-parser.ts", "containerfile_gen.py", "dockerfile.py"]
+        repo = _repo(tmp_path, files=dict.fromkeys(files, "x\n"))
+        descriptor = DESCRIPTORS["hadolint"]
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+            read = collect_files(
+                repo,
+                descriptor.file_patterns,
+                "hadolint",
+                accepts_name=descriptor.accepts_name,
+            )
+
+        assert [Path(f).relative_to(repo).as_posix() for f in read] == ["Dockerfile"]
+        warned = [
+            r.getMessage() for r in caplog.records if "NOT scanned" in r.getMessage()
+        ]
+        assert len(warned) == 1, warned
+        assert warned[0].endswith("NOT scanned: sub/dockerfile"), warned
 
     def test_the_walk_never_leaves_its_glob_to_the_interpreters_default(self, tmp_path):
         """Each glob is given the platform's own rule (case ignored on Windows

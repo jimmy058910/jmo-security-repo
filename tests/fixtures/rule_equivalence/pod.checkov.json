@@ -1,0 +1,1917 @@
+{
+  "check_type": "kubernetes",
+  "results": {
+    "passed_checks": [],
+    "failed_checks": [
+      {
+        "check_id": "CKV_K8S_37",
+        "bc_check_id": "BC_K8S_34",
+        "check_name": "Minimize the admission of containers with capabilities assigned",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/securityContext/capabilities/drop"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.MinimizeCapabilities",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-34",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_13",
+        "bc_check_id": "BC_K8S_12",
+        "check_name": "Memory limits should be set",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/resources/limits/memory"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.MemoryLimits",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-12",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_31",
+        "bc_check_id": "BC_K8S_29",
+        "check_name": "Ensure that the seccomp profile is set to docker/default or runtime/default",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.Seccomp",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-29",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_19",
+        "bc_check_id": "BC_K8S_18",
+        "check_name": "Containers should not share the host network namespace",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.SharedHostNetworkNamespace",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-18",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_14",
+        "bc_check_id": "BC_K8S_13",
+        "check_name": "Image Tag should be fixed - not latest or blank",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/image"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.ImageTagFixed",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-13",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_20",
+        "bc_check_id": "BC_K8S_19",
+        "check_name": "Containers should not run with allowPrivilegeEscalation",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/securityContext/allowPrivilegeEscalation"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.AllowPrivilegeEscalation",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-19",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_16",
+        "bc_check_id": "BC_K8S_15",
+        "check_name": "Container should not be privileged",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/securityContext/privileged"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.PrivilegedContainers",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-15",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_43",
+        "bc_check_id": "BC_K8S_39",
+        "check_name": "Image should use digest",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/image"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.ImageDigest",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-39",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_29",
+        "bc_check_id": "BC_K8S_43",
+        "check_name": "Apply security context to your pods and containers",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.PodSecurityContext",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/ensure-securitycontext-is-applied-to-pods-and-containers",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_40",
+        "bc_check_id": "BC_K8S_37",
+        "check_name": "Containers should run as a high UID to avoid host conflict",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.RootContainersHighUID",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-37",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_9",
+        "bc_check_id": "BC_K8S_8",
+        "check_name": "Readiness Probe Should be Configured",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/readinessProbe"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.ReadinessProbe",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-8",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_22",
+        "bc_check_id": "BC_K8S_21",
+        "check_name": "Use read-only filesystem for containers where possible",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/securityContext/readOnlyRootFilesystem"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.ReadOnlyFilesystem",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-21",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_28",
+        "bc_check_id": "BC_K8S_27",
+        "check_name": "Minimize the admission of containers with the NET_RAW capability",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/securityContext/capabilities/drop"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.DropCapabilities",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-27",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_10",
+        "bc_check_id": "BC_K8S_9",
+        "check_name": "CPU requests should be set",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/resources/requests/cpu"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.CPURequests",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-9",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_21",
+        "bc_check_id": "BC_K8S_20",
+        "check_name": "The default namespace should not be used",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.DefaultNamespace",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-20",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_38",
+        "bc_check_id": "BC_K8S_35",
+        "check_name": "Ensure that Service Account Tokens are only mounted where necessary",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.ServiceAccountTokens",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-35",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_11",
+        "bc_check_id": "BC_K8S_10",
+        "check_name": "CPU limits should be set",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/resources/limits/cpu"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.CPULimits",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-10",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_8",
+        "bc_check_id": "BC_K8S_7",
+        "check_name": "Liveness Probe Should be Configured",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/livenessProbe"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.LivenessProbe",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-7",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_17",
+        "bc_check_id": "BC_K8S_16",
+        "check_name": "Containers should not share the host process ID namespace",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.ShareHostPID",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-16",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_23",
+        "bc_check_id": "BC_K8S_22",
+        "check_name": "Minimize the admission of root containers",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": []
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.RootContainers",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-22",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV_K8S_12",
+        "bc_check_id": "BC_K8S_11",
+        "check_name": "Memory requests should be set",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "spec/containers/[0]/resources/requests/memory"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.kubernetes.checks.resource.k8s.MemoryRequests",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/kubernetes-policies/kubernetes-policy-index/bc-k8s-11",
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      },
+      {
+        "check_id": "CKV2_K8S_6",
+        "bc_check_id": null,
+        "check_name": "Minimize the admission of pods which lack an associated NetworkPolicy",
+        "check_result": {
+          "result": "FAILED",
+          "evaluated_keys": [
+            "resource_type"
+          ]
+        },
+        "code_block": [
+          [
+            1,
+            "apiVersion: v1\n"
+          ],
+          [
+            2,
+            "kind: Pod\n"
+          ],
+          [
+            3,
+            "metadata:\n"
+          ],
+          [
+            4,
+            "  name: web\n"
+          ],
+          [
+            5,
+            "spec:\n"
+          ],
+          [
+            6,
+            "  hostPID: true\n"
+          ],
+          [
+            7,
+            "  hostNetwork: true\n"
+          ],
+          [
+            8,
+            "  containers:\n"
+          ],
+          [
+            9,
+            "  - name: web\n"
+          ],
+          [
+            10,
+            "    image: nginx:latest\n"
+          ],
+          [
+            11,
+            "    securityContext:\n"
+          ],
+          [
+            12,
+            "      privileged: true\n"
+          ]
+        ],
+        "file_path": "/pod.yaml",
+        "file_abs_path": "/work/pod.yaml",
+        "repo_file_path": "/pod.yaml",
+        "file_line_range": [
+          1,
+          12
+        ],
+        "resource": "Pod.default.web",
+        "evaluations": {},
+        "check_class": "checkov.common.graph.checks_infra.base_check",
+        "fixed_definition": null,
+        "entity_tags": null,
+        "caller_file_path": null,
+        "caller_file_line_range": null,
+        "resource_address": null,
+        "severity": null,
+        "bc_category": null,
+        "benchmarks": null,
+        "description": null,
+        "short_description": null,
+        "vulnerability_details": null,
+        "connected_node": null,
+        "guideline": null,
+        "details": [],
+        "check_len": null,
+        "definition_context_file_path": null
+      }
+    ],
+    "skipped_checks": [],
+    "parsing_errors": []
+  },
+  "summary": {
+    "passed": 67,
+    "failed": 22,
+    "skipped": 0,
+    "parsing_errors": 0,
+    "resource_count": 1,
+    "checkov_version": "3.3.29"
+  },
+  "url": "Add an api key '--bc-api-key <api-key>' to see more detailed insights via https://bridgecrew.cloud"
+}

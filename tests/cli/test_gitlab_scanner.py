@@ -389,6 +389,30 @@ FROM scratch
         # python:3.11-slim NOT included because it has "AS builder"
         assert len(images) == 2
 
+    def test_discovery_reads_every_spelling_of_a_dockerfile(self, tmp_path):
+        """#1410: the images a `Containerfile`, `Dockerfile-dev`,
+        `Dockerfile_prod` or `prod-Dockerfile` names are images to scan."""
+        from scripts.cli.scan_jobs.gitlab_scanner import _discover_container_images
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        named = {
+            "Containerfile": "alpine:3.20",
+            "Dockerfile-dev": "node:22",
+            "Dockerfile_prod": "nginx:1.27",
+            "prod-Dockerfile": "postgres:16",
+            "Dockerfile.sh": "notanimage:1",
+        }
+        for name, image in named.items():
+            (repo / name).write_bytes(f"FROM {image}\n".encode())
+
+        assert sorted(_discover_container_images(repo)) == [
+            "alpine:3.20",
+            "nginx:1.27",
+            "node:22",
+            "postgres:16",
+        ]
+
     def test_discover_container_images_docker_compose(self, tmp_path):
         """Test discovering images from docker-compose.yml"""
         from scripts.cli.scan_jobs.gitlab_scanner import _discover_container_images

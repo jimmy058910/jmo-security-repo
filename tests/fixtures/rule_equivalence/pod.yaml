@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+spec:
+  hostPID: true
+  hostNetwork: true
+  containers:
+  - name: web
+    image: nginx:latest
+    securityContext:
+      privileged: true

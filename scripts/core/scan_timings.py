@@ -26,7 +26,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,9 @@ SCAN_TIMINGS_FILENAME = "scan-timings.json"
 # row for every requested tool, including the ones that never ran, keyed
 # `tool/state/reason/seconds/...` rather than ToolRunner's result fields.
 # Version 4: a row's `kept_findings` (#1369), null unless a run of a failed row
-# worked.
-SCAN_TIMINGS_SCHEMA_VERSION = 4
+# worked. Version 5: a row's `own_config` (#1430), null unless the tool read a
+# configuration file of the target's own.
+SCAN_TIMINGS_SCHEMA_VERSION = 5
 
 # `outcome` values: did the target get as far as running tools at all.
 OUTCOME_COMPLETED = "completed"
@@ -138,6 +139,16 @@ FAIL_REASONS: frozenset[Reason] = frozenset(
 )
 
 
+class OwnConfig(NamedTuple):
+    """A file of the scanned target's own that a tool read as its
+    configuration, and what it says (#1430): the target then decides part of
+    its own audit. `file` is relative to the target, never a host path, since
+    the row reaches the artifacts people share."""
+
+    file: str
+    detail: str
+
+
 @dataclass(frozen=True)
 class ToolRun:
     """One tool on one target. The accounting record (#722).
@@ -156,6 +167,12 @@ class ToolRun:
     truncated one failed the scan where a vulnerable one passed it. Only a
     failed row carries it. It is the adapter's count, before the report
     de-duplicates, so the report can hold fewer.
+
+    `own_config` names the target's own configuration files the tool read
+    (`zizmor.yml`, `osv-scanner.toml`, `.checkov.yaml`, `.gitleaks.toml`) and
+    what each suppresses, which JMo reads itself from the file: a report with
+    fewer findings then says the target asked for it (#1430). None when the
+    tool read none.
     """
 
     tool: str
@@ -167,6 +184,7 @@ class ToolRun:
     invocations: int = 0
     detail: str | None = None
     kept_findings: int | None = None
+    own_config: tuple[OwnConfig, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.state is State.RAN:
@@ -198,6 +216,9 @@ class ToolRun:
             "invocations": self.invocations,
             "detail": self.detail,
             "kept_findings": self.kept_findings,
+            "own_config": None
+            if self.own_config is None
+            else [c._asdict() for c in self.own_config],
         }
 
     @classmethod
@@ -205,6 +226,7 @@ class ToolRun:
         """Read a row back; raises ValueError/KeyError on anything else."""
         reason = data.get("reason")
         kept = data.get("kept_findings")
+        own = data.get("own_config")
         return cls(
             tool=str(data["tool"]),
             state=State(data["state"]),
@@ -215,6 +237,9 @@ class ToolRun:
             invocations=int(data.get("invocations") or 0),
             detail=data.get("detail"),
             kept_findings=None if kept is None else int(kept),
+            own_config=None
+            if own is None
+            else tuple(OwnConfig(str(c["file"]), str(c["detail"])) for c in own),
         )
 
 

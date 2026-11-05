@@ -632,7 +632,7 @@ CWE_TO_NIST_CSF_2_0 = {
             "function": "GOVERN",
             "category": "GV.SC",
             "subcategory": "GV.SC-3",
-            "description": "Cybersecurity supply chain risk management processes are identified",
+            "description": "Cybersecurity supply chain risk management processes are identified, established, assessed, managed, and agreed upon by organizational stakeholders",
         },
     ],
 }
@@ -705,19 +705,19 @@ CWE_TO_PCI_DSS_4_0 = {
     "CWE-798": [
         {
             "requirement": "8.3.2",
-            "description": "Strong cryptography for authentication credentials",
+            "description": "Strong cryptography is used to render authentication credentials unreadable during transmission and storage",
             "priority": "CRITICAL",
         },
         {
             "requirement": "8.2.1",
-            "description": "Verify user identity before credential modification",
+            "description": "User identity is verified before modifying authentication credentials",
             "priority": "HIGH",
         },
     ],
     "CWE-259": [
         {
             "requirement": "8.3.2",
-            "description": "Strong cryptography for authentication credentials",
+            "description": "Strong cryptography is used to render authentication credentials unreadable during transmission and storage",
             "priority": "CRITICAL",
         },
     ],
@@ -731,21 +731,21 @@ CWE_TO_PCI_DSS_4_0 = {
     "CWE-79": [
         {
             "requirement": "6.2.4",
-            "description": "Prevent XSS attacks in bespoke software",
+            "description": "Bespoke and custom software are developed securely (attacks prevented)",
             "priority": "CRITICAL",
         },
     ],
     "CWE-89": [
         {
             "requirement": "6.2.4",
-            "description": "Prevent SQL injection attacks in bespoke software",
+            "description": "Bespoke and custom software are developed securely (attacks prevented)",
             "priority": "CRITICAL",
         },
     ],
     "CWE-352": [
         {
             "requirement": "6.2.4",
-            "description": "Prevent CSRF attacks in bespoke software",
+            "description": "Bespoke and custom software are developed securely (attacks prevented)",
             "priority": "CRITICAL",
         },
     ],
@@ -778,8 +778,10 @@ MITRE_ATTACK = {
             "tactic": "Execution",
             "technique": "T1059",
             "techniqueName": "Command and Scripting Interpreter",
-            "subtechnique": "T1059.001",
-            "subtechniqueName": "PowerShell",
+            # The technique alone: an injection finding names no interpreter,
+            # and the CWE-78 row carries the same entry (#1370).
+            "subtechnique": "",
+            "subtechniqueName": "",
         },
         {
             "tactic": "Initial Access",
@@ -878,7 +880,7 @@ CWE_TO_MITRE_ATTACK = {
             "technique": "T1195",
             "techniqueName": "Supply Chain Compromise",
             "subtechnique": "T1195.001",
-            "subtechniqueName": "Compromise Software Dependencies",
+            "subtechniqueName": "Compromise Software Dependencies and Development Tools",
         },
     ],
 }
@@ -897,23 +899,35 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
 
     Returns:
         Category string: "secrets", "sast", "sca", "iac", "dast", "container", "runtime" or None
+
+    What a finding is decides before its tool (#1370): trivy reports
+    vulnerabilities, misconfigurations and secrets, tagged `vulnerability`,
+    `misconfig` and `secret`, and filing all three under supply chain gave a
+    leaked token the dependency controls. yara-x has no category: no table's
+    controls describe a signature match.
     """
     tool = tool_name.lower()
 
-    # Secrets scanners
-    if tool == "trufflehog" or "secrets" in tags:
+    # Secrets scanners, and a secret any tool found
+    if tool == "trufflehog" or "secrets" in tags or "secret" in tags:
         return "secrets"
 
+    # A misconfiguration in a file is configuration, whichever tool read it.
+    # nuclei's web templates are tagged `misconfig` too: what a running site
+    # exposes, found by requesting it, stays DAST.
+    if "misconfig" in tags and "dast" not in tags:
+        return "iac"
+
     # SAST tools
-    if tool == "opengrep" or "sast" in tags:
+    if tool in ["opengrep", "shellcheck"] or "sast" in tags:
         return "sast"
 
     # SCA/vulnerability tools
     if tool in ["trivy", "syft"] or "sca" in tags or "vuln" in tags:
         return "sca"
 
-    # IaC scanners
-    if tool in ["checkov", "hadolint"] or "iac" in tags:
+    # IaC scanners, GitHub Actions workflows included
+    if tool in ["checkov", "hadolint", "zizmor"] or "iac" in tags:
         return "iac"
 
     # DAST tools

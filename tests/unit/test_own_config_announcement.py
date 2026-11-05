@@ -21,8 +21,9 @@ import pytest
 
 from scripts.cli.scan_jobs import tool_loop
 from scripts.core import osv_database
-from scripts.core.scan_timings import State
+from scripts.core.scan_timings import OwnConfig, State
 from scripts.core.tool_descriptors import DESCRIPTORS, ScanContext
+from scripts.core.tool_runner import ToolResult
 from scripts.core.tool_utils import find_tool
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -352,6 +353,180 @@ class TestCheckovDiscovery:
         assert said == []
 
 
+# --- what is announced is recorded on the row (#1430) -------------------------
+
+
+class TestTheRowRecordsIt:
+    """The announcement was a console line only, so `findings.json`, history
+    and a teammate reading the artifacts saw fewer findings with no hint that
+    the repository had switched some off (#1430)."""
+
+    def test_what_is_announced_is_returned_for_the_row(self, tmp_path) -> None:
+        repo = tmp_path / "repo"
+        _plant(
+            repo,
+            {
+                "package-lock.json": NPM_LOCK,
+                "osv-scanner.toml": TOML_TWO_AND_ONE,
+                "api/package-lock.json": NPM_LOCK,
+                "api/osv-scanner.toml": b"",
+            },
+        )
+        ctx = ScanContext(
+            tool="osv-scanner",
+            target_type="repo",
+            target=repo,
+            out_dir=tmp_path,
+            files=(
+                str(repo / "package-lock.json"),
+                str(repo / "api/package-lock.json"),
+            ),
+        )
+
+        found = tool_loop._announce_own_config(DESCRIPTORS["osv-scanner"], ctx)
+
+        assert found == (
+            OwnConfig(
+                "osv-scanner.toml",
+                "2 ignored vulnerabilities and 1 ignored package suppress findings",
+            ),
+            OwnConfig(
+                "api/osv-scanner.toml", "it ignores no vulnerability and no package"
+            ),
+        )
+
+    def test_nothing_read_is_none(self, tmp_path) -> None:
+        repo = tmp_path / "repo"
+        _plant(repo, {"package-lock.json": NPM_LOCK})
+        ctx = ScanContext(
+            tool="osv-scanner",
+            target_type="repo",
+            target=repo,
+            out_dir=tmp_path,
+            files=(str(repo / "package-lock.json"),),
+        )
+
+        assert tool_loop._announce_own_config(DESCRIPTORS["osv-scanner"], ctx) is None
+
+    def test_a_config_that_resolves_outside_the_target_is_named_by_its_name(
+        self, tmp_path, caplog
+    ) -> None:
+        """The row reaches `findings.json`, history and the artifacts people
+        share, which keep no host path (#1007); the log line may. A symlink
+        to a shared config resolves outside the target."""
+        shared = tmp_path / "shared" / "zizmor.yml"
+        _plant(tmp_path / "shared", {"zizmor.yml": b"rules: {}\n"})
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        try:
+            (repo / "zizmor.yml").symlink_to(shared)
+        except OSError:
+            pytest.skip("this platform cannot create a symlink here")
+        ctx = ScanContext(
+            tool="zizmor", target_type="repo", target=repo, out_dir=tmp_path
+        )
+
+        with caplog.at_level(logging.INFO):
+            found = tool_loop._announce_own_config(DESCRIPTORS["zizmor"], ctx)
+
+        assert found == (OwnConfig("zizmor.yml", "its audit settings apply"),)
+
+    @pytest.mark.parametrize(
+        ("tool", "files", "expected"),
+        [
+            (
+                "zizmor",
+                {
+                    ".github/workflows/ci.yml": b"on: push\njobs: {}\n",
+                    ".github/zizmor.yml": b"rules: {}\n",
+                },
+                [{"file": ".github/zizmor.yml", "detail": "its audit settings apply"}],
+            ),
+            (
+                "checkov",
+                {"main.tf": TF, ".checkov.yaml": CHECKOV_SKIPS},
+                [{"file": ".checkov.yaml", "detail": "its audit settings apply"}],
+            ),
+            (
+                "gitleaks",
+                {
+                    "app.py": b"x = 1\n",
+                    ".gitleaks.toml": b"[extend]\nuseDefault = true\n",
+                },
+                [
+                    {
+                        "file": ".gitleaks.toml",
+                        "detail": "its rules and allowlists apply",
+                    }
+                ],
+            ),
+            ("zizmor", {".github/workflows/ci.yml": b"on: push\njobs: {}\n"}, None),
+            ("gitleaks", {"app.py": b"x = 1\n"}, None),
+        ],
+    )
+    def test_the_row_and_scan_timings_carry_it(
+        self, tmp_path, caplog, tool, files, expected
+    ) -> None:
+        """Through the loop, not the helper: the row is what every artifact
+        is written from, so a value the helper returns and the loop drops
+        reaches none of them."""
+        repo = tmp_path / "repo"
+        _plant(repo, files)
+        out = tmp_path / "out"
+        out.mkdir()
+        d = DESCRIPTORS[tool]
+
+        class Runner:
+            def __init__(self, tools, progress_callback=None):
+                self.tools = tools
+
+            def run_all_parallel(self):
+                results = []
+                for definition in self.tools:
+                    Path(definition.output_file).write_bytes(
+                        json.dumps(d.stub).encode()
+                    )
+                    results.append(
+                        ToolResult(
+                            tool=definition.name,
+                            status="success",
+                            returncode=0,
+                            duration=1.0,
+                            output_file=definition.output_file,
+                        )
+                    )
+                return results
+
+        with caplog.at_level(logging.INFO):
+            rows = tool_loop.run_tools(
+                tools=[tool],
+                target_type="repo",
+                target=repo,
+                target_label="repo",
+                out_dir=out,
+                timeout=60,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                runner_cls=Runner,
+                find_tool_func=lambda name: f"/bin/{name}",
+                repo_root=repo,
+            )
+
+        row = rows[tool]
+        doc = json.loads((out / "scan-timings.json").read_bytes())
+        (written,) = doc["tools"]
+        assert written["own_config"] == expected, (row, written)
+        assert (
+            None if row.own_config is None else [c._asdict() for c in row.own_config]
+        ) == expected
+        if expected:
+            # Said on the console too, at WARNING, as for the other tools:
+            # gitleaks' line was INFO, which a default scan hides.
+            (line,) = _announced(caplog, tool)
+            assert expected[0]["file"] in line
+
+
 # --- the real binaries, through the scan loop ---------------------------------
 
 
@@ -397,6 +572,7 @@ def test_real_osv_scanner_obeys_the_repositorys_toml_and_the_scan_says_so(
         assert row.state is State.RAN, row
         assert _osv_ids(out) == ["JMO-TEST-2026-0001"]
         assert _announced(caplog, "osv-scanner") == []
+        assert row.own_config is None
 
         caplog.clear()
         row, out = _scan(
@@ -414,6 +590,12 @@ def test_real_osv_scanner_obeys_the_repositorys_toml_and_the_scan_says_so(
     (line,) = _announced(caplog, "osv-scanner")
     assert "osv-scanner.toml" in line
     assert "1 ignored vulnerability" in line
+    assert row.own_config == (
+        OwnConfig(
+            "osv-scanner.toml",
+            "1 ignored vulnerability and 0 ignored packages suppress findings",
+        ),
+    )
 
 
 @pytest.mark.requires_tools
@@ -446,6 +628,7 @@ def test_real_checkov_obeys_the_repositorys_config_and_the_scan_says_so(
     assert failed(out) < before
     (line,) = _announced(caplog, "checkov")
     assert ".checkov.yaml" in line
+    assert row.own_config == (OwnConfig(".checkov.yaml", "its audit settings apply"),)
 
 
 def test_the_announcement_reaches_a_scan_at_its_default_log_level(

@@ -45,6 +45,7 @@ def _generate_metadata(
     scan_id: str | None = None,
     tools: list[str] | None = None,
     target_count: int | None = None,
+    own_config: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Generate metadata block for findings output.
 
@@ -53,12 +54,15 @@ def _generate_metadata(
         scan_id: UUID of the scan (optional)
         tools: List of tool names used in scan
         target_count: Number of targets scanned
+        own_config: The targets' own config files their tools read, one
+            entry per target, tool and file (#1430); the key is left out
+            when there are none
 
     Returns:
         Metadata dictionary with output version, jmo version, timestamp, etc.
 
     """
-    return {
+    metadata = {
         "output_version": "1.0.0",
         "jmo_version": _get_jmo_version(),
         "schema_version": "1.2.0",
@@ -69,6 +73,9 @@ def _generate_metadata(
         "finding_count": len(findings),
         "platform": platform.system(),
     }
+    if own_config:
+        metadata["own_config"] = own_config
+    return metadata
 
 
 def write_json(

@@ -37,6 +37,11 @@ GOOD_VIBEPROOF = {
     "test/fixtures/clean/package.json": b'{"name":"clean"}\n',
 }
 
+GOOD_KICS = {
+    "assets/queries/dockerfile/q/test/positive1.dockerfile": b"FROM alpine\n",
+    "assets/queries/dockerfile/q/test/positive_expected_result.json": b"[]\n",
+}
+
 
 @pytest.fixture
 def keys_dir(tmp_path, monkeypatch) -> Path:
@@ -56,10 +61,11 @@ def served(monkeypatch) -> list[str]:
     monkeypatch.setattr(
         fak, "VIBEPROOF_FILES", {p: _sha(d) for p, d in GOOD_VIBEPROOF.items()}
     )
+    monkeypatch.setattr(fak, "KICS_FILES", {p: _sha(d) for p, d in GOOD_KICS.items()})
 
     def download(url: str) -> bytes:
         asked.append(url)
-        for path, data in {**GOOD, **GOOD_VIBEPROOF}.items():
+        for path, data in {**GOOD, **GOOD_VIBEPROOF, **GOOD_KICS}.items():
             if url.endswith("/" + path):
                 return data
         raise OSError(f"no such file: {url}")
@@ -74,6 +80,10 @@ def _landed(root: Path) -> Path:
 
 def _landed_vibeproof(root: Path) -> Path:
     return root / "vibeproof" / fak.VIBEPROOF_COMMIT
+
+
+def _landed_kics(root: Path) -> Path:
+    return root / "kics" / fak.KICS_COMMIT
 
 
 # --- where the keys live ---------------------------------------------------------
@@ -269,6 +279,8 @@ def test_the_command_with_no_name_fetches_every_key(keys_dir, served) -> None:
         assert (_landed(keys_dir) / path).is_file()
     for path in GOOD_VIBEPROOF:
         assert (_landed_vibeproof(keys_dir) / path).is_file()
+    for path in GOOD_KICS:
+        assert (_landed_kics(keys_dir) / path).is_file()
 
 
 def test_the_command_fetches_the_key_it_is_asked_for(keys_dir, served) -> None:
@@ -399,3 +411,47 @@ def test_the_vibeproof_pins_hold_the_two_files_the_answer_key_test_materialises(
 
 def test_vibeproof_is_registered_under_the_name_the_command_takes() -> None:
     assert fak.KEYS["vibeproof"] is fak.vibeproof
+
+
+# --- the kics key ----------------------------------------------------------------
+
+
+def test_the_kics_key_lands_under_its_name_and_its_commit(keys_dir, served) -> None:
+    assert fak.kics_dir() == _landed_kics(keys_dir)
+
+    assert fak.kics() == []
+
+    for path, data in GOOD_KICS.items():
+        assert (_landed_kics(keys_dir) / path).read_bytes() == data
+
+
+def test_each_kics_file_is_asked_for_by_the_pinned_commit(keys_dir, served) -> None:
+    fak.kics()
+
+    assert sorted(served) == sorted(
+        f"https://raw.githubusercontent.com/Checkmarx/kics/{fak.KICS_COMMIT}/{path}"
+        for path in GOOD_KICS
+    )
+
+
+def test_the_kics_pins_are_every_dockerfile_query_and_its_samples() -> None:
+    """KICS v2.2.0's 48 Dockerfile queries: each one's expected lines and its
+    positive samples, 133 of them, and nothing else (measured 2026-11-04)."""
+    assert re.fullmatch(r"[0-9a-f]{40}", fak.KICS_COMMIT)
+    shape = re.compile(
+        r"assets/queries/dockerfile/[a-z0-9_]+/test/"
+        r"(positive\d*\.dockerfile|positive_expected_result\.json)"
+    )
+    for path, digest in fak.KICS_FILES.items():
+        assert re.fullmatch(r"[0-9a-f]{64}", digest), path
+        assert fak.relative_path_problem(path) is None, path
+        assert shape.fullmatch(path), path
+    expected = {p.rsplit("/", 2)[0] for p in fak.KICS_FILES if p.endswith(".json")}
+    samples = {p.rsplit("/", 2)[0] for p in fak.KICS_FILES if p.endswith(".dockerfile")}
+    assert len(expected) == 48
+    assert expected == samples, "a query with expected lines and no sample, or both"
+    assert sum(p.endswith(".dockerfile") for p in fak.KICS_FILES) == 133
+
+
+def test_kics_is_registered_under_the_name_the_command_takes() -> None:
+    assert fak.KEYS["kics"] is fak.kics

@@ -21,9 +21,11 @@ and handed in through `ScanContext`, so a builder only splices them.
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import re
+import ssl
 import subprocess
 import sys
 import tomllib
@@ -32,7 +34,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
 from typing import Any
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import yaml
 
@@ -1388,6 +1390,13 @@ def _osv_own_config_detail(path: Path) -> str:
     )
 
 
+def _gitleaks_own_config_detail(path: Path) -> str:
+    """JMo's own config extends a repository's `.gitleaks.toml` rather than
+    replacing it, so its rules and allowlists apply, as when gitleaks runs
+    alone (#1327)."""
+    return "its rules and allowlists apply"
+
+
 def _checkov_own_config_dirs(ctx: ScanContext) -> list[Path]:
     """checkov runs from its target (`-d .`), or from a single file's
     directory (`-f <name>`), and reads `.checkov.yaml` / `.checkov.yml` from the
@@ -1404,8 +1413,18 @@ def _osv_reads(name: str) -> bool:
 
 # What a Dockerfile is, the one definition hadolint's row and the images a
 # GitLab target names both read (#1311): the patterns find the candidates,
-# `is_dockerfile` decides.
-DOCKERFILE_PATTERNS = ("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile")
+# `is_dockerfile` decides. Podman's `Containerfile` is one, and a variant joins
+# either name with `.`, `-` or `_` (#1410). `rule_bundle`'s Dockerfile row
+# starts with the same names, bare.
+DOCKERFILE_PATTERNS = (
+    *("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"),
+    *("**/Dockerfile-*", "**/Dockerfile_*", "**/*-Dockerfile", "**/*_Dockerfile"),
+    *("**/Containerfile", "**/Containerfile.*", "**/*.Containerfile"),
+    *("**/Containerfile-*", "**/Containerfile_*"),
+    *("**/*-Containerfile", "**/*_Containerfile"),
+)
+_DOCKERFILE_NAMES = ("Dockerfile", "Containerfile")
+_VARIANT_SEPARATORS = (".", "-", "_")
 # `Dockerfile.<suffix>` names that are not a Dockerfile: a document about one,
 # Docker's own ignore file for one, a template that renders one, and code.
 _NOT_DOCKERFILE_SUFFIXES = frozenset(
@@ -1413,24 +1432,33 @@ _NOT_DOCKERFILE_SUFFIXES = frozenset(
         *("md", "txt", "rst", "adoc", "html"),
         "dockerignore",
         *("j2", "jinja", "jinja2", "tmpl", "tpl", "template", "in"),
-        "py",
+        *("py", "sh", "bash", "ps1"),
     }
 )
 
 
 def is_dockerfile(name: str) -> bool:
-    """`Dockerfile`, `Dockerfile.<variant>` or `<variant>.Dockerfile`, case
-    included: the walk's glob ignores case on Windows, where it matched a
-    `dockerfile.py`. A `Dockerfile.<suffix>` that is not one is refused:
-    hadolint linted a document's prose as a Dockerfile (`Dockerfile.md`) and
-    reported a DL1000 at error level on `Dockerfile.dockerignore` and a
-    `Dockerfile.j2` template, and discovery read `From the root...` and
-    `FROM {{ base }}` as images to pull (measured)."""
-    if name == "Dockerfile" or name.endswith(".Dockerfile"):
-        return True
-    if not name.startswith("Dockerfile."):
-        return False
-    return name.rsplit(".", 1)[1].lower() not in _NOT_DOCKERFILE_SUFFIXES
+    """`Dockerfile` or `Containerfile`, alone or with a variant joined by `.`,
+    `-` or `_` on either side (`Dockerfile.dev`, `Dockerfile-dev`,
+    `prod_Dockerfile`), case included: the walk's glob ignores case on
+    Windows, where it matched a `dockerfile.py`. A name whose last `.<suffix>`
+    says it is not one is refused: hadolint linted a document's prose as a
+    Dockerfile (`Dockerfile.md`) and reported a DL1000 at error level on
+    `Dockerfile.dockerignore` and a `Dockerfile.j2` template, and discovery
+    read `From the root...` and `FROM {{ base }}` as images to pull
+    (measured); a `Dockerfile.sh` is a build script. A `-` or `_` variant is a
+    name with no suffix of its own (`Dockerfile-dev`): `Dockerfile_test.go`
+    and `Dockerfile-lint.yml` are code and config about one."""
+    for base in _DOCKERFILE_NAMES:
+        if name == base or name.endswith(
+            tuple(sep + base for sep in _VARIANT_SEPARATORS)
+        ):
+            return True
+        if name.startswith(base + "."):
+            return name.rsplit(".", 1)[-1].lower() not in _NOT_DOCKERFILE_SUFFIXES
+        if name.startswith((base + "-", base + "_")):
+            return "." not in name[len(base) + 1 :]
+    return False
 
 
 def _osv_databases(ctx: ScanContext) -> Shortfall | None:
@@ -1647,7 +1675,127 @@ def _zap_node_name(scheme: str, netloc: str, path: str) -> str:
     return f"{scheme}://{netloc}{unquote(path)}"
 
 
-# TODO(issue-#1431): a redirect to another host spelling is attacked by nothing
+# One host, two names: a site served on one and redirecting to the other was
+# attacked by nothing, scoped to the name typed (#1431, measured on ZAP 2.17.0).
+_LOOPBACK_NAMES = ("127.0.0.1", "localhost")
+
+
+def _zap_scope(target: str) -> tuple[list[str], str]:
+    """The spellings the scan's scope begins with, and the regex of what may
+    follow them: the target as typed and as ZAP names its node, each also with
+    the other name of the loopback host when it is one of them (`_zap_context`).
+    """
+    parts = urlsplit(target)
+    netlocs = [parts.netloc]
+    host = (parts.hostname or "").lower()
+    if host in _LOOPBACK_NAMES and "@" not in parts.netloc:
+        other = next(name for name in _LOOPBACK_NAMES if name != host)
+        netlocs.append(f"{other}:{parts.port}" if parts.port else other)
+    spellings: dict[str, None] = {}
+    for netloc in netlocs:
+        spellings[f"{parts.scheme}://{netloc}{parts.path}"] = None
+        spellings[_zap_node_name(parts.scheme, netloc, parts.path)] = None
+    return list(spellings), (".*" if parts.path else "(?:[/?#].*)?")
+
+
+def _in_zap_scope(target: str, url: str) -> bool:
+    """Whether `url` is inside the scope `_zap_context` builds for `target`,
+    for both of ZAP's readers: as the spider requests it, and as the active
+    scan names its node. Matched as ZAP matches: with the query cut off, and
+    case ignored (a redirect from `/Shop` to `/shop/` is attacked)."""
+    spellings, tail = _zap_scope(target)
+    lowered = [s.lower() for s in spellings]
+    parts = urlsplit(url)
+    names = (
+        f"{parts.scheme}://{parts.netloc}{parts.path}",
+        _zap_node_name(parts.scheme, parts.netloc, parts.path),
+    )
+
+    def inside(name: str) -> bool:
+        name = name.lower()
+        return any(
+            name.startswith(s) and (tail == ".*" or name == s or name[len(s)] in "/?#")
+            for s in lowered
+        )
+
+    return all(inside(name) for name in names)
+
+
+def url_redirect(url: str, timeout: float = 10.0) -> str | None:
+    """Where `url` sends a client that asks for it, when it answers with a
+    redirect: its `Location`, made absolute. Asked once, with no redirect
+    followed. None for any other answer, and when it cannot be asked (a name
+    that does not resolve, a refused connection, a timeout): the tool that
+    scans it says what it could not reach.
+
+    A certificate is not verified. JMo passes ZAP no certificate setting, so a
+    staging host whose certificate no public CA signed is scanned, and a probe
+    that refused it hid the redirect (review of #1431). The probe sends no
+    credential and reads one header."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    connection: http.client.HTTPConnection | None = None
+    try:
+        # Handed no port, `http.client` reads the last `:1` of `::1` as one.
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        if parts.scheme == "https":
+            unverified = ssl.create_default_context()
+            unverified.check_hostname = False
+            unverified.verify_mode = ssl.CERT_NONE
+            connection = http.client.HTTPSConnection(
+                parts.hostname, port, timeout=timeout, context=unverified
+            )
+        else:
+            connection = http.client.HTTPConnection(
+                parts.hostname, port, timeout=timeout
+            )
+        # `http.client` sends no User-Agent, and a CDN or a WAF may answer a
+        # request without one with a 403 instead of the site's redirect.
+        connection.request(
+            "GET",
+            urlunsplit(("", "", parts.path or "/", parts.query, "")),
+            headers={"User-Agent": "Mozilla/5.0 (compatible; jmo-security)"},
+        )
+        response = connection.getresponse()
+        location = response.getheader("Location")
+        if 300 <= response.status < 400 and location:
+            return urljoin(url, location)
+    except (OSError, ValueError, http.client.HTTPException) as exc:
+        logger.debug("could not ask %s whether it redirects: %s", url, exc)
+    finally:
+        if connection is not None:
+            connection.close()
+    return None
+
+
+def _zap_partly_read(ctx: ScanContext) -> dict[str, str]:
+    """A spider run whose target redirects outside the scan's scope (#1431).
+    zap followed the 301 out of its scope and attacked nothing, rc 0, and the
+    row read a plain `ran` (measured on ZAP 2.17.0). A redirect the scope
+    holds (the target's own path, the other loopback name) is attacked and
+    needs no word. An `--api-spec` run crawls nothing, so it is not asked."""
+    if ctx.plan is None:
+        return {}
+    try:
+        jobs = yaml.safe_load(ctx.plan.read_bytes())["jobs"]
+    except (OSError, yaml.YAMLError, KeyError, TypeError):
+        return {}
+    if not jobs or jobs[0].get("type") != "spider":
+        return {}
+    target = str(ctx.target)
+    moved = url_redirect(target)
+    if moved is None or _in_zap_scope(target, moved):
+        return {}
+    # Without its query: a sign-on redirect carries its request and state
+    # there, and the row reaches the artifacts people paste into issues.
+    place = urlunsplit(urlsplit(moved)._replace(query="", fragment=""))
+    return {
+        target: f"it redirects to {place}, outside the scan's scope, and "
+        "what is there was not attacked"
+    }
+
+
 def _zap_context(target: str) -> dict[str, Any]:
     """The context the spider and the active scan are confined to: `target`,
     however ZAP spells it, and nothing wider.
@@ -1670,7 +1818,8 @@ def _zap_context(target: str) -> dict[str, Any]:
 
     - `includePaths`: the target without its query and fragment, as typed or
       as ZAP names it, quoted, then anything (a target with no path: anything
-      after a `/`, `?` or `#`).
+      after a `/`, `?` or `#`). A target on `127.0.0.1` or `localhost` also
+      takes the other name, with the same port and path (#1431).
     - `excludePaths`: every URL that does not match that, so the loose regex
       ZAP makes of the entry below adds nothing.
     - `urls` (ZAP requires one, and requests it): the target without its query,
@@ -1683,10 +1832,7 @@ def _zap_context(target: str) -> dict[str, Any]:
     """
     parts = urlsplit(target)
     origin = f"{parts.scheme}://{parts.netloc}"
-    tail = ".*" if parts.path else "(?:[/?#].*)?"
-    spellings = dict.fromkeys(
-        (origin + parts.path, _zap_node_name(parts.scheme, parts.netloc, parts.path))
-    )
+    spellings, tail = _zap_scope(target)
     scope = "(?:" + "|".join(_java_quote(s) for s in spellings) + ")" + tail
     path = "".join(
         f"%{ord(c):02X}" if c in _REGEX_CHARACTERS else c for c in parts.path
@@ -1933,6 +2079,9 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             short_switches=frozenset({"-h", "-v"}),
             stub={"version": "2.1.0", "runs": []},
             reads_history=True,
+            # Read from the scan root alone (`_repository_gitleaks_config`).
+            own_config=(".gitleaks.toml",),
+            own_config_detail=_gitleaks_own_config_detail,
         ),
         ToolDescriptor(
             name="opengrep",
@@ -2279,6 +2428,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
             precheck=_zap_launch,
+            partly_read=_zap_partly_read,
             automation_plan=True,
             # The plan's whole budget (`zap_minutes`).
             timeout_floor=900,

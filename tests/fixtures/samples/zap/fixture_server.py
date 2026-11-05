@@ -31,6 +31,12 @@ Modes
     redirects 301 to ``/app/``, as a static server does for a directory.
     Routed on the percent-decoded path, as a server is: ``/my%20app/`` is
     the directory ``/my app/``, which links and reflects as ``/app/`` does.
+``redirect``
+    The ``spider`` site, except that ``/app/`` asked for as ``127.0.0.1``
+    answers 301 to the same URL on ``localhost``, which serves it, and
+    ``/moved/`` answers 301 to ``http://zap-fixture.test/app/``: a site that
+    moved to another host, which a fixture started with that alias serves,
+    as a real one would (#1431).
 
 Each log line: ``t``, ``via`` (``direct`` | ``proxy``), ``method``, ``host``
 (the Host header), ``target`` (the host a proxied request named), ``path``,
@@ -357,8 +363,23 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(200, {"users": [{"name": "example"}]})
             return 200, "admin_users", prefix
 
-        # spider
+        # spider, and redirect
         path = unquote(path)
+        if mode == "redirect":
+            port = self.server.server_address[1]  # type: ignore[attr-defined]
+            if path == "/app/" and self.headers.get("Host", "").startswith("127.0.0.1"):
+                self._send(
+                    301, b"", "text/html", {"Location": f"http://localhost:{port}/app/"}
+                )
+                return 301, "app_loopback_redirect", ""
+            if path == "/moved/":
+                self._send(
+                    301,
+                    b"",
+                    "text/html",
+                    {"Location": "http://zap-fixture.test/app/"},
+                )
+                return 301, "moved_redirect", ""
         if path == "/":
             self._send(200, _INDEX_SPIDER, "text/html")
             return 200, "root", ""
@@ -387,7 +408,7 @@ class Fixture:
     def __init__(
         self, mode: str, log_path: Path, aliases: tuple[str, ...] = ()
     ) -> None:
-        if mode not in ("api", "spider"):
+        if mode not in ("api", "spider", "redirect"):
             raise ValueError(f"unknown mode {mode!r}")
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.httpd.daemon_threads = True
@@ -439,7 +460,7 @@ def proxy_flags(port: int) -> list[str]:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--mode", choices=("api", "spider"), default="api")
+    ap.add_argument("--mode", choices=("api", "spider", "redirect"), default="api")
     ap.add_argument("--log", required=True, type=Path)
     ap.add_argument("--port-file", type=Path)
     ap.add_argument("--spec-dir", type=Path, help="also write the two specs here")

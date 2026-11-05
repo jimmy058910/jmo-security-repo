@@ -441,6 +441,23 @@ class FindingCluster:
         }
 
 
+def _a_resource_range_pair(
+    tool1: str, rule_id1: str | None, tool2: str, rule_id2: str | None
+) -> bool:
+    """Whether one finding's range inside the other's is one place for these
+    two: the table names their rules as one check, and one is checkov's, which
+    reports a whole resource (#1354). Nowhere else is containment evidence:
+    gitleaks reports a private key's whole PEM and trufflehog its first line,
+    and merging those broke one finding per key per tool."""
+    if not (tool1 and tool2 and rule_id1 and rule_id2):
+        return False
+    if "checkov" not in (tool1, tool2):
+        return False
+    from scripts.core.rule_equivalence import are_rules_equivalent
+
+    return are_rules_equivalent(tool1, rule_id1, tool2, rule_id2)[0]
+
+
 class SimilarityCalculator:
     """Calculate multi-dimensional similarity between findings.
 
@@ -530,20 +547,24 @@ class SimilarityCalculator:
         if finding1.get("target") != finding2.get("target"):
             return 0.0
 
-        # Component similarities
-        loc_sim = self.location_similarity(
-            finding1.get("location", {}), finding2.get("location", {})
-        )
-
-        msg_sim = self.message_similarity(
-            finding1.get("message", ""), finding2.get("message", "")
-        )
-
         # Extract tool names for rule equivalence checking
         tool1 = finding1.get("tool", {})
         tool2 = finding2.get("tool", {})
         tool1_name = tool1.get("name", "") if isinstance(tool1, dict) else ""
         tool2_name = tool2.get("name", "") if isinstance(tool2, dict) else ""
+
+        # Component similarities
+        loc_sim = self.location_similarity(
+            finding1.get("location", {}),
+            finding2.get("location", {}),
+            nested_is_same=_a_resource_range_pair(
+                tool1_name, finding1.get("ruleId"), tool2_name, finding2.get("ruleId")
+            ),
+        )
+
+        msg_sim = self.message_similarity(
+            finding1.get("message", ""), finding2.get("message", "")
+        )
 
         meta_sim = self.metadata_similarity(
             finding1.get("raw", {}),
@@ -567,14 +588,24 @@ class SimilarityCalculator:
 
         return min(1.0, max(0.0, composite))
 
-    def location_similarity(self, loc1: dict, loc2: dict) -> float:
+    def location_similarity(
+        self, loc1: dict, loc2: dict, nested_is_same: bool = False
+    ) -> float:
         """Calculate location similarity (0.0-1.0).
 
         Algorithm:
             1. Normalize paths (strip ./ prefix, lowercase for case-insensitive FS)
             2. If paths differ → return 0.0
-            3. Calculate line overlap using Jaccard index
-            4. Apply distance penalty for gaps
+            3. With ``nested_is_same``, one range inside the other → 1.0
+            4. Calculate line overlap using Jaccard index
+            5. Apply distance penalty for gaps
+
+        ``nested_is_same`` is for two findings the equivalence table calls one
+        check, one of them checkov's (#1354). checkov reports a Kubernetes
+        resource's whole range and trivy one container's lines inside it, so
+        their Jaccard is 0.4 and the pair cannot cluster. Containment is not evidence for any other pair: on
+        one measured Pod, 20 trivy and 22 checkov findings all nest, and only
+        the table's eleven pairs are the same check.
         """
         path1 = self._normalize_path(loc1.get("path", ""))
         path2 = self._normalize_path(loc2.get("path", ""))
@@ -590,6 +621,11 @@ class SimilarityCalculator:
 
         if start1 == 0 or start2 == 0:
             return 0.0
+
+        if nested_is_same and (
+            (start1 <= start2 and end2 <= end1) or (start2 <= start1 and end1 <= end2)
+        ):
+            return 1.0
 
         # Calculate overlap using range intersection
         overlap = self._range_overlap(start1, end1, start2, end2)
