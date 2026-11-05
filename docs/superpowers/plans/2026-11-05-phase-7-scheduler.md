@@ -123,7 +123,8 @@ RAM-derived budget would change nothing.
    in Task B1 and recorded. **Changed in review (2026-11-05):** the folder is
    `~/.jmo/tmp/<jmo pid>-<target hash>-trufflehog-git`, not under the results, which CI
    uploads whole: a clone a killed jmo leaves holds the history's secrets. A scan's
-   start removes what a jmo no longer running left there.
+   start removes what a jmo no longer running left there. Accepted by the coordinator
+   for that reason, 2026-11-05.
 8. **opengrep's loss under load (#1591) is its per-file timeout, so the lever is that
    timeout** (measured in Task B1, below; not memory: JMo passes `-max_memory 0`).
    opengrep runs with an explicit `--timeout 30`; the gate (Task B2) is the second line.
@@ -163,7 +164,7 @@ scratch HOME, peak of the tree including jmo's ~45 MB:
 |---|---|---|---|---|
 | nuclei, the ZAP fixture site | 1,449 MB | 1,441 MB | 303 s | nuclei alone 1,404 MB: its whole template set, the largest single run |
 | osv-scanner retry round, 21 npm lockfiles, one truncated (#1373) | 2,447 MB | 2,326 MB | 60 s | 4 runs at once, about 600 MB each: npm's database per run |
-| zap, the ZAP fixture site | 600 MB | 588 MB | 23 s | java 554 MB: the 512 MB heap and the JVM |
+| zap, the ZAP fixture site | 600 MB | 588 MB | 23 s | java 554 MB on a small site; `zap.sh` had sized the heap at `-Xmx7008m` (a quarter of RAM), not 512 MB |
 | checkov, terragoat (47 `.tf`) | 390 MB | 235 MB | 8 s | two processes sharing pages: PSS is the honest figure |
 | hadolint, juice-shop (3 Dockerfiles) | 54 MB | 42 MB | 1 s | finished in 0.06 s, under one sample |
 | trufflehog's history clone in `$TMPDIR`, app B | 329 MB | | | files, not RSS: RAM on a tmpfs `/tmp` (Decided 7) |
@@ -363,8 +364,8 @@ Changed in review:
 - trufflehog's folder moved (Decided 7).
 - "start" is shown when a run is admitted.
 
-Open: zap's heap (Decided 4) waits on the coordinator, since `zap.sh` sizes it at a
-quarter of RAM on Linux and macOS, not 512 MB.
+Open: zap's heap. Decided 4 is re-confirmed on the corrected premise (below), and is to
+be built before 7b is pushed.
 
 ## Decided 2026-11-05 (Jimmy)
 
@@ -375,6 +376,10 @@ quarter of RAM on Linux and macOS, not 512 MB.
 3. **After Ctrl-C:** exit 130 with no report; the session is saved for
    `jmo scan --resume`.
 4. **zap's heap** (#1422): `per_tool.zap.heap`, default `512m`, passed as `-Xmx`.
+   Re-confirmed 2026-11-05 after the premise was corrected. `zap.sh` sizes the heap at a
+   quarter of RAM on Linux and macOS (`-Xmx7008m` on the 28 GB machine), not 512 MB, so
+   this lowers it there. The gate reserves the heap plus 90 MB, and `per_tool.zap.heap`
+   raises it for wide sites.
 5. **`--timeout` against the floors** (#1486, which names semgrep; Phase 5 replaced it
    with opengrep, which kept the floor): an explicit `--timeout` wins.
 6. **The 700 MB acceptance** is measured with `--memory-budget 700`; the default
