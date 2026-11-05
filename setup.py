@@ -26,19 +26,23 @@ SHIPPED = {
 }
 
 
+HERE = Path(__file__).resolve().parent
+
+
 class BuildPy(build_py):
     def run(self) -> None:
         super().run()
         if self.editable_mode:
             return
-        for source, dest in SHIPPED.items():
-            if not Path(source).is_file():
+        for name, dest in SHIPPED.items():
+            source = HERE / name
+            if not source.is_file():
                 raise SystemExit(
-                    f"setup.py: {source} is missing, so the wheel would be broken"
+                    f"setup.py: {name} is missing, so the wheel would be broken"
                 )
             target = Path(self.build_lib) / dest
             self.mkpath(str(target.parent))
-            self.copy_file(source, str(target))
+            self.copy_file(str(source), str(target))
 
 
 setup(cmdclass={"build_py": BuildPy})
