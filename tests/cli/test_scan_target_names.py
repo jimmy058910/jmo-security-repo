@@ -1301,6 +1301,31 @@ class TestDiscoveryHandsEachJobWhatItCanScan:
         assert "--api-spec needs --url" in err
         assert not env.results.exists()
 
+    def test_an_api_spec_with_several_urls_is_a_usage_error(
+        self, env, tmp_path, capsys
+    ):
+        """`--url` is repeatable (#1423), and a spec attacks one API.
+        Decided 2026-11-05: several --url with one --api-spec exits 2; plain
+        URLs beside the API go in --urls-file."""
+        (tmp_path / "openapi.yaml").write_bytes(b"openapi: 3.0.0\n")
+
+        rc = env.run(
+            "--url",
+            self.API,
+            "--url",
+            "http://other.test/",
+            "--api-spec",
+            "openapi.yaml",
+            "--tools",
+            "zap",
+        )
+
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "--api-spec needs exactly one --url" in err
+        assert "--urls-file" in err
+        assert not env.results.exists()
+
     def test_a_local_api_spec_is_imported_and_aimed_at_the_url(self, env, tmp_path):
         """#1320: a local spec became `file://C:\\...`, which the URL job
         rejected after the scan started; then it was refused, since zap could

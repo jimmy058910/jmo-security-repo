@@ -195,12 +195,17 @@ def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) 
     parser.add_argument("--k8s-manifest", help="Kubernetes manifest file to scan")
 
     # Live web app/API scanning
-    parser.add_argument("--url", help="Web application URL to scan")
+    parser.add_argument(
+        "--url",
+        action="append",
+        help="Web application URL to scan (repeat for several)",
+    )
     parser.add_argument("--urls-file", help="File with URLs (one per line)")
     parser.add_argument(
         "--api-spec",
         help="OpenAPI definition (a file or an http(s) URL) for zap to import; "
-        "needs --url, the API it attacks with the definition's operations",
+        "needs exactly one --url, the API it attacks with the definition's "
+        "operations",
     )
 
     # GitLab integration
@@ -3048,6 +3053,16 @@ def cmd_scan(args) -> int:
             "--api-spec needs --url: zap imports the definition and sends its "
             "operations to --url, the API to attack, never to the servers the "
             "definition names",
+        )
+        return 2
+    if getattr(args, "api_spec", None) and len(getattr(args, "url", None) or []) > 1:
+        # `--url` is repeatable (#1423), and a definition is the API of one.
+        # Decided 2026-11-05: several --url with one --api-spec exits 2.
+        _log(
+            args,
+            "ERROR",
+            "--api-spec needs exactly one --url, the API zap sends the "
+            "definition's operations to; list the other URLs in --urls-file",
         )
         return 2
     try:

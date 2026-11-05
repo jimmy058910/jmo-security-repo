@@ -330,7 +330,7 @@ class TestScanOrchestrator:
         orchestrator = ScanOrchestrator(config)
 
         args = MagicMock()
-        args.url = "https://example.com"
+        args.url = ["https://example.com"]
         args.urls_file = None
         args.api_spec = None
 
@@ -545,7 +545,7 @@ class TestScanOrchestrator:
         args.terraform_state = None
         args.cloudformation = None
         args.k8s_manifest = None
-        args.url = "https://example.com"
+        args.url = ["https://example.com"]
         args.urls_file = None
         args.api_spec = None
         args.gitlab_repo = None
@@ -934,7 +934,7 @@ class TestInvalidUrlWarning:
         orchestrator = ScanOrchestrator(config)
 
         class Args:
-            url = "not-a-valid-url"  # Single invalid URL
+            url = ["not-a-valid-url"]  # Single invalid URL
             urls_file = None
             api_spec = None
 
@@ -954,7 +954,7 @@ class TestInvalidUrlWarning:
         orchestrator = ScanOrchestrator(config)
 
         class Args:
-            url = "https://example.com"  # Valid URL
+            url = ["https://example.com"]  # Valid URL
             urls_file = None
             api_spec = None
 
@@ -1075,6 +1075,9 @@ class TestRejectedTargetsAreNamed:
             "k8s_all_namespaces": False,
         }
         base.update(kw)
+        # `--url` is repeatable (#1423): the parser gives a list.
+        if isinstance(base["url"], str):
+            base["url"] = [base["url"]]
         return SimpleNamespace(**base)
 
     @staticmethod

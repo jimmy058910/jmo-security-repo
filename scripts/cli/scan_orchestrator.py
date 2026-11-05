@@ -850,7 +850,7 @@ class ScanOrchestrator:
         Discover web URLs from CLI arguments.
 
         Supports two input modes:
-        - --url: Single URL
+        - --url: one URL each, repeatable
         - --urls-file: File with list of URLs
 
         Security: Validates URLs to ensure only http/https protocols
@@ -858,9 +858,9 @@ class ScanOrchestrator:
         """
         urls: list[str] = []
 
-        # Single URL
-        if getattr(args, "url", None):
-            url = args.url
+        # `--url` is repeatable: a plain store kept only the last, so a
+        # schedule exporting one `--url` per URL scanned one (#1423).
+        for url in getattr(args, "url", None) or []:
             if validate_url(url):
                 urls.append(url)
             else:
@@ -888,7 +888,8 @@ class ScanOrchestrator:
                         )
 
         if getattr(args, "api_spec", None):
-            self._pair_api_spec(args.api_spec, getattr(args, "url", None), urls)
+            given = getattr(args, "url", None) or []
+            self._pair_api_spec(args.api_spec, given[0] if given else None, urls)
 
         # A URL listed twice is scanned once, as a TSV row is (#1312).
         return list(dict.fromkeys(urls))

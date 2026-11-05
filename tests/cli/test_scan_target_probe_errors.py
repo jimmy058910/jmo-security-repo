@@ -172,7 +172,7 @@ def test_an_unstattable_target_is_rejected_not_raised(
     given = {attr: str(target)}
     if attr == "api_spec":
         # A spec is read only beside the URL it is aimed at (#1331).
-        given["url"] = "http://127.0.0.1:8080"
+        given["url"] = ["http://127.0.0.1:8080"]
 
     targets = orch.discover_targets(_Args(**given))
 

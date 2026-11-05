@@ -206,12 +206,11 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
                     "exclude": ["*-deprecated"],
                 },
                 "images": ["nginx:latest", "postgres:16-alpine", "redis:7-alpine"],
+                # One URL: a spec is the API of exactly one (#1423, decided
+                # 2026-11-05). Several URLs reach the scan in
+                # tests/unit/test_schedule_urls_reach_scan.py.
                 "web": {
-                    "urls": [
-                        "https://api.example.com",
-                        "https://app.example.com",
-                        "https://admin.example.com",
-                    ],
+                    "urls": ["https://api.example.com"],
                     "api_spec": "./openapi.yaml",
                 },
                 # This test is named for "all target types" and carried three
@@ -256,8 +255,6 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
 
     # URL targets
     assert "--url https://api.example.com" in script
-    assert "--url https://app.example.com" in script
-    assert "--url https://admin.example.com" in script
     assert "--api-spec ./openapi.yaml" in script
 
     # IaC targets
