@@ -121,12 +121,12 @@ RAM-derived budget would change nothing.
    the gate could not count it. trufflehog runs with `TMPDIR` set to a folder under the
    scan's results directory, removed after the run. Its clone size on app B is measured
    in Task B1 and recorded.
-8. **opengrep's loss under load (#1591) is fixed by what Task B1 measures, not guessed.** The
-   candidate levers, in order: the gate keeping opengrep's run from overlapping the
-   other heavy runs (Task B2), `-j 2` (Decided from measurement 2), an explicit
-   `--max-memory`. Excluding minified vendored bundles is the last resort, since it
-   trades the loss for a coverage gap. The fix is accepted only on the counts: juice-shop
-   223 and WebGoat 428 under the full matrix at the default budget, three runs each.
+8. **opengrep's loss under load (#1591) is its per-file timeout, so the lever is that
+   timeout** (measured in Task B1, below; not memory: JMo passes `-max_memory 0`).
+   opengrep runs with an explicit `--timeout 30`; the gate (Task B2) is the second line.
+   Excluding minified vendored bundles stays the last resort, since it trades the loss
+   for a coverage gap. Accepted only on the counts: juice-shop 223 and WebGoat 428 under
+   the full matrix at the default budget, three runs each.
 
 ## Tasks (PR 7b)
 
@@ -148,6 +148,36 @@ sampler used above, so the numbers can be re-run), `tests/unit/test_tool_descrip
   says which lever moves it.
 - [ ] Test first: every descriptor has `memory_mb > 0`; trufflehog's two invocations
   each carry it. Then add the field and the values.
+
+### Task B1 record (measured 2026-11-05)
+
+Each tool alone through `jmo scan --tools <t>` under `scripts/dev/peakmem.py --pss`,
+scratch HOME, peak of the tree including jmo's ~45 MB:
+
+| Run | Peak RSS | Peak PSS | Wall | Note |
+|---|---|---|---|---|
+| nuclei, the ZAP fixture site | 1,449 MB | 1,441 MB | 303 s | nuclei alone 1,404 MB: its whole template set, the largest single run |
+| osv-scanner retry round, 21 npm lockfiles, one truncated (#1373) | 2,447 MB | 2,326 MB | 60 s | 4 runs at once, about 600 MB each: npm's database per run |
+| zap, the ZAP fixture site | 600 MB | 588 MB | 23 s | java 554 MB: the 512 MB heap and the JVM |
+| checkov, terragoat (47 `.tf`) | 390 MB | 235 MB | 8 s | two processes sharing pages: PSS is the honest figure |
+| hadolint, juice-shop (3 Dockerfiles) | 54 MB | 42 MB | 1 s | finished in 0.06 s, under one sample |
+| trufflehog's history clone in `$TMPDIR`, app B | 329 MB | | | files, not RSS: RAM on a tmpfs `/tmp` (Decided 7) |
+
+**opengrep loses findings to its own per-file timeout** (#1591), on juice-shop
+`1618a611`, opengrep alone unless named:
+
+| Run | Results | Error on `three.js` |
+|---|---|---|
+| default (`-timeout 5`, opengrep's own) | 223 | one rule `Timeout`, even at rest |
+| `--timeout 1` | **204**, golden's full-matrix count | "Other syntax error ... Memprof_limits.Limit_reached: token set", golden's error |
+| `--timeout 30` | 223 | none |
+| full matrix, default, load average 15.6 | 223 | one rule `Timeout` |
+| full matrix, `--timeout 30`, load average 9.9 | 223 | none |
+
+The timeout is delivered through the `Memprof_limits` token, so a parse it cuts short
+reads as a syntax error and the whole 836 KB file is dropped: 19 findings. Under load
+the loss is intermittent: it happens when parsing the file crosses 5 s, which the
+full-matrix run at load 15.6 did not. WebGoat's `ace.js` is not yet measured.
 
 ### Task B2: the scan-wide gate
 
