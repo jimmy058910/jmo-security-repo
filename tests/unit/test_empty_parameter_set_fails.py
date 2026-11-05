@@ -57,6 +57,11 @@ def _run_pytest(tmp_path: Path, values: str) -> subprocess.CompletedProcess[str]
             str(PYPROJECT),
             "--rootdir",
             str(tmp_path),
+            # Collect nothing above tmp_path: without it the child listed every
+            # directory up to the system temp directory, where another xdist
+            # worker's temp directory could vanish under it (#1306).
+            "--confcutdir",
+            str(tmp_path),
             "-q",
             "-p",
             "no:cacheprovider",
@@ -105,3 +110,45 @@ def test_the_child_ignores_the_parents_pytest_addopts(
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "1 passed" in output, output
+
+
+_LISTING_HOOK = """\
+import os
+import sys
+
+def _audit(event, args):
+    if event == "os.scandir" and args and args[0] is not None:
+        with open({log!r}, "a", encoding="utf-8") as listed:
+            listed.write(os.path.abspath(os.fsdecode(args[0])) + "\\n")
+
+sys.addaudithook(_audit)
+"""
+
+
+def test_the_child_lists_no_directory_outside_its_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1306: the child listed every directory above its tmp_path, the system
+    temp directory included, and under `-n 8` another worker's temp
+    directory vanished between the listing and its lstat, failing the
+    collection. An audit hook in the child records each directory it lists."""
+    hook = tmp_path / "hook"
+    hook.mkdir()
+    log = tmp_path / "listed.txt"
+    (hook / "sitecustomize.py").write_bytes(
+        _LISTING_HOOK.format(log=str(log)).encode("utf-8")
+    )
+    monkeypatch.setenv(
+        "PYTHONPATH",
+        os.pathsep.join(filter(None, [str(hook), os.environ.get("PYTHONPATH")])),
+    )
+
+    result = _run_pytest(tmp_path, '["present"]')
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    listed = {
+        Path(p).resolve() for p in log.read_text(encoding="utf-8").split("\n") if p
+    }
+    root = tmp_path.resolve()
+    assert root in listed  # the hook ran, and saw the collection
+    assert sorted(str(p) for p in listed if not p.is_relative_to(root)) == []
