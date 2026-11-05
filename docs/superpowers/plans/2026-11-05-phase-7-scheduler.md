@@ -1,17 +1,19 @@
-# Phase 7 — memory-gated scheduler, process trees, Ctrl-C: task plan (draft)
+# Phase 7 — memory-gated scheduler, process trees, Ctrl-C: task plan
 
-> **Status: draft for Jimmy's decisions (end of file).** Nothing below is built until
-> they are made. PR 7a (the small measured fixes) is separate and does not depend on
-> this plan.
+> **Status: approved 2026-11-05 (10:05 EST), every recommended option** (see
+> [Decided](#decided-2026-11-05-jimmy)). PR 7a, the small measured fixes, lands first;
+> PR 7b builds this.
 >
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans. Steps use
 > checkbox (`- [ ]`) syntax.
 
 **Goal:** a scan's tools run under one scan-wide memory budget and one CPU slot count,
 each tool carrying a measured cost class; Ctrl-C stops the scan and leaves no process
-behind on any platform; and these open Phase 7 issues close: #1208, #1308,
-the osv-scanner retry round's #1373, zap's #1422, `--timeout`'s #1486, and the
-`--gitlab-group` placeholder of #1407 (PR 7a closes #1406).
+behind on any platform; opengrep's findings stop depending on what else runs; and
+these open issues close: #1208, #1308, the osv-scanner retry round's #1373, zap's
+issue #1422, `--timeout`'s #1486, the startup version probe's #1581, the
+`--gitlab-group` placeholder of #1407, and the opengrep issue the coordinator files
+from golden's measurement below (PR 7a closes #1406).
 
 **Architecture:** one PR, 7b, after 7a merges. The gate and the process registry are
 two small objects in `scripts/core/tool_runner.py` that `scan_all` installs for the
@@ -37,7 +39,11 @@ with its own osv database; about 10 GB free; nothing else contaminated a run.
 | Threads alive at the end of a `tests/cli` session | **115**: 114 `refresh_loop`, 1 `run_server` (2,755 passed) |
 
 Each tool alone through `jmo scan --tools <t>` (peak tree including jmo's ~45 MB), and
-direct runs of the exact command where a flag was tried:
+direct runs of the exact command where a flag was tried. The `jmo scan --tools`
+runs (09:51:38-09:54:19 EST) were on a quiet machine, as was the baseline above. The
+direct opengrep `-j` and trufflehog `--concurrency` runs (09:56-09:57) overlapped
+another lane's full test suite on 4 of the 8 cores (09:54:23-10:04:37): a tool's own
+memory is its own, so their peaks stand, but their wall times are upper bounds.
 
 | Tool | Peak | Wall | Note |
 |---|---|---|---|
@@ -55,8 +61,19 @@ Not measured here: checkov, hadolint (app B has no IaC or Dockerfile), zap, nucl
 (URL tools). Two hidden costs seen: trufflehog's history run clones the repository into
 `$TMPDIR`, which is RAM on a tmpfs `/tmp` and invisible to process RSS; and the startup
 probe runs zap's `-version` through `zap.sh`, which sized its JVM at `-Xmx7008m`
-(385 MB RSS, 26 s, on a scan with no URL target; drafted to the coordinator as its own
-issue).
+(385 MB RSS, 26 s, on a scan with no URL target: #1581, Task B8).
+
+**opengrep loses findings under load** (measured by the golden lane, 2026-11-05,
+opengrep 1.32.0 at `-j 4`, 12 tools concurrent). juice-shop `1618a611`: `jmo scan
+--tools opengrep` reads 223 raw results, twice; the full matrix reads 204, all 19
+missing from `frontend/src/assets/private/three.js`. WebGoat `7e198f39`: 428 alone,
+twice, against 402 in the full scan, all 26 missing from
+`src/main/resources/webgoat/static/js/libs/ace.js`. In the full scan opengrep logs
+`Memprof_limits.Limit_reached` ("Other syntax error") on that file and returns nothing
+from it; alone, no error. Scanned-path sets identical, no timeout. JMo passes no memory
+limit: the core runs with `-max_memory 0 -j 4 -timeout 5 -timeout_threshold 3`
+(measured here), so what trips is not a limit JMo sets. A user's finding count moves
+with machine load, which is the 1,314 MB overlap from another angle.
 
 **Where concurrency comes from today:** `scan_all`'s pool runs `threads` targets
 (`jmo.yml` 4, else `_get_max_workers`), and each target's `ToolRunner` runs 4 tools
@@ -99,6 +116,17 @@ RAM-derived budget would change nothing.
    at a time, so two URL targets no longer share one ZAP home at once.
 6. **A killed run is `failed:interrupted`**, a new `Reason`, never `ran` with whatever
    it wrote.
+7. **trufflehog's temporary clone moves to disk.** Its history run clones the
+   repository into `$TMPDIR`; on a tmpfs `/tmp` that is RAM no process's RSS shows, so
+   the gate could not count it. trufflehog runs with `TMPDIR` set to a folder under the
+   scan's results directory, removed after the run. Its clone size on app B is measured
+   in Task B1 and recorded.
+8. **opengrep's loss under load is fixed by what Task B1 measures, not guessed.** The
+   candidate levers, in order: the gate keeping opengrep's run from overlapping the
+   other heavy runs (Task B2), `-j 2` (Decided from measurement 2), an explicit
+   `--max-memory`. Excluding minified vendored bundles is the last resort, since it
+   trades the loss for a coverage gap. The fix is accepted only on the counts: juice-shop
+   223 and WebGoat 428 under the full matrix at the default budget, three runs each.
 
 ## Tasks (PR 7b)
 
@@ -112,6 +140,12 @@ sampler used above, so the numbers can be re-run), `tests/unit/test_tool_descrip
 - [ ] Measure checkov and hadolint on a fixture with IaC and Dockerfiles, nuclei and zap
   on the ZAP fixture site, and osv-scanner's per-lockfile retry round on 20 npm
   lockfiles with one truncated (#1373).
+- [ ] trufflehog's history clone on app B: its size in `$TMPDIR` (Decided 7).
+- [ ] opengrep under load (Decided 8): reproduce golden's loss on juice-shop's
+  `three.js` and WebGoat's `ace.js` with opengrep alone beside a process holding a
+  fixed amount of memory, stepping it up; record the free memory at which
+  `Limit_reached` appears, at `-j 4` and `-j 2`, and with `--max-memory` set. That
+  says which lever moves it.
 - [ ] Test first: every descriptor has `memory_mb > 0`; trufflehog's two invocations
   each carry it. Then add the field and the values.
 
@@ -129,8 +163,13 @@ sampler used above, so the numbers can be re-run), `tests/unit/test_tool_descrip
   `finally`, unlimited when unset so a direct `ToolRunner` use is unchanged.
 - [ ] `ToolDefinition.memory_mb` from the descriptor in `tool_loop.definition()`;
   `ToolRunner.run_tool` holds a slot and the gate around the run, retries included.
-- [ ] Budget: `jmo.yml` `memory_budget_mb` and `--memory-budget`, default per
-  Decision 1. Free memory read per Decision 2.
+- [ ] Budget: `jmo.yml` `memory_budget_mb` and `--memory-budget`; the default is half
+  the memory free at scan start, never below 700 MB (Decided 1), read with `psutil`
+  (Decided 2). `psutil` reaches `pyproject.toml` and `uv.lock` in the installer lane's
+  PR 1; until it merges it is installed into this worktree's `.venv` only
+  (`uv pip install psutil`), and 7b rebases onto `dev` after it.
+- [ ] `tool_loop.py` lines 792-803 (the missing-tool message) are the installer lane's
+  (#1577): this task keeps clear of them, and whichever lands second rebases.
 
 ### Task B3: process trees die with the scan
 
@@ -144,6 +183,11 @@ sampler used above, so the numbers can be re-run), `tests/unit/test_tool_descrip
 - [ ] Windows: at scan start jmo assigns itself to a Job Object with
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (ctypes, `kernel32`), so every descendant dies
   when jmo exits however it exits. Nested jobs need Windows 8 or later.
+- [ ] The first-run lane's guard (#1285) requires `timeout=` on every
+  `subprocess.run`, `check_output` and `call` under `scripts/cli` and `scripts/core`.
+  It does not cover `Popen`, which `_run_bounded` uses; every `Popen` here is bounded by
+  `communicate(timeout=)` and killed as a tree on expiry, and a unit test says so for
+  each `Popen` in the file.
 - [ ] #1308: `clone_from_tsv.run` and the GitLab clone go through `_run_bounded`.
   Test first: a fake `git` that starts a sleeping grandchild and writes its pid;
   timed out at 1 s, the grandchild is gone (POSIX `os.kill(pid, 0)`).
@@ -160,13 +204,20 @@ sampler used above, so the numbers can be re-run), `tests/unit/test_tool_descrip
   against today's code shows them alive.
 - [ ] The handler sets a scan-wide stop event and calls `terminate_all()`; the gate
   wakes its waiters; `scan_all` stops submitting (`shutdown(cancel_futures=True)`);
-  killed runs are `failed:interrupted`; the session is saved; behaviour after that
-  per Decision 3. A second Ctrl-C exits at once.
+  killed runs are `failed:interrupted`; the session is saved; jmo exits 130 with no
+  report, and `jmo scan --resume` finishes the scan (Decided 3). A second Ctrl-C exits
+  at once.
 
 ### Task B5: no thread outlives the test session (#1208)
 
-**Files:** `scripts/cli/jmo.py` (`ProgressTracker`), `tests/cli/test_progress_tracker.py`,
-`tests/conftest.py` (**p9-code's**: the session-end guard is theirs to place or approve)
+**Files:** `scripts/cli/jmo.py` (`ProgressTracker`; the first-run lane adds an early
+return to `_write_progress_line`, #1082, and the rest is this task's),
+`tests/cli/test_progress_tracker.py`, `tests/conftest.py` (p9-code's file: the
+session-end check is approved for 7b, added beside p9-code's `pytest_configure` git-env
+scrub once its PR 2 is in `dev`)
+
+Measured baseline: **115 threads alive at the end of a `tests/cli` session** (2,755
+passed): 114 `refresh_loop`, 1 `run_server`. The target is 0.
 
 - [ ] `ProgressTracker` is a context manager whose exit calls `stop()`; `cmd_scan` uses
   it; the tests that start one stop it.
@@ -179,40 +230,52 @@ sampler used above, so the numbers can be re-run), `tests/unit/test_tool_descrip
 (`tool_timeout`), `scripts/cli/jmo.py` (`--timeout` help), `scripts/cli/scan_orchestrator.py`
 
 - [ ] zap `exclusive=True`; test: two URL targets, both zap rows `ran`.
-- [ ] zap's heap per Decision 4.
-- [ ] `--timeout` per Decision 5; its help says which wins.
+- [ ] zap's heap: `per_tool.zap.heap`, default `512m`, passed as `-Xmx` to `zap.sh` and
+  to the java line alike (Decided 4).
+- [ ] An explicit `--timeout` wins over opengrep's and zap's 900 s floors, as
+  `per_tool.<tool>.timeout` does; `jmo.yml`'s `timeout` does not; the help says so
+  (Decided 5).
 - [ ] Once the first-run lane has removed `--gitlab-group`, delete
   `_discover_gitlab_repos`' `group:` placeholder (`scan_orchestrator.py:967`).
+
+### Task B8: the startup probe asks only the tools a scan can run (#1581)
+
+**Files:** `scripts/cli/jmo.py` (`_warn_critical_updates`, `_check_scan_tools`),
+`tests/cli/` (the probe's tests)
+
+Measured: 44.5 s before the first scan line on a first run, 25.9 s of it zap's
+`-version` (its JVM sized at `-Xmx7008m`), on a repository scan where zap cannot run.
+
+- [ ] Test first: a repository-only scan probes no URL-only tool (zap, nuclei), counted
+  through a recording `ToolManager`; a scan with a URL target still probes them.
+- [ ] Restrict both to the requested tools that read at least one present target type
+  (`TOOL_SCAN_TYPES`). A tool left out still gets its row, `skipped`, as today.
+- [ ] Record first-run startup on app B before and after.
 
 ### Task B7: gates, then PR 7b
 
 - [ ] Targeted tests; one full suite with the coordinator's go-ahead.
 - [ ] **The evidence CI cannot give:** app B's default matrix under
-  `scripts/dev/peakmem.py`, with the budget at 700 and at the default: peak, wall, and
-  processes left 5 s after a SIGINT 3 s into the scan phase. Numbers in the PR body.
+  `scripts/dev/peakmem.py`, with `--memory-budget 700` (the 700 MB acceptance, Decided
+  6) and at the default budget: peak, wall, and processes left 5 s after a SIGINT 3 s
+  into the scan phase, against the baseline above (1,314 MB, 85 s, 6 alive). Measured
+  with no other suite running. Numbers in the PR body.
+- [ ] opengrep's counts under the full matrix at the default budget: juice-shop 223,
+  WebGoat 428, three runs each (Decided 8).
+- [ ] The thread count at the end of a `tests/cli` session: 0 (was 115).
 - [ ] Windows: Ctrl-C and the Job Object checked on a Windows machine by a script Jimmy
   runs (CI cannot send a console Ctrl-C).
 
-## Decisions for Jimmy
+## Decided 2026-11-05 (Jimmy)
 
-1. **The default budget.** (a) 700 MB, the program plan's target: app B's scan phase
-   goes from about 40 s to about 70-80 s. (b, recommended) Half the memory free at scan
-   start, never below 700 MB: unchanged on a large machine, bounded on a small one; the
-   700 MB number is then measured with `--memory-budget 700`.
-2. **Reading free memory.** (a, recommended) `psutil`, a new runtime dependency in
-   `pyproject.toml` and `uv.lock` (the installer lane's files). (b) The standard
-   library: `/proc/meminfo` on Linux, `sysctl` on macOS, `GlobalMemoryStatusEx` through
-   ctypes on Windows, about 40 lines to keep.
-3. **After Ctrl-C.** (a, recommended) Exit 130 with no report: the session is saved and
-   `jmo scan --resume` finishes the scan. (b) Write a report of the targets that
-   finished, marked partial.
-4. **zap's heap** (#1422). (a, recommended) `per_tool.zap.heap` (default `512m`),
-   passed as `-Xmx`, `zap.sh` and the java line alike. (b) Honour `_JAVA_OPTIONS`, which
-   overrides `-Xmx` (measured in PR API), and document it.
-5. **`--timeout` against a tool's floor** (#1486). (a, recommended) An explicit
-   `--timeout` wins over opengrep's and zap's 900 s floors (#1486 says semgrep, which
-   Phase 5 replaced; opengrep kept the floor), as `per_tool.<tool>.timeout`
-   already does; `jmo.yml`'s `timeout` does not. (b) Keep the floors and say so in the
-   help.
-6. **The 700 MB acceptance.** Keep it as a target recorded with `--memory-budget 700`
-   (predicted 640-700 MB on app B), or move it to what the default budget gives.
+"Approve as recommended", 10:05 EST. Commit bodies cite them as "Decided 2026-11-05: ...".
+
+1. **Default memory budget:** half the memory free at scan start, never below 700 MB.
+2. **Free memory:** `psutil`, a runtime dependency added by the installer lane.
+3. **After Ctrl-C:** exit 130 with no report; the session is saved for
+   `jmo scan --resume`.
+4. **zap's heap** (#1422): `per_tool.zap.heap`, default `512m`, passed as `-Xmx`.
+5. **`--timeout` against the floors** (#1486, which names semgrep; Phase 5 replaced it
+   with opengrep, which kept the floor): an explicit `--timeout` wins.
+6. **The 700 MB acceptance** is measured with `--memory-budget 700`; the default
+   budget's peak is recorded beside it.
