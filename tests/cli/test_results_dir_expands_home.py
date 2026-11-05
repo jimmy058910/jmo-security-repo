@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 
 import pytest
 
@@ -85,7 +86,9 @@ def test_every_results_and_history_path_option_expands_home(home):
     unexpanded = []
     for command, option, action in actions:
         value = action.type("~/probe") if action.type else "~/probe"
-        if os.fspath(value) != os.path.join(str(home), "probe"):
+        # As paths, not strings: on Windows `~/probe` expands to `<home>/probe`,
+        # a separator of each kind, and names the same file as `<home>\\probe`.
+        if Path(os.fspath(value)) != Path(home) / "probe":
             unexpanded.append(f"jmo {command} {option}")
     assert unexpanded == []
 
@@ -107,4 +110,4 @@ def test_scan_ci_and_report_read_the_expanded_path(argv, home):
         or getattr(args, "results_dir_opt", None)
         or getattr(args, "results_dir_pos", None)
     )
-    assert got == os.path.join(str(home), "out")
+    assert Path(got) == Path(home) / "out"

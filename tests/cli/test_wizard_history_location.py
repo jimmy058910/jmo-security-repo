@@ -13,7 +13,7 @@ Docker mode mounts the database's directory.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -73,8 +73,11 @@ def test_docker_scan_stores_through_a_mount_of_the_wizards_database(config):
 
     mounts = dict(parts[i + 1].rsplit(":", 1) for i, p in enumerate(parts) if p == "-v")
     host = WizardConfig.get_db_path().resolve()
-    assert mounts.get(str(host.parent)) == str(Path(stored).parent), (mounts, stored)
-    assert Path(stored).name == host.name
+    # The container path is POSIX whatever the host is; read on Windows as a
+    # WindowsPath, `/history` became `\\history`.
+    container = PurePosixPath(stored)
+    assert mounts.get(str(host.parent)) == str(container.parent), (mounts, stored)
+    assert container.name == host.name
     # Created before docker runs, or the engine makes it root-owned (#1307).
     assert str(host.parent) in docker_output_dirs(config)
 
