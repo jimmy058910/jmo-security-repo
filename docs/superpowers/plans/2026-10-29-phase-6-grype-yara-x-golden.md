@@ -260,7 +260,7 @@ sha256, download URL, target and command (`tests/fixtures/golden/gitleaks/v8.30.
 | juice-shop's `// vuln-code-snippet vuln-line` markers (MIT) | `1618a611` (T2's pin) | **40** marked lines in 17 files: 10 TypeScript, 3 Solidity, 2 Terraform, 2 YAML (Phase 4's research said 38 in 16). B's archived registry-rule runs hit **5 of 40** (semgrep 137 results, opengrep 129) | yes, T3 |
 | QuackatronHQ/sca-kitchen-sink (MIT) | `eeddfe4d92fddb749915a98a7b02956eae33af22` (2025-06-19) | 15 lockfiles in 14 formats, every one in `LOCKFILE_ECOSYSTEMS`. Through `jmo scan --tools osv-scanner trivy`, adapter findings per lockfile (osv / trivy): `packages.lock.json` 4/4, `packages.config` 2/2, `go.mod` 108/66, `gradle.lockfile` 108/108, `pom.xml` 94/94, `bun.lock` 44/44, `package-lock.json` 44/44, `pnpm-lock.yaml` 44/44, `yarn.lock` (yarn 4) 44/44, `composer.lock` 29/28, `poetry.lock` 89/44, `requirements.txt` 168/98, `uv.lock` 89/44, `Gemfile.lock` 58/58, `Cargo.lock` 8/4. No format is silent today. trivy also reads `csharp/API.deps.json` (7), which JMo does not hand osv-scanner | yes, T4: a per-format wiring oracle, not a quality score (a "real" frozen snapshot needs a matcher, and osv-scanner would be grading itself) |
 | TheAuditorTool/BenchProctor (Apache-2.0) | release 2026.07.22 (releases halted, so the pin cannot move); repository `ad70ff85` | quicktest bundles: TypeScript 6,571,432 bytes, sha256 `80f417b0d7aa…59c4`; JavaScript 5,726,494 bytes, `ce18f02c168f…3a3e`; a standard-library `score_sarif.py` and `expectedresults-2026.07.22.csv` per framework; the scorer reads CWE from `ruleId`, `properties`/`tags` or `taxa`. Not run: it grades Phase 5's bundle | yes, F7, after PR B |
-| Checkmarx/kics `assets/queries` (Apache-2.0) | v2.2.0 `453066aa9c66014ad7aee7dd0149ba1944c78050` | Dockerfile: 48 queries, 131 positive and 154 negative samples, **242** expected (file, line). hadolint 2.15.1 and trivy 0.74.0 (bare binaries) put some finding on 176 and 112 of those lines, **181 (74%)** either. "Some finding on the line" is not "the same check", so this is a floor, not recall. Negatives are unusable without an id mapping: 250 of 308 (tool, negative sample) pairs report something, because a negative for one query still breaks others. Kubernetes: 142 queries (same `positive*.yaml` + `positive_expected_result.json` layout), not run. **Re-measured 2026-11-04: the 181 does not reproduce** (its script is gone): 133 positive samples, 242 entries = 230 distinct (file, line); hadolint 221, trivy 130, either **226 (93.4%)**. Kubernetes: 271 positives (261 `.yaml`, 10 `.json`), 430 entries | yes, E6: Dockerfile; Kubernetes moved to F6b (2026-11-04); Terraform (340 AWS queries alone) and CloudFormation (262) after the tag |
+| Checkmarx/kics `assets/queries` (Apache-2.0) | v2.2.0 `453066aa9c66014ad7aee7dd0149ba1944c78050` | Dockerfile: 48 queries, 131 positive and 154 negative samples, **242** expected (file, line). hadolint 2.15.1 and trivy 0.74.0 (bare binaries) put some finding on 176 and 112 of those lines, **181 (74%)** either. "Some finding on the line" is not "the same check", so this is a floor, not recall. Negatives are unusable without an id mapping: 250 of 308 (tool, negative sample) pairs report something, because a negative for one query still breaks others. Kubernetes: 142 queries (same `positive*.yaml` + `positive_expected_result.json` layout), not run. **Re-measured 2026-11-04: the 181 does not reproduce** (its script is gone): 133 positive samples, 242 entries = 230 distinct (file, line); hadolint 221, trivy 130, either **226 (93.4%)**. Kubernetes: 271 positives (261 `.yaml`, 10 `.json`), 430 entries | yes, E6: Dockerfile; Kubernetes moved to F6b (2026-11-04), graded there by trivy and the delta rule, 140 of 409 lines (2026-11-05); Terraform (340 AWS queries alone) and CloudFormation (262) after the tag |
 | Samsung/CredData | — | now 73,842 labelled lines, 4,583 true, from 19.5 M lines in 297 repositories (Phase 4 recorded 67,564 / 15,714: the labels were revised); `download_data.py` clones all 297 | **no: after the tag** (J7) |
 
 ### Issue premises (22 open; #1426 and #1472 closed 2026-10-24)
@@ -1336,6 +1336,19 @@ check: checkov's range is the whole resource, `[1,N]`, so it range-hits 335 of 4
   say why in J7's row. Either is acceptance (J10).
 - [ ] **Step 3:** Commit `test: KICS's expected Kubernetes lines, graded through jmo scan`, or
   the plan edit that drops it.
+
+**Measured 2026-11-05 (F6b, at `1406db9f`):** 25 queries (every fifth, sorted), first positive
+and first negative each, through `jmo scan --k8s-manifest --tools checkov trivy`, 39 expected
+lines. A finding at the line's start: checkov 0, trivy 2. A finding spanning the line:
+checkov 35, trivy 22 (positives carried 52 findings each, negatives 44: the span is the
+resource). A check spanning the line that fires on none of the query's negatives (the
+**delta** rule): checkov 12, trivy 9, and read against the query names 13 of the 15 queries
+with one are its check (`cpu_limits_not_set`: `CKV_K8S_11`, `KSV-0011`). So the delta rule
+tells a check from the resource. Graded with **trivy alone**: its repository scan reads every
+manifest (two `--repos-dir` scans, positives and negatives, 3 min 55 s here), while checkov
+reads none on a repository scan and would need one `--k8s-manifest` scan per sample (533).
+Recorded: **140 of 409** distinct lines (142 of 430 entries); 248 are spanned by some
+finding. `kics-k8s-lines.json`; a second run graded identical.
 
 ## Task F7: BenchProctor grades the rule bundle on TypeScript and JavaScript (J7) (P5)
 

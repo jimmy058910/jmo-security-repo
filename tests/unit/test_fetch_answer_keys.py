@@ -449,21 +449,30 @@ def test_each_kics_file_is_asked_for_by_the_pinned_commit(keys_dir, served) -> N
 
 def test_the_kics_pins_are_every_dockerfile_query_and_its_samples() -> None:
     """KICS v2.2.0's 48 Dockerfile queries: each one's expected lines and its
-    positive samples, 133 of them, and nothing else (measured 2026-11-04)."""
+    positive samples, 133 of them (measured 2026-11-04); and its 142
+    Kubernetes queries: each one's expected lines, its 271 positive samples
+    and its 262 negative ones (measured 2026-11-05). Nothing else."""
     assert re.fullmatch(r"[0-9a-f]{40}", fak.KICS_COMMIT)
-    shape = re.compile(
+    dockerfile = re.compile(
         r"assets/queries/dockerfile/[a-z0-9_]+/test/"
         r"(positive\d*\.dockerfile|positive_expected_result\.json)"
+    )
+    kubernetes = re.compile(
+        r"assets/queries/k8s/[a-z0-9_]+/test/"
+        r"((positive|negative)\d*\.(yaml|json)|positive_expected_result\.json)"
     )
     for path, digest in fak.KICS_FILES.items():
         assert re.fullmatch(r"[0-9a-f]{64}", digest), path
         assert fak.relative_path_problem(path) is None, path
-        assert shape.fullmatch(path), path
-    expected = {p.rsplit("/", 2)[0] for p in fak.KICS_FILES if p.endswith(".json")}
-    samples = {p.rsplit("/", 2)[0] for p in fak.KICS_FILES if p.endswith(".dockerfile")}
-    assert len(expected) == 48
-    assert expected == samples, "a query with expected lines and no sample, or both"
-    assert sum(p.endswith(".dockerfile") for p in fak.KICS_FILES) == 133
+        assert dockerfile.fullmatch(path) or kubernetes.fullmatch(path), path
+    for kind, queries, samples in (("dockerfile", 48, 133), ("k8s", 142, 271)):
+        half = [p for p in fak.KICS_FILES if p.startswith(f"assets/queries/{kind}/")]
+        expected = {p.rsplit("/", 2)[0] for p in half if p.endswith("_result.json")}
+        positives = [p for p in half if "/test/positive" in p and "expected" not in p]
+        assert len(expected) == queries, kind
+        assert {p.rsplit("/", 2)[0] for p in positives} == expected, kind
+        assert len(positives) == samples, kind
+    assert sum("/test/negative" in p for p in fak.KICS_FILES) == 262
 
 
 def test_kics_is_registered_under_the_name_the_command_takes() -> None:
