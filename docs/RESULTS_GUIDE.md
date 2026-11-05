@@ -155,9 +155,17 @@ with a stand-in, `jmo-redacted:` and a digest keyed for that report alone. Equal
 secrets get equal stand-ins, so a later report still pairs each secret's tree and
 history findings. A run stopped before its report, interrupted or failed, leaves them
 as the tools wrote them. Upload `summaries/`,
-never the whole results directory. `summaries/` is not free of source text either:
-a finding's `context.snippet`, and an opengrep finding's `raw`, quote the code it
-matched, so a rule that matches a hard-coded secret quotes that secret (issue #1585).
+never the whole results directory.
+
+**A finding whose rule matches a secret's value quotes no code.** For an opengrep rule
+listed in `scripts/core/secret_value_rules.py` as matching a credential's value (a
+hard-coded JWT key, a password default, a Kubernetes Secret), or one carrying a
+hard-coded-credential CWE (798, 259 or 321), the finding has no snippet, its `raw`
+keeps no matched lines or metavariables, and a message that quoted the value says
+`[redacted]` instead. The report rewrites those results in `opengrep.json` the same
+way and replaces their secrets in `.opengrep/semgrep.log`. Every other finding still
+quotes the lines around it, so `summaries/` holds source text: treat it as you would
+the code.
 
 Each target's folder is unique within its type. When two targets would share a
 folder name, they are told apart: repositories each by their parent folder

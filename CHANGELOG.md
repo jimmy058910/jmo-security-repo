@@ -1005,8 +1005,19 @@ All notable changes to JMo Security will be documented in this file.
   held every secret found in plaintext, and a CI artifact is readable by anyone who can read
   the run. Both GitHub Actions templates, and the CI examples in the docs (GitHub Actions,
   GitLab and Jenkins), now upload the summaries, which hold no secret scanner's raw output.
-  They still quote source text: a finding's `context.snippet`, and an opengrep finding's
-  `raw`, quote the code it matched, a hard-coded secret included (#1585).
+  They still quote source text: a finding's `context.snippet` and an opengrep finding's
+  `raw` quote the code around it.
+- **A secret an opengrep rule matches reaches no report, raw output or history (#1585).**
+  A finding from a rule that matches a credential's value quoted it in its snippet, its
+  raw record (`extra.lines`, `metavars`, `dataflow_trace`) and, where the rule's message
+  interpolates what it matched (`secrets-in-config-file`'s `$VALUE`, say), its message,
+  so the secret reached findings.json, findings.sarif, the dashboard, the PCI report and
+  history (measured). A reviewed list, `scripts/core/secret_value_rules.py`, marks the 32
+  bundled rules that match a value; any rule with CWE-798/259/321 counts too. Their
+  findings carry no snippet, their raw record keeps no matched code, and their message
+  says `[redacted]` where it quoted the value, which changes those findings' ids once.
+  The report rewrites their results in `opengrep.json` and replaces their secrets in
+  `.opengrep/semgrep.log`, and a later report reads the same findings.
 - **A report takes the secrets out of the secret scanners' raw outputs once it has read
   them (#1329).** `trufflehog.json`, `gitleaks.json` and their `.git.json` history files
   held every secret found, deleted ones included. The report `jmo scan`, `jmo ci` and
