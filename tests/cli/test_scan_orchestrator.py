@@ -330,7 +330,7 @@ class TestScanOrchestrator:
         orchestrator = ScanOrchestrator(config)
 
         args = MagicMock()
-        args.url = "https://example.com"
+        args.url = ["https://example.com"]
         args.urls_file = None
         args.api_spec = None
 
@@ -545,7 +545,7 @@ class TestScanOrchestrator:
         args.terraform_state = None
         args.cloudformation = None
         args.k8s_manifest = None
-        args.url = "https://example.com"
+        args.url = ["https://example.com"]
         args.urls_file = None
         args.api_spec = None
         args.gitlab_repo = None
@@ -579,10 +579,22 @@ class TestMsysPathDetection:
     def test_detects_windows_path_in_docker(self, monkeypatch):
         """Should detect Windows drive paths when DOCKER_CONTAINER=1."""
         monkeypatch.setenv("DOCKER_CONTAINER", "1")
+        # The image is Linux: pinned, so the Windows shard tests the same thing.
+        monkeypatch.setattr("scripts.cli.scan_orchestrator.sys.platform", "linux")
 
         # Any Windows path inside Docker container is likely MSYS-mangled
         assert _detect_msys_path_mangling("C:/Users/test/project") is True
         assert _detect_msys_path_mangling("D:\\Projects\\myrepo") is True
+
+    def test_docker_variable_on_native_windows_flags_no_drive_path(self, monkeypatch):
+        """On native Windows every path has a drive letter, so the variable alone
+        must not make them all mangled (#1558): only the MSYS telltale does."""
+        monkeypatch.setenv("DOCKER_CONTAINER", "1")
+        monkeypatch.setattr("scripts.cli.scan_orchestrator.sys.platform", "win32")
+
+        assert _detect_msys_path_mangling("C:/Users/test/project") is False
+        assert _detect_msys_path_mangling("D:\\Projects\\myrepo") is False
+        assert _detect_msys_path_mangling("C:/Program Files/Git/scan/x") is True
 
     def test_ignores_windows_path_outside_docker(self, monkeypatch):
         """Should NOT flag Windows paths when NOT in Docker (native Windows use)."""
@@ -922,7 +934,7 @@ class TestInvalidUrlWarning:
         orchestrator = ScanOrchestrator(config)
 
         class Args:
-            url = "not-a-valid-url"  # Single invalid URL
+            url = ["not-a-valid-url"]  # Single invalid URL
             urls_file = None
             api_spec = None
 
@@ -942,7 +954,7 @@ class TestInvalidUrlWarning:
         orchestrator = ScanOrchestrator(config)
 
         class Args:
-            url = "https://example.com"  # Valid URL
+            url = ["https://example.com"]  # Valid URL
             urls_file = None
             api_spec = None
 
@@ -1063,6 +1075,9 @@ class TestRejectedTargetsAreNamed:
             "k8s_all_namespaces": False,
         }
         base.update(kw)
+        # `--url` is repeatable (#1423): the parser gives a list.
+        if isinstance(base["url"], str):
+            base["url"] = [base["url"]]
         return SimpleNamespace(**base)
 
     @staticmethod

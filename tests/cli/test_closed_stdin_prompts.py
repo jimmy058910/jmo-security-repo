@@ -269,7 +269,7 @@ def resumable_scan(tmp_path: Path, home: Path, monkeypatch):
         pid=1,
     )
     session.register_target("repo", "proj", ["trufflehog"])
-    session.mark_target_complete("proj", row)
+    session.mark_target_complete("repo", "proj", row)
     save_session(session, tmp_path / ".jmo" / "scan-session.json")
 
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))

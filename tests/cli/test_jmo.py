@@ -322,7 +322,7 @@ def test_parse_args_multi_target_scanning(tmp_path: Path):
         assert args.cmd == "scan"
         assert args.repo == str(tmp_path)
         assert args.image == "nginx:latest"
-        assert args.url == "https://example.com"
+        assert args.url == ["https://example.com"]  # repeatable (#1423)
 
 
 # ========== Category 2: Error Handling Tests ==========

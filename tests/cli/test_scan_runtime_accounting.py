@@ -924,7 +924,7 @@ class TestResumeSkipIsVisibleAtDefaultVerbosity:
         session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
         session.register_target("repo", "alpha", ["trufflehog"])
         session.register_target("repo", "beta", ["trufflehog"])
-        session.mark_target_complete("alpha", rows(trufflehog="ran"))
+        session.mark_target_complete("repo", "alpha", rows(trufflehog="ran"))
 
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
             mock_scan.return_value = ("beta", rows(trufflehog="ran"))
@@ -948,6 +948,39 @@ class TestResumeSkipIsVisibleAtDefaultVerbosity:
         # used to say they covered "only the remaining ones".
         assert "reused" in notice[0], notice
         assert "only the remaining" not in notice[0], notice
+
+    def test_a_repository_and_an_image_with_one_name_resume_apart(self, tmp_path):
+        """`--repo ./nginx --image nginx`: keyed by id alone, the image's
+        record replaced the repository's, so with the image done the resumed
+        scan skipped the unscanned repository and reported the image's rows
+        as its own (#1406)."""
+        from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanTargets
+        from scripts.cli.scan_session import ScanSession
+
+        config = jmo.ScanConfig(results_dir=tmp_path, tools=["trivy"])
+        orchestrator = ScanOrchestrator(config)
+        (tmp_path / "nginx").mkdir()
+        targets = ScanTargets(repos=[tmp_path / "nginx"], images=["nginx"])
+
+        session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
+        session.register_target("repo", "nginx", ["trivy"])
+        session.register_target("image", "nginx", ["trivy"])
+        session.mark_target_complete("image", "nginx", rows(trivy="ran"), name="nginx")
+
+        with (
+            patch("scripts.cli.scan_jobs.scan_repository") as scan_repository,
+            patch("scripts.cli.scan_jobs.scan_image") as scan_image,
+        ):
+            scan_repository.return_value = ("nginx", rows(trivy="failed:timed out"))
+            results = orchestrator.scan_all(
+                targets, {}, session=session, session_path=tmp_path / "s.json"
+            )
+
+        assert scan_repository.call_count == 1
+        assert not scan_image.called
+        assert sorted(
+            (kind, name, run["trivy"].state.value) for kind, name, run in results
+        ) == [("image", "nginx", "ran"), ("repo", "nginx", "failed")]
 
 
 class TestCrashedTargetIsStillAccounted:
@@ -1251,7 +1284,7 @@ class TestResumedTargetsKeepTheirRows:
         done = ToolRun(
             "trufflehog", State.RAN, seconds=4.5, exit_code=0, attempts=1, invocations=1
         )
-        session.mark_target_complete("alpha", {"trufflehog": done})
+        session.mark_target_complete("repo", "alpha", {"trufflehog": done})
         path = tmp_path / "session.json"
         save_session(session, path)
         resumed = load_session(path)  # the rows must survive the file itself

@@ -172,7 +172,7 @@ def test_an_unstattable_target_is_rejected_not_raised(
     given = {attr: str(target)}
     if attr == "api_spec":
         # A spec is read only beside the URL it is aimed at (#1331).
-        given["url"] = "http://127.0.0.1:8080"
+        given["url"] = ["http://127.0.0.1:8080"]
 
     targets = orch.discover_targets(_Args(**given))
 
@@ -244,20 +244,93 @@ READ_FLAGS = [
 def test_a_list_file_that_stats_but_cannot_be_read_is_rejected(
     attr, flag, tmp_path, monkeypatch, orch
 ):
-    """``exists()`` answering True does not promise ``read_text()`` will work.
+    """``exists()`` answering True does not promise a read will work.
 
     A traversable directory holding a mode-000 file gives exactly this: the
     stat succeeds, the open does not.
     """
     listing = tmp_path / "list.txt"
     listing.write_text("# empty\n", encoding="utf-8")
-    _raise_on(monkeypatch, listing, "read_text")
+    _raise_on(monkeypatch, listing, "read_bytes")
 
     targets = orch.discover_targets(_Args(**{attr: str(listing)}))
 
     joined = "\n".join(targets.rejected)
     assert flag in joined, joined
     assert "Permission denied" in joined, joined
+
+
+@pytest.mark.parametrize("attr, flag", READ_FLAGS, ids=[f for _, f in READ_FLAGS])
+def test_a_list_file_that_is_not_utf8_is_rejected_not_raised(
+    attr, flag, tmp_path, orch
+):
+    """A list saved as UTF-16 by a Windows editor raised UnicodeDecodeError, a
+    ValueError the OSError handler did not catch: a traceback and exit 1 (#1175).
+    No patching: the bytes are the real cause."""
+    listing = tmp_path / "list.txt"
+    listing.write_bytes(b"\xff\xfe/some/path\x00\n")
+
+    targets = orch.discover_targets(_Args(**{attr: str(listing)}))
+
+    joined = "\n".join(targets.rejected)
+    assert flag in joined, joined
+    assert "not valid UTF-8 (byte 0xff at position 0)" in joined, joined
+    assert "uid 1000" not in joined, joined
+
+
+@pytest.mark.parametrize("attr, flag", READ_FLAGS, ids=[f for _, f in READ_FLAGS])
+def test_a_missing_list_file_still_says_it_does_not_exist(attr, flag, tmp_path, orch):
+    """The decode branch's negative control: an absent list file is not called
+    unreadable, nor blamed on its encoding (#1175)."""
+    targets = orch.discover_targets(_Args(**{attr: str(tmp_path / "nope.txt")}))
+
+    joined = "\n".join(targets.rejected)
+    assert flag in joined, joined
+    assert "does not exist" in joined, joined
+    assert "UTF-8" not in joined, joined
+
+
+def test_a_list_file_with_a_byte_order_mark_keeps_its_first_entry(tmp_path, orch):
+    """PowerShell 5.1's `Out-File -Encoding utf8` and Notepad's "UTF-8 with BOM"
+    start the file with U+FEFF, which stayed glued to the first entry: an
+    existing directory was rejected as missing, and a URL or an image reference
+    as malformed (#1485)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bom = "\ufeff"
+    for name, line in (
+        ("targets.txt", str(repo)),
+        ("images.txt", "nginx:1.27"),
+        ("urls.txt", "http://localhost:8080/"),
+    ):
+        (tmp_path / name).write_bytes(f"{bom}{line}\n".encode())
+
+    targets = orch.discover_targets(
+        _Args(
+            targets=str(tmp_path / "targets.txt"),
+            images_file=str(tmp_path / "images.txt"),
+            urls_file=str(tmp_path / "urls.txt"),
+        )
+    )
+
+    assert targets.rejected == [], targets.rejected
+    assert [p.name for p in targets.repos] == ["repo"]
+    assert targets.images == ["nginx:1.27"]
+    assert targets.urls == ["http://localhost:8080/"]
+
+
+def test_a_bad_byte_after_a_byte_order_mark_is_named_at_its_file_offset(tmp_path, orch):
+    """The mark is dropped before decoding, and the refusal still counts the
+    bad byte's place in the file, mark included: one says position 8 for the
+    byte a hex editor shows at 8."""
+    listing = tmp_path / "list.txt"
+    listing.write_bytes(b"\xef\xbb\xbfgood\n\xff\n")
+
+    targets = orch.discover_targets(_Args(targets=str(listing)))
+
+    assert "not valid UTF-8 (byte 0xff at position 8)" in "\n".join(targets.rejected), (
+        targets.rejected
+    )
 
 
 # --------------------------------------------------------------------------
@@ -292,7 +365,7 @@ def test_no_discovery_method_probes_the_filesystem_directly():
     """
     import scripts.cli.scan_orchestrator as mod
 
-    unguarded = {"exists", "is_dir", "iterdir", "read_text"}
+    unguarded = {"exists", "is_dir", "iterdir", "read_text", "read_bytes"}
     tree = ast.parse(inspect.getsource(mod))
     visited: list[str] = []
     offenders: list[str] = []

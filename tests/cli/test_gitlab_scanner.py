@@ -1092,6 +1092,78 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
         ), logged
 
 
+class TestEveryClaimedImageGetsRows:
+    """`_scan_named_images` claims an image before scanning it, so no other
+    target will: it promises rows for each. Its outer handler gave them, but a
+    fault inside that handler left the images after it with none, and the
+    report said nothing of them (#1557)."""
+
+    IMAGES = {"alpine:3.19", "nginx:1.27"}
+
+    def _named(self, tmp_path, scan_image):
+        from scripts.cli.scan_jobs import gitlab_scanner
+
+        images = DiscoveredImages(tmp_path / "individual-images")
+        with (
+            patch.object(
+                gitlab_scanner, "_discover_container_images", return_value=self.IMAGES
+            ),
+            patch.object(gitlab_scanner, "scan_image", side_effect=scan_image),
+        ):
+            try:
+                gitlab_scanner._scan_named_images(
+                    tmp_path / "clone",
+                    "group/app",
+                    "group_app",
+                    images,
+                    tools=["trivy"],
+                    timeout=600,
+                    retries=0,
+                    per_tool_config={},
+                    allow_missing_tools=False,
+                    find_tool_func=None,
+                    write_stub_func=None,
+                )
+            except RuntimeError as exc:
+                # The handler's own fault still reaches the caller's WARNING.
+                assert "logging failed" in str(exc)
+        return images
+
+    def test_a_fault_in_the_handler_still_leaves_each_image_its_rows(
+        self, tmp_path, monkeypatch
+    ):
+        """Both handlers start by logging: when that raises, the outer one
+        died before recording any image, and both claimed images had none."""
+        from scripts.cli.scan_jobs import gitlab_scanner
+
+        def error(*args, **kwargs):
+            raise RuntimeError("logging failed")
+
+        monkeypatch.setattr(gitlab_scanner.logger, "error", error)
+
+        def scan_raises(**kw):
+            raise OSError("pull failed")
+
+        images = self._named(tmp_path, scan_raises)
+
+        found = dict(images.found_in("group/app"))
+        assert set(found) == self.IMAGES
+        assert all(
+            rows["trivy"].label == "failed:scanner error" for rows in found.values()
+        )
+        assert all(
+            "logging failed" in (rows["trivy"].detail or "") for rows in found.values()
+        )
+
+    def test_a_scan_that_worked_is_recorded_once(self, tmp_path):
+        """The control: on success the reconciliation adds nothing."""
+        images = self._named(tmp_path, lambda **kw: (kw["image"], _rows(trivy=True)))
+
+        found = images.found_in("group/app")
+        assert sorted(image for image, _ in found) == sorted(self.IMAGES)
+        assert all(rows == _rows(trivy=True) for _, rows in found)
+
+
 class TestAReferenceNoToolIsGivenIsAFailedImageRow:
     """A reference the validator refuses never reaches a tool's command line:
     `--file=<path>` is a syft flag. Discovery keeps only what Docker's grammar

@@ -12,6 +12,7 @@ URL and container image validation to prevent injection attacks.
 
 from __future__ import annotations
 
+import codecs
 import fnmatch
 import logging
 import os
@@ -61,7 +62,7 @@ def _user_path(value: str) -> Path:
     return Path(value).expanduser()
 
 
-def _unreadable(exc: OSError) -> str:
+def _unreadable(exc: OSError | UnicodeDecodeError, offset: int = 0) -> str:
     """Rejection text for a target the process was not allowed to inspect.
 
     The ownership sentence is attached only to ``PermissionError``: a user
@@ -69,7 +70,18 @@ def _unreadable(exc: OSError) -> str:
     no way to guess that the *container's* uid is what could not see it, and
     re-types the path instead of fixing the mount. Anything else keeps the bare
     errno text, because inventing a cause is worse than reporting one.
+
+    A list file that is not UTF-8 (one a Windows editor saved as UTF-16) names
+    its first bad byte instead: there is no errno, and the fix is to re-save
+    the file, not to look at its permissions (#1175). `offset` is how many
+    bytes were dropped before decoding (a byte-order mark), so the position
+    is the byte's place in the file.
     """
+    if isinstance(exc, UnicodeDecodeError):
+        return (
+            f"cannot be read: not valid UTF-8 (byte 0x{exc.object[exc.start]:02x} "
+            f"at position {exc.start + offset}); save it as UTF-8"
+        )
     detail = exc.strerror or type(exc).__name__
     if isinstance(exc, PermissionError):
         return (
@@ -122,11 +134,23 @@ def _read_lines(path: Path) -> tuple[list[str], str | None]:
 
     ``exists()`` answering True does not promise ``open()`` will work: a
     traversable directory holding a mode-000 file gives exactly that split.
+    Nor does a readable file promise UTF-8 (#1175).
+
+    A leading byte-order mark is dropped, which PowerShell 5.1's
+    `Out-File -Encoding utf8` and Notepad's "UTF-8 with BOM" write: kept, it
+    was glued to the first entry, and an existing path was refused as missing
+    (#1485). Dropped here rather than by `utf-8-sig`, so a bad byte after it
+    is still named at its place in the file.
     """
     try:
-        return path.read_text(encoding="utf-8").splitlines(), None
+        raw = path.read_bytes()
     except OSError as exc:
         return [], _unreadable(exc)
+    mark = len(codecs.BOM_UTF8) if raw.startswith(codecs.BOM_UTF8) else 0
+    try:
+        return raw[mark:].decode("utf-8").splitlines(), None
+    except UnicodeDecodeError as exc:
+        return [], _unreadable(exc, offset=mark)
 
 
 def _detect_msys_path_mangling(path_str: str) -> bool:
@@ -152,9 +176,10 @@ def _detect_msys_path_mangling(path_str: str) -> bool:
     if re.match(msys_pattern, path_str):
         return True
 
-    # Also detect any Windows path inside a Docker Linux container
-    # Check if we're in Docker AND the path looks like a Windows path
-    if os.environ.get("DOCKER_CONTAINER") == "1":
+    # Also detect any Windows path inside a Docker Linux container. Only on a
+    # platform that is not Windows: on native Windows every path has a drive
+    # letter, and the variable alone refused them all (#1558).
+    if os.environ.get("DOCKER_CONTAINER") == "1" and sys.platform != "win32":
         # Windows drive letter pattern: C:/ or D:\
         if re.match(r"^[A-Za-z]:[/\\]", path_str):
             return True
@@ -825,7 +850,7 @@ class ScanOrchestrator:
         Discover web URLs from CLI arguments.
 
         Supports two input modes:
-        - --url: Single URL
+        - --url: one URL each, repeatable
         - --urls-file: File with list of URLs
 
         Security: Validates URLs to ensure only http/https protocols
@@ -833,9 +858,9 @@ class ScanOrchestrator:
         """
         urls: list[str] = []
 
-        # Single URL
-        if getattr(args, "url", None):
-            url = args.url
+        # `--url` is repeatable: a plain store kept only the last, so a
+        # schedule exporting one `--url` per URL scanned one (#1423).
+        for url in getattr(args, "url", None) or []:
             if validate_url(url):
                 urls.append(url)
             else:
@@ -863,7 +888,8 @@ class ScanOrchestrator:
                         )
 
         if getattr(args, "api_spec", None):
-            self._pair_api_spec(args.api_spec, getattr(args, "url", None), urls)
+            given = getattr(args, "url", None) or []
+            self._pair_api_spec(args.api_spec, given[0] if given else None, urls)
 
         # A URL listed twice is scanned once, as a TSV row is (#1312).
         return list(dict.fromkeys(urls))
@@ -1206,22 +1232,28 @@ class ScanOrchestrator:
         tools = list(self.config.tools)
 
         # Helper to check if a target was already completed in a previous session
-        def _is_completed(target_id: str) -> bool:
+        def _is_completed(target_type: str, target_id: str) -> bool:
             if session is not None:
-                return bool(session.is_target_completed(target_id))
+                return bool(session.is_target_completed(target_type, target_id))
             return False
 
         # A resumed scan does not scan a completed target again, but its rows
         # are still this scan's record: `tool_runs`, history, the reconciler.
         def _resumed(target_type: str, target_id: str) -> None:
-            kept = session.completed_rows(target_id) if session is not None else None
+            kept = (
+                session.completed_rows(target_type, target_id)
+                if session is not None
+                else None
+            )
             if kept is not None:
                 all_results.append((target_type, kept[0], kept[1]))
 
         # Helper to checkpoint after each target completes
-        def _checkpoint(target_id: str, name: str, rows: Mapping[str, ToolRun]) -> None:
+        def _checkpoint(
+            target_type: str, target_id: str, name: str, rows: Mapping[str, ToolRun]
+        ) -> None:
             if session is not None and session_path is not None:
-                session.mark_target_complete(target_id, rows, name=name)
+                session.mark_target_complete(target_type, target_id, rows, name=name)
                 from scripts.cli.scan_session import save_session as _save
 
                 _save(session, session_path)
@@ -1246,11 +1278,45 @@ class ScanOrchestrator:
             for image, image_rows in discovered.found_in(gitlab_id):
                 all_results.append(("image", image, image_rows))
                 image_id = found_image_id(image)
-                if session is not None:
-                    session.register_target(
-                        "image", image_id, tools, found_in=gitlab_id
+                # Each step below fails on its own, as a target's do after its
+                # scan (#1556): a checkpoint or a display that raises must not
+                # cost the images after this one their place in the results.
+                try:
+                    if session is not None:
+                        session.register_target(
+                            "image", image_id, tools, found_in=gitlab_id
+                        )
+                    _checkpoint("image", image_id, image, image_rows)
+                except Exception as e:
+                    logger.error(
+                        "image %s, named by %s, was scanned, but checkpointing "
+                        "it failed (%s: %s); its results stand",
+                        image,
+                        gitlab_id,
+                        type(e).__name__,
+                        e,
+                        exc_info=True,
                     )
-                _checkpoint(image_id, image, image_rows)
+                # No target count held it, so the display never showed it,
+                # and a failed one surfaced only in the final ERROR line
+                # (#1409).
+                if progress_callback:
+                    try:
+                        progress_callback(
+                            "image",
+                            image,
+                            image_rows,
+                            elapsed=max(
+                                (r.seconds or 0.0 for r in image_rows.values()),
+                                default=0.0,
+                            ),
+                        )
+                    except Exception:
+                        logger.debug(
+                            "Progress callback failed for image %s",
+                            image,
+                            exc_info=True,
+                        )
 
         # A tool someone named that no target in this scan reads runs nowhere.
         # Its rows say `skipped` on every target; this line says it once. Only
@@ -1298,7 +1364,7 @@ class ScanOrchestrator:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for repo, result_name in zip(targets.repos, repo_names, strict=True):
-                if _is_completed(result_name):
+                if _is_completed("repo", result_name):
                     skipped_count += 1
                     _resumed("repo", result_name)
                     continue
@@ -1319,7 +1385,7 @@ class ScanOrchestrator:
                 futures.append(("repo", result_name, jobs_dir / result_name, future))
 
             for image, folder in zip(targets.images, image_folders, strict=True):
-                if _is_completed(image):
+                if _is_completed("image", image):
                     skipped_count += 1
                     _resumed("image", image)
                     continue
@@ -1344,7 +1410,7 @@ class ScanOrchestrator:
                 # The name its job records, so a scanner that raises is
                 # recorded under the name success would have used (#1315).
                 iac_id = iac_target_name(iac_type, iac_path)
-                if _is_completed(iac_id):
+                if _is_completed("iac", iac_id):
                     skipped_count += 1
                     _resumed("iac", iac_id)
                     continue
@@ -1365,7 +1431,7 @@ class ScanOrchestrator:
                 futures.append(("iac", iac_id, jobs_dir / folder, future))
 
             for url, folder in zip(targets.urls, url_folders, strict=True):
-                if _is_completed(url):
+                if _is_completed("url", url):
                     skipped_count += 1
                     _resumed("url", url)
                     continue
@@ -1387,7 +1453,7 @@ class ScanOrchestrator:
 
             for gitlab_repo_info in targets.gitlab_repos:
                 gl_id = gitlab_repo_info.get("full_path", "unknown")
-                if _is_completed(gl_id):
+                if _is_completed("gitlab", gl_id):
                     skipped_count += 1
                     _resumed("gitlab", gl_id)
                     continue
@@ -1412,7 +1478,7 @@ class ScanOrchestrator:
                 ctx = k8s_resource_info.get("context", "unknown")
                 ns = k8s_resource_info.get("namespace", "unknown")
                 k8s_id = f"{ctx}:{ns}"
-                if _is_completed(k8s_id):
+                if _is_completed("k8s", k8s_id):
                     skipped_count += 1
                     _resumed("k8s", k8s_id)
                     continue
@@ -1455,17 +1521,6 @@ class ScanOrchestrator:
             for target_type, target_id, out_dir, future in futures:
                 try:
                     name, rows, elapsed = future.result()
-                    all_results.append((target_type, name, rows))
-                    if target_type == "gitlab":
-                        _record_found(target_id)
-
-                    # Checkpoint after each completed target
-                    _checkpoint(target_id, name, rows)
-
-                    # Call progress callback if provided
-                    if progress_callback:
-                        progress_callback(target_type, target_id, rows, elapsed=elapsed)
-
                 except Exception as e:
                     # Log error but continue with other targets
                     logger.error(
@@ -1480,15 +1535,10 @@ class ScanOrchestrator:
                         tools, target_type, Reason.SCANNER_ERROR, detail=error
                     )
                     all_results.append((target_type, target_id, failed_rows))
-                    # Only a scan that raised has no timings of its own to
-                    # keep. This `try` also covers what runs after a good scan
-                    # (`_record_found`, `_checkpoint`, the progress callback):
-                    # its `ran` timings and output are on disk, and the report
-                    # must keep reading them (#1518).
-                    if future.exception() is not None:
-                        _record_raised_scan(
-                            out_dir, target_id, target_type, failed_rows, error
-                        )
+                    # The scan raised, so it has no timings of its own to keep.
+                    _record_raised_scan(
+                        out_dir, target_id, target_type, failed_rows, error
+                    )
 
                     # The callback used to be skipped on this path, so a target
                     # whose scanner *raised* never reached the progress display
@@ -1512,5 +1562,29 @@ class ScanOrchestrator:
                                 target_id,
                                 exc_info=True,
                             )
+                    continue
+
+                all_results.append((target_type, name, rows))
+                # What runs after a scan that worked is not the scan: a step
+                # that raises is logged, and the target stays recorded once,
+                # with its rows. One `try` around both appended it again as
+                # failed (#1556), and its `ran` timings and output on disk
+                # stand for the report (#1518).
+                try:
+                    if target_type == "gitlab":
+                        _record_found(target_id)
+                    _checkpoint(target_type, target_id, name, rows)
+                    if progress_callback:
+                        progress_callback(target_type, target_id, rows, elapsed=elapsed)
+                except Exception as e:
+                    logger.error(
+                        "%s %s was scanned, but recording it afterwards failed "
+                        "(%s: %s); its results stand",
+                        target_type,
+                        target_id,
+                        type(e).__name__,
+                        e,
+                        exc_info=True,
+                    )
 
         return all_results

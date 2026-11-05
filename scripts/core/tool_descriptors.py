@@ -29,8 +29,10 @@ import ssl
 import subprocess
 import sys
 import tomllib
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -109,12 +111,30 @@ def is_batch_launcher(executable: str | Path) -> bool:
     return Path(executable).suffix.lower() in (".bat", ".cmd")
 
 
+# The long-path (`\\?\`) and device (`\\.\`) prefixes of a drive letter, either
+# separator: `\\?\C:\x` is the local `C:\x`, not a share.
+_DRIVE_PREFIX = re.compile(r"^[\\/]{2}[?.][\\/](?=[A-Za-z]:)")
+
+
 def is_unc(path: str | Path) -> bool:
     """Whether `path` is a UNC path (`\\\\server\\share\\...`), which cmd.exe
     refuses as its working directory: it starts in `C:\\Windows` instead.
-    Read as a Windows path on every platform; elsewhere no path is one."""
-    # TODO(issue-#1428): reads \\?\C:\x and \\.\C:\x as UNC
-    return PureWindowsPath(str(path)).drive.startswith("\\\\")
+    Read as a Windows path on every platform; elsewhere no path is one. The
+    long-path and device spellings of a drive (`\\\\?\\C:\\x`, `\\\\.\\C:\\x`) start
+    `\\\\` too and are local, not UNC (#1428); `\\\\?\\UNC\\...` is a share."""
+    text = str(path)
+    return not _DRIVE_PREFIX.match(text) and PureWindowsPath(text).drive.startswith(
+        "\\\\"
+    )
+
+
+def plain_drive(path: Path) -> Path:
+    """`path` without a long-path or device prefix on its drive letter:
+    `\\\\?\\C:\\x` is `C:\\x`. For a batch launcher's working directory, since
+    whether cmd.exe starts in a `\\\\?\\` directory is not measured, and it
+    refuses every other one that starts `\\\\` (#1428). Anything else as given."""
+    text = str(path)
+    return Path(_DRIVE_PREFIX.sub("", text)) if _DRIVE_PREFIX.match(text) else path
 
 
 class ExclusionStyle(StrEnum):
@@ -478,6 +498,11 @@ class ToolDescriptor:
     # UNC path; both Windows), fails the row before it runs (a trigger can
     # only skip).
     precheck: Precheck | None = None
+    # What starts in place of the batch launcher (`.bat`/`.cmd`) the tool
+    # resolved to, from that launcher; None when nothing can. zap's `zap.bat`
+    # is replaced by its java line (`zap_java`), so cmd.exe never reads zap's
+    # arguments and `tool_flags` need not drop them (#1427).
+    replaces_launcher: Callable[[Path], str | None] | None = None
     # The tool was handed files and read none of them: a skip, not a failure.
     nothing_read: NothingRead | None = None
     # Which of the files it was handed it did not read, from its stderr.
@@ -1027,8 +1052,27 @@ def _syft_image(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+def _trivy_cwd(ctx: ScanContext) -> Path:
+    """Where trivy runs: it reads `trivy.yaml` and `.trivyignore` from there
+    (measured, 0.74.0), so never from jmo's own directory (#1574). A
+    repository from its root, whose files are its own and announced
+    (`own_config`); anything else from JMo's output folder, which holds none."""
+    if ctx.target_type == "repo":
+        return Path(scan_root(ctx.target))
+    return Path(ctx.out_dir).absolute()
+
+
 def _trivy(subcommand: str, *pre: str, excl: bool = False) -> Builder:
     def build(ctx: ScanContext) -> list[Invocation]:
+        # `.` from a repository's root; any other operand absolute, as the
+        # output is, since trivy no longer runs where jmo does.
+        operand = (
+            "."
+            if ctx.target_type == "repo"
+            else str(Path(ctx.target).absolute())
+            if subcommand == "config"
+            else str(ctx.target)
+        )
         return [
             Invocation(
                 command=(
@@ -1040,13 +1084,14 @@ def _trivy(subcommand: str, *pre: str, excl: bool = False) -> Builder:
                     *pre,
                     *(ctx.exclusion_args if excl else ()),
                     *filter_trivy_flags(subcommand, ctx.flags),
-                    str(ctx.target),
+                    operand,
                     "-o",
-                    str(ctx.output),
+                    str(Path(ctx.output).absolute()),
                 ),
                 output_file=ctx.output,
                 capture_stdout=False,
                 ok_return_codes=(0, 1),
+                cwd=_trivy_cwd(ctx),
             )
         ]
 
@@ -1067,7 +1112,7 @@ def _trivy_k8s(ctx: ScanContext) -> list[Invocation]:
     # sentinel discovery writes when the user named none.
     if not all_namespaces and namespace not in ("", "*", "default"):
         command += ["--include-namespaces", namespace]
-    command += ["-o", str(ctx.output)]
+    command += ["-o", str(Path(ctx.output).absolute())]
     # The context is POSITIONAL (`trivy kubernetes [flags] [CONTEXT]`).
     if context and context != "current":
         command.append(context)
@@ -1077,6 +1122,7 @@ def _trivy_k8s(ctx: ScanContext) -> list[Invocation]:
             output_file=ctx.output,
             capture_stdout=False,
             ok_return_codes=(0, 1),
+            cwd=_trivy_cwd(ctx),
         )
     ]
 
@@ -1113,9 +1159,10 @@ def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
     """
 
     def build(ctx: ScanContext) -> list[Invocation]:
-        target = Path(ctx.target)
+        batch = is_batch_launcher(ctx.binary)
+        target = plain_drive(Path(ctx.target)) if batch else Path(ctx.target)
         cwd: Path | None
-        if is_batch_launcher(ctx.binary) and is_unc(target):
+        if batch and is_unc(target):
             cwd, operand = None, str(target)
         elif flag == "-d":
             cwd, operand = target, "."
@@ -1168,21 +1215,48 @@ def _checkov_unc(ctx: ScanContext) -> Shortfall | None:
     )
 
 
-def _file_fed(*format_args: str) -> Builder:
+def _file_fed(*format_args: str, from_root: bool = False) -> Builder:
     """hadolint and shellcheck take many paths per invocation; the scan loop
-    walks the tree (pruning the excluded directories) and hands them over."""
+    walks the tree (pruning the excluded directories) and hands them over.
+
+    `from_root`: run from the target's root, the files absolute. hadolint
+    reads `.hadolint.yaml` / `.hadolint.yml` from where it runs (measured,
+    2.15.1), which was jmo's own directory (#1574)."""
 
     def build(ctx: ScanContext) -> list[Invocation]:
+        files = (
+            tuple(str(Path(f).absolute()) for f in ctx.files)
+            if from_root
+            else ctx.files
+        )
         return [
             Invocation(
-                command=(ctx.binary, *format_args, *ctx.flags, *ctx.files),
+                command=(ctx.binary, *format_args, *ctx.flags, *files),
                 output_file=ctx.output,
                 capture_stdout=True,
                 ok_return_codes=(0, 1),  # 2+ are fatal parse/usage errors
+                cwd=Path(scan_root(ctx.target)) if from_root else None,
             )
         ]
 
     return build
+
+
+def _shellcheck_own_config_dirs(ctx: ScanContext) -> list[Path]:
+    """shellcheck reads `.shellcheckrc` or `shellcheckrc` from each script's
+    directory and its parents (measured, 0.11.0): each directory from a walked
+    script up to the root, once. One above the root, or the user's own
+    `~/.shellcheckrc`, also applies; it is not the repository's, so not named."""
+    root, scripts = _relative_to_target(ctx)
+    dirs: dict[Path, None] = {}
+    for script in scripts:
+        here = (root / script).parent
+        while True:
+            dirs[here] = None
+            if here == root or root not in here.parents:
+                break
+            here = here.parent
+    return list(dirs)
 
 
 def _relative_to_target(ctx: ScanContext) -> tuple[Path, list[str]]:
@@ -1350,6 +1424,35 @@ def _osv_own_config_dirs(ctx: ScanContext) -> list[Path]:
     return list(dict.fromkeys((root / f).parent for f in lockfiles))
 
 
+def _osv_active(until: object) -> bool:
+    """Whether an entry still applies: osv-scanner keeps it until its
+    `ignoreUntil` / `effectiveUntil` passes (measured, 2.7.0: a past date kept
+    the finding, a future one dropped it). A date is midnight UTC; a value that
+    is not a date is counted, as before (#1433)."""
+    if isinstance(until, datetime):
+        moment = until if until.tzinfo else until.replace(tzinfo=UTC)
+    elif isinstance(until, date):
+        moment = datetime(until.year, until.month, until.day, tzinfo=UTC)
+    else:
+        return True
+    return moment > datetime.now(UTC)
+
+
+def _osv_override_scope(override: dict[str, Any]) -> str:
+    """What a `[[PackageOverrides]]` entry without a `name` ignores: every
+    package its other fields select (measured, 2.7.0: `ecosystem = "npm"` and
+    no selector at all both dropped an npm advisory)."""
+    ecosystem = override.get("ecosystem")
+    scope = (
+        f"every {ecosystem} package"
+        if isinstance(ecosystem, str) and ecosystem
+        else "every package"
+    )
+    if "version" in override or "group" in override:
+        scope += " matching its version or group"
+    return scope
+
+
 def _osv_own_config_detail(path: Path) -> str:
     """What an `osv-scanner.toml` suppresses: its `[[IgnoredVulns]]` entries,
     and the `[[PackageOverrides]]` entries that ignore a package
@@ -1358,7 +1461,10 @@ def _osv_own_config_detail(path: Path) -> str:
     override with `ignore = false` or only a license kept it, and was
     announced as suppressing. A file that ignores nothing is still named, as
     read, without the word. A file that does not parse is said to be
-    unreadable here, not a crash."""
+    unreadable here, not a crash.
+
+    An entry counts only while its date has not passed, and an override with
+    no `name` is said to ignore the scope it selects, not "1 package" (#1433)."""
     try:
         document = tomllib.loads(path.read_bytes().decode("utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
@@ -1378,16 +1484,27 @@ def _osv_own_config_detail(path: Path) -> str:
             isinstance(vulnerability, dict) and vulnerability.get("ignore") is True
         )
 
-    n_ignored = len(tables("IgnoredVulns"))
-    # TODO(issue-#1433): expired ignores and nameless overrides overstated
-    n_packages = sum(ignores(o) for o in tables("PackageOverrides"))
-    if not n_ignored and not n_packages:
+    n_ignored = sum(_osv_active(v.get("ignoreUntil")) for v in tables("IgnoredVulns"))
+    overrides = [
+        o
+        for o in tables("PackageOverrides")
+        if ignores(o) and _osv_active(o.get("effectiveUntil"))
+    ]
+    n_packages = sum("name" in o for o in overrides)
+    scopes = Counter(_osv_override_scope(o) for o in overrides if "name" not in o)
+    if not n_ignored and not overrides:
         return "it ignores no vulnerability and no package"
-    return (
-        f"{n_ignored} ignored {'vulnerability' if n_ignored == 1 else 'vulnerabilities'}"
-        f" and {n_packages} ignored {'package' if n_packages == 1 else 'packages'}"
-        " suppress findings"
-    )
+    pieces = [
+        f"{n_ignored} ignored {'vulnerability' if n_ignored == 1 else 'vulnerabilities'}",
+        f"{n_packages} ignored {'package' if n_packages == 1 else 'packages'}",
+        *(
+            f"an override that ignores {scope}"
+            if n == 1
+            else f"{n} overrides that ignore {scope}"
+            for scope, n in scopes.items()
+        ),
+    ]
+    return f"{', '.join(pieces[:-1])} and {pieces[-1]} suppress findings"
 
 
 def _gitleaks_own_config_detail(path: Path) -> str:
@@ -1664,15 +1781,30 @@ def _java_quote(text: str) -> str:
     return "\\Q" + text.replace("\\E", "\\E\\\\E\\Q") + "\\E"
 
 
-def _zap_node_name(scheme: str, netloc: str, path: str) -> str:
+# Escapes that decode to another path: `%2F` is a `/` and `%25XX` a `%XX`.
+_ZAP_PATH_ESCAPES = re.compile(r"(%2[Ff]|%25)")
+# Those, and the ones ZAP cuts a page's name at once decoded (`?`, `#`).
+_ZAP_NAME_BREAKING = re.compile(r"%2[Ff5]|%3[Ff]|%23")
+
+
+def _zap_node_name(scheme: str, netloc: str, path: str, *, scope: bool = False) -> str:
     """`scheme://netloc/path` as ZAP names its site-tree node: without the
-    scheme's default port, the path percent-decoded."""
+    scheme's default port, the path percent-decoded.
+
+    With `scope`, the spelling the scan's scope takes: `%2F` and `%25` stay
+    encoded, since decoded each is another path, and the scope took in a
+    directory the target is not (#1434). ZAP's own name for such a page is
+    then outside it; `_zap_partly_read` says so on the row."""
     host, colon, port = netloc.rpartition(":")
     default = {"http": 80, "https": 443}.get(scheme.lower())
     if colon and port.isdigit() and int(port) == default:
         netloc = host
-    # TODO(issue-#1434): unquote widens scope for %2F and %25XX
-    return f"{scheme}://{netloc}{unquote(path)}"
+    if scope:
+        pieces = _ZAP_PATH_ESCAPES.split(path)
+        decoded = "".join(p if i % 2 else unquote(p) for i, p in enumerate(pieces))
+    else:
+        decoded = unquote(path)
+    return f"{scheme}://{netloc}{decoded}"
 
 
 # One host, two names: a site served on one and redirecting to the other was
@@ -1694,7 +1826,7 @@ def _zap_scope(target: str) -> tuple[list[str], str]:
     spellings: dict[str, None] = {}
     for netloc in netlocs:
         spellings[f"{parts.scheme}://{netloc}{parts.path}"] = None
-        spellings[_zap_node_name(parts.scheme, netloc, parts.path)] = None
+        spellings[_zap_node_name(parts.scheme, netloc, parts.path, scope=True)] = None
     return list(spellings), (".*" if parts.path else "(?:[/?#].*)?")
 
 
@@ -1774,26 +1906,49 @@ def _zap_partly_read(ctx: ScanContext) -> dict[str, str]:
     zap followed the 301 out of its scope and attacked nothing, rc 0, and the
     row read a plain `ran` (measured on ZAP 2.17.0). A redirect the scope
     holds (the target's own path, the other loopback name) is attacked and
-    needs no word. An `--api-spec` run crawls nothing, so it is not asked."""
+    needs no word. An `--api-spec` run crawls nothing, so it is not asked.
+
+    Any run of a target whose path holds `%2F`, `%25`, `%3F` or `%23`: ZAP's
+    active scan names a page by its decoded path, which for these is another
+    path or one cut short, outside the scope (`_zap_node_name`), so it may
+    attack nothing there (#1434, not measured against ZAP)."""
     if ctx.plan is None:
         return {}
-    try:
-        jobs = yaml.safe_load(ctx.plan.read_bytes())["jobs"]
-    except (OSError, yaml.YAMLError, KeyError, TypeError):
-        return {}
-    if not jobs or jobs[0].get("type") != "spider":
-        return {}
     target = str(ctx.target)
+    notes: list[str] = []
+    held = sorted(
+        {m.upper() for m in _ZAP_NAME_BREAKING.findall(urlsplit(target).path)}
+    )
+    if held:
+        notes.append(
+            f"its path holds {', '.join(held)}, which ZAP's active scan decodes "
+            "in the names it gives pages, so what is under it may not have been "
+            "attacked"
+        )
+    moved = _zap_redirect(ctx.plan, target)
+    if moved is not None:
+        notes.append(
+            f"it redirects to {moved}, outside the scan's scope, and what is "
+            "there was not attacked"
+        )
+    return {target: "; ".join(notes)} if notes else {}
+
+
+def _zap_redirect(plan: Path, target: str) -> str | None:
+    """Where a spider run's `target` redirects outside the scope, without its
+    query, or None (`_zap_partly_read`)."""
+    try:
+        jobs = yaml.safe_load(plan.read_bytes())["jobs"]
+    except (OSError, yaml.YAMLError, KeyError, TypeError):
+        return None
+    if not jobs or jobs[0].get("type") != "spider":
+        return None
     moved = url_redirect(target)
     if moved is None or _in_zap_scope(target, moved):
-        return {}
+        return None
     # Without its query: a sign-on redirect carries its request and state
     # there, and the row reaches the artifacts people paste into issues.
-    place = urlunsplit(urlsplit(moved)._replace(query="", fragment=""))
-    return {
-        target: f"it redirects to {place}, outside the scan's scope, and "
-        "what is there was not attacked"
-    }
+    return urlunsplit(urlsplit(moved)._replace(query="", fragment=""))
 
 
 def _zap_context(target: str) -> dict[str, Any]:
@@ -1949,6 +2104,12 @@ def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
     if not java:
         return (), "java, which zap runs on, could not be found"
     return (java, ZAP_HEAP, "-jar", str(jars[0])), ""
+
+
+def _zap_java_executable(launcher: Path) -> str | None:
+    """The java that runs in place of `zap.bat` (`zap_java`), or None."""
+    launch, _problem = zap_java(launcher)
+    return launch[0] if launch else None
 
 
 def _zap_launch(ctx: ScanContext) -> Shortfall | None:
@@ -2157,6 +2318,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="trivy",
+            own_config=("trivy.yaml", ".trivyignore"),
             invocations={
                 # No `secret`: gitleaks and trufflehog already read a repository's
                 # secrets, and trivy's own pass is redundant there. `--include-dev-deps`
@@ -2231,7 +2393,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="hadolint",
-            invocations={"repo": _file_fed("-f", "json")},
+            invocations={"repo": _file_fed("-f", "json", from_root=True)},
+            own_config=(".hadolint.yaml", ".hadolint.yml"),
             version_probe=VersionProbe(
                 re.compile(r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)")
             ),
@@ -2252,6 +2415,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="shellcheck",
             invocations={"repo": _file_fed("--format=json")},
+            own_config=(".shellcheckrc", "shellcheckrc"),
+            own_config_dirs=_shellcheck_own_config_dirs,
             version_probe=VersionProbe(
                 re.compile(r"(?:version:?\s*)?(\d+\.\d+\.\d+)", re.IGNORECASE)
             ),
@@ -2428,6 +2593,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
             precheck=_zap_launch,
+            replaces_launcher=_zap_java_executable,
             partly_read=_zap_partly_read,
             automation_plan=True,
             # The plan's whole budget (`zap_minutes`).

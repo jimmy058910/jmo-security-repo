@@ -313,6 +313,10 @@ class RichScanProgressTracker:
 
         with self._lock:
             self.targets_completed += 1
+            # An image a GitLab target names is found mid-scan, after the
+            # total was counted: it grows the total rather than reading
+            # `[2/1]` (#1409).
+            self.total_targets = max(self.total_targets, self.targets_completed)
             self.current_target_type = target_type
             self.current_target = target_name
 
@@ -323,6 +327,7 @@ class RichScanProgressTracker:
             self.target_progress.update(
                 self.target_task,
                 completed=self.targets_completed,
+                total=self.total_targets,
                 description=description,
             )
 

@@ -389,7 +389,8 @@ All notable changes to JMo Security will be documented in this file.
   (1 request, nothing attacked, rc 0) and `?q=(x` did not compile (rc 1). The context is
   the URL, quoted, without its query, and nothing wider. It holds the URL twice: as typed,
   which the spider matches, and as ZAP names its site-tree nodes, which the active scan
-  matches, without the scheme's default port and with the path percent-decoded. Scoped as
+  matches, without the scheme's default port and with the path percent-decoded, except
+  an encoded `/` or `%`, which decoded would name another path (#1434). Scoped as
   typed alone, `http://h:80/app/`, `http://h/my%20app/` and an `--api-spec` scan of
   `http://h:80` were crawled and attacked nothing, rc 0. With `--api-spec FILE|URL`
   (a file, or the http(s) URL it is served from) an import of the definition replaces the
@@ -993,6 +994,47 @@ All notable changes to JMo Security will be documented in this file.
   is missing, as it already did when another tool on the target ran; a target where no run
   of any tool worked still exits 1. `scan-timings.json` is schema 4, with a
   `kept_findings` count on each row, null when no run of the row worked (#1369).
+- **`jmo scan --url` is repeatable.** It kept only the last `--url`, so a schedule whose
+  GitHub Actions, GitLab CI or cron export writes one `--url` per web URL scanned one of
+  them, exit 0. `--api-spec` with more than one `--url` exits 2, as it does with none: a
+  definition is the API of one URL, and the others go in `--urls-file`. A schedule naming
+  `web.api_spec` with several `web.urls` is refused where it is built and exported
+  (#1423).
+- **The scan session keys a target by its type and its id.** `--repo ./nginx --image
+  nginx` shared one record, so a resumed scan could skip the unscanned repository as done
+  and report the image's rows as its own. A session file written before this still loads
+  (#1406).
+- **A target is recorded once when a step after its scan fails.** A failing checkpoint
+  or progress display appended it again as failed, beside its scanned rows, in the
+  results and in history (#1556).
+- **Every image a GitLab target claims gets rows, and reaches the progress display.** A
+  fault inside the image step's own error handler left the images after it with no rows
+  (#1557), and the images, found mid-scan, never appeared on the progress line, where the
+  count now grows for them (#1409).
+- **A `--targets`, `--images-file` or `--urls-file` list that is not plain UTF-8 is
+  read or refused, never a traceback.** A file saved as UTF-16 crashed the scan; it is now
+  refused, naming its first bad byte (#1175). A UTF-8 file with a byte-order mark, as
+  PowerShell 5.1 and Notepad write, lost its first entry; the mark is now dropped (#1485).
+- **`DOCKER_CONTAINER=1` on native Windows no longer refuses every drive-letter path as
+  MSYS-mangled** (#1558).
+- **checkov scans a `\\?\C:\...` or `\\.\C:\...` target instead of failing it as a UNC
+  path**, run from the drive's plain spelling (#1428).
+- **ZAP's `per_tool.zap.flags` keep `& | ^ < > %` on Windows.** They were dropped as if
+  `zap.bat` ran them, though JMo runs the java line it holds (#1427).
+- **ZAP's scope no longer widens for a target path holding `%2F` or `%25`,** which decoded
+  to another directory; a path holding `%2F`, `%25`, `%3F` or `%23` is named as partly
+  audited, since ZAP's active scan may name its pages outside the scope (#1434).
+- **The osv-scanner own-config announcement counts only active entries.** An expired
+  `ignoreUntil` or `effectiveUntil` was counted as suppressing, and an override with no
+  `name` was "1 ignored package" though it ignores a whole ecosystem (#1433).
+- **ShellCheck, Hadolint and Trivy announce a repository's own config, and no longer read
+  the launch directory's.** `.shellcheckrc`, `.hadolint.yaml` and `trivy.yaml` /
+  `.trivyignore` switched checks off unannounced; Hadolint and Trivy read theirs from
+  wherever `jmo` was launched, so a stray file there applied to every target. They now run
+  from the scanned repository (Trivy on an image, IaC file or cluster from JMo's output
+  folder), and each file read is named and recorded as `own_config`. A relative path in
+  their `per_tool` flags is now read from there too; an absolute path is unaffected
+  (#1574).
 
 ### Security
 

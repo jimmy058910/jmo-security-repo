@@ -36,6 +36,7 @@ from scripts.core.tool_descriptors import (
     Fallback,
     Invocation,
     ScanContext,
+    is_unc,
 )
 from scripts.core.tool_registry import BUILTIN_TOOLS
 from scripts.core.tool_runner import ToolResult
@@ -187,6 +188,10 @@ UNC_ROOT = Path(r"\\server.invalid\share")
 
 
 def _is_unc(path: Path | None) -> bool:
+    """Whether cmd.exe may refuse `path` as its working directory: any drive
+    that starts `\\\\`. Stricter than the product's `is_unc` on purpose, which
+    calls the long-path spellings `\\\\?\\C:` and `\\\\.\\C:` local (#1428): whether
+    cmd.exe starts in one is not measured, so no launcher may be sent there."""
     return path is not None and PureWindowsPath(str(path)).drive.startswith("\\\\")
 
 
@@ -241,9 +246,11 @@ class TestTheClassTestIsNotVacuous:
             assert Path(line[0]).name == "checkov.cmd", line
 
     def test_the_rendered_values_hold_the_character(self, tmp_path, java):
-        """A rendering that lost the character would pass for every tool."""
-        (inv,) = _render(tmp_path, "trivy", "repo", "&", ".exe")
-        assert any("repo&x" in arg for arg in inv.command), inv.command
+        """A rendering that lost the character would pass for every tool.
+        trivy's IaC run names its file's directory; its repository run is
+        `.` from the target since #1574."""
+        (inv,) = _render(tmp_path, "trivy", "iac", "&", ".exe")
+        assert any("iac&x" in arg for arg in inv.command), inv.command
         assert "res&ults" in str(inv.output_file)
 
     @pytest.mark.parametrize(
@@ -291,8 +298,18 @@ class TestTheClassTestIsNotVacuous:
             ("C:/x/t.exe", r"\\server\share\repo", False),
             ("C:/x/t.cmd", "C:/repo", False),
             ("C:/x/t.cmd", None, False),
+            ("C:/x/t.cmd", r"\\?\C:\repo", True),
+            ("C:/x/t.cmd", r"\\.\C:\repo", True),
         ],
-        ids=["cmd-unc", "bat-wsl", "exe-unc", "cmd-local", "cmd-none"],
+        ids=[
+            "cmd-unc",
+            "bat-wsl",
+            "exe-unc",
+            "cmd-local",
+            "cmd-none",
+            "cmd-long-path",
+            "cmd-device",
+        ],
     )
     def test_the_unc_oracle_flags_a_batch_launcher_only(self, launcher, cwd, flagged):
         inv = Invocation(
@@ -376,6 +393,64 @@ class TestCheckovRunsFromItsTarget:
         assert inv.command[1:3] == ("-f", "pod.yaml")
         assert inv.cwd == manifest.parent
         assert not any(str(manifest.parent) in arg for arg in inv.command)
+
+    @pytest.mark.parametrize(
+        ("key", "flag", "target", "cwd", "operand"),
+        [
+            ("repo", "-d", r"\\?\C:\scan\repo", r"C:\scan\repo", "."),
+            ("repo", "-d", r"\\.\C:\scan\repo", r"C:\scan\repo", "."),
+            # Forward slashes, so a POSIX `Path` can split the file from its
+            # directory on every shard; Windows reads both separators.
+            ("iac", "-f", "//?/C:/scan/pod.yaml", r"C:\scan", "pod.yaml"),
+        ],
+        ids=["repo-long-path", "repo-device", "iac-long-path"],
+    )
+    def test_a_long_path_spelling_of_a_drive_is_run_from_the_plain_drive(
+        self, tmp_path, key, flag, target, cwd, operand
+    ):
+        """`\\\\?\\C:\\x` and `\\\\.\\C:\\x` are a local drive, not a UNC path: the
+        row is not failed as one (#1428). checkov runs from the drive's plain
+        spelling, since whether cmd.exe starts in a `\\\\?\\` directory is not
+        measured and it refuses any other `\\\\` one."""
+        ctx = ScanContext(
+            tool="checkov",
+            target_type=key,
+            target=Path(target),
+            out_dir=tmp_path / "out",
+            binary="C:/venv/Scripts/checkov.cmd",
+        )
+        precheck = DESCRIPTORS["checkov"].precheck
+        assert precheck is not None
+        assert precheck(ctx) is None
+
+        inv = self._invocation(tmp_path, key, Path(target))
+
+        assert inv.command[1:3] == (flag, operand)
+        assert str(inv.cwd).replace("/", "\\") == cwd
+        assert _unc_cwds([inv]) == []
+
+
+class TestIsUnc:
+    @pytest.mark.parametrize(
+        ("path", "unc"),
+        [
+            (r"\\server\share\repo", True),
+            ("//server/share/repo", True),
+            (r"\\?\UNC\server\share\repo", True),
+            (r"\\wsl$\Ubuntu\home\u", True),
+            (r"\\wsl.localhost\Ubuntu\home\u", True),
+            (r"\\?\C:\repo", False),
+            (r"\\.\C:\repo", False),
+            (r"\\?\c:\repo", False),
+            (r"C:\repo", False),
+            ("C:/repo", False),
+            ("/home/u/repo", False),
+        ],
+    )
+    def test_a_long_path_spelling_of_a_drive_is_not_unc(self, path, unc):
+        """The long-path and device spellings of a drive also start `\\\\`, and
+        checkov failed such a target with "is a UNC path" (#1428)."""
+        assert is_unc(path) is unc
 
 
 class TestBatchArgvRefusal:

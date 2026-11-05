@@ -40,12 +40,11 @@ SESSION_VERSION = 1
 def found_image_id(reference: str) -> str:
     """The session id of an image a GitLab target named (#1311).
 
-    Typed, because the session keys a target by its id alone: a project
-    `acme/api` whose Dockerfile says `FROM acme/api` gave the image the
-    project's id, one record for two targets, and a resumed scan reported
-    the repository's rows as the image's. An image reference and a GitLab
-    path hold no space, so neither starts `image: `. A repository's id is its
-    folder name, which on POSIX could; no real checkout is named so.
+    Apart from an `--image` of the same reference: both are image targets, and
+    the session keys a target by its type and id (#1406). A scan that resumes
+    with an `--image` it did not have first would otherwise share one record
+    with the image found the first time. An image reference holds no space,
+    so none starts `image: `.
     """
     return f"image: {reference}"
 
@@ -121,6 +120,12 @@ class TargetRecord:
         )
 
 
+#: A target's key in a session: its type and its id. Keyed by the id alone,
+#: `--repo ./nginx --image nginx` shared one record, and completing one target
+#: completed the other (#1406).
+TargetKey = tuple[str, str]
+
+
 @dataclass
 class ScanSession:
     """Checkpoint state for a scan session."""
@@ -129,18 +134,18 @@ class ScanSession:
     config_hash: str
     started_at: float
     pid: int
-    targets: dict[str, TargetRecord] = field(default_factory=dict)
+    targets: dict[TargetKey, TargetRecord] = field(default_factory=dict)
     version: int = SESSION_VERSION
 
     @property
-    def completed_targets(self) -> list[str]:
-        """Return list of completed target IDs."""
-        return [tid for tid, t in self.targets.items() if t.completed]
+    def completed_targets(self) -> list[TargetKey]:
+        """The (type, id) of each completed target."""
+        return [key for key, t in self.targets.items() if t.completed]
 
     @property
-    def pending_targets(self) -> list[str]:
-        """Return list of pending (not completed) target IDs."""
-        return [tid for tid, t in self.targets.items() if not t.completed]
+    def pending_targets(self) -> list[TargetKey]:
+        """The (type, id) of each target not yet completed."""
+        return [key for key, t in self.targets.items() if not t.completed]
 
     @property
     def total_targets(self) -> int:
@@ -156,9 +161,7 @@ class ScanSession:
         """Register a target for scanning; `found_in` names the GitLab target
         whose repository named it, for an image found mid-scan."""
         tool_records = {name: ToolRecord(name=name) for name in tools}
-        # TODO(issue-#1406): keyed by id alone, so `repo:nginx` and `image:nginx`
-        # share one record; key by (target_type, target_id).
-        self.targets[target_id] = TargetRecord(
+        self.targets[(target_type, target_id)] = TargetRecord(
             target_type=target_type,
             target_id=target_id,
             tools=tool_records,
@@ -166,7 +169,11 @@ class ScanSession:
         )
 
     def mark_target_complete(
-        self, target_id: str, rows: Mapping[str, ToolRun], name: str | None = None
+        self,
+        target_type: str,
+        target_id: str,
+        rows: Mapping[str, ToolRun],
+        name: str | None = None,
     ) -> None:
         """Mark a target as completed, with each tool's state from its row.
 
@@ -174,9 +181,9 @@ class ScanSession:
         the target as), so a resumed scan can report a target it does not
         scan again.
         """
-        if target_id not in self.targets:
+        target = self.targets.get((target_type, target_id))
+        if target is None:
             return
-        target = self.targets[target_id]
         target.completed = True
         target.name = name or target_id
         target.rows = {tool: row.to_dict() for tool, row in rows.items()}
@@ -195,22 +202,25 @@ class ScanSession:
         id: its reference and that target. A resumed scan reports and does not
         rescan them, and no target list names them."""
         return {
-            tid: (t.name or tid, t.found_in)
-            for tid, t in self.targets.items()
+            t.target_id: (t.name or t.target_id, t.found_in)
+            for t in self.targets.values()
             if t.found_in and t.completed and t.target_type == "image"
         }
 
-    def is_target_completed(self, target_id: str) -> bool:
+    def is_target_completed(self, target_type: str, target_id: str) -> bool:
         """Check if a specific target has been completed."""
-        return target_id in self.targets and self.targets[target_id].completed
+        target = self.targets.get((target_type, target_id))
+        return target is not None and target.completed
 
-    def completed_rows(self, target_id: str) -> tuple[str, dict[str, ToolRun]] | None:
+    def completed_rows(
+        self, target_type: str, target_id: str
+    ) -> tuple[str, dict[str, ToolRun]] | None:
         """A completed target's recorded name and rows, or None without them.
 
         None for a session written before the rows were kept; an unreadable row
         is dropped with a warning rather than failing the resume.
         """
-        target = self.targets.get(target_id)
+        target = self.targets.get((target_type, target_id))
         if target is None or not target.completed or not target.rows:
             return None
         rows: dict[str, ToolRun] = {}
@@ -230,14 +240,22 @@ class ScanSession:
             "config_hash": self.config_hash,
             "started_at": self.started_at,
             "pid": self.pid,
-            "targets": {tid: t.to_dict() for tid, t in self.targets.items()},
+            # JSON keys are strings. Each record carries its type and id, which
+            # is what loading keys it by, so the key is only a label.
+            "targets": {
+                f"{t.target_type}:{t.target_id}": t.to_dict()
+                for t in self.targets.values()
+            },
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ScanSession:
+        # Keyed by each record's own type and id, not the stored key: a file
+        # written before #1406 keys by the id alone, and loads the same.
         targets = {}
-        for tid, target_data in data.get("targets", {}).items():
-            targets[tid] = TargetRecord.from_dict(target_data)
+        for target_data in data.get("targets", {}).values():
+            record = TargetRecord.from_dict(target_data)
+            targets[(record.target_type, record.target_id)] = record
         return cls(
             session_id=data["session_id"],
             config_hash=data["config_hash"],

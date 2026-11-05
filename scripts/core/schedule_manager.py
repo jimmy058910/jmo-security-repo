@@ -81,21 +81,32 @@ class SpecWithoutTargetError(ValueError):
 
 
 def reject_api_spec_without_url(web: dict[str, Any]) -> None:
-    """Raise if `web` names an `api_spec` and no `urls`.
+    """Raise if `web` names an `api_spec` and not exactly one of `urls`.
 
     `jmo scan --api-spec` needs `--url`: zap imports the definition and sends
     its operations there, and without one it attacked the servers the
-    definition names (#1331). So `jmo scan` exits 2 on it, and a schedule
-    holding one renders that command in every consumer. Called where a
-    schedule is built and by each generator, since `schedules.json` can be
-    edited by hand.
+    definition names (#1331). With several `--url` it pairs with none of them:
+    decided 2026-11-05, that exits 2 too (#1423). A schedule holding either
+    renders that command in every consumer. Called where a schedule is built
+    and by each generator, since `schedules.json` can be edited by hand.
     """
-    if web.get("api_spec") and not web.get("urls"):
+    if not web.get("api_spec"):
+        return
+    urls = web.get("urls") or []
+    if not urls:
         raise SpecWithoutTargetError(
             f"schedule names web.api_spec ({web['api_spec']}) and no web.urls: "
             "`jmo scan --api-spec` needs --url, the API zap attacks with the "
             "definition, so this schedule would render a command that exits 2. "
             "Add the API's address as a URL."
+        )
+    if len(urls) > 1:
+        raise SpecWithoutTargetError(
+            f"schedule names web.api_spec ({web['api_spec']}) and {len(urls)} "
+            "web.urls: `jmo scan --api-spec` needs exactly one --url, the API "
+            "zap attacks with the definition, so this schedule would render a "
+            "command that exits 2. Keep the API's URL here and scan the others "
+            "in a schedule of their own."
         )
 
 

@@ -293,7 +293,7 @@ def test_a_resumed_target_is_not_touched(tmp_path, monkeypatch):
     for name in ("alpha", "beta"):
         session.register_target("repo", name, ["trivy"])
     done = ToolRun("trivy", State.RAN, seconds=1.0, exit_code=0)
-    session.mark_target_complete("alpha", {"trivy": done})
+    session.mark_target_complete("repo", "alpha", {"trivy": done})
     scanned: list[str] = []
 
     def scan_repository(repo, results_dir, *args, result_name, **kwargs):
@@ -371,6 +371,137 @@ def test_a_scan_that_succeeded_keeps_its_timings_when_what_follows_it_fails(
     assert (timings["outcome"], timings["error"]) == (OUTCOME_COMPLETED, None)
     assert [(r["tool"], r["state"]) for r in timings["tools"]] == [("trivy", "ran")]
     assert len(gather_results(results)) == EARLIER_FINDINGS
+
+
+@pytest.mark.parametrize("fails", ["progress", "checkpoint"])
+def test_a_target_whose_post_scan_step_fails_is_recorded_once(
+    tmp_path, monkeypatch, caplog, fails
+):
+    """One `try` covered the scan's result and the steps after it, so a
+    checkpoint or a progress display that raised appended the target a second
+    time, as failed, beside its scanned rows: two results, two history rows
+    (#1556). The step's failure is logged; the target is recorded once."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    results = tmp_path / "results"
+    alpha = tmp_path / "alpha"
+    alpha.mkdir()
+
+    def scan_repository(repo, results_dir, *args, result_name, **kwargs):
+        return result_name, {"trivy": ToolRun("trivy", State.RAN, exit_code=0)}
+
+    monkeypatch.setattr("scripts.cli.scan_jobs.scan_repository", scan_repository)
+    session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
+    session.register_target("repo", "alpha", ["trivy"])
+    callbacks = {}
+    if fails == "progress":
+        callbacks["progress_callback"] = _progress_display_fails
+    else:
+        monkeypatch.setattr(ScanSession, "mark_target_complete", _checkpoint_fails)
+
+    with caplog.at_level(logging.ERROR, logger="scripts.cli.scan_orchestrator"):
+        got = _orchestrator(results).scan_all(
+            ScanTargets(repos=[alpha]),
+            {},
+            session=session,
+            session_path=tmp_path / "session.json",
+            **callbacks,
+        )
+
+    assert [
+        (kind, name, {tool: row.state for tool, row in rows.items()})
+        for kind, name, rows in got
+    ] == [("repo", "alpha", {"trivy": State.RAN})]
+    assert any("alpha" in r.getMessage() for r in caplog.records), caplog.text
+
+
+def test_each_image_a_gitlab_target_names_reaches_the_progress_display(
+    tmp_path, monkeypatch
+):
+    """Found mid-scan, so no target count held them: the images a GitLab target
+    named never reached the progress display, and a failed one surfaced only
+    in the final ERROR line (#1409). Each is reported as a target when its
+    GitLab target's results are recorded, a failing display included."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+    def scan_gitlab_repo(info, results_dir, tools, *args, images, **kwargs):
+        for image, state in (("alpine:3.19", State.RAN), ("nginx:1.27", None)):
+            images.claim(image, info["full_path"])
+            row = (
+                ToolRun("trivy", state, seconds=2.0)
+                if state
+                else ToolRun("trivy", State.FAILED, Reason.SCANNER_ERROR)
+            )
+            images.add(info["full_path"], image, {"trivy": row})
+        return info["full_path"], {"trivy": ToolRun("trivy", State.RAN)}
+
+    monkeypatch.setattr("scripts.cli.scan_jobs.scan_gitlab_repo", scan_gitlab_repo)
+    seen: list[tuple[str, str, str]] = []
+
+    def progress(target_type, target_id, rows, elapsed=0.0):
+        seen.append((target_type, target_id, rows["trivy"].state.value))
+        if target_id == "alpine:3.19":
+            raise OSError("the display is gone")
+
+    got = _orchestrator(tmp_path / "results").scan_all(
+        ScanTargets(gitlab_repos=[{"full_path": "group/app"}]),
+        {},
+        progress_callback=progress,
+    )
+
+    assert sorted(seen) == [
+        ("gitlab", "group/app", "ran"),
+        ("image", "alpine:3.19", "ran"),
+        ("image", "nginx:1.27", "failed"),
+    ]
+    # A display that raised on one image lost neither image from the results.
+    assert sorted((kind, name) for kind, name, _rows in got) == [
+        ("gitlab", "group/app"),
+        ("image", "alpine:3.19"),
+        ("image", "nginx:1.27"),
+    ]
+
+
+def test_a_found_image_whose_checkpoint_fails_costs_no_other_image(
+    tmp_path, monkeypatch
+):
+    """A checkpoint that raised on the first image a GitLab target named ended
+    the loop over them: the images after it were neither in the results nor
+    on the display (#1556's class, inside the found images)."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+    def scan_gitlab_repo(info, results_dir, tools, *args, images, **kwargs):
+        for image in ("alpine:3.19", "nginx:1.27"):
+            images.claim(image, info["full_path"])
+            images.add(info["full_path"], image, {"trivy": ToolRun("trivy", State.RAN)})
+        return info["full_path"], {"trivy": ToolRun("trivy", State.RAN)}
+
+    monkeypatch.setattr("scripts.cli.scan_jobs.scan_gitlab_repo", scan_gitlab_repo)
+    real = ScanSession.mark_target_complete
+
+    def first_image_fails(self, target_type, target_id, *args, **kwargs):
+        if target_id.endswith("alpine:3.19"):
+            raise OSError("the session file is gone")
+        return real(self, target_type, target_id, *args, **kwargs)
+
+    monkeypatch.setattr(ScanSession, "mark_target_complete", first_image_fails)
+    session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
+    session.register_target("gitlab", "group/app", ["trivy"])
+    shown: list[str] = []
+
+    got = _orchestrator(tmp_path / "results").scan_all(
+        ScanTargets(gitlab_repos=[{"full_path": "group/app"}]),
+        {},
+        progress_callback=lambda kind, name, rows, elapsed=0.0: shown.append(name),
+        session=session,
+        session_path=tmp_path / "session.json",
+    )
+
+    assert sorted(name for _kind, name, _rows in got) == [
+        "alpine:3.19",
+        "group/app",
+        "nginx:1.27",
+    ]
+    assert sorted(shown) == ["alpine:3.19", "group/app", "nginx:1.27"]
 
 
 def test_a_timings_write_that_fails_does_not_replace_the_targets_failure(

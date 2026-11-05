@@ -22,7 +22,7 @@ import pytest
 from scripts.cli.scan_jobs import tool_loop
 from scripts.core import osv_database
 from scripts.core.scan_timings import OwnConfig, State
-from scripts.core.tool_descriptors import DESCRIPTORS, ScanContext
+from scripts.core.tool_descriptors import DESCRIPTORS, Invocation, ScanContext
 from scripts.core.tool_runner import ToolResult
 from scripts.core.tool_utils import find_tool
 
@@ -171,6 +171,115 @@ class TestOsvScannerDiscovery:
         else:
             assert "suppress" not in line
             assert "it ignores no vulnerability and no package" in line
+
+    @pytest.mark.parametrize(
+        ("toml", "expected"),
+        [
+            # Measured with osv-scanner 2.7.0 on the frozen database: a past
+            # date kept left-pad's advisory, a future one dropped it.
+            (
+                b'[[IgnoredVulns]]\nid = "JMO-TEST-2026-0001"\n'
+                b"ignoreUntil = 2020-01-01\n",
+                None,
+            ),
+            (
+                b'[[IgnoredVulns]]\nid = "JMO-TEST-2026-0001"\n'
+                b"ignoreUntil = 2020-01-01T00:00:00Z\n",
+                None,
+            ),
+            (
+                b'[[IgnoredVulns]]\nid = "JMO-TEST-2026-0001"\n'
+                b"ignoreUntil = 2999-01-01\n",
+                "1 ignored vulnerability and 0 ignored packages suppress findings",
+            ),
+            (
+                b'[[PackageOverrides]]\nname = "left-pad"\necosystem = "npm"\n'
+                b"ignore = true\neffectiveUntil = 2020-01-01\n",
+                None,
+            ),
+            (
+                b'[[PackageOverrides]]\nname = "left-pad"\necosystem = "npm"\n'
+                b"ignore = true\neffectiveUntil = 2999-01-01\n",
+                "0 ignored vulnerabilities and 1 ignored package suppress findings",
+            ),
+        ],
+        ids=[
+            "ignore-expired",
+            "ignore-expired-datetime",
+            "ignore-active",
+            "override-expired",
+            "override-active",
+        ],
+    )
+    def test_an_entry_counts_only_until_its_date(
+        self, tmp_path, caplog, toml, expected
+    ) -> None:
+        """An expired `ignoreUntil` or `effectiveUntil` was counted as
+        suppressing while osv-scanner kept the finding (#1433)."""
+        said = _osv(
+            tmp_path,
+            {"package-lock.json": NPM_LOCK, "osv-scanner.toml": toml},
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        if expected is None:
+            assert "suppress" not in line, line
+            assert "it ignores no vulnerability and no package" in line
+        else:
+            assert line.endswith(f"({expected})"), line
+
+    @pytest.mark.parametrize(
+        ("selectors", "scope"),
+        [
+            (b'ecosystem = "npm"\n', "an override that ignores every npm package"),
+            (b"", "an override that ignores every package"),
+            (
+                b'ecosystem = "Maven"\ngroup = "org.example"\n',
+                "an override that ignores every Maven package matching its "
+                "version or group",
+            ),
+        ],
+        ids=["ecosystem", "everything", "group"],
+    )
+    def test_an_override_without_a_name_says_what_it_ignores(
+        self, tmp_path, caplog, selectors, scope
+    ) -> None:
+        """Without `name` an override selects every package its other fields
+        do: osv-scanner 2.7.0 dropped left-pad's advisory for `ecosystem =
+        "npm"` and for no selector at all. It was announced as "1 ignored
+        package" (#1433)."""
+        toml = b"[[PackageOverrides]]\n" + selectors + b"ignore = true\n"
+        said = _osv(
+            tmp_path,
+            {"package-lock.json": NPM_LOCK, "osv-scanner.toml": toml},
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        assert line.endswith(
+            f"(0 ignored vulnerabilities, 0 ignored packages and {scope} "
+            "suppress findings)"
+        ), line
+
+    def test_nameless_overrides_with_one_scope_are_counted_together(
+        self, tmp_path, caplog
+    ) -> None:
+        override = b'[[PackageOverrides]]\necosystem = "npm"\nignore = true\n'
+        said = _osv(
+            tmp_path,
+            {
+                "package-lock.json": NPM_LOCK,
+                "osv-scanner.toml": override + b"\n" + override,
+            },
+            ["package-lock.json"],
+            caplog,
+        )
+
+        (line,) = said
+        assert "and 2 overrides that ignore every npm package suppress" in line
 
     def test_a_file_that_ignores_nothing_is_named_but_suppresses_nothing(
         self, tmp_path, caplog
@@ -354,6 +463,150 @@ class TestCheckovDiscovery:
 
 
 # --- what is announced is recorded on the row (#1430) -------------------------
+
+
+SCRIPT = b"#!/bin/bash\necho $1\n"
+DOCKERFILE = b"FROM ubuntu:latest\nRUN apt-get update && apt-get install -y curl\n"
+
+
+def _walked(tmp_path: Path, tool: str, files: dict[str, bytes], handed: list[str]):
+    """The announcement a walk-fed tool's row makes for `handed` files."""
+    repo = tmp_path / "repo"
+    _plant(repo, files)
+    ctx = ScanContext(
+        tool=tool,
+        target_type="repo",
+        target=repo,
+        out_dir=tmp_path,
+        files=tuple(str(repo / f) for f in handed),
+    )
+    return tool_loop._announce_own_config(DESCRIPTORS[tool], ctx)
+
+
+class TestShellcheckDiscovery:
+    """shellcheck reads `.shellcheckrc` or `shellcheckrc` from each script's
+    directory and its parents (measured, 0.11.0: a root `disable=SC2086`
+    silenced a script in a subdirectory). Unannounced, a repository could
+    switch checks off (#1574)."""
+
+    @pytest.mark.parametrize("name", [".shellcheckrc", "shellcheckrc"])
+    def test_an_rc_at_the_root_is_named_for_a_script_below_it(self, tmp_path, name):
+        found = _walked(
+            tmp_path,
+            "shellcheck",
+            {"tools/s.sh": SCRIPT, name: b"disable=SC2086\n"},
+            ["tools/s.sh"],
+        )
+
+        assert found == (OwnConfig(name, "its audit settings apply"),)
+
+    def test_an_rc_beside_a_script_is_named_by_its_path(self, tmp_path):
+        found = _walked(
+            tmp_path,
+            "shellcheck",
+            {"tools/s.sh": SCRIPT, "tools/.shellcheckrc": b"disable=SC2086\n"},
+            ["tools/s.sh"],
+        )
+
+        assert found == (OwnConfig("tools/.shellcheckrc", "its audit settings apply"),)
+
+    def test_an_rc_no_script_reaches_is_not_named(self, tmp_path):
+        """shellcheck looks up from a script, never down or sideways."""
+        found = _walked(
+            tmp_path,
+            "shellcheck",
+            {"s.sh": SCRIPT, "docs/.shellcheckrc": b"disable=SC2086\n"},
+            ["s.sh"],
+        )
+
+        assert found is None
+
+
+class TestHadolintAndTrivyReadTheirTarget:
+    """hadolint reads `.hadolint.yaml` / `.hadolint.yml`, and trivy `trivy.yaml`
+    and `.trivyignore`, from the directory they run in, and from nowhere else
+    (measured: hadolint 2.15.1; trivy 0.74.0, which ignored `.trivyignore.yaml`,
+    `trivy.yml` and a subdirectory's `.trivyignore`). They ran in jmo's own
+    directory: launched from the repository the findings dropped unannounced,
+    launched elsewhere a stray file there applied to every target (#1574).
+    Now they run from the target, whose files are announced, or from JMo's
+    output folder, which holds none."""
+
+    @pytest.mark.parametrize(
+        ("tool", "name", "handed"),
+        [
+            ("hadolint", ".hadolint.yaml", ["Dockerfile"]),
+            ("hadolint", ".hadolint.yml", ["Dockerfile"]),
+            ("trivy", "trivy.yaml", []),
+            ("trivy", ".trivyignore", []),
+        ],
+    )
+    def test_a_config_at_the_root_is_named(self, tmp_path, tool, name, handed):
+        found = _walked(
+            tmp_path, tool, {"Dockerfile": DOCKERFILE, name: b"x: 1\n"}, handed
+        )
+
+        assert found == (OwnConfig(name, "its audit settings apply"),)
+
+    @staticmethod
+    def _invocation(tmp_path: Path, tool: str, key: str, target, **kw) -> Invocation:
+        ctx = ScanContext(
+            tool=tool,
+            target_type=key,
+            target=target,
+            out_dir=Path("relative-out"),
+            binary=f"/opt/{tool}",
+            **kw,
+        )
+        (inv,) = DESCRIPTORS[tool].invocations[key](ctx)
+        return inv
+
+    def test_trivy_scans_a_repository_from_inside_it(self, tmp_path, monkeypatch):
+        """Given as `--repo .` it stays relative, so every path JMo passes is
+        absolute: the target is `.` from its root, the output JMo's own."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "repo").mkdir()
+        inv = self._invocation(tmp_path, "trivy", "repo", Path("repo"))
+
+        assert inv.cwd == (tmp_path / "repo").resolve()
+        assert inv.command[-3:] == (
+            ".",
+            "-o",
+            str((tmp_path / "relative-out" / "trivy.json").absolute()),
+        )
+
+    @pytest.mark.parametrize(
+        ("key", "target"),
+        [
+            ("image", "nginx:1.27"),
+            ("iac", Path("iac/main.tf")),
+            ("k8s", {"context": "kind", "namespace": "default"}),
+        ],
+    )
+    def test_trivy_runs_anything_else_from_jmos_own_folder(
+        self, tmp_path, monkeypatch, key, target
+    ):
+        monkeypatch.chdir(tmp_path)
+        inv = self._invocation(tmp_path, "trivy", key, target)
+
+        assert inv.cwd == (tmp_path / "relative-out").absolute()
+        assert str((tmp_path / "relative-out" / "trivy.json").absolute()) in (
+            inv.command
+        )
+        if key == "iac":
+            assert str((tmp_path / "iac" / "main.tf").absolute()) in inv.command
+
+    def test_hadolint_runs_from_its_target_with_absolute_files(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "repo").mkdir()
+        inv = self._invocation(
+            tmp_path, "hadolint", "repo", Path("repo"), files=("repo/Dockerfile",)
+        )
+
+        assert inv.cwd == (tmp_path / "repo").resolve()
+        assert inv.command[-1] == str((tmp_path / "repo" / "Dockerfile").absolute())
 
 
 class TestTheRowRecordsIt:
@@ -629,6 +882,52 @@ def test_real_checkov_obeys_the_repositorys_config_and_the_scan_says_so(
     (line,) = _announced(caplog, "checkov")
     assert ".checkov.yaml" in line
     assert row.own_config == (OwnConfig(".checkov.yaml", "its audit settings apply"),)
+
+
+@pytest.mark.requires_tools
+@pytest.mark.parametrize(
+    ("tool", "files", "config", "code"),
+    [
+        (
+            "hadolint",
+            {"Dockerfile": DOCKERFILE},
+            (".hadolint.yaml", b"ignored:\n  - DL3007\n"),
+            "DL3007",
+        ),
+        ("shellcheck", {"s.sh": SCRIPT}, (".shellcheckrc", b"disable=SC2086\n"), 2086),
+    ],
+    ids=["hadolint", "shellcheck"],
+)
+def test_real_tools_read_the_targets_config_not_the_launch_directorys(
+    tmp_path, caplog, monkeypatch, tool, files, config, code
+) -> None:
+    """hadolint read `.hadolint.yaml` from wherever jmo was launched, so a
+    stray one there applied to every target, and from the repository's root
+    only when launched there; shellcheck read the repository's rc unannounced
+    (#1574). Launched from a directory holding the config, nothing changes;
+    the target's own config applies and is named."""
+    if find_tool(tool) is None:
+        pytest.skip(f"{tool} is not installed")
+
+    def codes(out: Path) -> set:
+        return {d["code"] for d in json.loads((out / f"{tool}.json").read_bytes())}
+
+    name, body = config
+    launch = tmp_path / "launch"
+    _plant(launch, {name: body})
+    monkeypatch.chdir(launch)
+
+    with caplog.at_level(logging.INFO):
+        row, out = _scan(tmp_path, tool, files, "a")
+        assert row.state is State.RAN, row
+        assert code in codes(out)
+        assert row.own_config is None
+
+        row, out = _scan(tmp_path, tool, {**files, name: body}, "b")
+
+    assert row.state is State.RAN, row
+    assert code not in codes(out)
+    assert row.own_config == (OwnConfig(name, "its audit settings apply"),)
 
 
 def test_the_announcement_reaches_a_scan_at_its_default_log_level(

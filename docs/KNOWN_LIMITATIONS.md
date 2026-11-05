@@ -468,18 +468,18 @@ Kubernetes manifest given directly is still checked in full.
 `--framework <name>` outside JMo. See
 [When each tool runs](TOOLS.md#when-each-tool-runs).
 
-### On Windows, a Checkov or ZAP flag cannot hold cmd.exe's metacharacters
+### On Windows, a Checkov flag cannot hold cmd.exe's metacharacters
 
-On Windows, Checkov is installed as `checkov.cmd` and ZAP's launcher is
-`zap.bat`. Windows starts either through `cmd.exe`, which reads the whole
-command line again and treats `& | ^ < > %` as its own: `--skip-check A|B`
-would pipe into a command named `B`. A line break ends its command line,
-dropping every argument after it. No quoting survives that second reading, so a
-`per_tool.<tool>.flags` entry holding one of the six or a line break, for a
-tool that resolved to a `.cmd` or `.bat` launcher, is dropped (with its value,
-or its flag when the value is a token of its own) and named in a WARNING.
-ZAP's flags are checked this way too, although JMo runs the java command
-`zap.bat` holds rather than `zap.bat` itself.
+On Windows, Checkov is installed as `checkov.cmd`. Windows starts it through
+`cmd.exe`, which reads the whole command line again and treats `& | ^ < > %`
+as its own: `--skip-check A|B` would pipe into a command named `B`. A line
+break ends its command line, dropping every argument after it. No quoting
+survives that second reading, so a `per_tool.<tool>.flags` entry holding one of
+the six or a line break, for a tool that resolved to a `.cmd` or `.bat`
+launcher, is dropped (with its value, or its flag when the value is a token of
+its own) and named in a WARNING. ZAP's launcher is `zap.bat`, but JMo runs the
+java command `zap.bat` holds rather than `zap.bat` itself, so ZAP's flags are
+kept.
 
 The paths JMo builds stay off those command lines: Checkov runs from the
 repository it scans, and ZAP's plan and home go to java. One cannot: an IaC
