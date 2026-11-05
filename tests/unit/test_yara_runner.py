@@ -171,8 +171,8 @@ class TestHonestFailure:
     def test_absent_engine_is_reported_not_swallowed(
         self, tmp_path, monkeypatch, capsys
     ):
-        """yara-x ships with JMo, but a broken install still scans nothing:
-        the runner must fail loudly and must not resemble success."""
+        """An install without the yara extra (#1577) scans nothing: the runner
+        must fail loudly, say how to add the engine, and not resemble success."""
         monkeypatch.setattr(yara_runner, "_import_yara_x", lambda: None)
         rules = _rules_dir(tmp_path, hit=RULE_HIT)
         target = _target_dir(tmp_path, **{"a.txt": b"hello"})
@@ -181,7 +181,7 @@ class TestHonestFailure:
         rc = _run(rules, target, out)
 
         assert rc not in (0, 1)
-        assert "yara-x" in capsys.readouterr().err
+        assert 'install "jmo-security[yara]"' in capsys.readouterr().err
         assert not out.exists(), "an output file was written for a scan that never ran"
 
 

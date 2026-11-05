@@ -36,7 +36,6 @@ dependencies = [
     "requests>=2.31.0",  # Required for EPSS/KEV integration (v0.9.0+)
     "rapidfuzz>=3.0.0",  # Required for cross-tool deduplication fuzzy matching (v1.0.0+)
     "rich>=13.0",  # Required for trend analysis console formatting (v1.0.0+)
-    "yara-x==1.22.1",  # The YARA engine (v2.0.0 Phase 6); `jmo tools install yara` fetches its rules
 ]
 
 [project.urls]
@@ -47,6 +46,11 @@ Repository = "https://github.com/jimmy058910/jmo-security-repo"
 LinkedIn = "https://linkedin.com/in/jimmy-moceri"
 
 [project.optional-dependencies]
+# The YARA engine (v2.0.0 Phase 6); `jmo tools install yara-x` fetches its rules.
+# An extra, not a dependency (#1577): yara-x publishes wheels only (Linux glibc
+# 2.28+, macOS 14+, Windows x86_64), so as a dependency it failed the whole
+# install everywhere else. The documented install and the image include it.
+yara = ["yara-x==1.22.1"]
 reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
 mcp = ["mcp[cli]>=2.2.0"]  # MCP server; 2.0 renamed FastMCP -> MCPServer with no shim, and jmo_server.py imports MCPServer; >=2.2.0: CVE-2026-59951
@@ -68,6 +72,9 @@ visual = [
 # is how PR #361 shipped a scheduled job broken by a missing pytest-benchmark.
 [dependency-groups]
 dev = [
+    # The project's own yara extra, so every dev environment and CI job has the
+    # engine its tests drive (#1577).
+    "jmo-security[yara]",
     # Testing
     "pytest",
     "pytest-cov",

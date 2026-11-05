@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from scripts.core.paths import get_isolated_tool_path
-from scripts.core.tool_registry import BUILTIN_TOOLS
+from scripts.core.tool_registry import BUILTIN_TOOLS, DEPENDENCY_MISSING
 
 # Module-level warning tracker for deduplication (Fix 1.3 - Issue #3)
 _warned_tools: set[str] = set()
@@ -31,6 +31,7 @@ TOOL_INSTALL_HINTS = {
     "hadolint": "Install: brew install hadolint (macOS) or see https://github.com/hadolint/hadolint#install",
     "nuclei": "Install: brew install nuclei (macOS) or see https://docs.projectdiscovery.io/tools/nuclei/install",
     "zap": "Install: Docker image ghcr.io/zaproxy/zaproxy:stable",
+    **DEPENDENCY_MISSING,
 }
 
 

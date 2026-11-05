@@ -746,7 +746,6 @@ dependencies = [
     { name = "rapidfuzz" },
     { name = "requests" },
     { name = "rich" },
-    { name = "yara-x" },
 ]
 
 [package.optional-dependencies]
@@ -766,6 +765,9 @@ reporting = [
 visual = [
     { name = "pytest-playwright" },
 ]
+yara = [
+    { name = "yara-x" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -775,6 +777,7 @@ dev = [
     { name = "croniter" },
     { name = "cryptography" },
     { name = "hypothesis" },
+    { name = "jmo-security", extra = ["yara"] },
     { name = "jsonschema" },
     { name = "mcp", extra = ["cli"] },
     { name = "mypy" },
@@ -812,9 +815,9 @@ requires-dist = [
     { name = "resend", marker = "extra == 'email'", specifier = ">=2.0" },
     { name = "rich", specifier = ">=13.0" },
     { name = "sigstore", marker = "extra == 'attestation'", specifier = ">=2.0.0" },
-    { name = "yara-x", specifier = "==1.22.1" },
+    { name = "yara-x", marker = "extra == 'yara'", specifier = "==1.22.1" },
 ]
-provides-extras = ["reporting", "email", "mcp", "attestation", "visual"]
+provides-extras = ["yara", "reporting", "email", "mcp", "attestation", "visual"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -824,6 +827,7 @@ dev = [
     { name = "croniter" },
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "hypothesis" },
+    { name = "jmo-security", extras = ["yara"] },
     { name = "jsonschema" },
     { name = "mcp", extras = ["cli"], specifier = ">=2.2.0" },
     { name = "mypy", specifier = ">=2.2.0" },

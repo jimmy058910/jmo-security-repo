@@ -92,15 +92,43 @@ def test_a_default_install_picks_up_missing_rules(tmp_path: Path) -> None:
     assert [s.name for s in missing] == ["yara-x"]
 
 
-def test_every_dependency_tool_is_a_declared_dependency() -> None:
+def _names(requirements: list[str]) -> set[str]:
+    return {re.split(r"[=<>!~\[;\s]", req, maxsplit=1)[0] for req in requirements}
+
+
+def test_the_engine_is_the_yara_extra_not_a_hard_dependency() -> None:
+    # yara-x publishes wheels only, so as a hard dependency it failed the whole
+    # JMo install on Alpine, Windows ARM64, glibc < 2.28 and macOS 13 (#1577).
     pyproject = tomllib.loads((REPO / "pyproject.toml").read_bytes().decode("utf-8"))
-    declared = {
-        dep.split("==")[0].split(">=")[0].strip()
-        for dep in pyproject["project"]["dependencies"]
-    }
 
     assert DEPENDENCY_TOOLS == {"yara-x": "yara-x"}
-    assert set(DEPENDENCY_TOOLS.values()) <= declared
+    assert "yara-x" not in _names(pyproject["project"]["dependencies"])
+    assert _names(pyproject["project"]["optional-dependencies"]["yara"]) == {"yara-x"}
+    # The dev environment, and so every CI job, still has the engine.
+    assert "jmo-security[yara]" in pyproject["dependency-groups"]["dev"]
+
+
+def test_a_missing_engine_is_reported_with_the_extra_that_adds_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # As on a platform yara-x has no wheel for: the module cannot be imported.
+    monkeypatch.setitem(sys.modules, "yara_x", None)
+
+    status = ToolManager().check_tool("yara-x")
+
+    assert not status.installed
+    assert 'install "jmo-security[yara]"' in status.install_hint
+    assert status.execution_warning == status.install_hint
+
+
+def test_the_image_installs_the_yara_extra() -> None:
+    # The image is the way on the platforms the extra cannot reach, so it must
+    # carry the engine; docker-smoke's `import yara_x` checks it only when the
+    # Dockerfile changes.
+    dockerfile = (REPO / "Dockerfile").read_bytes().decode("utf-8")
+    (extras,) = re.findall(r'-e "/opt/jmo-security\[([^\]]*)\]"', dockerfile)
+
+    assert "yara" in extras.split(",")
 
 
 def test_an_attestation_records_the_engine_version() -> None:
