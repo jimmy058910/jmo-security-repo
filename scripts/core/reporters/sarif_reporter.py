@@ -73,6 +73,25 @@ def _as_sarif_line(value: Any) -> int | None:
     return None
 
 
+_CWE = re.compile(r"CWE-(\d+)", re.IGNORECASE)
+
+
+def _cwe_ids(finding: dict[str, Any]) -> list[str]:
+    """Each CWE a finding names, as `CWE-<n>`, once, in order: its `CWE-` tags,
+    then `risk.cwe` (a string or a list)."""
+    cwe = (finding.get("risk") or {}).get("cwe") or []
+    named = [
+        *(t for t in finding.get("tags", []) if str(t).upper().startswith("CWE-")),
+        *([cwe] if isinstance(cwe, str) else cwe),
+    ]
+    ids: list[str] = []
+    for value in named:
+        match = _CWE.match(str(value).strip())
+        if match and f"CWE-{match.group(1)}" not in ids:
+            ids.append(f"CWE-{match.group(1)}")
+    return ids
+
+
 def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
     """Convert normalized findings to SARIF 2.1.0 format.
 
@@ -170,17 +189,14 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
         if remediation_text:
             result.setdefault("properties", {})["remediation"] = remediation_text
 
-        # Add CWE/OWASP/CVE taxonomy if present in tags
-        taxa = []
+        # CWE/OWASP/CVE taxa from the tags, and every CWE from `risk.cwe`, where
+        # the adapters put it (often with its title: "CWE-78: Improper ...").
+        # Read from tags alone, no opengrep result carried a CWE (Phase 6, F7).
+        taxa = [{"id": cwe, "toolComponent": {"name": "CWE"}} for cwe in _cwe_ids(f)]
         for tag in f.get("tags", []):
             tag_str = str(tag).upper()
             if tag_str.startswith("CWE-"):
-                taxa.append(
-                    {
-                        "id": tag_str,
-                        "toolComponent": {"name": "CWE"},
-                    }
-                )
+                continue  # in _cwe_ids
             elif tag_str.startswith("OWASP-"):
                 taxa.append(
                     {

@@ -195,6 +195,43 @@ class TestSarifReporterCoverage:
             for t in result["taxa"]
         )
 
+    def test_a_finding_s_risk_cwe_is_a_cwe_taxon(self):
+        """The adapters put a finding's CWE in `risk.cwe`, often with its title
+        ("CWE-78: Improper Neutralization ..."), not in `tags`: every opengrep
+        result left SARIF with no CWE, and BenchProctor's scorer, which reads a
+        result's taxa, credited none of 1,527 (Phase 6, F7)."""
+        findings = [
+            {
+                "ruleId": "javascript.lang.security.detect-child-process",
+                "message": "Command injection",
+                "severity": "HIGH",
+                "location": {"path": "a.ts", "startLine": 3},
+                "tags": ["sast"],
+                "risk": {
+                    "cwe": [
+                        "CWE-78: Improper Neutralization of Special Elements "
+                        "used in an OS Command ('OS Command Injection')"
+                    ]
+                },
+            }
+        ]
+        result = to_sarif(findings)["runs"][0]["results"][0]
+        assert result["taxa"] == [{"id": "CWE-78", "toolComponent": {"name": "CWE"}}]
+
+    def test_a_cwe_in_both_tags_and_risk_is_one_taxon(self):
+        findings = [
+            {
+                "ruleId": "r",
+                "message": "m",
+                "severity": "HIGH",
+                "location": {"path": "a.py", "startLine": 1},
+                "tags": ["CWE-89"],
+                "risk": {"cwe": "CWE-89", "confidence": "HIGH"},
+            }
+        ]
+        result = to_sarif(findings)["runs"][0]["results"][0]
+        assert [t["id"] for t in result["taxa"]] == ["CWE-89"]
+
     def test_to_sarif_with_owasp_tag(self):
         """Test OWASP taxonomy tag handling (lines 109-115)."""
         findings = [
