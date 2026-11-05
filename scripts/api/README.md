@@ -123,7 +123,7 @@ service: jmo-subscribe-api
 
 provider:
   name: aws
-  runtime: nodejs20.x
+  runtime: nodejs22.x
   environment:
     RESEND_API_KEY: \${env:RESEND_API_KEY}
 
@@ -151,7 +151,7 @@ serverless deploy
 # 1. Create Dockerfile
 
 cat > Dockerfile <<EOF
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --production

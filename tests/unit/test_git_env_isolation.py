@@ -19,7 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import scrub_git_environment
+import tests.conftest
+from tests.conftest import GIT_LOCAL_ENV_VARS, scrub_git_environment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # A test that calls `git_commit_all`, which runs `git init` and `git config`.
@@ -55,6 +56,24 @@ def test_the_scrub_drops_every_variable_git_names(
     scrub_git_environment()
 
     assert not named & set(os.environ)
+
+
+def test_the_scrub_asks_git_rather_than_trusting_its_own_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every name git lists today is in GIT_LOCAL_ENV_VARS, so the test above
+    cannot tell the live lookup from the tuple. One name taken out of the tuple
+    must still go, because git names it."""
+    monkeypatch.setattr(
+        tests.conftest,
+        "GIT_LOCAL_ENV_VARS",
+        tuple(n for n in GIT_LOCAL_ENV_VARS if n != "GIT_COMMON_DIR"),
+    )
+    monkeypatch.setenv("GIT_COMMON_DIR", str(REPO_ROOT / ".git"))
+
+    scrub_git_environment()
+
+    assert "GIT_COMMON_DIR" not in os.environ
 
 
 def test_a_suite_run_under_git_dir_leaves_that_repository_alone(

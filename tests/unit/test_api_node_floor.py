@@ -42,16 +42,27 @@ def _accepts_major(spec: str, major: int) -> bool:
     return False
 
 
+def _lock() -> dict:
+    return json.loads((API / "package-lock.json").read_text(encoding="utf-8"))
+
+
 def _runtime_floors() -> dict[str, str]:
-    lock = json.loads((API / "package-lock.json").read_text(encoding="utf-8"))
-    return {
-        name: info["engines"]["node"]
-        for name, info in lock["packages"].items()
-        if name
-        and not info.get("dev")
-        and isinstance(info.get("engines"), dict)
-        and "node" in info["engines"]
-    }
+    floors = {}
+    for name, info in _lock()["packages"].items():
+        if not name or info.get("dev") or "engines" not in info:
+            continue
+        engines = info["engines"]
+        # npm once allowed an array here; one now would be read as no floor.
+        assert isinstance(engines, dict), (name, engines)
+        if "node" in engines:
+            floors[name] = engines["node"]
+    return floors
+
+
+def test_the_lock_records_the_declared_floor() -> None:
+    """npm writes package.json's engines into the lock's root entry."""
+    manifest = json.loads((API / "package.json").read_text(encoding="utf-8"))
+    assert _lock()["packages"][""]["engines"] == manifest["engines"]
 
 
 def test_the_lock_is_read() -> None:
