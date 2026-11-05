@@ -209,6 +209,11 @@ All notable changes to JMo Security will be documented in this file.
   unchanged. What was still useful moved: the adapter-test categories into the
   `coverage-gap-finder` agent, the documentation map into `doc-sync-checker`, and the
   `scan-timings.json` / `timings.json` distinction into `docs/SCAN_OPTIMIZATION.md`.
+- **History drops `scans.scan_notes` and `findings.finding_status`.** v1.1.0's migration
+  added both by ALTER TABLE, nothing read or wrote either, and a fresh database had
+  neither until `jmo history migrate` ran, so one version had two schemas. They are
+  dropped in place, with `finding_status`'s index, at the next store or
+  `jmo history migrate`, as `profile` and `target_type` are (#1337).
 
 ### Changed
 

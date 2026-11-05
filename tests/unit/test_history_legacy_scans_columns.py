@@ -251,9 +251,32 @@ def _results_dir(tmp_path: Path) -> Path:
     return results_dir
 
 
+def _findings_columns(conn) -> set[str]:
+    return {row[1] for row in conn.execute("PRAGMA table_info(findings)")}
+
+
+def _add_v1_1_0_columns(db_path: Path) -> None:
+    """What `jmo history migrate` did to any database recording 1.0.0, which
+    is every one: `SCHEMA_VERSION` is still "1.0.0", so v1.1.0's migration
+    runs first (#1337)."""
+    from scripts.migrations.v1_1_0 import Migration_1_0_0_to_1_1_0
+
+    conn = get_connection(db_path)
+    Migration_1_0_0_to_1_1_0().migrate_up(conn)
+    conn.commit()
+    assert "scan_notes" in _columns(conn)
+    assert "finding_status" in _findings_columns(conn)
+    assert "idx_findings_status" in _indexes(conn)
+    conn.close()
+
+
 def _assert_both_columns_gone_in_place(conn) -> None:
     assert not {"profile", "target_type"} & _columns(conn)
     assert not {"idx_scans_profile", "idx_scans_target_type"} & _indexes(conn)
+    # v1.1.0's two, which nothing reads and the current schema lacks (#1337).
+    assert "scan_notes" not in _columns(conn)
+    assert "finding_status" not in _findings_columns(conn)
+    assert "idx_findings_status" not in _indexes(conn)
     assert "target_type" not in _scans_sql(conn)
     # The cascade guard: a drop-and-recreate would have deleted these.
     assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 3
@@ -289,6 +312,9 @@ def test_fixture_is_a_real_legacy_database(tmp_path: Path, legacy_shape: str) ->
     ), gap
     # The live shape is SQLite's own rewrite, not a retyped string.
     assert ("scan_notes" in _columns(conn)) == (legacy_shape == "1.1.0-live")
+    assert ("finding_status" in _findings_columns(conn)) == (
+        legacy_shape == "1.1.0-live"
+    )
     assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 3
 
 
@@ -301,6 +327,66 @@ def test_init_database_drops_both_columns_in_place(
     init_database(db_path)
 
     _assert_both_columns_gone_in_place(get_connection(db_path))
+
+
+def test_init_database_drops_v1_1_0s_columns_from_every_shape(
+    tmp_path: Path, legacy_shape: str
+) -> None:
+    """`scans.scan_notes` and `findings.finding_status` went in by v1.1.0's
+    ALTER TABLE, on any shape `jmo history migrate` ran on; nothing reads
+    either (#1337). In place: `findings` cascades from `scans`."""
+    db_path = tmp_path / "legacy.db"
+    _build_pre_v2_database(db_path, legacy_shape)
+    _add_v1_1_0_columns(db_path)
+
+    init_database(db_path)
+
+    _assert_both_columns_gone_in_place(get_connection(db_path))
+
+
+def test_history_migrate_drops_v1_1_0s_columns_from_every_shape(
+    tmp_path: Path, legacy_shape: str
+) -> None:
+    db_path = tmp_path / "legacy.db"
+    _build_pre_v2_database(db_path, legacy_shape)
+    _add_v1_1_0_columns(db_path)
+
+    result = run_migrations(db_path)
+
+    assert result["errors"] == [], result["errors"]
+    _assert_both_columns_gone_in_place(get_connection(db_path))
+
+
+def test_a_fresh_database_ends_migrate_without_v1_1_0s_columns(
+    tmp_path: Path,
+) -> None:
+    """A fresh database records 1.0.0, so `jmo history migrate` runs v1.1.0's
+    migration on it, which adds both columns; v2.0.0's must take them out
+    again, or one version has two schemas."""
+    db_path = tmp_path / "fresh.db"
+    init_database(db_path)
+    conn = get_connection(db_path)
+    fresh = sorted(
+        tuple(row) for row in conn.execute("SELECT type, name, sql FROM sqlite_master")
+    )
+    conn.close()
+
+    result = run_migrations(db_path)
+
+    assert result["errors"] == [], result["errors"]
+    assert get_current_version(db_path) == "2.0.0"
+    conn = get_connection(db_path)
+    assert "scan_notes" not in _columns(conn)
+    assert "finding_status" not in _findings_columns(conn)
+    assert "idx_findings_status" not in _indexes(conn)
+    # Down to the stored DDL: SQLite's DROP COLUMN undoes the ADD COLUMN text.
+    assert (
+        sorted(
+            tuple(row)
+            for row in conn.execute("SELECT type, name, sql FROM sqlite_master")
+        )
+        == fresh
+    )
 
 
 def test_a_legacy_database_accepts_the_next_store(
@@ -346,12 +432,15 @@ def test_init_database_is_idempotent(tmp_path: Path, legacy_shape: str) -> None:
     _assert_both_columns_gone_in_place(conn)
 
 
+_V1_1_0_COLUMNS = {"scan_notes": "scans", "finding_status": "findings"}
+
+
 @pytest.mark.parametrize(
     ("legacy_shape", "column"),
     [
         (shape, column)
         for shape in LEGACY_SHAPES
-        for column in ("profile", "target_type")
+        for column in ("profile", "target_type", *_V1_1_0_COLUMNS)
         if column != "profile" or has_profile(shape)
     ],
 )
@@ -367,8 +456,11 @@ def test_a_blocked_drop_leaves_the_database_exactly_as_it_was(
     """
     db_path = tmp_path / "legacy.db"
     _build_pre_v2_database(db_path, legacy_shape)
+    _add_v1_1_0_columns(db_path)
+    table = _V1_1_0_COLUMNS.get(column, "scans")
+    key = "fingerprint" if table == "findings" else "id"
     conn = get_connection(db_path)
-    conn.execute(f"CREATE VIEW user_view AS SELECT id, {column} FROM scans")
+    conn.execute(f"CREATE VIEW user_view AS SELECT {key}, {column} FROM {table}")
     conn.commit()
     before = conn.execute(
         "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
@@ -383,7 +475,7 @@ def test_a_blocked_drop_leaves_the_database_exactly_as_it_was(
         "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
     ).fetchall()
     assert after == before
-    assert column in _columns(conn)
+    assert column in (_findings_columns if table == "findings" else _columns)(conn)
     assert "target_type" in _columns(conn)
     assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 3
 

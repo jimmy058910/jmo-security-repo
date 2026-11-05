@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Migration v1.3.0 -> v2.0.0: drop scans.profile and scans.target_type.
+Migration v1.3.0 -> v2.0.0: drop scans.profile and scans.target_type, and
+v1.1.0's scans.scan_notes and findings.finding_status.
 
 v2.0.0 removed the fast/slim/balanced/deep profiles; one tool matrix runs
 instead, and a scan records no profile. The column was `TEXT NOT NULL`, so a
@@ -14,6 +15,11 @@ already been written by dev builds, so a database recording 2.0.0 can still
 have it. `jmo history migrate` does not run this migration again there; the
 drop in `init_database`, which does not read the recorded version, removes it
 at that database's next store.
+
+v1.1.0's migration added `scan_notes` and `finding_status` by ALTER TABLE.
+Nothing read or wrote either and the current schema has neither, so they go
+too (#1337). Every database records 1.0.0, a fresh one included, so this chain
+adds them in v1.1.0 and takes them out here.
 
 The drops themselves live in `history_db._drop_legacy_profile_column` and
 `_drop_legacy_target_type_column`, which `init_database` also calls:
@@ -38,12 +44,14 @@ import sqlite3
 from scripts.core.history_db import (
     _drop_legacy_profile_column,
     _drop_legacy_target_type_column,
+    _drop_v1_1_0_columns,
 )
 from scripts.core.history_migrations import Migration
 
 
 class Migration_1_3_0_to_2_0_0(Migration):
-    """Drop the scans.profile and scans.target_type columns and their indexes."""
+    """Drop scans.profile, scans.target_type, scans.scan_notes and
+    findings.finding_status, and their indexes."""
 
     @property
     def version(self) -> str:
@@ -52,6 +60,7 @@ class Migration_1_3_0_to_2_0_0(Migration):
     def migrate_up(self, conn: sqlite3.Connection) -> None:
         _drop_legacy_profile_column(conn)
         _drop_legacy_target_type_column(conn)
+        _drop_v1_1_0_columns(conn)
 
     def migrate_down(self, conn: sqlite3.Connection) -> None:
         """Rollback is intentionally a no-op.
