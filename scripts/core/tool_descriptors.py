@@ -109,12 +109,30 @@ def is_batch_launcher(executable: str | Path) -> bool:
     return Path(executable).suffix.lower() in (".bat", ".cmd")
 
 
+# The long-path (`\\?\`) and device (`\\.\`) prefixes of a drive letter, either
+# separator: `\\?\C:\x` is the local `C:\x`, not a share.
+_DRIVE_PREFIX = re.compile(r"^[\\/]{2}[?.][\\/](?=[A-Za-z]:)")
+
+
 def is_unc(path: str | Path) -> bool:
     """Whether `path` is a UNC path (`\\\\server\\share\\...`), which cmd.exe
     refuses as its working directory: it starts in `C:\\Windows` instead.
-    Read as a Windows path on every platform; elsewhere no path is one."""
-    # TODO(issue-#1428): reads \\?\C:\x and \\.\C:\x as UNC
-    return PureWindowsPath(str(path)).drive.startswith("\\\\")
+    Read as a Windows path on every platform; elsewhere no path is one. The
+    long-path and device spellings of a drive (`\\\\?\\C:\\x`, `\\\\.\\C:\\x`) start
+    `\\\\` too and are local, not UNC (#1428); `\\\\?\\UNC\\...` is a share."""
+    text = str(path)
+    return not _DRIVE_PREFIX.match(text) and PureWindowsPath(text).drive.startswith(
+        "\\\\"
+    )
+
+
+def plain_drive(path: Path) -> Path:
+    """`path` without a long-path or device prefix on its drive letter:
+    `\\\\?\\C:\\x` is `C:\\x`. For a batch launcher's working directory, since
+    whether cmd.exe starts in a `\\\\?\\` directory is not measured, and it
+    refuses every other one that starts `\\\\` (#1428). Anything else as given."""
+    text = str(path)
+    return Path(_DRIVE_PREFIX.sub("", text)) if _DRIVE_PREFIX.match(text) else path
 
 
 class ExclusionStyle(StrEnum):
@@ -1113,9 +1131,10 @@ def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
     """
 
     def build(ctx: ScanContext) -> list[Invocation]:
-        target = Path(ctx.target)
+        batch = is_batch_launcher(ctx.binary)
+        target = plain_drive(Path(ctx.target)) if batch else Path(ctx.target)
         cwd: Path | None
-        if is_batch_launcher(ctx.binary) and is_unc(target):
+        if batch and is_unc(target):
             cwd, operand = None, str(target)
         elif flag == "-d":
             cwd, operand = target, "."
