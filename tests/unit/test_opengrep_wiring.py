@@ -293,6 +293,10 @@ def test_the_command_line(tmp_path) -> None:
         "--disable-version-check",
         "-j",
         "2",
+        # Per file and rule. opengrep's own 5 s cut a large minified file's
+        # parse short under load, and dropped the file (#1591).
+        "--timeout",
+        "30",
         *(f"--exclude={d}" for d in (*VENDORED_DIRS, "results")),
         # Run from inside the target, which is named `.`: see
         # `test_a_target_under_a_directory_the_default_ignore_list_names_is_scanned`.
@@ -652,6 +656,34 @@ def test_the_languages_are_chosen_from_the_whole_walk(tmp_path, caplog) -> None:
     assert "NOT scanned" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    "theirs",
+    [["--timeout", "9"], ["--timeout=9"]],
+    ids=["separate", "attached"],
+)
+def test_a_users_timeout_is_refused_as_jmos(tmp_path, caplog, theirs) -> None:
+    """opengrep refuses `--timeout` twice (rc 2, "option '--timeout' cannot be
+    repeated": measured), and JMo passes 30 s (#1591), so a user's is refused
+    as `-j` is. `--timeout-threshold` is another flag, and reaches it."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+    flags = {"opengrep": {"flags": [*theirs, "--timeout-threshold", "5"]}}
+
+    with caplog.at_level(logging.WARNING):
+        _, (definition,) = _recorded(repo, out, flags)
+
+    command = definition.command
+    assert [t for t in command if t.startswith("--timeout")] == [
+        "--timeout",
+        "--timeout-threshold",
+    ]
+    assert command[command.index("--timeout") + 1] == "30"
+    assert command[command.index("--timeout-threshold") + 1] == "5"
+    assert any("--timeout" in r.getMessage() for r in caplog.records)
+
+
 def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
     """opengrep refuses a second `-j` (rc 2, "option '-j' cannot be repeated",
     no output: measured) and JMo sets it to 2 (Phase 7's measurement: 507 MB
@@ -660,7 +692,7 @@ def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
     _plant(repo, ["app.py"])
     out = tmp_path / "out"
     out.mkdir()
-    flags = ["-j", "2", "--jobs=3", "-j8", "--timeout", "9"]
+    flags = ["-j", "2", "--jobs=3", "-j8", "--max-target-bytes", "9"]
 
     with caplog.at_level(logging.WARNING):
         _, (definition,) = _recorded(repo, out, {"opengrep": {"flags": flags}})
@@ -669,7 +701,7 @@ def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
     assert command.count("-j") == 1 and command[command.index("-j") + 1] == "2"
     assert not any(tok.startswith(("--jobs", "-j8")) for tok in command)
     # What is not JMo's is the user's, spliced in before the target.
-    assert command[-3:-1] == ["--timeout", "9"]
+    assert command[-3:-1] == ["--max-target-bytes", "9"]
     assert command[-1] == "."  # the target, from inside it
     for refused in ("-j 2", "--jobs=3", "-j8"):
         assert f"Ignoring `{refused}` in per_tool.opengrep.flags" in caplog.text

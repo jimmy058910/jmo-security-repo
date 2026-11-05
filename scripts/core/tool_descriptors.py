@@ -993,6 +993,13 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
                 # Fixed: at 4 its tree peaked at 662 MB on app B, at 2 at 507 MB,
                 # the same findings, about 1 s slower (Phase 7, measured).
                 *("-j", "2"),
+                # Per file and rule. opengrep's own 5 s fired while it parsed
+                # juice-shop's 836 KB minified three.js under load, reported
+                # the cut as a syntax error (Memprof_limits.Limit_reached) and
+                # dropped the file: 223 findings read 204 (#1591). At 30 s it
+                # read 223 with no error, in the same wall time. JMo's, like
+                # `-j`: opengrep refuses the flag twice (rc 2, measured).
+                *("--timeout", "30"),
                 # JMo's exclusions before the user's flags, so an explicit
                 # per_tool entry still wins; repeatable forms accumulate.
                 *ctx.exclusion_args,
@@ -2290,6 +2297,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 PASSED=(
                     "-j",
                     "--jobs",
+                    "--timeout",
                     "--rewrite-rule-ids",
                     "--no-rewrite-rule-ids",
                     "--enable-version-check",

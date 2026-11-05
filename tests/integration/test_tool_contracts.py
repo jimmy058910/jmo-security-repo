@@ -156,6 +156,8 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
             "--disable-version-check",
             "-j",
             "2",
+            "--timeout",
+            "30",
             ".",
         ],
         "ok_return_codes": (0,),
