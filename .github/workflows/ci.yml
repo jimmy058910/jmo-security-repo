@@ -1712,6 +1712,7 @@ jobs:
             tests/unit/test_opengrep_wiring.py \
             tests/unit/test_jmo_rules_bundle.py \
             tests/unit/test_own_config_announcement.py \
+            tests/unit/test_generate_golden.py \
             -v \
             -m "requires_tools" \
             --tb=short \

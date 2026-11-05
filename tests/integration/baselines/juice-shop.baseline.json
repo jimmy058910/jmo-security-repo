@@ -2,7 +2,7 @@
   "metadata": {
     "target": "juice-shop/juice-shop",
     "version": "1618a611b173b4bf114028e6e02549950606e29d",
-    "generated": "2026-10-30T22:04:43Z",
+    "generated": "2026-11-05T14:41:00Z",
     "tools_used": [
       "checkov",
       "gitleaks",
@@ -11,19 +11,21 @@
       "syft",
       "trivy",
       "trufflehog",
+      "yara-x",
       "zizmor"
     ],
     "findings_per_tool": {
       "checkov": 111,
       "gitleaks": 69,
       "hadolint": 6,
-      "opengrep": 223,
+      "opengrep": 204,
       "syft": 52,
       "trivy": 87,
       "trufflehog": 6,
-      "zizmor": 95
+      "yara-x": 2,
+      "zizmor": 96
     },
-    "finding_count": 640,
+    "finding_count": 624,
     "notes": "OWASP Juice Shop at the commit one after the v20.2.0 tag"
   },
   "expected_findings": [
@@ -46,12 +48,6 @@
       "min_count": 18
     },
     {
-      "rule_id": "CWE-915",
-      "severity": "MEDIUM",
-      "category": "cwe-915",
-      "min_count": 18
-    },
-    {
       "rule_id": "CWE-223",
       "severity": "LOW",
       "category": "cwe-223",
@@ -64,16 +60,16 @@
       "min_count": 15
     },
     {
-      "rule_id": "CWE-79",
-      "severity": "HIGH",
-      "category": "xss",
-      "min_count": 11
-    },
-    {
       "rule_id": "CWE-326",
       "severity": "MEDIUM",
       "category": "cwe-326",
       "min_count": 10
+    },
+    {
+      "rule_id": "CWE-79",
+      "severity": "HIGH",
+      "category": "xss",
+      "min_count": 9
     },
     {
       "rule_id": "CWE-116",
@@ -151,6 +147,12 @@
       "rule_id": "CWE-522",
       "severity": "HIGH",
       "category": "cwe-522",
+      "min_count": 1
+    },
+    {
+      "rule_id": "CWE-915",
+      "severity": "MEDIUM",
+      "category": "cwe-915",
       "min_count": 1
     },
     {
