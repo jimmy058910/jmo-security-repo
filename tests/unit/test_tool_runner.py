@@ -2163,3 +2163,33 @@ class TestExclusiveRunsOneAtATime:
         assert results[0].failure == "interrupted"
         assert results[0].duration == 0.0
         assert not marker.exists()
+
+
+def test_the_only_popen_in_the_product_is_the_bounded_runners() -> None:
+    """The first-run lane's guard (#1285) requires `timeout=` on every
+    `subprocess.run`, `check_output` and `call`; it cannot see `Popen`. The one
+    `Popen` under `scripts/cli` and `scripts/core` is `_run_bounded`'s, bounded
+    by `communicate(timeout=)` and killed as a tree when that expires
+    (`TestTimeoutKillsTheProcessTree`), registered for Ctrl-C. A process
+    started anywhere else would be neither: start it through `run_bounded`."""
+    import ast
+
+    scripts = TOOL_RUNNER_SOURCE.parents[1]
+    found = []
+    for path in sorted(
+        [
+            *scripts.joinpath("cli").rglob("*.py"),
+            *scripts.joinpath("core").rglob("*.py"),
+        ]
+    ):
+        tree = ast.parse(path.read_bytes())
+        for func in ast.walk(tree):
+            if not isinstance(func, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for node in ast.walk(func):
+                callee = node.func if isinstance(node, ast.Call) else None
+                name = getattr(callee, "attr", None) or getattr(callee, "id", None)
+                if name == "Popen":
+                    found.append((path.relative_to(scripts).as_posix(), func.name))
+    # Nested functions would count a call twice; the set is what is asserted.
+    assert sorted(set(found)) == [("core/tool_runner.py", "_run_bounded")], found
