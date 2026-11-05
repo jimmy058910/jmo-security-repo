@@ -742,6 +742,7 @@ version = "1.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "croniter" },
+    { name = "jsonschema" },
     { name = "pyyaml" },
     { name = "rapidfuzz" },
     { name = "requests" },
@@ -758,9 +759,6 @@ email = [
 ]
 mcp = [
     { name = "mcp", extra = ["cli"] },
-]
-reporting = [
-    { name = "jsonschema" },
 ]
 visual = [
     { name = "pytest-playwright" },
@@ -806,7 +804,7 @@ dev = [
 requires-dist = [
     { name = "croniter", specifier = ">=1.0" },
     { name = "cryptography", marker = "extra == 'attestation'", specifier = ">=50.0.0" },
-    { name = "jsonschema", marker = "extra == 'reporting'", specifier = ">=4.0" },
+    { name = "jsonschema", specifier = ">=4.0" },
     { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=2.2.0" },
     { name = "pytest-playwright", marker = "extra == 'visual'", specifier = ">=0.5.2" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -817,7 +815,7 @@ requires-dist = [
     { name = "sigstore", marker = "extra == 'attestation'", specifier = ">=2.0.0" },
     { name = "yara-x", marker = "extra == 'yara'", specifier = "==1.22.1" },
 ]
-provides-extras = ["yara", "reporting", "email", "mcp", "attestation", "visual"]
+provides-extras = ["yara", "email", "mcp", "attestation", "visual"]
 
 [package.metadata.requires-dev]
 dev = [

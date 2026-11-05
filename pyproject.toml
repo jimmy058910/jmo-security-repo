@@ -36,6 +36,11 @@ dependencies = [
     "requests>=2.31.0",  # Required for EPSS/KEV integration (v0.9.0+)
     "rapidfuzz>=3.0.0",  # Required for cross-tool deduplication fuzzy matching (v1.0.0+)
     "rich>=13.0",  # Required for trend analysis console formatting (v1.0.0+)
+    # The report validates findings against the CommonFinding schema (#1350). It
+    # was the `reporting` extra, so an install made the documented way skipped
+    # validation silently. Its one compiled dependency, rpds-py, has wheels for
+    # every platform yara-x lacks (#1577) and an sdist.
+    "jsonschema>=4.0",
 ]
 
 [project.urls]
@@ -51,7 +56,6 @@ LinkedIn = "https://linkedin.com/in/jimmy-moceri"
 # 2.28+, macOS 14+, Windows x86_64), so as a dependency it failed the whole
 # install everywhere else. The documented install and the image include it.
 yara = ["yara-x==1.22.1"]
-reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
 mcp = ["mcp[cli]>=2.2.0"]  # MCP server; 2.0 renamed FastMCP -> MCPServer with no shim, and jmo_server.py imports MCPServer; >=2.2.0: CVE-2026-59951
 # SLSA attestation (Feature #6, v1.0.0). The cryptography floor must track the
