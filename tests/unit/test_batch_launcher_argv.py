@@ -246,9 +246,11 @@ class TestTheClassTestIsNotVacuous:
             assert Path(line[0]).name == "checkov.cmd", line
 
     def test_the_rendered_values_hold_the_character(self, tmp_path, java):
-        """A rendering that lost the character would pass for every tool."""
-        (inv,) = _render(tmp_path, "trivy", "repo", "&", ".exe")
-        assert any("repo&x" in arg for arg in inv.command), inv.command
+        """A rendering that lost the character would pass for every tool.
+        trivy's IaC run names its file's directory; its repository run is
+        `.` from the target since #1574."""
+        (inv,) = _render(tmp_path, "trivy", "iac", "&", ".exe")
+        assert any("iac&x" in arg for arg in inv.command), inv.command
         assert "res&ults" in str(inv.output_file)
 
     @pytest.mark.parametrize(

@@ -1052,8 +1052,27 @@ def _syft_image(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+def _trivy_cwd(ctx: ScanContext) -> Path:
+    """Where trivy runs: it reads `trivy.yaml` and `.trivyignore` from there
+    (measured, 0.74.0), so never from jmo's own directory (#1574). A
+    repository from its root, whose files are its own and announced
+    (`own_config`); anything else from JMo's output folder, which holds none."""
+    if ctx.target_type == "repo":
+        return Path(scan_root(ctx.target))
+    return Path(ctx.out_dir).absolute()
+
+
 def _trivy(subcommand: str, *pre: str, excl: bool = False) -> Builder:
     def build(ctx: ScanContext) -> list[Invocation]:
+        # `.` from a repository's root; any other operand absolute, as the
+        # output is, since trivy no longer runs where jmo does.
+        operand = (
+            "."
+            if ctx.target_type == "repo"
+            else str(Path(ctx.target).absolute())
+            if subcommand == "config"
+            else str(ctx.target)
+        )
         return [
             Invocation(
                 command=(
@@ -1065,13 +1084,14 @@ def _trivy(subcommand: str, *pre: str, excl: bool = False) -> Builder:
                     *pre,
                     *(ctx.exclusion_args if excl else ()),
                     *filter_trivy_flags(subcommand, ctx.flags),
-                    str(ctx.target),
+                    operand,
                     "-o",
-                    str(ctx.output),
+                    str(Path(ctx.output).absolute()),
                 ),
                 output_file=ctx.output,
                 capture_stdout=False,
                 ok_return_codes=(0, 1),
+                cwd=_trivy_cwd(ctx),
             )
         ]
 
@@ -1092,7 +1112,7 @@ def _trivy_k8s(ctx: ScanContext) -> list[Invocation]:
     # sentinel discovery writes when the user named none.
     if not all_namespaces and namespace not in ("", "*", "default"):
         command += ["--include-namespaces", namespace]
-    command += ["-o", str(ctx.output)]
+    command += ["-o", str(Path(ctx.output).absolute())]
     # The context is POSITIONAL (`trivy kubernetes [flags] [CONTEXT]`).
     if context and context != "current":
         command.append(context)
@@ -1102,6 +1122,7 @@ def _trivy_k8s(ctx: ScanContext) -> list[Invocation]:
             output_file=ctx.output,
             capture_stdout=False,
             ok_return_codes=(0, 1),
+            cwd=_trivy_cwd(ctx),
         )
     ]
 
@@ -1194,21 +1215,48 @@ def _checkov_unc(ctx: ScanContext) -> Shortfall | None:
     )
 
 
-def _file_fed(*format_args: str) -> Builder:
+def _file_fed(*format_args: str, from_root: bool = False) -> Builder:
     """hadolint and shellcheck take many paths per invocation; the scan loop
-    walks the tree (pruning the excluded directories) and hands them over."""
+    walks the tree (pruning the excluded directories) and hands them over.
+
+    `from_root`: run from the target's root, the files absolute. hadolint
+    reads `.hadolint.yaml` / `.hadolint.yml` from where it runs (measured,
+    2.15.1), which was jmo's own directory (#1574)."""
 
     def build(ctx: ScanContext) -> list[Invocation]:
+        files = (
+            tuple(str(Path(f).absolute()) for f in ctx.files)
+            if from_root
+            else ctx.files
+        )
         return [
             Invocation(
-                command=(ctx.binary, *format_args, *ctx.flags, *ctx.files),
+                command=(ctx.binary, *format_args, *ctx.flags, *files),
                 output_file=ctx.output,
                 capture_stdout=True,
                 ok_return_codes=(0, 1),  # 2+ are fatal parse/usage errors
+                cwd=Path(scan_root(ctx.target)) if from_root else None,
             )
         ]
 
     return build
+
+
+def _shellcheck_own_config_dirs(ctx: ScanContext) -> list[Path]:
+    """shellcheck reads `.shellcheckrc` or `shellcheckrc` from each script's
+    directory and its parents (measured, 0.11.0): each directory from a walked
+    script up to the root, once. One above the root, or the user's own
+    `~/.shellcheckrc`, also applies; it is not the repository's, so not named."""
+    root, scripts = _relative_to_target(ctx)
+    dirs: dict[Path, None] = {}
+    for script in scripts:
+        here = (root / script).parent
+        while True:
+            dirs[here] = None
+            if here == root or root not in here.parents:
+                break
+            here = here.parent
+    return list(dirs)
 
 
 def _relative_to_target(ctx: ScanContext) -> tuple[Path, list[str]]:
@@ -2270,6 +2318,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="trivy",
+            own_config=("trivy.yaml", ".trivyignore"),
             invocations={
                 # No `secret`: gitleaks and trufflehog already read a repository's
                 # secrets, and trivy's own pass is redundant there. `--include-dev-deps`
@@ -2344,7 +2393,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="hadolint",
-            invocations={"repo": _file_fed("-f", "json")},
+            invocations={"repo": _file_fed("-f", "json", from_root=True)},
+            own_config=(".hadolint.yaml", ".hadolint.yml"),
             version_probe=VersionProbe(
                 re.compile(r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)")
             ),
@@ -2365,6 +2415,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="shellcheck",
             invocations={"repo": _file_fed("--format=json")},
+            own_config=(".shellcheckrc", "shellcheckrc"),
+            own_config_dirs=_shellcheck_own_config_dirs,
             version_probe=VersionProbe(
                 re.compile(r"(?:version:?\s*)?(\d+\.\d+\.\d+)", re.IGNORECASE)
             ),
