@@ -170,11 +170,13 @@ def test_a_timeout_kills_the_clones_whole_process_tree(tmp_path, monkeypatch) ->
         b"open(sys.argv[1], 'w').write(str(helper.pid))\n"
         b"time.sleep(60)\n"
     )
-    monkeypatch.setattr(clone_mod, "GIT_TIMEOUT", 2)
+    # Long enough for a slow machine to start the helper and write its pid.
+    monkeypatch.setattr(clone_mod, "GIT_TIMEOUT", 5)
 
     rc, _out, err = run([sys.executable, str(fake_git), str(pid_file)])
 
     assert rc == 124, err
+    assert pid_file.exists(), "the stand-in timed out before it started its helper"
     helper = int(pid_file.read_bytes())
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:

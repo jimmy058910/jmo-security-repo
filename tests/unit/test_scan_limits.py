@@ -113,31 +113,45 @@ def test_cpu_slots_bound_the_count_whatever_the_budget(tmp_path) -> None:
     assert _codes(results) == [0, 0], results
 
 
-def test_first_come_first_served(tmp_path) -> None:
+def test_first_come_first_served() -> None:
     """A large run waiting is not passed by a small one that would fit."""
     order: list[str] = []
+
+    def until(condition, what: str) -> None:
+        deadline = time.monotonic() + 5
+        while not condition():
+            assert time.monotonic() < deadline, what
+            time.sleep(0.01)
+
     with scan_limits(budget_mb=600, slots=4) as limits:
         assert limits.admit(400)
 
         def wait(name: str, mb: int) -> None:
-            assert limits.admit(mb)
-            order.append(name)
+            if limits.admit(mb):
+                order.append(name)
 
         large = threading.Thread(target=wait, args=("large", 550))
-        large.start()
-        time.sleep(0.3)
         small = threading.Thread(target=wait, args=("small", 100))
-        small.start()
-        time.sleep(0.3)
-        assert order == [], "the small run went past the large one"
-        limits.release(400)
-        large.join(timeout=5)
-        time.sleep(0.3)
-        assert order == ["large"], "the small run fits beside neither"
-        limits.release(550)
-        small.join(timeout=5)
-        assert order == ["large", "small"]
-        limits.release(100)
+        try:
+            large.start()
+            until(lambda: len(limits._queue) == 1, "the large run never queued")
+            small.start()
+            until(lambda: len(limits._queue) == 2, "the small run never queued")
+            time.sleep(0.3)
+            assert order == [], "the small run went past the large one"
+            limits.release(400)
+            until(lambda: order == ["large"], "the large run was not admitted")
+            time.sleep(0.3)
+            assert order == ["large"], "the small run fits beside neither"
+            limits.release(550)
+            until(lambda: order == ["large", "small"], "the small run never ran")
+            limits.release(100)
+        finally:
+            # A failed assert must not leave a waiter blocking pytest's exit.
+            tool_runner.request_stop()
+            large.join(timeout=5)
+            small.join(timeout=5)
+            tool_runner.clear_stop()
 
 
 def test_ctrl_c_wakes_a_waiting_run_and_it_never_starts(tmp_path) -> None:

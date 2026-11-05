@@ -66,7 +66,10 @@ def test_a_killed_jmo_takes_its_children_with_it(tmp_path, mode, dies) -> None:
         env={**os.environ, "PYTHONPATH": str(ROOT)},
     )
     deadline = time.monotonic() + 30
-    while not pid_file.exists() and time.monotonic() < deadline:
+    # Until it holds the pid: the file exists before the write lands.
+    while time.monotonic() < deadline and not (
+        pid_file.exists() and pid_file.read_bytes().strip()
+    ):
         time.sleep(0.1)
     assert pid_file.exists(), "the parent never started its child"
     child = int(pid_file.read_bytes())
