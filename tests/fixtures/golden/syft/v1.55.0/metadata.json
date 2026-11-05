@@ -1,0 +1,28 @@
+{
+  "tool": "syft",
+  "version": "1.55.0",
+  "generated_at": "2026-11-05T14:34:18.101026+00:00",
+  "finding_count": 5,
+  "raw_output_hash": "8a25700d1438",
+  "binary": "syft",
+  "binary_sha256": "64c9631c3560336c55c549df0de08cd577d02399c9de807ac390960a4ed5c351",
+  "recipe": {
+    "samples": [
+      "python-vulnerable"
+    ],
+    "url": null,
+    "prepared": null
+  },
+  "target": {
+    "samples": [
+      "python-vulnerable"
+    ],
+    "files": {
+      "requirements.txt": "be542ba756d80af97931d7839b1a3089b360d370fa936fbfe47e49d19627173e",
+      "vulnerable_app.py": "d12591b8ee9115d8fbb7df244683eac912f79a96593aca23d99e458a8ce8a5a4"
+    }
+  },
+  "config": {},
+  "command": "jmo scan --repo /golden/target --tools syft --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

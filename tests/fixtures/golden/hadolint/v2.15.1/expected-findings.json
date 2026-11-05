@@ -1,0 +1,446 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "89454c98c83740cc",
+    "ruleId": "DL3006",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 9
+    },
+    "message": "Always tag the version of an image explicitly",
+    "title": "DL3006",
+    "description": "Always tag the version of an image explicitly",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3006",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 9,
+      "message": "Always tag the version of an image explicitly"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "56dfd9708b556614",
+    "ruleId": "DL3015",
+    "severity": "INFO",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 12
+    },
+    "message": "Avoid additional packages by specifying `--no-install-recommends`",
+    "title": "DL3015",
+    "description": "Avoid additional packages by specifying `--no-install-recommends`",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3015",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "info",
+      "line": 12,
+      "message": "Avoid additional packages by specifying `--no-install-recommends`"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "614c9d05cc4782c7",
+    "ruleId": "DL3008",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 12
+    },
+    "message": "Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`",
+    "title": "DL3008",
+    "description": "Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3008",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 12,
+      "message": "Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "a0f8a2c45a2fd1f4",
+    "ruleId": "DL3015",
+    "severity": "INFO",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 15
+    },
+    "message": "Avoid additional packages by specifying `--no-install-recommends`",
+    "title": "DL3015",
+    "description": "Avoid additional packages by specifying `--no-install-recommends`",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3015",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "info",
+      "line": 15,
+      "message": "Avoid additional packages by specifying `--no-install-recommends`"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "aa31187f02caa661",
+    "ruleId": "DL3008",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 15
+    },
+    "message": "Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`",
+    "title": "DL3008",
+    "description": "Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3008",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 15,
+      "message": "Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "0d7412a4aff3fbfc",
+    "ruleId": "DL3020",
+    "severity": "HIGH",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 18
+    },
+    "message": "Use COPY instead of ADD for files and folders",
+    "title": "DL3020",
+    "description": "Use COPY instead of ADD for files and folders",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3020",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "error",
+      "line": 18,
+      "message": "Use COPY instead of ADD for files and folders"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "987aa9bc84273d34",
+    "ruleId": "DL3007",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 21
+    },
+    "message": "Using latest is prone to errors if the image will ever update. Pin the version explicitly to a release tag",
+    "title": "DL3007",
+    "description": "Using latest is prone to errors if the image will ever update. Pin the version explicitly to a release tag",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3007",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 21,
+      "message": "Using latest is prone to errors if the image will ever update. Pin the version explicitly to a release tag"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "8fa57c707c9d0689",
+    "ruleId": "DL3013",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 24
+    },
+    "message": "Pin versions in pip. Instead of `pip install <package>` use `pip install <package>==<version>` or `pip install --requirement <requirements file>`",
+    "title": "DL3013",
+    "description": "Pin versions in pip. Instead of `pip install <package>` use `pip install <package>==<version>` or `pip install --requirement <requirements file>`",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3013",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 24,
+      "message": "Pin versions in pip. Instead of `pip install <package>` use `pip install <package>==<version>` or `pip install --requirement <requirements file>`"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "8d0c70ce42e50b40",
+    "ruleId": "DL3042",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 24
+    },
+    "message": "Avoid use of cache directory with pip. Use `pip install --no-cache-dir <package>`",
+    "title": "DL3042",
+    "description": "Avoid use of cache directory with pip. Use `pip install --no-cache-dir <package>`",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3042",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 24,
+      "message": "Avoid use of cache directory with pip. Use `pip install --no-cache-dir <package>`"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "112c9b3dcfcce794",
+    "ruleId": "DL3025",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 28
+    },
+    "message": "Use arguments JSON notation for CMD and ENTRYPOINT arguments",
+    "title": "DL3025",
+    "description": "Use arguments JSON notation for CMD and ENTRYPOINT arguments",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3025",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 28,
+      "message": "Use arguments JSON notation for CMD and ENTRYPOINT arguments"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "636430f354253b98",
+    "ruleId": "DL4006",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 31
+    },
+    "message": "Set the SHELL option -o pipefail before RUN with a pipe in it. If you are using /bin/sh in an alpine image or if your shell is symlinked to busybox then consider explicitly setting your SHELL to /bin/ash, or disable this check",
+    "title": "DL4006",
+    "description": "Set the SHELL option -o pipefail before RUN with a pipe in it. If you are using /bin/sh in an alpine image or if your shell is symlinked to busybox then consider explicitly setting your SHELL to /bin/ash, or disable this check",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL4006",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 31,
+      "message": "Set the SHELL option -o pipefail before RUN with a pipe in it. If you are using /bin/sh in an alpine image or if your shell is symlinked to busybox then consider explicitly setting your SHELL to /bin/ash, or disable this check"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "e4c12e9c97307a00",
+    "ruleId": "DL3003",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "hadolint",
+      "version": "2.15.1"
+    },
+    "location": {
+      "path": "/golden/target/Dockerfile",
+      "startLine": 34
+    },
+    "message": "Use WORKDIR to switch to a directory",
+    "title": "DL3003",
+    "description": "Use WORKDIR to switch to a directory",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "dockerfile",
+      "lint"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "code": "DL3003",
+      "column": 1,
+      "file": "/golden/target/Dockerfile",
+      "level": "warning",
+      "line": 34,
+      "message": "Use WORKDIR to switch to a directory"
+    }
+  }
+]

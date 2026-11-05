@@ -1,0 +1,108 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "1bd8552c9f66a9de",
+    "ruleId": "JMO_Canary_Test",
+    "severity": "HIGH",
+    "tool": {
+      "name": "yara-x",
+      "version": "1.22.1"
+    },
+    "location": {
+      "path": "/golden/target/node_modules/left-pad/index.js",
+      "startLine": 0
+    },
+    "message": "YARA rule 'JMO_Canary_Test' matched: A string only JMo's tests write (1 string matches). Rule by JMo Security test suite",
+    "title": "Malware Detected: JMO_Canary_Test",
+    "description": "A string only JMo's tests write",
+    "remediation": "Review file for malware indicators. YARA rule 'JMO_Canary_Test' detected malicious patterns.",
+    "references": [],
+    "tags": [
+      "malware-detection",
+      "yara-x",
+      "namespace:canary"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "rule_name": "JMO_Canary_Test",
+      "namespace": "canary",
+      "author": "JMo Security test suite",
+      "reference": null,
+      "rule_tags": [],
+      "matched_strings_count": 1,
+      "matched_strings": [
+        "$canary"
+      ]
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "rule": "JMO_Canary_Test",
+      "namespace": "canary",
+      "tags": [],
+      "meta": {
+        "author": "JMo Security test suite",
+        "description": "A string only JMo's tests write"
+      },
+      "strings": [
+        "$canary"
+      ],
+      "file": "/golden/target/node_modules/left-pad/index.js"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "108648f8a63382c3",
+    "ruleId": "JMO_Canary_Test",
+    "severity": "HIGH",
+    "tool": {
+      "name": "yara-x",
+      "version": "1.22.1"
+    },
+    "location": {
+      "path": "/golden/target/src/index.js",
+      "startLine": 0
+    },
+    "message": "YARA rule 'JMO_Canary_Test' matched: A string only JMo's tests write (1 string matches). Rule by JMo Security test suite",
+    "title": "Malware Detected: JMO_Canary_Test",
+    "description": "A string only JMo's tests write",
+    "remediation": "Review file for malware indicators. YARA rule 'JMO_Canary_Test' detected malicious patterns.",
+    "references": [],
+    "tags": [
+      "malware-detection",
+      "yara-x",
+      "namespace:canary"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "rule_name": "JMO_Canary_Test",
+      "namespace": "canary",
+      "author": "JMo Security test suite",
+      "reference": null,
+      "rule_tags": [],
+      "matched_strings_count": 1,
+      "matched_strings": [
+        "$canary"
+      ]
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "rule": "JMO_Canary_Test",
+      "namespace": "canary",
+      "tags": [],
+      "meta": {
+        "author": "JMo Security test suite",
+        "description": "A string only JMo's tests write"
+      },
+      "strings": [
+        "$canary"
+      ],
+      "file": "/golden/target/src/index.js"
+    }
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "tool": "jmo-native",
+  "version": "1.1.1",
+  "generated_at": "2026-11-05T14:34:20.511092+00:00",
+  "finding_count": 8,
+  "raw_output_hash": "6faf1b7fb026",
+  "binary": "python",
+  "binary_sha256": "eaaa308032c4aa063df5880c4c293cd458b4629d503fbc2c03ec163d71f7f790",
+  "recipe": {
+    "samples": [
+      "native"
+    ],
+    "url": null,
+    "prepared": null
+  },
+  "target": {
+    "samples": [
+      "native"
+    ],
+    "files": {
+      ".env.example": "2d750078eb0312bdc576bbca0def1b8285390702f214063be8decab99b60d9a9",
+      "README.md": "1c937d1094ea70d394833676da5b4bf90b0fd194ceaed440c42c362856566e43",
+      "app/api/admin/route.ts": "e548d692b1ad3b71bac5c035726074de335e7720c3f135c36efafeacaa852d9c",
+      "app/dashboard/chat.tsx": "81cb3fd5d8ab0ac50f63f1bf2a5226d251cd543346939e8d2ed00a2f0aa95ad8",
+      "firestore.rules": "680b88bc3049cd795bc560d2885166a219aa35a2c813bc2490b4bc4f7bd4a3f1",
+      "src/lib/supabase.ts": "06ade2fef0949c7b0962f60cff860b7be4b20ce5cb008a9188d04dab5140ffb1",
+      "storage.rules": "837917742806b8eff41eff21d10ca3d7f253760ae0ca6e1b7ad330d5455bd44a",
+      "supabase/migrations/20260101000000_init.sql": "eb5cd33c3f40d8f06297cd15a6dba02d4c552f9618e7c3cceaf03a2011f234de"
+    }
+  },
+  "config": {},
+  "command": "jmo scan --repo /golden/target --tools jmo-native --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

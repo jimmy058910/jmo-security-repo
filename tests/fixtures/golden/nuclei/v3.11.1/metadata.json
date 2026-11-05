@@ -1,0 +1,27 @@
+{
+  "tool": "nuclei",
+  "version": "3.11.1",
+  "generated_at": "2026-11-05T14:34:23.865099+00:00",
+  "finding_count": 1,
+  "raw_output_hash": "3802f3711b0f",
+  "binary": "nuclei",
+  "binary_sha256": "c49588140f357cbdddd5436dec11201953a4c5390faeec90777f9ee2cfd70251",
+  "recipe": {
+    "samples": [],
+    "url": "fixture_server.py --mode spider",
+    "prepared": "_nuclei_template"
+  },
+  "target": {
+    "server": "tests/fixtures/samples/zap/fixture_server.py",
+    "mode": "spider"
+  },
+  "config": {
+    "flags": [
+      "-t",
+      "/golden/golden.yaml",
+      "-duc"
+    ]
+  },
+  "command": "jmo scan --url http://127.0.0.1:41023 --tools nuclei --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

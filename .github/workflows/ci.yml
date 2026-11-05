@@ -1557,6 +1557,8 @@ jobs:
               - 'scripts/core/adapters/opengrep_adapter.py'
               - 'scripts/dev/fetch_rule_fixture.py'
               - 'scripts/jmo_rules/**'
+              - 'scripts/dev/generate_golden.py'
+              - 'tests/unit/test_generate_golden.py'
 
       - name: Set up uv
         if: steps.changes.outputs.versions == 'true'
@@ -1712,10 +1714,18 @@ jobs:
             tests/unit/test_opengrep_wiring.py \
             tests/unit/test_jmo_rules_bundle.py \
             tests/unit/test_own_config_announcement.py \
+            tests/unit/test_generate_golden.py \
             -v \
             -m "requires_tools" \
             --tb=short \
-            --timeout=300
+            --timeout=300 \
+            --junitxml=contract-junit.xml
+
+      - name: Fail if the contract tests passed nothing
+        # pytest exits 0 for a run of skips, and each of these tests skips
+        # without its tool (#1349's class).
+        if: steps.changes.outputs.versions == 'true'
+        run: python3 scripts/dev/require_passed.py contract-junit.xml
 
       - name: Summarize skip
         if: steps.changes.outputs.versions != 'true'

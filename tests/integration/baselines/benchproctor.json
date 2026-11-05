@@ -1,0 +1,63 @@
+{
+  "source": {
+    "repository": "TheAuditorTool/BenchProctor",
+    "commit": "ad70ff85c2325626ccbda2a6565d354732d032ff",
+    "bundles": "quicktest 2026.07.22, TypeScript and JavaScript"
+  },
+  "tool": "opengrep",
+  "matching": "score_sarif.py's default: a finding names the test's file and carries its CWE (a result's taxa); never --match-mode filename",
+  "j": "the scorer's Category-Averaged score: macro TPR minus macro FPR, in percent",
+  "tolerance": 0.2,
+  "tolerance_reason": "two steps of the scorer's one-decimal rounding; losing one category's rule (cmdi, TPR 72%) moves J by about 0.45",
+  "spread_measured": "two identical runs on Debian, 2026-11-05: every framework scored the same, spread 0.0",
+  "frameworks": {
+    "express_ts": {
+      "spread": 0.0,
+      "peak_rss_mb": 535,
+      "tpr": 7.6,
+      "fpr": 5.4,
+      "j": 2.3,
+      "tp": 237,
+      "fp": 167,
+      "fn": 2863,
+      "tn": 2933,
+      "seconds": 47.0
+    },
+    "nestjs": {
+      "spread": 0.0,
+      "peak_rss_mb": 326,
+      "tpr": 5.4,
+      "fpr": 4.9,
+      "j": 0.5,
+      "tp": 167,
+      "fp": 153,
+      "fn": 2933,
+      "tn": 2947,
+      "seconds": 43.1
+    },
+    "express": {
+      "spread": 0.0,
+      "peak_rss_mb": 499,
+      "tpr": 7.8,
+      "fpr": 5.4,
+      "j": 2.4,
+      "tp": 241,
+      "fp": 167,
+      "fn": 2859,
+      "tn": 2933,
+      "seconds": 47.4
+    },
+    "koa": {
+      "spread": 0.0,
+      "peak_rss_mb": 495,
+      "tpr": 4.3,
+      "fpr": 3.5,
+      "j": 0.8,
+      "tp": 133,
+      "fp": 108,
+      "fn": 2967,
+      "tn": 2992,
+      "seconds": 71.5
+    }
+  }
+}

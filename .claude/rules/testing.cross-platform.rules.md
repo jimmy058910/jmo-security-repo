@@ -194,7 +194,7 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 | `ci.yml` tool-contract-tests | `-m "requires_tools"` | Tools installed via the `Install tools` step earlier in the job. |
 | `ci.yml` windows-opengrep | `-m "requires_tools"` | The one Windows job that runs `requires_tools`: opengrep installed by `jmo tools install`, three test files, `-p no:xdist -p no:rerunfailures`, no `PYTHONUTF8`. The step fails on any skip (read from the junit file) and under a floor of 29 tests. |
 | `scheduled.yml` Nightly Extended | `-m "not requires_tools and not smoke"` | Includes slow tests intentionally (omit `not slow`) since nightly has the time budget. Excludes real-tool + smoke tests because runner doesn't install tools or install released package. |
-| `scheduled.yml` Tool Smoke Tests | `-m "smoke"` | Runs only `@pytest.mark.smoke` tests against released `jmo-security` PyPI package. |
+| `scheduled.yml` Tool Output Contract Tests | `-m "requires_tools"`, then the answer-key files with no filter | The contract selection, then `generate_golden.py --check` (all 14 tools), then the six answer-key files after their keys and the OSV databases are fetched. `require_passed.py` fails the step on 0 passed, and the answer-key step on any skip. Replaced the juice-shop smoke job, which read green on 0 passed (#1349). |
 | `scheduled.yml` Integration matrix | `-m "integration and not slow"` | Per-component integration tests; `not slow` keeps matrix runtime bounded. |
 | `scheduled.yml` E2E (×2 jobs) | `-m "not docker"` | E2E tests that don't require local Docker daemon (Released Package + general E2E). |
 | `scheduled.yml` E2E real-tool scans | `-m "requires_tools"` | Real-tool tests after installing the tool matrix. |

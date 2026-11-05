@@ -319,12 +319,8 @@ def test_the_golden_generator_never_writes_the_digest(tmp_path) -> None:
 
     path = tmp_path / "t.json"
     path.write_bytes(json.dumps(_trufflehog_fs_record(SECRET)).encode())
-    config = {
-        "adapter_module": "scripts.core.adapters.trufflehog_adapter",
-        "adapter_class": "TruffleHogAdapter",
-    }
 
-    (found,) = run_adapter("trufflehog", config, path)
+    (found,) = run_adapter("trufflehog", path)
     assert "secretDigest" not in found
     assert found["location"]["path"] == "keys/live.pem"  # it did parse
 

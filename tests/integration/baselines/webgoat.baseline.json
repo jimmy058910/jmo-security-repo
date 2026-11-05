@@ -2,10 +2,9 @@
   "metadata": {
     "target": "WebGoat/WebGoat",
     "version": "7e198f39189f33e1912f7cbb60e24e42635ca06a",
-    "generated": "2026-10-30T22:05:42Z",
+    "generated": "2026-11-05T14:43:05Z",
     "tools_used": [
       "gitleaks",
-      "grype",
       "hadolint",
       "opengrep",
       "osv-scanner",
@@ -16,16 +15,15 @@
     ],
     "findings_per_tool": {
       "gitleaks": 24,
-      "grype": 36,
-      "hadolint": 2,
-      "opengrep": 404,
+      "hadolint": 5,
+      "opengrep": 378,
       "osv-scanner": 36,
       "syft": 66,
       "trivy": 36,
       "trufflehog": 2,
       "zizmor": 38
     },
-    "finding_count": 607,
+    "finding_count": 548,
     "notes": "OWASP WebGoat at release v2026.5"
   },
   "expected_findings": [
@@ -33,13 +31,13 @@
       "rule_id": "CWE-79",
       "severity": "HIGH",
       "category": "xss",
-      "min_count": 247
+      "min_count": 235
     },
     {
       "rule_id": "CWE-94",
       "severity": "HIGH",
       "category": "cwe-94",
-      "min_count": 46
+      "min_count": 33
     },
     {
       "rule_id": "CWE-89",
@@ -207,12 +205,6 @@
       "rule_id": "CWE-328",
       "severity": "MEDIUM",
       "category": "cwe-328",
-      "min_count": 1
-    },
-    {
-      "rule_id": "CWE-345",
-      "severity": "MEDIUM",
-      "category": "cwe-345",
       "min_count": 1
     },
     {

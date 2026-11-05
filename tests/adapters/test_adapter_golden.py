@@ -1,261 +1,114 @@
 """
-Golden/snapshot tests for adapter correctness.
+Golden tests: each adapter replays a real output of its tool and must produce
+the findings recorded beside it.
 
-These tests verify that adapters produce EXPECTED findings from KNOWN tool outputs.
-If a tool's output format changes, these tests will fail loudly.
-
-This catches:
+These catch:
 - Silent adapter failures (parsing returns [] when it should find issues)
 - Tool output format changes (upstream tools change JSON structure)
 - Adapter regressions (bugs in parsing logic)
-- Schema version mismatches
+
+Every tool in TOOL_MATRIX has a fixture, and the guards below fail when one is
+missing, empty or incomplete (#1097). Until v2.0.0 Phase 6 a registered tool
+with no fixture generated no test at all, a fixture holding 0 findings passed
+`0 == 0`, and an adapter that would not import skipped: kubescape's adapter
+returned [] on every real scan for two major versions (#1094) with nothing here
+to say so.
+
+The adapter is the one the report reads a tool's output with (`count_findings`
+in `scripts/core/normalize_and_report.py`): the registry entry named
+`tool.replace("-", "_")`, which is also the fixture directory's name.
 
 Usage:
-    # Run all golden tests
     pytest tests/adapters/test_adapter_golden.py -v
-
-    # Run golden tests for specific tool
     pytest tests/adapters/test_adapter_golden.py -v -k "trivy"
 
-Golden File Generation:
-    # Generate golden files (requires security tools installed)
-    python scripts/dev/generate_golden.py --all
-
-    # Check if golden files are current
-    python scripts/dev/generate_golden.py --check-current-versions
+Capturing a fixture (needs the tool installed):
+    python scripts/dev/generate_golden.py --tool <tool>
 """
 
 from __future__ import annotations
 
-import importlib
 import json
-import logging
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-logger = logging.getLogger(__name__)
+from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
+from scripts.core.tool_registry import TOOL_MATRIX
 
-# Path to golden test fixtures
 GOLDEN_DIR = Path(__file__).parent.parent / "fixtures" / "golden"
 
-# Mapping of tool names to their adapter modules and classes
-ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
-    "trivy": {
-        "module": "scripts.core.adapters.trivy_adapter",
-        "class": "TrivyAdapter",
-    },
-    "opengrep": {
-        "module": "scripts.core.adapters.opengrep_adapter",
-        "class": "OpengrepAdapter",
-    },
-    "hadolint": {
-        "module": "scripts.core.adapters.hadolint_adapter",
-        "class": "HadolintAdapter",
-    },
-    "checkov": {
-        "module": "scripts.core.adapters.checkov_adapter",
-        "class": "CheckovAdapter",
-    },
-    "trufflehog": {
-        "module": "scripts.core.adapters.trufflehog_adapter",
-        "class": "TruffleHogAdapter",
-    },
-    "shellcheck": {
-        "module": "scripts.core.adapters.shellcheck_adapter",
-        "class": "ShellCheckAdapter",
-    },
-    # Phase 1 of the v2.0.0 program: the three SARIF bindings. Each is ~25
-    # lines over `sarif_common.parse_sarif`, so a regression here is the
-    # importer's, and these three real documents are the only place its
-    # severity chain and `file://` decoding meet a tool's actual output.
-    "zizmor": {
-        "module": "scripts.core.adapters.zizmor_adapter",
-        "class": "ZizmorAdapter",
-    },
-    "gitleaks": {
-        "module": "scripts.core.adapters.gitleaks_adapter",
-        "class": "GitleaksAdapter",
-    },
-    "osv_scanner": {
-        "module": "scripts.core.adapters.osv_scanner_adapter",
-        "class": "OsvScannerAdapter",
-    },
-}
+# The three files a capture writes (scripts/dev/generate_golden.py).
+RAW = "raw-output.json"
+EXPECTED = "expected-findings.json"
+METADATA = "metadata.json"
+
+
+def adapter_name(tool: str) -> str:
+    """The name the report looks a tool's adapter up by, and the fixture
+    directory's: `osv-scanner` -> `osv_scanner`."""
+    return get_plugin_loader()._tool_to_adapter_name(tool)
 
 
 def get_golden_test_cases() -> list[tuple[str, str, Path]]:
-    """Discover all golden test cases dynamically.
-
-    Returns:
-        List of (tool_name, version, golden_dir_path) tuples
-    """
-    cases = []
-
-    if not GOLDEN_DIR.exists():
-        logger.warning("Golden directory does not exist: %s", GOLDEN_DIR)
-        return cases
-
-    for tool_dir in sorted(GOLDEN_DIR.iterdir()):
-        if not tool_dir.is_dir():
-            continue
-
-        tool_name = tool_dir.name
-
-        for version_dir in sorted(tool_dir.iterdir()):
-            if not version_dir.is_dir():
-                continue
-
-            version = version_dir.name
-
-            # Check required files exist
-            raw_output_files = list(version_dir.glob("*.json"))
-            expected_file = version_dir / "expected-findings.json"
-
-            if expected_file.exists() and len(raw_output_files) > 1:  # raw + expected
-                cases.append((tool_name, version, version_dir))
-
-    return cases
+    """Every version directory under every tool directory, whatever it holds,
+    so an incomplete one fails its case rather than going missing."""
+    if not GOLDEN_DIR.is_dir():
+        return []
+    return [
+        (tool_dir.name, version_dir.name, version_dir)
+        for tool_dir in sorted(p for p in GOLDEN_DIR.iterdir() if p.is_dir())
+        for version_dir in sorted(p for p in tool_dir.iterdir() if p.is_dir())
+    ]
 
 
-def get_adapter_for_tool(tool_name: str) -> Any:
-    """Get the adapter instance for a tool.
-
-    Args:
-        tool_name: Name of the tool
-
-    Returns:
-        Adapter instance
-
-    Raises:
-        ImportError: If adapter module cannot be imported
-        AttributeError: If adapter class not found in module
-    """
-    if tool_name not in ADAPTER_REGISTRY:
-        raise ValueError(f"Unknown tool: {tool_name}. Add to ADAPTER_REGISTRY.")
-
-    adapter_info = ADAPTER_REGISTRY[tool_name]
-    module = importlib.import_module(adapter_info["module"])
-    adapter_class = getattr(module, adapter_info["class"])
-    return adapter_class()
+def get_adapter_for_tool(name: str) -> Any:
+    """The adapter registered as `name`. A name with none fails the test: a skip
+    here is how an unimportable adapter went unnoticed."""
+    plugin = get_plugin_registry().get(name)
+    assert plugin is not None, f"no adapter is registered as {name!r}"
+    return plugin()
 
 
 def findings_to_comparable(findings: list[Any]) -> set[str]:
-    """Convert findings to a set of comparable identifiers.
-
-    Uses fingerprint/id for stable comparison across runs.
-    Falls back to (ruleId, path, line) tuple if no id.
-
-    Args:
-        findings: List of Finding objects or dicts
-
-    Returns:
-        Set of finding identifiers for comparison
-    """
+    """Findings as a set of ids, or (ruleId, path, line) where one has none."""
     identifiers = set()
-
     for f in findings:
-        # Handle both Finding objects and dicts
-        if hasattr(f, "__dict__"):
-            f_dict = asdict(f) if hasattr(f, "__dataclass_fields__") else vars(f)
-        else:
-            f_dict = f
-
-        # Primary: use id/fingerprint
+        f_dict = asdict(f) if hasattr(f, "__dataclass_fields__") else f
         if f_dict.get("id"):
             identifiers.add(f_dict["id"])
         else:
-            # Fallback: composite key
-            rule_id = f_dict.get("ruleId", "")
             location = f_dict.get("location", {})
             path = location.get("path", "") if isinstance(location, dict) else ""
             line = location.get("startLine", 0) if isinstance(location, dict) else 0
-            identifiers.add(f"{rule_id}:{path}:{line}")
-
+            identifiers.add(f"{f_dict.get('ruleId', '')}:{path}:{line}")
     return identifiers
 
 
-def get_raw_output_file(golden_dir: Path) -> Path | None:
-    """Find the raw output file in a golden directory.
-
-    The raw output file is any JSON file that is NOT expected-findings.json
-    or metadata.json.
-
-    Args:
-        golden_dir: Path to golden version directory
-
-    Returns:
-        Path to raw output file, or None if not found
-    """
-    for f in golden_dir.iterdir():
-        if f.suffix == ".json" and f.name not in [
-            "expected-findings.json",
-            "metadata.json",
-        ]:
-            return f
-    return None
+def _load(path: Path) -> Any:
+    return json.loads(path.read_bytes())
 
 
-# Generate test cases dynamically
 GOLDEN_TEST_CASES = get_golden_test_cases()
+CASE_IDS = [f"{t}-{v}" for t, v, _ in GOLDEN_TEST_CASES]
 
 
-@pytest.mark.skipif(
-    len(GOLDEN_TEST_CASES) == 0,
-    reason="No golden test fixtures found. Run: python scripts/dev/generate_golden.py --all",
-)
 class TestAdapterGolden:
-    """Golden tests for adapter correctness."""
+    """Each adapter against each of its tool's real outputs."""
 
-    @pytest.mark.parametrize(
-        "tool,version,golden_dir",
-        GOLDEN_TEST_CASES,
-        ids=[f"{t}-{v}" for t, v, _ in GOLDEN_TEST_CASES],
-    )
+    @pytest.mark.parametrize("tool,version,golden_dir", GOLDEN_TEST_CASES, ids=CASE_IDS)
     def test_adapter_produces_expected_findings(
         self, tool: str, version: str, golden_dir: Path
     ):
-        """
-        Golden test: adapter output must match expected findings.
+        """The findings must match the recorded ones, by count and by id."""
+        expected_findings = _load(golden_dir / EXPECTED)
+        actual_findings = get_adapter_for_tool(tool).parse(golden_dir / RAW)
 
-        This catches:
-        - Tool output format changes (would produce different/fewer findings)
-        - Adapter regressions (bugs in parsing logic)
-        - Schema version mismatches
-
-        Args:
-            tool: Tool name (e.g., "trivy")
-            version: Tool version (e.g., "v0.67.2")
-            golden_dir: Path to golden test directory
-        """
-        # Load expected findings
-        expected_file = golden_dir / "expected-findings.json"
-        assert expected_file.exists(), f"Missing expected findings: {expected_file}"
-
-        with expected_file.open() as f:
-            expected_findings = json.load(f)
-
-        # Find raw output file
-        raw_output = get_raw_output_file(golden_dir)
-        assert raw_output is not None, f"No raw output file found in {golden_dir}"
-        assert raw_output.exists(), f"Missing raw output: {raw_output}"
-
-        # Get adapter and parse
-        try:
-            adapter = get_adapter_for_tool(tool)
-        except (ImportError, AttributeError, ValueError) as e:
-            pytest.skip(f"Adapter not available for {tool}: {e}")
-
-        actual_findings = adapter.parse(raw_output)
-
-        # Convert to comparable format
         actual_ids = findings_to_comparable(actual_findings)
         expected_ids = findings_to_comparable(expected_findings)
 
-        # === CRITICAL ASSERTION: Finding count must match ===
-        # This is the key guard against silent failures
         assert len(actual_findings) == len(expected_findings), (
             f"Finding count mismatch for {tool} {version}:\n"
             f"  Expected: {len(expected_findings)} findings\n"
@@ -264,146 +117,85 @@ class TestAdapterGolden:
             f"  Missing: {expected_ids - actual_ids}\n"
             f"  Extra:   {actual_ids - expected_ids}"
         )
-
-        # === SECONDARY ASSERTION: Finding IDs should match ===
-        # Order-independent comparison
-        missing = expected_ids - actual_ids
-        extra = actual_ids - expected_ids
-
         assert actual_ids == expected_ids, (
             f"Finding IDs don't match for {tool} {version}:\n"
-            f"  Missing (expected but not found): {missing}\n"
-            f"  Extra (found but not expected):   {extra}"
+            f"  Missing (expected but not found): {expected_ids - actual_ids}\n"
+            f"  Extra (found but not expected):   {actual_ids - expected_ids}"
         )
 
-    @pytest.mark.parametrize(
-        "tool,version,golden_dir",
-        GOLDEN_TEST_CASES,
-        ids=[f"{t}-{v}" for t, v, _ in GOLDEN_TEST_CASES],
-    )
-    def test_adapter_does_not_crash_on_golden_input(
-        self, tool: str, version: str, golden_dir: Path
-    ):
-        """
-        Smoke test: adapter should not raise exceptions on golden input.
-
-        Even if findings don't match exactly, the adapter should not crash.
-        """
-        raw_output = get_raw_output_file(golden_dir)
-        if raw_output is None:
-            pytest.skip(f"No raw output file found in {golden_dir}")
-
-        try:
-            adapter = get_adapter_for_tool(tool)
-        except (ImportError, AttributeError, ValueError) as e:
-            pytest.skip(f"Adapter not available for {tool}: {e}")
-
-        # Should not raise
-        findings = adapter.parse(raw_output)
-
-        # Basic sanity checks
-        assert isinstance(findings, list), (
-            f"Adapter should return list, got {type(findings)}"
-        )
-
-        for finding in findings:
-            # Each finding should have required fields
-            f_dict = (
-                asdict(finding) if hasattr(finding, "__dataclass_fields__") else finding
-            )
-            assert "ruleId" in f_dict or "id" in f_dict, (
-                f"Finding missing ruleId/id: {f_dict}"
-            )
-            assert "severity" in f_dict, f"Finding missing severity: {f_dict}"
-
-    @pytest.mark.parametrize(
-        "tool,version,golden_dir",
-        GOLDEN_TEST_CASES,
-        ids=[f"{t}-{v}" for t, v, _ in GOLDEN_TEST_CASES],
-    )
+    @pytest.mark.parametrize("tool,version,golden_dir", GOLDEN_TEST_CASES, ids=CASE_IDS)
     def test_adapter_findings_have_valid_schema(
         self, tool: str, version: str, golden_dir: Path
     ):
-        """
-        Schema test: all findings should have valid CommonFinding schema.
-        """
-        raw_output = get_raw_output_file(golden_dir)
-        if raw_output is None:
-            pytest.skip(f"No raw output file found in {golden_dir}")
-
-        try:
-            adapter = get_adapter_for_tool(tool)
-        except (ImportError, AttributeError, ValueError) as e:
-            pytest.skip(f"Adapter not available for {tool}: {e}")
-
-        findings = adapter.parse(raw_output)
-
+        """Every finding has a ruleId or id, a known severity, a located path and
+        a named tool."""
+        findings = get_adapter_for_tool(tool).parse(golden_dir / RAW)
         valid_severities = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
 
         for i, finding in enumerate(findings):
-            f_dict = (
-                asdict(finding) if hasattr(finding, "__dataclass_fields__") else finding
+            f_dict = asdict(finding)
+            assert "ruleId" in f_dict or "id" in f_dict, f"Finding {i} has no ruleId/id"
+            assert f_dict.get("severity") in valid_severities, (
+                f"Finding {i} has invalid severity {f_dict.get('severity')!r}"
             )
-
-            # Severity must be valid
-            severity = f_dict.get("severity", "")
-            assert severity in valid_severities, (
-                f"Finding {i} has invalid severity '{severity}'. "
-                f"Valid: {valid_severities}"
-            )
-
-            # Location should have path
             location = f_dict.get("location", {})
             if location:
                 assert "path" in location, f"Finding {i} location missing 'path'"
-
-            # Tool should have name
             tool_info = f_dict.get("tool", {})
             if tool_info:
                 assert "name" in tool_info, f"Finding {i} tool missing 'name'"
 
 
 class TestGoldenInfrastructure:
-    """Tests for golden test infrastructure itself."""
+    """The fixtures themselves: one per matrix tool, none empty, none partial."""
 
-    def test_golden_directory_structure(self):
-        """Verify golden directory structure is correct."""
-        if not GOLDEN_DIR.exists():
-            pytest.skip("Golden directory not created yet")
-
-        # Should have subdirectories per tool
-        tool_dirs = [d for d in GOLDEN_DIR.iterdir() if d.is_dir()]
-        assert len(tool_dirs) >= 0, "Golden directory should exist (may be empty)"
-
-    def test_adapter_registry_completeness(self):
-        """Verify adapter registry covers all golden test tools."""
-        if len(GOLDEN_TEST_CASES) == 0:
-            pytest.skip("No golden test cases to verify")
-
-        for tool, version, _ in GOLDEN_TEST_CASES:
-            assert tool in ADAPTER_REGISTRY, (
-                f"Tool '{tool}' has golden files but is not in ADAPTER_REGISTRY. "
-                f"Add it to the registry in test_adapter_golden.py"
+    def test_every_matrix_tool_has_an_adapter(self):
+        for tool in TOOL_MATRIX:
+            assert get_plugin_registry().get(adapter_name(tool)) is not None, (
+                f"{tool}: no adapter is registered as {adapter_name(tool)!r}"
             )
 
-    def test_can_import_all_registered_adapters(self):
-        """Verify all adapters in registry can be imported."""
-        for tool_name, adapter_info in ADAPTER_REGISTRY.items():
-            try:
-                module = importlib.import_module(adapter_info["module"])
-                assert hasattr(module, adapter_info["class"]), (
-                    f"Module {adapter_info['module']} missing class {adapter_info['class']}"
-                )
-            except ImportError as e:
-                pytest.fail(f"Cannot import adapter for {tool_name}: {e}")
+    def test_every_matrix_tool_has_a_fixture(self):
+        # A tool with no directory generated no case before #1097's guard: six
+        # registered tools were "covered" that way.
+        missing = [
+            tool
+            for tool in TOOL_MATRIX
+            if not any(p.is_dir() for p in (GOLDEN_DIR / adapter_name(tool)).glob("v*"))
+        ]
+        assert not missing, (
+            f"no golden fixture for {missing}: "
+            "python scripts/dev/generate_golden.py --tool <tool>"
+        )
 
+    def test_every_fixture_directory_is_a_matrix_tool(self):
+        # One spelling: the adapter name. An `osv-scanner/` beside
+        # `osv_scanner/` would be a second, unguarded copy.
+        names = {adapter_name(tool) for tool in TOOL_MATRIX}
+        strays = [
+            p.name for p in GOLDEN_DIR.iterdir() if p.is_dir() and p.name not in names
+        ]
+        assert not strays, f"fixture directories for no matrix tool: {strays}"
 
-# Standalone execution for debugging
-if __name__ == "__main__":
-    print(f"Golden directory: {GOLDEN_DIR}")
-    print(f"Exists: {GOLDEN_DIR.exists()}")
+    @pytest.mark.parametrize("tool,version,golden_dir", GOLDEN_TEST_CASES, ids=CASE_IDS)
+    def test_a_fixture_is_the_three_files_a_capture_writes(
+        self, tool: str, version: str, golden_dir: Path
+    ):
+        # metadata.json used to count as the "raw output" a fixture needed.
+        assert sorted(p.name for p in golden_dir.iterdir()) == sorted(
+            [EXPECTED, METADATA, RAW]
+        )
 
-    cases = get_golden_test_cases()
-    print(f"\nFound {len(cases)} golden test cases:")
-    for tool, version, path in cases:
-        print(f"  - {tool} {version}: {path}")
+    @pytest.mark.parametrize("tool,version,golden_dir", GOLDEN_TEST_CASES, ids=CASE_IDS)
+    def test_a_fixture_holds_findings_and_says_how_many(
+        self, tool: str, version: str, golden_dir: Path
+    ):
+        # `0 == 0` passed semgrep's empty fixture until Phase 5 removed it.
+        expected = _load(golden_dir / EXPECTED)
+        metadata = _load(golden_dir / METADATA)
+        assert isinstance(expected, list) and len(expected) > 0, (
+            f"{tool} {version}: no expected finding"
+        )
+        assert metadata["finding_count"] == len(expected)
+        assert adapter_name(metadata["tool"]) == tool
+        assert version == f"v{metadata['version']}"

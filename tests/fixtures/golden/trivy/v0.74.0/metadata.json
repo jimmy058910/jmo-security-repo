@@ -1,0 +1,37 @@
+{
+  "tool": "trivy",
+  "version": "0.74.0",
+  "generated_at": "2026-11-05T14:34:26.645294+00:00",
+  "finding_count": 74,
+  "raw_output_hash": "59bae33856b0",
+  "binary": "trivy",
+  "binary_sha256": "d89bcc6510a267f11b773398cbf1be5520ce39f9e8b6633178c4487f05b7d791",
+  "recipe": {
+    "samples": [
+      "python-vulnerable",
+      "dockerfile-issues",
+      "terraform-misconfig",
+      "k8s-insecure-pod"
+    ],
+    "url": null,
+    "prepared": null
+  },
+  "target": {
+    "samples": [
+      "python-vulnerable",
+      "dockerfile-issues",
+      "terraform-misconfig",
+      "k8s-insecure-pod"
+    ],
+    "files": {
+      "Dockerfile": "f3534859dd17b28b39ec8cab391dff07d1c2e1aa5657a2acfd2258ac95c30ae6",
+      "main.tf": "62511911cdcc3ff64368547a406e2eb1d4aab7a16064ffeeb60a8302622b02ff",
+      "pod.yaml": "de5b84d4e9f94c93365c547564060995e264833ebf01a9a5548721e9aaa8bf5e",
+      "requirements.txt": "be542ba756d80af97931d7839b1a3089b360d370fa936fbfe47e49d19627173e",
+      "vulnerable_app.py": "d12591b8ee9115d8fbb7df244683eac912f79a96593aca23d99e458a8ce8a5a4"
+    }
+  },
+  "config": {},
+  "command": "jmo scan --repo /golden/target --tools trivy --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

@@ -1,41 +1,43 @@
 #!/usr/bin/env python3
-"""
-Generate golden test fixtures by running real security tools.
+"""Capture golden fixtures through `jmo scan`.
 
-Golden tests verify that adapters produce EXPECTED findings from KNOWN tool outputs.
-This catches silent failures when security tools change their output format.
+    python scripts/dev/generate_golden.py --tool <tool> [--tool ...] [--update]
+    python scripts/dev/generate_golden.py --all [--update]
+    python scripts/dev/generate_golden.py --check [--tool <tool> ...]
 
-Usage:
-    # Generate for all configured tools
-    python scripts/dev/generate_golden.py --all
+A golden fixture is one tool's real output, what JMo's adapter reads from it,
+and how it was made (`tests/adapters/test_adapter_golden.py` replays it). This
+script makes one the way a user's scan does: `jmo scan --tools <tool>` on a
+tracked sample, in a HOME of its own, so the command is the descriptor's and
+never a copy kept here (#1349 measured such a copy drifting). It keeps the
+`<tool>.json` the scan wrote as `raw-output.json`, the adapter's findings as
+`expected-findings.json`, and `metadata.json` in Phase 0's shape, under
+`tests/fixtures/golden/<adapter>/v<version>/`.
 
-    # Generate for specific tool
-    python scripts/dev/generate_golden.py --tool trivy
+`--check` captures every tool again in scratch, writes nothing, and fails when
+a tool does not run or its output parses to no finding: the silent-adapter
+class #1097 is about. A count that moved from the committed fixture's is
+reported, not failed: trivy's database and zap's spider move it with no change
+to JMo.
 
-    # Update existing golden files (when tool version changes)
-    python scripts/dev/generate_golden.py --tool trivy --update
+What a capture changes in the tool's output, each recorded in its metadata:
 
-    # Check if golden files exist for current tool versions
-    python scripts/dev/generate_golden.py --check-current-versions
+- The capture's working directory reads as `/golden`. A file-fed tool names
+  each file absolutely (shellcheck, hadolint, checkov, osv-scanner, syft,
+  yara-x, nuclei's template), so a fixture would otherwise carry the capturing
+  machine's path and differ on every machine.
+- trufflehog's credential fields are replaced (`SECRET_BEARING_FIELDS`, the
+  adapter's own list). Its target is a key generated for the capture, since no
+  tracked sample holds one it reports, and a key never enters the tree. The
+  capture fails if the replacement changes a finding.
 
-    # Run in Docker container (recommended for consistency)
-    python scripts/dev/generate_golden.py --all --docker
+The HOME links the real `~/.jmo/bin`, `tools` and `yara-rules` (read, never
+installed into), copies the frozen OSV database from `tests/fixtures/osv-db`,
+and points trivy at the developer's own cache (`TRIVY_CACHE_DIR`, as the e2e
+helper does). `--home DIR` uses a HOME you prepared instead, for a tool held at
+another version there.
 
-Directory Structure Created:
-    tests/fixtures/golden/
-    ├── trivy/
-    │   └── v0.67.2/
-    │       ├── raw-output.json       # Raw tool output
-    │       ├── expected-findings.json # Parsed adapter output
-    │       └── metadata.json          # Tool version, timestamp, sample used
-    ├── hadolint/
-    │   └── v{version}/
-    │       └── ...
-    └── ...
-
-Requirements:
-    - Security tools must be installed (or use --docker flag)
-    - Sample fixtures must exist in tests/fixtures/samples/
+Linux and macOS: the HOME is made of symbolic links.
 """
 
 from __future__ import annotations
@@ -43,494 +45,645 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import logging
+import os
+import shutil
+import site
 import subprocess
 import sys
-from dataclasses import asdict, dataclass
+import tempfile
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# Paths
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-VERSIONS_FILE = PROJECT_ROOT / "versions.yaml"
+# Run directly, sys.path[0] is scripts/dev: the project root makes `scripts`
+# importable, as in scripts/dev/fetch_answer_keys.py.
+if __package__ in (None, ""):  # pragma: no cover - only on direct execution
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry  # noqa: E402
+from scripts.core.tool_registry import TOOL_MATRIX  # noqa: E402
+
 SAMPLES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "samples"
 GOLDEN_DIR = PROJECT_ROOT / "tests" / "fixtures" / "golden"
+FROZEN_OSV_DB = PROJECT_ROOT / "tests" / "fixtures" / "osv-db"
+FIXTURE_SERVER = SAMPLES_DIR / "zap" / "fixture_server.py"
+
+# What the capture's working directory reads as in a fixture.
+PLACEHOLDER = "/golden"
+# A trufflehog credential field's value in a fixture.
+REMOVED = "<removed by generate_golden.py>"
+
+SCAN_TIMEOUT = 1800
 
 
-@dataclass
-class ToolConfig:
-    """Configuration for a security tool's golden test generation."""
-
-    name: str
-    version: str
-    command: list[str]
-    sample_dir: str
-    output_file: str
-    adapter_module: str
-    adapter_class: str
-    requires_docker: bool = False
-    docker_image: str | None = None
+class CaptureError(Exception):
+    """A capture that must not become a fixture: the tool did not run, wrote
+    nothing, or its output parses to no finding."""
 
 
-# Tool configurations for golden test generation
-# Maps tool name to configuration for running and parsing
-TOOL_CONFIGS: dict[str, dict[str, Any]] = {
-    "trivy": {
-        "sample_dir": "python-vulnerable",
-        "output_file": "trivy.json",
-        "command": [
-            "trivy",
-            "fs",
-            "--format",
-            "json",
-            "--output",
-            "{output}",
-            "{sample}",
-        ],
-        "adapter_module": "scripts.core.adapters.trivy_adapter",
-        "adapter_class": "TrivyAdapter",
-    },
-    "hadolint": {
-        "sample_dir": "dockerfile-issues",
-        "output_file": "hadolint.json",
-        "command": [
-            "hadolint",
-            "--format",
-            "json",
-            "{sample}/Dockerfile",
-        ],
-        "adapter_module": "scripts.core.adapters.hadolint_adapter",
-        "adapter_class": "HadolintAdapter",
-    },
-    "checkov": {
-        "sample_dir": "terraform-misconfig",
-        "output_file": "checkov.json",
-        "command": [
-            "checkov",
-            "-d",
-            "{sample}",
-            "--output",
-            "json",
-            "--output-file-path",
-            "{output_dir}",
-        ],
-        "adapter_module": "scripts.core.adapters.checkov_adapter",
-        "adapter_class": "CheckovAdapter",
-    },
-    "trufflehog": {
-        "sample_dir": "credential-patterns",
-        "output_file": "trufflehog.json",
-        "command": [
-            "trufflehog",
-            "filesystem",
-            "{sample}",
-            "--json",
-        ],
-        "adapter_module": "scripts.core.adapters.trufflehog_adapter",
-        "adapter_class": "TruffleHogAdapter",
-    },
-    "shellcheck": {
-        "sample_dir": "shell-issues",
-        "output_file": "shellcheck.json",
-        "command": [
-            "shellcheck",
-            "--format=json",
-            "{sample}/vulnerable_script.sh",
-        ],
-        "adapter_module": "scripts.core.adapters.shellcheck_adapter",
-        "adapter_class": "ShellCheckAdapter",
-    },
+# --- what each tool scans ---------------------------------------------------------
+
+# A string only JMo's tests write (tests/integration/test_yara_x_canary.py's
+# canary): never EICAR, never a real sample (decision 7).
+YARA_X_CANARY = "jmo-yara-x-canary-7d3f9a: a test marker, not malware"
+YARA_X_RULE = f"""rule JMO_Canary_Test {{
+    meta:
+        author = "JMo Security test suite"
+        description = "A string only JMo's tests write"
+    strings:
+        $canary = "{YARA_X_CANARY}"
+    condition:
+        $canary
+}}
+"""
+
+# fixture_server.py's spider site reflects `q` into its page unescaped.
+NUCLEI_TEMPLATE = """id: jmo-golden-reflected-query
+info:
+  name: JMo golden fixture - a query parameter reflected unescaped
+  author: jmo-security
+  severity: medium
+  tags: jmo,golden
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/search?q=jmo-golden-7c1e%3Cb%3E"
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "jmo-golden-7c1e<b>"
+"""
+
+
+def _generated_key() -> bytes:
+    """A private key made now, as tests/conftest.py's `generated_rsa_pem`."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption(),
+        )
+    )
+
+
+def _trufflehog_key(work: Path, port: int | None) -> dict[str, Any]:
+    # Every credential in credential-patterns is a shape trufflehog refuses
+    # (AWS's documented example key, `ghp_xxx...`, a truncated PEM): 0
+    # findings, measured on 3.99.8.
+    (work / "target" / "deploy.pem").write_bytes(_generated_key())
+    return {}
+
+
+def _yara_x_canary(work: Path, port: int | None) -> dict[str, Any]:
+    target = work / "target"
+    for rel in ("src/index.js", "node_modules/left-pad/index.js"):
+        (target / rel).parent.mkdir(parents=True, exist_ok=True)
+        (target / rel).write_bytes(f"// {YARA_X_CANARY}\n".encode())
+    (work / "canary.yar").write_bytes(YARA_X_RULE.encode())
+    return {"rules_path": str(work / "canary.yar")}
+
+
+def _zap_through_the_fixture(work: Path, port: int | None) -> dict[str, Any]:
+    # Every request goes through the fixture, which answers for itself and
+    # refuses any other host (fixture_server.proxy_flags).
+    return {
+        "flags": [
+            "-config",
+            "network.connection.httpProxy.enabled=true",
+            "-config",
+            "network.connection.httpProxy.host=127.0.0.1",
+            "-config",
+            f"network.connection.httpProxy.port={port}",
+        ]
+    }
+
+
+def _nuclei_template(work: Path, port: int | None) -> dict[str, Any]:
+    (work / "golden.yaml").write_bytes(NUCLEI_TEMPLATE.encode())
+    # `-duc`: with `-t` alone nuclei still fetched its public templates (87 MB
+    # into a fresh HOME, measured on 3.11.1); with it, nothing.
+    return {"flags": ["-t", str(work / "golden.yaml"), "-duc"]}
+
+
+Prepare = Callable[[Path, int | None], dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class Capture:
+    """One tool's target. A repo capture copies `samples` into the target's
+    root, then `prepare` adds what is made for it and returns the tool's
+    `per_tool` config; a URL capture scans fixture_server.py's spider site."""
+
+    samples: tuple[str, ...] = ()
+    url: bool = False
+    prepare: Prepare | None = None
+    scrub: bool = False
+
+    def recipe(self) -> dict[str, Any]:
+        """What a fixture's metadata records, and `--check` compares by: a
+        count from another target is not this capture's."""
+        return {
+            "samples": list(self.samples),
+            "url": "fixture_server.py --mode spider" if self.url else None,
+            "prepared": self.prepare.__name__ if self.prepare else None,
+        }
+
+
+CAPTURES: dict[str, Capture] = {
+    "trufflehog": Capture(
+        ("credential-patterns",), prepare=_trufflehog_key, scrub=True
+    ),
+    "gitleaks": Capture(("credential-patterns",)),
+    "opengrep": Capture(("python-vulnerable",)),
+    "syft": Capture(("python-vulnerable",)),
+    # Both of its repository classes: vulnerabilities (requirements.txt) and
+    # misconfigurations (a Dockerfile, Terraform and a Pod).
+    "trivy": Capture(
+        (
+            "python-vulnerable",
+            "dockerfile-issues",
+            "terraform-misconfig",
+            "k8s-insecure-pod",
+        )
+    ),
+    # A repository scan reads Terraform, not Kubernetes (`--framework`).
+    "checkov": Capture(("terraform-misconfig",)),
+    "hadolint": Capture(("dockerfile-issues",)),
+    "shellcheck": Capture(("shell-issues",)),
+    "zizmor": Capture(("github-actions",)),
+    "jmo-native": Capture(("native",)),
+    "yara-x": Capture(prepare=_yara_x_canary),
+    # Against tests/fixtures/osv-db's synthetic advisories, offline.
+    "osv-scanner": Capture(("python-vulnerable",)),
+    "zap": Capture(url=True, prepare=_zap_through_the_fixture),
+    "nuclei": Capture(url=True, prepare=_nuclei_template),
 }
 
 
-def load_versions() -> dict[str, Any]:
-    """Load tool versions from versions.yaml."""
-    if not VERSIONS_FILE.exists():
-        logger.error("versions.yaml not found at %s", VERSIONS_FILE)
-        sys.exit(1)
-
-    with VERSIONS_FILE.open(encoding="utf-8") as f:
-        data: dict[str, Any] = yaml.safe_load(f)
-        return data
+# --- running jmo ------------------------------------------------------------------
 
 
-def get_tool_version(tool_name: str) -> str:
-    """Get the configured version for a tool from versions.yaml."""
-    versions = load_versions()
-
-    # Check all tool categories
-    for category in ["python_tools", "binary_tools", "special_tools"]:
-        if category in versions and tool_name in versions[category]:
-            return str(versions[category][tool_name].get("version", "unknown"))
-
-    logger.warning("Tool %s not found in versions.yaml", tool_name)
-    return "unknown"
-
-
-def get_installed_version(tool_name: str) -> str | None:
-    """Get the installed version of a tool by running it."""
-    version_commands = {
-        "trivy": ["trivy", "--version"],
-        "hadolint": ["hadolint", "--version"],
-        "checkov": ["checkov", "--version"],
-        "trufflehog": ["trufflehog", "--version"],
-        "shellcheck": ["shellcheck", "--version"],
-    }
-
-    cmd = version_commands.get(tool_name)
-    if not cmd:
-        return None
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
-        )
-        output = result.stdout + result.stderr
-        # Extract version from output (usually first line with version number)
-        for line in output.split("\n"):
-            if "version" in line.lower() or any(c.isdigit() for c in line):
-                # Try to extract version pattern
-                import re
-
-                match = re.search(r"(\d+\.\d+\.?\d*)", line)
-                if match:
-                    return match.group(1)
-        return None
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return None
-
-
-def run_tool(
-    tool_name: str, config: dict[str, Any], output_dir: Path
-) -> tuple[bool, Path]:
-    """Run a security tool and save its output.
-
-    Returns:
-        Tuple of (success, output_file_path)
-    """
-    sample_path = SAMPLES_DIR / config["sample_dir"]
-    if not sample_path.exists():
-        logger.error("Sample directory not found: %s", sample_path)
-        return False, Path()
-
-    output_file = output_dir / config["output_file"]
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Build command with substitutions
-    cmd = []
-    for part in config["command"]:
-        part = part.replace("{sample}", str(sample_path))
-        part = part.replace("{output}", str(output_file))
-        part = part.replace("{output_dir}", str(output_dir))
-        cmd.append(part)
-
-    logger.info("Running %s: %s", tool_name, " ".join(cmd))
-
-    try:
-        # Some tools write to stdout instead of file
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,  # 5 minute timeout
-            cwd=PROJECT_ROOT,
-        )
-
-        # Check if output was written to file or stdout
-        if not output_file.exists() and result.stdout:
-            # Tool wrote to stdout, save it
-            output_file.write_text(result.stdout, encoding="utf-8")
-            logger.info("Captured stdout to %s", output_file)
-        elif output_file.exists():
-            logger.info("Output written to %s", output_file)
-        else:
-            # Tool may have found nothing (valid case)
-            logger.warning(
-                "%s produced no output (may be valid if no findings)", tool_name
-            )
-            # Create empty JSON for consistency
-            output_file.write_text("[]", encoding="utf-8")
-
-        # Log any errors (but don't fail - some tools exit non-zero when findings exist)
-        if result.returncode != 0:
-            logger.debug(
-                "%s exited with code %d (may be normal)", tool_name, result.returncode
-            )
-            if result.stderr:
-                logger.debug("stderr: %s", result.stderr[:500])
-
-        return True, output_file
-
-    except subprocess.TimeoutExpired:
-        logger.error("%s timed out after 5 minutes", tool_name)
-        return False, Path()
-    except FileNotFoundError:
-        logger.error("%s not installed or not in PATH", tool_name)
-        return False, Path()
-    except OSError as e:
-        logger.error("Error running %s: %s", tool_name, e)
-        return False, Path()
-
-
-def run_adapter(
-    tool_name: str, config: dict[str, Any], raw_output_path: Path
-) -> list[dict[str, Any]]:
-    """Run the adapter to parse raw tool output into CommonFinding format."""
-    try:
-        # Dynamically import the adapter module
-        import importlib
-
-        module = importlib.import_module(config["adapter_module"])
-        adapter_class = getattr(module, config["adapter_class"])
-        adapter = adapter_class()
-
-        # Parse the raw output
-        findings = adapter.parse(raw_output_path)
-
-        # Convert Finding objects to dicts for JSON serialization
-        findings_dicts = []
-        for f in findings:
-            if hasattr(f, "__dict__"):
-                # It's a dataclass or object
-                found = asdict(f) if hasattr(f, "__dataclass_fields__") else vars(f)
-                # Transient: a keyed digest the report phase pairs by and
-                # removes (G1). Its key is random per process, so a fixture
-                # holding it would change on every regeneration.
-                found.pop("secretDigest", None)
-                findings_dicts.append(found)
-            elif isinstance(f, dict):
-                findings_dicts.append(f)
-            else:
-                logger.warning("Unknown finding type: %s", type(f))
-
-        return findings_dicts
-
-    except ImportError as e:
-        logger.error("Failed to import adapter for %s: %s", tool_name, e)
-        return []
-    except Exception as e:
-        logger.error("Error running adapter for %s: %s", tool_name, e)
-        return []
-
-
-def generate_golden_files(tool_name: str, update: bool = False) -> bool:
-    """Generate golden test files for a single tool.
-
-    Args:
-        tool_name: Name of the tool to generate golden files for
-        update: If True, overwrite existing golden files
-
-    Returns:
-        True if successful, False otherwise
-    """
-    if tool_name not in TOOL_CONFIGS:
-        logger.error(
-            "Unknown tool: %s. Available: %s", tool_name, list(TOOL_CONFIGS.keys())
-        )
-        return False
-
-    config = TOOL_CONFIGS[tool_name]
-    version = get_tool_version(tool_name)
-
-    # Check installed version matches expected
-    installed = get_installed_version(tool_name)
-    if installed and installed != version:
-        logger.warning(
-            "%s version mismatch: installed=%s, expected=%s",
-            tool_name,
-            installed,
-            version,
-        )
-
-    # Create versioned output directory
-    golden_version_dir = GOLDEN_DIR / tool_name / f"v{version}"
-
-    if golden_version_dir.exists() and not update:
-        logger.info(
-            "Golden files already exist for %s v%s (use --update to overwrite)",
-            tool_name,
-            version,
-        )
-        return True
-
-    logger.info("Generating golden files for %s v%s", tool_name, version)
-
-    # Step 1: Run the tool
-    success, raw_output_path = run_tool(tool_name, config, golden_version_dir)
-    if not success:
-        return False
-
-    # Step 2: Run the adapter to get expected findings
-    expected_findings = run_adapter(tool_name, config, raw_output_path)
-
-    # Step 3: Save expected findings
-    expected_path = golden_version_dir / "expected-findings.json"
-    with expected_path.open("w", encoding="utf-8") as f:
-        json.dump(expected_findings, f, indent=2, default=str)
-    logger.info(
-        "Saved %d expected findings to %s", len(expected_findings), expected_path
+def run_jmo(
+    args: list[str], *, env: dict[str, str], cwd: Path, timeout: int
+) -> subprocess.CompletedProcess[str]:
+    """`jmo <args>` from this checkout (PYTHONPATH), never an installed one."""
+    return subprocess.run(
+        [sys.executable, "-m", "scripts.cli.jmo", *args],
+        env={**env, "PYTHONPATH": str(PROJECT_ROOT)},
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
     )
 
-    # Step 4: Save metadata
-    metadata = {
-        "tool": tool_name,
-        "version": version,
-        "generated_at": datetime.now(UTC).isoformat(),
-        "sample_dir": config["sample_dir"],
-        "finding_count": len(expected_findings),
-        "raw_output_hash": hashlib.sha256(raw_output_path.read_bytes()).hexdigest()[
-            :12
-        ],
+
+def isolated_home(home: Path) -> Path:
+    """A HOME whose scanners are the developer's and whose OSV database is the
+    frozen one: `.jmo/bin`, `tools` and `yara-rules` link the real ones,
+    `osv-db` is a copy of tests/fixtures/osv-db."""
+    real = Path.home() / ".jmo"
+    jmo = home / ".jmo"
+    jmo.mkdir(parents=True, exist_ok=True)
+    for name in ("bin", "tools", "yara-rules"):
+        if (real / name).exists() and not (jmo / name).exists():
+            (jmo / name).symlink_to(real / name, target_is_directory=True)
+    if not (jmo / "osv-db").exists():
+        shutil.copytree(FROZEN_OSV_DB, jmo / "osv-db")
+    return home
+
+
+def _env(home: Path) -> dict[str, str]:
+    return {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "JMO_NON_INTERACTIVE": "1",
+        # trivy keeps its database under the home: without this a capture
+        # fetches it again (#1517's measurement).
+        "TRIVY_CACHE_DIR": os.environ.get(
+            "TRIVY_CACHE_DIR", str(Path.home() / ".cache" / "trivy")
+        ),
+        # A tool installed with `pip install --user` imports itself from the
+        # user site, found through HOME: under the capture's HOME, CI's checkov
+        # was ModuleNotFoundError and its row failed with no output. JMo's own
+        # interpreter is a venv, which reads no user site.
+        "PYTHONUSERBASE": os.environ.get("PYTHONUSERBASE") or site.getuserbase(),
     }
-    metadata_path = golden_version_dir / "metadata.json"
-    with metadata_path.open("w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
-
-    logger.info("Golden files generated successfully for %s", tool_name)
-    return True
 
 
-def check_current_versions() -> bool:
-    """Check that golden files exist for current tool versions.
+# --- one capture ------------------------------------------------------------------
 
-    Returns:
-        True if all tools have up-to-date golden files, False otherwise
-    """
-    all_current = True
 
-    for tool_name in TOOL_CONFIGS:
-        version = get_tool_version(tool_name)
-        golden_version_dir = GOLDEN_DIR / tool_name / f"v{version}"
-        expected_file = golden_version_dir / "expected-findings.json"
+def fixture_dir_name(tool: str) -> str:
+    """The golden directory's name: the adapter name the report looks the
+    tool up by (`count_findings`), `osv-scanner` -> `osv_scanner`."""
+    return get_plugin_loader()._tool_to_adapter_name(tool)
 
-        if expected_file.exists():
-            # Load metadata to show info
-            metadata_path = golden_version_dir / "metadata.json"
-            if metadata_path.exists():
-                with metadata_path.open(encoding="utf-8") as f:
-                    metadata = json.load(f)
-                logger.info(
-                    "✅ %s v%s: %d findings (generated %s)",
-                    tool_name,
-                    version,
-                    metadata.get("finding_count", "?"),
-                    metadata.get("generated_at", "?")[:10],
-                )
-            else:
-                logger.info("✅ %s v%s: golden files exist", tool_name, version)
-        else:
-            logger.warning(
-                "❌ %s v%s: missing golden files at %s",
-                tool_name,
-                version,
-                golden_version_dir,
+
+def run_adapter(tool: str, raw_output_path: Path) -> list[dict[str, Any]]:
+    """What the report reads from one output: the adapter `count_findings`
+    uses, its findings as dicts. `secretDigest` is transient (a keyed digest
+    the report pairs by and removes; its key is random per process), so a
+    fixture holding it would change on every capture."""
+    adapter = get_plugin_registry().get(fixture_dir_name(tool))
+    if adapter is None:
+        raise CaptureError(f"{tool}: no adapter is registered for it")
+    found = []
+    for f in adapter().parse(raw_output_path):
+        d = asdict(f)
+        d.pop("secretDigest", None)
+        found.append(d)
+    return found
+
+
+def _rewrite(raw: bytes, work: Path, home: Path | None = None) -> bytes:
+    """The capture HOME as `PLACEHOLDER/home`, then the work directory as
+    PLACEHOLDER, each in its plain and its JSON spelling. The HOME goes first:
+    one given with --home is outside the work directory (syft records its Go
+    and Maven caches under it), and the default one sits beside each tool's."""
+    text = raw.decode("utf-8")
+    # The HOME as given and as resolved: a symlink, or a Windows short name
+    # (RUNNER~1), spells it two ways, and the scan writes the one it was given.
+    homes = {home.absolute(), home.resolve()} if home else set()
+    pairs = [
+        (h, f"{PLACEHOLDER}/home") for h in sorted(homes, key=lambda h: -len(str(h)))
+    ]
+    for path, placeholder in [*pairs, (work, PLACEHOLDER)]:
+        plain = str(path)
+        for spelling in (json.dumps(plain)[1:-1], plain):
+            text = text.replace(spelling, placeholder)
+    return text.encode("utf-8")
+
+
+def _as_committed(raw: bytes) -> bytes:
+    """The bytes pre-commit would commit: no whitespace at a line's end, and a
+    final newline (trailing-whitespace, end-of-file-fixer). A JSON string never
+    holds a raw line break, so this changes no value."""
+    lines = raw.decode("utf-8").splitlines()
+    return ("\n".join(line.rstrip(" \t") for line in lines) + "\n").encode("utf-8")
+
+
+def _scrub(tool: str, raw: bytes) -> bytes:
+    """trufflehog's NDJSON with every credential-bearing field replaced."""
+    from scripts.core.adapters.trufflehog_adapter import SECRET_BEARING_FIELDS
+
+    lines = []
+    for line in raw.decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        for key in SECRET_BEARING_FIELDS & record.keys():
+            record[key] = REMOVED
+        lines.append(json.dumps(record, sort_keys=True))
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def _ids(findings: list[dict[str, Any]]) -> list[str]:
+    return sorted(str(f.get("id")) for f in findings)
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+@dataclass
+class Captured:
+    tool: str
+    version: str
+    raw: bytes
+    findings: list[dict[str, Any]]
+    binary: str | None
+    binary_sha256: str | None
+    target: dict[str, Any]
+    command: str
+    config: dict[str, Any]
+    metadata_extra: dict[str, Any] = field(default_factory=dict)
+
+
+UNKNOWN = "unknown"
+
+
+def _version(tool: str, env: dict[str, str], work: Path) -> tuple[str, Path | None]:
+    """The version and binary `jmo tools check` finds under the capture's
+    HOME: the tool the scan ran, not the pin. UNKNOWN when the probe names
+    none (zap's starts a JVM, and once timed out on a busy machine): the scan
+    itself ran, so --check still grades it, and write_fixture refuses it."""
+    done = run_jmo(["tools", "check", tool, "--json"], env=env, cwd=work, timeout=120)
+    try:
+        info = json.loads(done.stdout)["tools"][tool]
+    except (ValueError, KeyError):
+        return UNKNOWN, None
+    binary = Path(info["binary_path"]) if info.get("binary_path") else None
+    return str(info.get("installed_version") or UNKNOWN), binary
+
+
+def _start_fixture(work: Path) -> tuple[subprocess.Popen[bytes], int]:
+    port_file = work / "port"
+    server = subprocess.Popen(
+        [
+            sys.executable,
+            str(FIXTURE_SERVER),
+            "--mode",
+            "spider",
+            "--log",
+            str(work / "requests.jsonl"),
+            "--port-file",
+            str(port_file),
+        ],
+        stdout=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if port_file.exists() and port_file.read_bytes().strip():
+            return server, int(port_file.read_bytes())
+        time.sleep(0.1)
+    server.kill()
+    raise CaptureError("fixture_server.py did not report its port in 30 s")
+
+
+def capture(tool: str, *, home: Path, work: Path) -> Captured:
+    """Run `jmo scan --tools <tool>` on its target in `work`, and return what a
+    fixture holds. Raises CaptureError when the tool did not run, wrote no
+    output, or its output parses to no finding."""
+    spec = CAPTURES[tool]
+    work.mkdir(parents=True, exist_ok=True)
+    work = work.resolve()
+    if any(work.iterdir()):
+        raise CaptureError(f"{tool}: {work} is not empty")
+    env = _env(home)
+    target = work / "target"
+    server = None
+    port = None
+    if spec.url:
+        server, port = _start_fixture(work)
+        target_arg = ["--url", f"http://127.0.0.1:{port}"]
+        target_record: dict[str, Any] = {
+            "server": "tests/fixtures/samples/zap/fixture_server.py",
+            "mode": "spider",
+        }
+    else:
+        target.mkdir()
+        for sample in spec.samples:
+            shutil.copytree(SAMPLES_DIR / sample, target, dirs_exist_ok=True)
+        target_arg = ["--repo", str(target)]
+        target_record = {"samples": list(spec.samples)}
+    try:
+        per_tool = spec.prepare(work, port) if spec.prepare else {}
+        if not spec.url:
+            target_record["files"] = {
+                p.relative_to(target).as_posix(): _sha256(p)
+                for p in sorted(target.rglob("*"))
+                if p.is_file()
+            }
+        config = work / "jmo.yml"
+        config.write_bytes(
+            yaml.safe_dump({"per_tool": {tool: per_tool} if per_tool else {}}).encode()
+        )
+        args = [
+            "scan",
+            *target_arg,
+            "--tools",
+            tool,
+            "--config",
+            str(config),
+            "--results-dir",
+            str(work / "results"),
+            "--history-db",
+            str(work / "history.db"),
+            "--no-store-history",
+        ]
+        done = run_jmo(args, env=env, cwd=work, timeout=SCAN_TIMEOUT)
+    finally:
+        if server is not None:
+            server.terminate()
+            server.wait(timeout=10)
+
+    kind = "individual-web" if spec.url else "individual-repos"
+    out_dirs = sorted((work / "results" / kind).glob("*/"))
+    if len(out_dirs) != 1:
+        raise CaptureError(
+            f"{tool}: the scan wrote {len(out_dirs)} target directories "
+            f"(rc {done.returncode}): {done.stderr[-500:]}"
+        )
+    (out_dir,) = out_dirs
+    timings = json.loads((out_dir / "scan-timings.json").read_bytes())
+    row = next((r for r in timings.get("tools", []) if r.get("tool") == tool), None)
+    if row is None or row.get("state") != "ran":
+        state = row.get("state") if row else "absent"
+        reason = row.get("reason") if row else None
+        raise CaptureError(f"{tool}: its row is {state} ({reason}), not ran")
+    output = out_dir / f"{tool}.json"
+    if not output.is_file():
+        raise CaptureError(f"{tool}: ran and wrote no {output.name}")
+
+    raw = _as_committed(_rewrite(output.read_bytes(), work, home))
+    developer = str(Path.home())
+    named = {developer, json.dumps(developer)[1:-1]}
+    if len(developer) > 1 and any(n in raw.decode("utf-8") for n in named):
+        raise CaptureError(
+            f"{tool}: its output names your home directory, which a fixture must not"
+        )
+    rewritten = work / "raw-output.json"
+    rewritten.write_bytes(raw)
+    findings = run_adapter(tool, rewritten)
+    extra: dict[str, Any] = {}
+    if spec.scrub:
+        scrubbed = _scrub(tool, raw)
+        rewritten.write_bytes(scrubbed)
+        after = run_adapter(tool, rewritten)
+        if _ids(after) != _ids(findings):
+            raise CaptureError(
+                f"{tool}: stripping its credential fields changed what the "
+                f"adapter reads ({len(findings)} findings before, {len(after)} after)"
             )
-            all_current = False
+        raw, findings = scrubbed, after
+        extra["stripped"] = (
+            "Every credential-bearing field (the trufflehog adapter's "
+            f"SECRET_BEARING_FIELDS) reads {REMOVED!r}: the key was generated "
+            "for this capture, and no key enters the tree. The adapter's "
+            "findings are the same with and without them."
+        )
+    if not findings:
+        raise CaptureError(f"{tool}: its output parses to 0 findings")
 
-    return all_current
+    version, binary = _version(tool, env, work)
+    binary_name = binary_sha = None
+    if binary is not None and binary.is_file() and binary.suffix != ".py":
+        binary_name, binary_sha = binary.name, _sha256(binary)
+    command = (
+        " ".join(["jmo", *(_rewrite(a.encode(), work, home).decode() for a in args)])
+        + f"  (cwd: {PLACEHOLDER}; HOME: a capture home)"
+    )
+    return Captured(
+        tool=tool,
+        version=version,
+        raw=raw,
+        findings=findings,
+        binary=binary_name,
+        binary_sha256=binary_sha,
+        target=target_record,
+        command=command,
+        config=json.loads(_rewrite(json.dumps(per_tool).encode(), work, home)),
+        metadata_extra=extra,
+    )
 
 
-def main():
-    """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Generate golden test fixtures by running real security tools.",
+def write_fixture(
+    tool: str,
+    captured: Captured,
+    *,
+    golden_dir: Path = GOLDEN_DIR,
+    update: bool = False,
+) -> Path:
+    """Write the three files under `<golden>/<adapter>/v<version>/`; an
+    existing version is left as it is unless `update`."""
+    if captured.version == UNKNOWN:
+        raise CaptureError(f"{tool}: `jmo tools check` named no version, so no fixture")
+    out = golden_dir / fixture_dir_name(tool) / f"v{captured.version}"
+    if out.exists() and not update:
+        raise CaptureError(f"{out} exists: pass --update to replace it")
+    out.mkdir(parents=True, exist_ok=True)
+    metadata = {
+        "tool": tool,
+        "version": captured.version,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "finding_count": len(captured.findings),
+        "raw_output_hash": hashlib.sha256(captured.raw).hexdigest()[:12],
+        "binary": captured.binary,
+        "binary_sha256": captured.binary_sha256,
+        "recipe": CAPTURES[tool].recipe(),
+        "target": captured.target,
+        "config": captured.config,
+        "command": captured.command,
+        "rewritten": (
+            f"the capture's working directory reads as {PLACEHOLDER} and its HOME as "
+            f"{PLACEHOLDER}/home; no line ends in whitespace and the file ends in a "
+            "newline, as the pre-commit hooks commit it"
+        ),
+        **captured.metadata_extra,
+    }
+    (out / "raw-output.json").write_bytes(captured.raw)
+    (out / "expected-findings.json").write_bytes(
+        (json.dumps(captured.findings, indent=2, default=str) + "\n").encode()
+    )
+    (out / "metadata.json").write_bytes(
+        (json.dumps(metadata, indent=2) + "\n").encode()
+    )
+    return out
+
+
+# --- --check ----------------------------------------------------------------------
+
+
+def _committed(tool: str, golden_dir: Path) -> list[dict[str, Any]]:
+    tool_dir = golden_dir / fixture_dir_name(tool)
+    if not tool_dir.is_dir():
+        return []
+    return [
+        json.loads(meta.read_bytes())
+        for meta in sorted(tool_dir.glob("*/metadata.json"))
+    ]
+
+
+def check(
+    tools: list[str], *, home: Path, golden_dir: Path = GOLDEN_DIR, scratch: Path
+) -> int:
+    """Capture each tool again in `scratch`; 1 when any could not be."""
+    failed = 0
+    for tool in tools:
+        try:
+            got = capture(tool, home=home, work=scratch / fixture_dir_name(tool))
+        except (CaptureError, OSError, ValueError, subprocess.SubprocessError) as e:
+            failed += 1
+            print(f"FAIL {tool}: {e}", flush=True)
+            continue
+        now = f"v{got.version}, {len(got.findings)} findings"
+        recipe = CAPTURES[tool].recipe()
+        committed = _committed(tool, golden_dir)
+        same = [m for m in committed if m.get("recipe") == recipe]
+        if same:
+            ref = next(
+                (m for m in same if m.get("version") == got.version),
+                max(same, key=lambda m: str(m.get("generated_at", ""))),
+            )
+            was, count = ref.get("finding_count"), len(got.findings)
+            moved = "" if was == count else "  (changed: re-capture with --update)"
+            print(
+                f"ok   {tool}: {now}; fixture v{ref.get('version')}: {was} -> {count}{moved}"
+            )
+        elif committed:
+            versions = ", ".join(f"v{m.get('version')}" for m in committed)
+            print(
+                f"ok   {tool}: {now}; fixture {versions} from another recipe, not compared"
+            )
+        else:
+            print(f"ok   {tool}: {now}; no fixture committed")
+    return 1 if failed else 0
+
+
+# --- the command line -------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description=(__doc__ or "").split("\n\n")[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-
-    parser.add_argument(
-        "--tool",
-        "-t",
-        choices=list(TOOL_CONFIGS.keys()),
-        help="Generate golden files for a specific tool",
+    ap.add_argument("--tool", action="append", choices=sorted(CAPTURES), default=[])
+    ap.add_argument("--all", action="store_true", help="every tool in TOOL_MATRIX")
+    ap.add_argument("--update", action="store_true", help="replace an existing version")
+    ap.add_argument(
+        "--check", action="store_true", help="capture again in scratch, write nothing"
     )
-    parser.add_argument(
-        "--all",
-        "-a",
-        action="store_true",
-        help="Generate golden files for all configured tools",
+    ap.add_argument(
+        "--home", type=Path, help="a HOME you prepared (default: made here)"
     )
-    parser.add_argument(
-        "--update",
-        "-u",
-        action="store_true",
-        help="Update/overwrite existing golden files",
+    ap.add_argument(
+        "--work", type=Path, help="scratch for the captures (default: a temp directory)"
     )
-    parser.add_argument(
-        "--check-current-versions",
-        action="store_true",
-        help="Check if golden files exist for current tool versions",
+    args = ap.parse_args(argv)
+
+    tools = (
+        list(TOOL_MATRIX) if args.all or (args.check and not args.tool) else args.tool
     )
-    parser.add_argument(
-        "--docker",
-        action="store_true",
-        help="Run tools in JMo Security Docker container",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging",
-    )
+    if not tools:
+        ap.error("name --tool, --all or --check")
 
-    args = parser.parse_args()
-
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-
-    # Validate arguments
-    if not any([args.tool, args.all, args.check_current_versions]):
-        parser.error("Must specify --tool, --all, or --check-current-versions")
-
-    if args.docker:
-        logger.warning("--docker mode not yet implemented, running locally")
-
-    # Check current versions
-    if args.check_current_versions:
-        success = check_current_versions()
-        sys.exit(0 if success else 1)
-
-    # Generate for specific tool
-    if args.tool:
-        success = generate_golden_files(args.tool, args.update)
-        sys.exit(0 if success else 1)
-
-    # Generate for all tools
-    if args.all:
-        success_count = 0
-        fail_count = 0
-
-        for tool_name in TOOL_CONFIGS:
-            if generate_golden_files(tool_name, args.update):
-                success_count += 1
-            else:
-                fail_count += 1
-
-        logger.info(
-            "Golden file generation complete: %d succeeded, %d failed",
-            success_count,
-            fail_count,
-        )
-        sys.exit(0 if fail_count == 0 else 1)
+    work = args.work or Path(tempfile.mkdtemp(prefix="jmo-golden-"))
+    try:
+        home = args.home or isolated_home(work / "home")
+        if args.check:
+            return check(tools, home=home, scratch=work / "check")
+        failed = 0
+        for tool in tools:
+            try:
+                got = capture(tool, home=home, work=work / fixture_dir_name(tool))
+                out = write_fixture(tool, got, update=args.update)
+            except (CaptureError, OSError, ValueError, subprocess.SubprocessError) as e:
+                failed += 1
+                print(f"FAIL {tool}: {e}", flush=True)
+                continue
+            print(f"ok   {tool}: {len(got.findings)} findings -> {out}", flush=True)
+        return 1 if failed else 0
+    finally:
+        if args.work is None:
+            shutil.rmtree(work, ignore_errors=True)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

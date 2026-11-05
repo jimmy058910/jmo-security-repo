@@ -2,7 +2,7 @@
   "metadata": {
     "target": "juice-shop/juice-shop",
     "commit": "1618a611b173b4bf114028e6e02549950606e29d",
-    "generated": "2026-10-30T22:27:38Z",
+    "generated": "2026-11-05T14:47:08Z",
     "tools_used": [
       "checkov",
       "gitleaks",
@@ -11,6 +11,7 @@
       "syft",
       "trivy",
       "trufflehog",
+      "yara-x",
       "zizmor"
     ]
   },

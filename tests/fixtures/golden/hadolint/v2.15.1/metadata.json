@@ -1,0 +1,27 @@
+{
+  "tool": "hadolint",
+  "version": "2.15.1",
+  "generated_at": "2026-11-05T14:34:14.309285+00:00",
+  "finding_count": 12,
+  "raw_output_hash": "956be522c39f",
+  "binary": "hadolint",
+  "binary_sha256": "c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507",
+  "recipe": {
+    "samples": [
+      "dockerfile-issues"
+    ],
+    "url": null,
+    "prepared": null
+  },
+  "target": {
+    "samples": [
+      "dockerfile-issues"
+    ],
+    "files": {
+      "Dockerfile": "f3534859dd17b28b39ec8cab391dff07d1c2e1aa5657a2acfd2258ac95c30ae6"
+    }
+  },
+  "config": {},
+  "command": "jmo scan --repo /golden/target --tools hadolint --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

@@ -1,0 +1,27 @@
+{
+  "tool": "shellcheck",
+  "version": "0.11.0",
+  "generated_at": "2026-11-05T14:34:15.632895+00:00",
+  "finding_count": 17,
+  "raw_output_hash": "43fdc67e7498",
+  "binary": "shellcheck",
+  "binary_sha256": "4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b",
+  "recipe": {
+    "samples": [
+      "shell-issues"
+    ],
+    "url": null,
+    "prepared": null
+  },
+  "target": {
+    "samples": [
+      "shell-issues"
+    ],
+    "files": {
+      "vulnerable_script.sh": "11ac46942145ed866fd796203a0e298488b544f3211f0243bb5b140307aa337d"
+    }
+  },
+  "config": {},
+  "command": "jmo scan --repo /golden/target --tools shellcheck --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

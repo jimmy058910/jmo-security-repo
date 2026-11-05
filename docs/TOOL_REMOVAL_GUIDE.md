@@ -28,9 +28,9 @@ Work bottom-up: tests first, then code, then Docker/config/docs. Run `make test-
 Remove tests first so deleting production code doesn't cause import errors.
 
 - [ ] Delete adapter test: `tests/adapters/test_<tool>_adapter.py`
-- [ ] Delete golden fixtures: `tests/fixtures/golden/<tool>/`
+- [ ] Delete golden fixtures: `tests/fixtures/golden/<adapter>/` (the adapter name, `osv_scanner` for `osv-scanner`)
+- [ ] Remove its `CAPTURES` entry in `scripts/dev/generate_golden.py` (a test holds that table equal to `TOOL_MATRIX`)
 - [ ] Remove from `ALL_ADAPTERS` in `tests/adapters/test_adapter_malformed.py`
-- [ ] Remove smoke config from `tests/integration/test_tool_smoke.py`
 - [ ] Remove URL tests from `tests/unit/test_tool_installer_urls.py`
 - [ ] Update mock data in `tests/cli/test_tool_manager.py`
 - [ ] Update the pinned `TOOL_MATRIX` set in `tests/unit/test_tool_registry.py` and any count assertions in `tests/core/test_tool_registry.py`

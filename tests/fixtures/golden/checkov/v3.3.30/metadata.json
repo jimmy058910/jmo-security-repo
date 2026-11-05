@@ -1,0 +1,27 @@
+{
+  "tool": "checkov",
+  "version": "3.3.30",
+  "generated_at": "2026-11-05T14:34:12.504429+00:00",
+  "finding_count": 37,
+  "raw_output_hash": "2f21d10adb41",
+  "binary": "checkov",
+  "binary_sha256": "577b2fe43d7bda28ad12027e2e6c69d5af90584abc9aef6c3527b4671416e836",
+  "recipe": {
+    "samples": [
+      "terraform-misconfig"
+    ],
+    "url": null,
+    "prepared": null
+  },
+  "target": {
+    "samples": [
+      "terraform-misconfig"
+    ],
+    "files": {
+      "main.tf": "62511911cdcc3ff64368547a406e2eb1d4aab7a16064ffeeb60a8302622b02ff"
+    }
+  },
+  "config": {},
+  "command": "jmo scan --repo /golden/target --tools checkov --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

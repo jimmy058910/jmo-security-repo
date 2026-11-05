@@ -155,6 +155,24 @@ All notable changes to JMo Security will be documented in this file.
   line moves from INFO, which a default scan hides, to WARNING. A history database built
   before the column gains it on the next store, without `jmo history migrate`. The HTML
   dashboard does not show it yet.
+- **A golden fixture for every tool in the matrix, captured through `jmo scan`.**
+  `scripts/dev/generate_golden.py` runs `jmo scan --tools <tool>` on the tool's tracked
+  sample in a HOME of its own, so a fixture's command is the descriptor's, and writes its
+  raw output, the adapter's findings and metadata (version, binary sha256, target files,
+  command) under `tests/fixtures/golden/<adapter>/v<version>/`. All 14 tools now have one;
+  the golden test fails when a matrix tool has none, when a fixture is empty or partial,
+  or when an adapter cannot be found, where it used to skip (#1097). `--check` captures
+  every tool again and fails when one does not run or parses to no finding; the scheduled
+  contract job (04:00 UTC, weekdays) runs it. A capture writes the work directory as `/golden`, and replaces
+  trufflehog's credential fields, so no fixture carries a host path or a key.
+- **Answer keys run on schedule.** The contract job (04:00 UTC, weekdays) fetches them and runs juice-shop's
+  and WebGoat's baselines and juice-shop's marked lines, sca-kitchen-sink's lockfile
+  formats, KICS's Dockerfile and (new) Kubernetes line floors, vibeproof's native-pack
+  key, (new) zizmor's own snapshots (69 of 69 inputs match) and (new) BenchProctor's
+  TypeScript and JavaScript scores for the rule bundle, a gate on a drop of Youden's J.
+  None ran in any job before. A pytest step there, in the PR-time contract job or in the
+  real-tool scans that passes nothing, or an answer-key step that skips, fails
+  (`scripts/dev/require_passed.py`).
 
 ### Removed
 
@@ -231,6 +249,12 @@ All notable changes to JMo Security will be documented in this file.
   neither until `jmo history migrate` ran, so one version had two schemas. They are
   dropped in place, with `finding_status`'s index, at the next store or
   `jmo history migrate`, as `profile` and `target_type` are (#1337).
+- The nightly "Tool Smoke Tests (Juice-Shop Fixture)" job and
+  `tests/integration/test_tool_smoke.py`: their fixture has been gitignored since
+  2026-02-01, so every test skipped and the job read green on 0 passed (#1349). Golden
+  re-capture (`generate_golden.py --check`) does what it was for. docker-smoke's
+  `test_all_expected_tools_functional` went too: it passed when one tool of fourteen
+  read OK, and `test_docker_image_tools` checks each tool (#1365).
 
 ### Changed
 
@@ -1070,6 +1094,15 @@ All notable changes to JMo Security will be documented in this file.
   folder), and each file read is named and recorded as `own_config`. A relative path in
   their `per_tool` flags is now read from there too; an absolute path is unaffected
   (#1574).
+- **A SARIF result carries its finding's CWE.** `findings.sarif` took a result's CWE
+  taxa from `CWE-` tags only, and the adapters put a CWE in `risk.cwe`, so no opengrep
+  result carried one; it is a `CWE-<n>` taxon now. BenchProctor's scorer credited 0 of
+  1,527 findings before.
+- The juice-shop and WebGoat baselines are re-derived on the final matrix (grype gone,
+  yara-x in). Two of juice-shop's rows rested on 19 opengrep findings in one minified
+  file, `three.js`, that opengrep drops under memory pressure when the other tools run
+  beside it; the rows are now what a full scan reports. The scheduled e2e gate's error
+  count is guarded by a test (#1502).
 
 ### Security
 

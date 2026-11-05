@@ -1,0 +1,707 @@
+{
+  "source": {
+    "repository": "Checkmarx/kics",
+    "commit": "453066aa9c66014ad7aee7dd0149ba1944c78050",
+    "path": "assets/queries/k8s"
+  },
+  "tools": [
+    "trivy"
+  ],
+  "counted": "one target per positive and per negative sample; one jmo scan --tools trivy of each set; a line is hit when a trivy finding in its positive's output, parsed by JMo's adapter, spans it (startLine..endLine) and that check fires on none of the query's negatives",
+  "entries": 430,
+  "entries_hit": 142,
+  "distinct": 409,
+  "distinct_hit": 140,
+  "distinct_spanned_by_any_finding": 248,
+  "lines": {
+    "always_admit_admission_control_plugin_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "always_pull_images_admission_control_plugin_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "anonymous_auth_is_not_set_to_false/positive1.yaml:11": [
+      "trivy"
+    ],
+    "anonymous_auth_is_not_set_to_false/positive2.yaml:11": [
+      "trivy"
+    ],
+    "anonymous_auth_is_not_set_to_false/positive3.yaml:11": [],
+    "anonymous_auth_is_not_set_to_false/positive4.yaml:11": [],
+    "anonymous_auth_is_not_set_to_false/positive5.yaml:9": [],
+    "anonymous_auth_is_not_set_to_false/positive6.json:7": [],
+    "audit_log_maxage_not_properly_set/positive1.yaml:11": [],
+    "audit_log_maxage_not_properly_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "audit_log_maxage_not_properly_set/positive3.yaml:12": [],
+    "audit_log_maxage_not_properly_set/positive3.yaml:27": [],
+    "audit_log_maxage_not_properly_set/positive3.yaml:40": [],
+    "audit_log_maxage_not_properly_set/positive3.yaml:55": [],
+    "audit_log_maxbackup_not_properly_set/positive1.yaml:11": [],
+    "audit_log_maxbackup_not_properly_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "audit_log_maxbackup_not_properly_set/positive3.yaml:12": [],
+    "audit_log_maxbackup_not_properly_set/positive3.yaml:27": [],
+    "audit_log_maxbackup_not_properly_set/positive3.yaml:40": [],
+    "audit_log_maxbackup_not_properly_set/positive3.yaml:55": [],
+    "audit_log_maxsize_not_properly_set/positive1.yaml:11": [],
+    "audit_log_maxsize_not_properly_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "audit_log_maxsize_not_properly_set/positive3.yaml:12": [],
+    "audit_log_maxsize_not_properly_set/positive3.yaml:27": [],
+    "audit_log_maxsize_not_properly_set/positive3.yaml:40": [],
+    "audit_log_maxsize_not_properly_set/positive3.yaml:55": [],
+    "audit_log_path_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "audit_log_path_not_set/positive2.yaml:12": [],
+    "audit_log_path_not_set/positive2.yaml:27": [],
+    "audit_log_path_not_set/positive2.yaml:40": [],
+    "audit_log_path_not_set/positive2.yaml:55": [],
+    "audit_policy_file_not_defined/positive1.yaml:11": [],
+    "audit_policy_file_not_defined/positive2.yaml:11": [],
+    "audit_policy_file_not_defined/positive3.yaml:12": [],
+    "audit_policy_not_cover_key_security_concerns/positive1.yaml:6": [],
+    "audit_policy_not_cover_key_security_concerns/positive2.yaml:4": [],
+    "audit_policy_not_cover_key_security_concerns/positive3.yaml:6": [],
+    "authorization_mode_node_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "authorization_mode_node_not_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "authorization_mode_rbac_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "authorization_mode_rbac_not_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "authorization_mode_set_to_always_allow/positive1.yaml:11": [],
+    "authorization_mode_set_to_always_allow/positive2.yaml:11": [
+      "trivy"
+    ],
+    "authorization_mode_set_to_always_allow/positive3.yaml:11": [],
+    "authorization_mode_set_to_always_allow/positive4.yaml:11": [],
+    "authorization_mode_set_to_always_allow/positive5.yaml:11": [],
+    "authorization_mode_set_to_always_allow/positive6.json:6": [],
+    "auto_tls_set_to_true/positive1.yaml:21": [
+      "trivy"
+    ],
+    "basic_auth_file_is_set/positive1.yaml:11": [],
+    "basic_auth_file_is_set/positive2.yaml:11": [],
+    "bind_address_not_properly_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "bind_address_not_properly_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "bind_address_not_properly_set/positive3.yaml:20": [
+      "trivy"
+    ],
+    "bind_address_not_properly_set/positive4.yaml:20": [
+      "trivy"
+    ],
+    "client_certificate_authentication_not_setup_properly/positive1.yaml:11": [],
+    "client_certificate_authentication_not_setup_properly/positive2.yaml:11": [],
+    "client_certificate_authentication_not_setup_properly/positive3.yaml:11": [
+      "trivy"
+    ],
+    "client_certificate_authentication_not_setup_properly/positive4.yaml:2": [],
+    "client_certificate_authentication_not_setup_properly/positive5.yaml:2": [],
+    "client_certificate_authentication_not_setup_properly/positive6.yaml:2": [],
+    "cluster_admin_role_binding_with_super_user_permissions/positive.yaml:11": [],
+    "cluster_allows_unsafe_sysctls/positive1.yaml:11": [],
+    "cluster_allows_unsafe_sysctls/positive1.yaml:13": [],
+    "cluster_allows_unsafe_sysctls/positive1.yaml:24": [],
+    "cluster_allows_unsafe_sysctls/positive2.yaml:18": [],
+    "cni_plugin_does_not_support_network_policies/positive.json:6": [],
+    "cni_plugin_does_not_support_network_policies/positive2.yaml:10": [],
+    "container_is_privileged/positive1.yaml:10": [
+      "trivy"
+    ],
+    "container_is_privileged/positive1.yaml:23": [
+      "trivy"
+    ],
+    "container_is_privileged/positive2.yaml:21": [
+      "trivy"
+    ],
+    "container_runs_unmasked/positive.yaml:12": [],
+    "containers_run_with_low_uid/positive1.yaml:12": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive10.yaml:18": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive10.yaml:36": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive2.yaml:13": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive2.yaml:18": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive3.yaml:12": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive4.yaml:18": [],
+    "containers_run_with_low_uid/positive5.yaml:18": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive5.yaml:24": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive6.yaml:25": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive6.yaml:32": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive7.yaml:23": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive7.yaml:25": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive8.yaml:21": [
+      "trivy"
+    ],
+    "containers_run_with_low_uid/positive8.yaml:43": [],
+    "containers_run_with_low_uid/positive9.yaml:18": [],
+    "containers_run_with_low_uid/positive9.yaml:38": [],
+    "containers_running_as_root/positive1.yaml:12": [],
+    "containers_running_as_root/positive1.yaml:28": [],
+    "containers_running_as_root/positive1.yaml:43": [],
+    "containers_running_as_root/positive2.yaml:12": [],
+    "containers_running_as_root/positive2.yaml:17": [],
+    "containers_running_as_root/positive3.yaml:12": [],
+    "containers_running_as_root/positive4.yaml:7": [
+      "trivy"
+    ],
+    "containers_running_as_root/positive4.yaml:11": [
+      "trivy"
+    ],
+    "containers_running_as_root/positive5.yaml:20": [
+      "trivy"
+    ],
+    "containers_running_as_root/positive5.yaml:42": [],
+    "containers_running_as_root/positive6.yaml:17": [],
+    "containers_running_as_root/positive6.yaml:37": [],
+    "containers_running_as_root/positive7.yaml:18": [
+      "trivy"
+    ],
+    "containers_running_as_root/positive7.yaml:36": [
+      "trivy"
+    ],
+    "containers_with_added_capabilities/positive.yaml:12": [],
+    "containers_with_added_capabilities/positive.yaml:43": [],
+    "containers_with_sys_admin_capabilities/positive.yaml:12": [
+      "trivy"
+    ],
+    "cpu_limits_not_set/positive.yaml:10": [
+      "trivy"
+    ],
+    "cpu_limits_not_set/positive.yaml:14": [
+      "trivy"
+    ],
+    "cpu_limits_not_set/positive.yaml:31": [],
+    "cpu_limits_not_set/positive.yaml:35": [],
+    "cpu_requests_not_set/positive.yaml:10": [
+      "trivy"
+    ],
+    "cpu_requests_not_set/positive.yaml:15": [
+      "trivy"
+    ],
+    "cpu_requests_not_set/positive.yaml:30": [],
+    "cpu_requests_not_set/positive.yaml:37": [],
+    "cronjob_deadline_not_configured/positive.yaml:6": [],
+    "dashboard_is_enabled/positive.yaml:22": [
+      "trivy"
+    ],
+    "dashboard_is_enabled/positive.yaml:67": [
+      "trivy"
+    ],
+    "deployment_has_no_pod_anti_affinity/positive.yaml:19": [],
+    "deployment_has_no_pod_anti_affinity/positive.yaml:39": [],
+    "deployment_without_pod_disruption_budget/positive.yaml:20": [],
+    "docker_daemon_socket_is_exposed_to_containers/positive.yaml:15": [
+      "trivy"
+    ],
+    "docker_daemon_socket_is_exposed_to_containers/positive.yaml:43": [
+      "trivy"
+    ],
+    "docker_daemon_socket_is_exposed_to_containers/positive.yaml:67": [],
+    "encryption_provider_config_is_not_defined/positive1.yaml:11": [
+      "trivy"
+    ],
+    "encryption_provider_not_properly_configured/positive1.yaml:6": [],
+    "ensure_administrative_boundaries_between_resources/positive.yaml:5": [],
+    "etcd_client_certificate_authentication_set_to_false/positive1.yaml:21": [
+      "trivy"
+    ],
+    "etcd_client_certificate_authentication_set_to_false/positive2.yaml:21": [
+      "trivy"
+    ],
+    "etcd_client_certificate_file_not_defined/positive1.yaml:11": [
+      "trivy"
+    ],
+    "etcd_peer_client_certificate_authentication_set_to_false/positive1.yaml:21": [],
+    "etcd_peer_client_certificate_authentication_set_to_false/positive2.yaml:21": [],
+    "etcd_peer_tls_certificate_files_not_properly_set/positive1.yaml:21": [
+      "trivy"
+    ],
+    "etcd_peer_tls_certificate_files_not_properly_set/positive1.yaml:46": [
+      "trivy"
+    ],
+    "etcd_peer_tls_certificate_files_not_properly_set/positive2.yaml:21": [
+      "trivy"
+    ],
+    "etcd_tls_certificate_files_not_properly_set/positive1.yaml:21": [
+      "trivy"
+    ],
+    "etcd_tls_certificate_files_not_properly_set/positive1.yaml:46": [
+      "trivy"
+    ],
+    "etcd_tls_certificate_files_not_properly_set/positive2.yaml:21": [
+      "trivy"
+    ],
+    "etcd_tls_certificate_not_properly_configured/positive1.yaml:11": [
+      "trivy"
+    ],
+    "etcd_tls_certificate_not_properly_configured/positive1.yaml:25": [],
+    "etcd_tls_certificate_not_properly_configured/positive2.yaml:11": [],
+    "event_rate_limit_admission_control_plugin_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "hpa_targeted_deployments_with_configured_replica_count/positive.yaml:10": [],
+    "hpa_targets_invalid_object/positive.yaml:12": [],
+    "image_policy_webhook_admission_control_plugin_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "image_pull_policy_of_container_is_not_always/positive1.yaml:9": [],
+    "image_pull_policy_of_container_is_not_always/positive2.yaml:18": [
+      "trivy"
+    ],
+    "image_pull_policy_of_container_is_not_always/positive3.yaml:16": [
+      "trivy"
+    ],
+    "image_without_digest/positive.yaml:8": [
+      "trivy"
+    ],
+    "incorrect_volume_claim_access_mode_read_write_once/positive.yaml:27": [],
+    "incorrect_volume_claim_access_mode_read_write_once/positive.yaml:72": [],
+    "ingress_controller_exposes_workload/positive.yaml:31": [],
+    "insecure_bind_address_set/positive1.yaml:11": [],
+    "insecure_bind_address_set/positive2.yaml:11": [],
+    "insecure_port_not_properly_set/positive1.yaml:11": [],
+    "insecure_port_not_properly_set/positive2.yaml:11": [],
+    "invalid_image/positive.yaml:8": [
+      "trivy"
+    ],
+    "invalid_image/positive.yaml:19": [
+      "trivy"
+    ],
+    "kubelet_certificate_authority_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "kubelet_client_certificate_or_key_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "kubelet_client_certificate_or_key_not_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "kubelet_client_certificate_or_key_not_set/positive2.yaml:25": [
+      "trivy"
+    ],
+    "kubelet_client_certificate_or_key_not_set/positive3.yaml:11": [
+      "trivy"
+    ],
+    "kubelet_client_periodic_certificate_switch_disabled/positive1.yaml:11": [],
+    "kubelet_client_periodic_certificate_switch_disabled/positive2.yaml:8": [],
+    "kubelet_client_periodic_certificate_switch_disabled/positive3.json:6": [],
+    "kubelet_client_periodic_certificate_switch_disabled/positive4.yaml:2": [],
+    "kubelet_event_qps_not_properly_set/positive1.yaml:11": [],
+    "kubelet_event_qps_not_properly_set/positive2.yaml:11": [],
+    "kubelet_event_qps_not_properly_set/positive3.yaml:5": [],
+    "kubelet_event_qps_not_properly_set/positive4.yaml:2": [],
+    "kubelet_hostname_override_is_set/positive1.yaml:11": [],
+    "kubelet_hostname_override_is_set/positive2.yaml:11": [],
+    "kubelet_https_set_to_false/positive1.yaml:11": [],
+    "kubelet_not_managing_ip_tables/positive1.yaml:11": [],
+    "kubelet_not_managing_ip_tables/positive2.yaml:8": [],
+    "kubelet_not_managing_ip_tables/positive3.json:7": [],
+    "kubelet_protect_kernel_defaults_set_to_false/positive1.yaml:11": [],
+    "kubelet_protect_kernel_defaults_set_to_false/positive2.yaml:11": [],
+    "kubelet_protect_kernel_defaults_set_to_false/positive3.yaml:5": [],
+    "kubelet_protect_kernel_defaults_set_to_false/positive4.yaml:2": [],
+    "kubelet_read_only_port_is_not_set_to_zero/positive1.yaml:11": [],
+    "kubelet_read_only_port_is_not_set_to_zero/positive2.yaml:11": [],
+    "kubelet_read_only_port_is_not_set_to_zero/positive3.yaml:8": [],
+    "kubelet_read_only_port_is_not_set_to_zero/positive4.json:5": [],
+    "kubelet_streaming_connection_timeout_disabled/positive1.yaml:11": [],
+    "kubelet_streaming_connection_timeout_disabled/positive2.yaml:8": [],
+    "kubelet_streaming_connection_timeout_disabled/positive3.json:10": [],
+    "liveness_probe_is_not_defined/positive.yaml:9": [],
+    "memory_limits_not_defined/positive1.yaml:8": [
+      "trivy"
+    ],
+    "memory_limits_not_defined/positive1.yaml:23": [
+      "trivy"
+    ],
+    "memory_limits_not_defined/positive1.yaml:38": [
+      "trivy"
+    ],
+    "memory_limits_not_defined/positive1.yaml:57": [],
+    "memory_limits_not_defined/positive2.yaml:21": [
+      "trivy"
+    ],
+    "memory_requests_not_defined/positive1.yaml:13": [
+      "trivy"
+    ],
+    "memory_requests_not_defined/positive1.yaml:27": [
+      "trivy"
+    ],
+    "memory_requests_not_defined/positive1.yaml:40": [
+      "trivy"
+    ],
+    "memory_requests_not_defined/positive1.yaml:59": [],
+    "memory_requests_not_defined/positive2.yaml:20": [
+      "trivy"
+    ],
+    "metadata_label_is_invalid/positive.yaml:6": [],
+    "missing_app_armor_config/positive.yaml:5": [],
+    "missing_app_armor_config/positive.yaml:36": [],
+    "namespace_lifecycle_admission_control_plugin_disabled/positive1.yaml:11": [
+      "trivy"
+    ],
+    "namespace_lifecycle_admission_control_plugin_disabled/positive2.yaml:11": [
+      "trivy"
+    ],
+    "net_raw_capabilities_disabled_for_psp/positive.yaml:13": [],
+    "net_raw_capabilities_disabled_for_psp/positive.yaml:57": [],
+    "net_raw_capabilities_not_being_dropped/positive1.yaml:11": [
+      "trivy"
+    ],
+    "net_raw_capabilities_not_being_dropped/positive1.yaml:13": [
+      "trivy"
+    ],
+    "net_raw_capabilities_not_being_dropped/positive1.yaml:18": [
+      "trivy"
+    ],
+    "net_raw_capabilities_not_being_dropped/positive1.yaml:23": [
+      "trivy"
+    ],
+    "net_raw_capabilities_not_being_dropped/positive2.yaml:31": [
+      "trivy"
+    ],
+    "network_policy_is_not_targeting_any_pod/positive.yaml:22": [],
+    "no_drop_capabilities_for_containers/positive.yaml:21": [
+      "trivy"
+    ],
+    "no_drop_capabilities_for_containers/positive.yaml:26": [
+      "trivy"
+    ],
+    "no_drop_capabilities_for_containers/positive.yaml:28": [
+      "trivy"
+    ],
+    "node_restriction_admission_control_plugin_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "non_kube_system_pod_with_host_mount/positive.yaml:40": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:43": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:59": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:76": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:106": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:136": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:153": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:168": [],
+    "non_kube_system_pod_with_host_mount/positive.yaml:185": [],
+    "not_limited_capabilities_for_pod_security_policy/positive.yaml:10": [],
+    "not_unique_certificate_authority/positive1.yaml:22": [],
+    "object_is_using_a_deprecated_api_version/positive.yaml:1": [],
+    "object_is_using_a_deprecated_api_version/positive.yaml:23": [],
+    "object_is_using_a_deprecated_api_version/positive.yaml:58": [],
+    "object_is_using_a_deprecated_api_version/positive.yaml:76": [],
+    "object_is_using_a_deprecated_api_version/positive.yaml:94": [],
+    "peer_auto_tls_set_to_true/positive1.yaml:21": [
+      "trivy"
+    ],
+    "permissive_access_to_create_pods/positive1.yaml:12": [
+      "trivy"
+    ],
+    "permissive_access_to_create_pods/positive1.yaml:21": [],
+    "permissive_access_to_create_pods/positive1.yaml:30": [],
+    "permissive_access_to_create_pods/positive1.yaml:39": [],
+    "permissive_access_to_create_pods/positive1.yaml:48": [],
+    "permissive_access_to_create_pods/positive1.yaml:60": [],
+    "permissive_access_to_create_pods/positive2.yaml:26": [],
+    "pod_misconfigured_network_policy/positive1.yaml:4": [],
+    "pod_misconfigured_network_policy/positive2.yaml:4": [],
+    "pod_or_container_without_limit_range/positive1.yaml:5": [],
+    "pod_or_container_without_limit_range/positive2.yaml:4": [
+      "trivy"
+    ],
+    "pod_or_container_without_limit_range/positive3.yaml:5": [],
+    "pod_or_container_without_limit_range/positive4.yaml:5": [],
+    "pod_or_container_without_resource_quota/positive1.yaml:5": [],
+    "pod_or_container_without_resource_quota/positive2.yaml:4": [
+      "trivy"
+    ],
+    "pod_or_container_without_resource_quota/positive3.yaml:5": [],
+    "pod_or_container_without_resource_quota/positive4.yaml:5": [],
+    "pod_or_container_without_security_context/positive.yaml:5": [
+      "trivy"
+    ],
+    "pod_or_container_without_security_context/positive.yaml:19": [
+      "trivy"
+    ],
+    "pod_security_policy_admission_control_plugin_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "privilege_escalation_allowed/positive1.yaml:10": [
+      "trivy"
+    ],
+    "privilege_escalation_allowed/positive1.yaml:21": [
+      "trivy"
+    ],
+    "privilege_escalation_allowed/positive2.yaml:9": [
+      "trivy"
+    ],
+    "privilege_escalation_allowed/positive2.yaml:13": [
+      "trivy"
+    ],
+    "privilege_escalation_allowed/positive2.yaml:17": [
+      "trivy"
+    ],
+    "profiling_not_set_to_false/positive1.yaml:11": [
+      "trivy"
+    ],
+    "profiling_not_set_to_false/positive2.yaml:11": [
+      "trivy"
+    ],
+    "profiling_not_set_to_false/positive3.yaml:21": [
+      "trivy"
+    ],
+    "profiling_not_set_to_false/positive4.yaml:21": [
+      "trivy"
+    ],
+    "profiling_not_set_to_false/positive5.yaml:2": [],
+    "profiling_not_set_to_false/positive6.yaml:3": [],
+    "profiling_not_set_to_false/positive7.yaml:14": [],
+    "psp_allows_privilege_escalation/positive.yaml:9": [],
+    "psp_allows_privilege_escalation/positive.yaml:32": [],
+    "psp_allows_sharing_host_ipc/positive.yaml:6": [],
+    "psp_allows_sharing_host_pid/positive.yaml:6": [],
+    "psp_containers_share_host_network_namespace/positive.yaml:14": [],
+    "psp_set_to_privileged/positive.yaml:6": [],
+    "psp_with_added_capabilities/positive.yaml:10": [],
+    "psp_with_unrestricted_access_to_host_path/positive1.yaml:5": [],
+    "psp_with_unrestricted_access_to_host_path/positive2.yaml:8": [],
+    "psp_with_unrestricted_access_to_host_path/positive3.yaml:9": [],
+    "rbac_roles_allow_privilege_escalation/positive.yaml:8": [],
+    "rbac_roles_with_attach_permission/positive.yaml:8": [],
+    "rbac_roles_with_exec_permission/positive.yaml:8": [
+      "trivy"
+    ],
+    "rbac_roles_with_impersonate_permission/positive.yaml:9": [],
+    "rbac_roles_with_portforwarding_permissions/positive.yaml:8": [],
+    "rbac_roles_with_read_secrets_permissions/positive.yaml:9": [
+      "trivy"
+    ],
+    "rbac_roles_with_read_secrets_permissions/positive.yaml:18": [],
+    "rbac_wildcard_in_rule/positive.yaml:7": [],
+    "rbac_wildcard_in_rule/positive.yaml:9": [],
+    "rbac_wildcard_in_rule/positive.yaml:18": [
+      "trivy"
+    ],
+    "rbac_wildcard_in_rule/positive.yaml:19": [
+      "trivy"
+    ],
+    "rbac_wildcard_in_rule/positive.yaml:20": [],
+    "rbac_wildcard_in_rule/positive.yaml:29": [],
+    "rbac_wildcard_in_rule/positive.yaml:31": [],
+    "readiness_probe_is_not_configured/positive.yaml:9": [],
+    "request_timeout_not_properly_set/positive1.yaml:11": [],
+    "request_timeout_not_properly_set/positive2.yaml:11": [],
+    "request_timeout_not_properly_set/positive3.yaml:11": [],
+    "request_timeout_not_properly_set/positive4.yaml:11": [],
+    "request_timeout_not_properly_set/positive5.yaml:11": [],
+    "request_timeout_not_properly_set/positive6.yaml:11": [],
+    "role_binding_to_default_service_account/positive.yaml:11": [],
+    "root_ca_file_not_defined/positive1.yaml:11": [
+      "trivy"
+    ],
+    "root_container_not_mounted_as_read_only/positive.yaml:12": [
+      "trivy"
+    ],
+    "root_container_not_mounted_as_read_only/positive.yaml:24": [
+      "trivy"
+    ],
+    "root_containers_admitted/positive.yaml:12": [],
+    "root_containers_admitted/positive.yaml:13": [],
+    "root_containers_admitted/positive.yaml:27": [],
+    "root_containers_admitted/positive.yaml:31": [],
+    "root_containers_admitted/positive.yaml:32": [],
+    "rotate_kubelet_server_certificate_not_active/positive1.yaml:8": [],
+    "rotate_kubelet_server_certificate_not_active/positive2.yaml:11": [],
+    "rotate_kubelet_server_certificate_not_active/positive3.json:8": [],
+    "rotate_kubelet_server_certificate_not_active/positive4.yaml:11": [
+      "trivy"
+    ],
+    "seccomp_profile_is_not_configured/positive1.yaml:7": [],
+    "seccomp_profile_is_not_configured/positive1.yaml:18": [],
+    "seccomp_profile_is_not_configured/positive1.yaml:26": [],
+    "seccomp_profile_is_not_configured/positive1.yaml:43": [],
+    "seccomp_profile_is_not_configured/positive2.yaml:24": [],
+    "seccomp_profile_is_not_configured/positive3.yaml:24": [],
+    "seccomp_profile_is_not_configured/positive3.yaml:33": [],
+    "seccomp_profile_is_not_configured/positive4.yaml:35": [],
+    "secrets_as_environment_variables/positive.yaml:12": [],
+    "secrets_as_environment_variables/positive.yaml:17": [],
+    "secrets_as_environment_variables/positive.yaml:31": [],
+    "secure_port_set_to_zero/positive1.yaml:11": [
+      "trivy"
+    ],
+    "security_context_deny_admission_control_plugin_not_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "service_account_admission_control_plugin_disabled/positive1.yaml:11": [
+      "trivy"
+    ],
+    "service_account_admission_control_plugin_disabled/positive2.yaml:11": [
+      "trivy"
+    ],
+    "service_account_allows_access_secrets/positive.yaml:10": [],
+    "service_account_allows_access_secrets/positive.yaml:34": [],
+    "service_account_allows_access_secrets/positive.yaml:58": [],
+    "service_account_key_file_not_properly_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "service_account_lookup_set_to_false/positive1.yaml:11": [
+      "trivy"
+    ],
+    "service_account_name_undefined_or_empty/positive.yaml:6": [],
+    "service_account_name_undefined_or_empty/positive.yaml:28": [],
+    "service_account_name_undefined_or_empty/positive.yaml:58": [],
+    "service_account_private_key_file_not_defined/positive1.yaml:11": [
+      "trivy"
+    ],
+    "service_account_token_automount_not_disabled/positive1.yaml:5": [],
+    "service_account_token_automount_not_disabled/positive1.yaml:28": [
+      "trivy"
+    ],
+    "service_account_token_automount_not_disabled/positive1.yaml:54": [],
+    "service_account_token_automount_not_disabled/positive2.yaml:5": [],
+    "service_does_not_target_pod/positive1.yaml:7": [],
+    "service_does_not_target_pod/positive2.yaml:12": [],
+    "service_type_is_nodeport/positive.yaml:6": [],
+    "service_with_external_load_balancer/positive.yaml:4": [],
+    "service_with_external_load_balancer/positive.yaml:18": [],
+    "service_with_external_load_balancer/positive.yaml:33": [],
+    "service_with_external_load_balancer/positive.yaml:48": [],
+    "service_with_external_load_balancer/positive.yaml:63": [],
+    "shared_host_ipc_namespace/positive.yaml:6": [
+      "trivy"
+    ],
+    "shared_host_ipc_namespace/positive2.yaml:9": [],
+    "shared_host_network_namespace/positive.yaml:6": [
+      "trivy"
+    ],
+    "shared_host_network_namespace/positive2.yaml:9": [],
+    "shared_host_pid_namespace/positive.yaml:6": [
+      "trivy"
+    ],
+    "shared_host_pid_namespace/positive2.yaml:9": [],
+    "shared_service_account/positive.yaml:6": [],
+    "shared_service_account/positive.yaml:16": [],
+    "statefulset_has_no_pod_anti_affinity/positive.yaml:23": [],
+    "statefulset_has_no_pod_anti_affinity/positive.yaml:53": [],
+    "statefulset_requests_storage/positive.yaml:33": [],
+    "statefulset_requests_storage/positive.yaml:66": [],
+    "statefulset_requests_storage/positive.yaml:73": [],
+    "statefulset_without_pod_disruption_budget/positive.yaml:19": [],
+    "statefulset_without_service_name/positive.yaml:26": [],
+    "terminated_pod_garbage_collector_threshold_not_properly_set/positive1.yaml:11": [],
+    "terminated_pod_garbage_collector_threshold_not_properly_set/positive2.yaml:11": [],
+    "tiller_deployment_is_accessible_from_within_the_cluster/positive.yaml:21": [],
+    "tiller_deployment_is_accessible_from_within_the_cluster/positive.yaml:53": [],
+    "tiller_is_deployed/positive.yaml:4": [],
+    "tiller_is_deployed/positive.yaml:10": [],
+    "tiller_is_deployed/positive.yaml:15": [],
+    "tiller_is_deployed/positive.yaml:20": [
+      "trivy"
+    ],
+    "tiller_service_is_not_deleted/positive.yaml:4": [],
+    "tiller_service_is_not_deleted/positive.yaml:7": [],
+    "tiller_service_is_not_deleted/positive.yaml:12": [],
+    "tls_connection_certificate_not_setup/positive1.yaml:11": [
+      "trivy"
+    ],
+    "tls_connection_certificate_not_setup/positive2.yaml:2": [],
+    "tls_connection_certificate_not_setup/positive3.json:2": [],
+    "token_auth_file_is_set/positive1.yaml:11": [
+      "trivy"
+    ],
+    "token_auth_file_is_set/positive2.yaml:11": [
+      "trivy"
+    ],
+    "use_service_account_credentials_not_set_to_true/positive1.yaml:11": [
+      "trivy"
+    ],
+    "use_service_account_credentials_not_set_to_true/positive2.yaml:11": [
+      "trivy"
+    ],
+    "using_kubernetes_native_secret_management/positive1.yaml:4": [],
+    "using_unrecommended_namespace/positive1.yaml:5": [
+      "trivy"
+    ],
+    "using_unrecommended_namespace/positive2.yaml:4": [
+      "trivy"
+    ],
+    "using_unrecommended_namespace/positive3.yaml:5": [
+      "trivy"
+    ],
+    "using_unrecommended_namespace/positive4.yaml:5": [
+      "trivy"
+    ],
+    "using_unrecommended_namespace/positive5.yaml:5": [],
+    "volume_mount_with_os_directory_write_permissions/positive1.yaml:10": [],
+    "volume_mount_with_os_directory_write_permissions/positive1.yaml:12": [],
+    "volume_mount_with_os_directory_write_permissions/positive1.yaml:36": [],
+    "volume_mount_with_os_directory_write_permissions/positive1.yaml:39": [],
+    "volume_mount_with_os_directory_write_permissions/positive2.yaml:10": [],
+    "volume_mount_with_os_directory_write_permissions/positive2.yaml:14": [],
+    "volume_mount_with_os_directory_write_permissions/positive2.yaml:33": [],
+    "volume_mount_with_os_directory_write_permissions/positive2.yaml:36": [],
+    "weak_tls_cipher_suites/positive1.yaml:11": [],
+    "weak_tls_cipher_suites/positive2.yaml:11": [],
+    "weak_tls_cipher_suites/positive3.yaml:9": [],
+    "weak_tls_cipher_suites/positive4.json:2": [],
+    "workload_host_port_not_specified/positive.yaml:9": [
+      "trivy"
+    ],
+    "workload_host_port_not_specified/positive.yaml:24": [
+      "trivy"
+    ],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:66": [
+      "trivy"
+    ],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:70": [
+      "trivy"
+    ],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:112": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:115": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:145": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:175": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:193": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:203": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:229": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:250": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:265": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:280": [],
+    "workload_mounting_with_sensitive_os_directory/positive.yaml:299": []
+  }
+}

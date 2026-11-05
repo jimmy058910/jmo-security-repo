@@ -46,19 +46,26 @@ RECORD = "JMO_RECORD_KICS_LINES"
 TOOLS = ("hadolint", "trivy")
 EXPECTED = "positive_expected_result.json"
 FILE_KEYS = ("fileName", "filename", "fineName")
+# The Kubernetes half (F6b): graded by trivy alone, by the delta rule below.
+K8S_BASELINE = Path(__file__).parent / "baselines" / "kics-k8s-lines.json"
+K8S_RECORD = "JMO_RECORD_KICS_K8S_LINES"
+K8S_SUFFIXES = (".yaml", ".json")
 
 # (query, sample file, line)
 Line = tuple[str, str, int]
 
 
-def expected_entries(queries: Path, suffix: str) -> list[Line]:
+def expected_entries(queries: Path, suffix: str | tuple[str, ...]) -> list[Line]:
     """KICS's entries for every query under `queries`, a line listed twice
-    kept twice. `suffix` picks a query's positive samples (`.dockerfile`)."""
+    kept twice. `suffix` picks a query's positive samples (`.dockerfile`, or
+    the Kubernetes half's `.yaml` and `.json`); the answer file is never one."""
     entries: list[Line] = []
     for expected in sorted(queries.glob(f"*/test/{EXPECTED}")):
         query = expected.parent.parent.name
         positives = sorted(
-            p.name for p in expected.parent.glob(f"positive*{suffix}") if p.is_file()
+            p.name
+            for p in expected.parent.glob("positive*")
+            if p.is_file() and p.name != EXPECTED and p.name.endswith(suffix)
         )
         for entry in json.loads(expected.read_bytes()):
             named = [entry[k] for k in FILE_KEYS if k in entry]
@@ -78,6 +85,21 @@ def expected_entries(queries: Path, suffix: str) -> list[Line]:
 def target_of(query: str, file: str) -> str:
     """The target a sample is staged as: one directory per sample."""
     return f"{query}--{Path(file).stem}"
+
+
+def delta_hits(
+    lines: list[int], found: list[tuple[str, int, int]], negative_rules: set[str]
+) -> dict[int, list[str]]:
+    """For each line, the checks spanning it (rule, first line, last line) that
+    fire on none of the query's negative samples. A Kubernetes finding spans
+    its whole resource, so a plain span is about the resource; KICS's negatives
+    are the same resources with the query's issue fixed."""
+    return {
+        line: sorted(
+            {r for r, start, end in found if start <= line <= end} - set(negative_rules)
+        )
+        for line in lines
+    }
 
 
 def label(line: Line) -> str:
@@ -142,13 +164,33 @@ def test_a_line_listed_twice_is_two_entries_and_one_line(tmp_path) -> None:
     assert set(entries) == {("q", "positive1.dockerfile", 8)}
 
 
+def test_a_kubernetes_query_reads_yaml_and_json_positives_never_its_answer(
+    tmp_path,
+) -> None:
+    # positive_expected_result.json is itself `positive*.json`: it is the
+    # answer, never a sample.
+    _query(tmp_path, "q", [{"line": 3}], ["positive.json"])
+
+    assert expected_entries(tmp_path, K8S_SUFFIXES) == [("q", "positive.json", 3)]
+
+
+def test_a_line_counts_only_for_a_check_its_negatives_do_not_fire() -> None:
+    # A Kubernetes finding spans its whole resource, so any finding "covers"
+    # most expected lines. A check that also fires on the query's fixed
+    # samples is about the resource, not about this query.
+    found = [("KSV-0011", 1, 20), ("KSV-0106", 1, 20)]
+    assert delta_hits([5], found, negative_rules={"KSV-0011", "KSV-0106"}) == {5: []}
+    assert delta_hits([5], found, negative_rules={"KSV-0106"}) == {5: ["KSV-0011"]}
+    assert delta_hits([25], found, negative_rules=set()) == {25: []}
+
+
 # --- the floor, through jmo scan ------------------------------------------------
 
 
 @pytest.fixture(scope="module")
-def dockerfile_queries() -> Path:
-    """The pinned Dockerfile half of the key; skips when it is not fetched and
-    fails when what is there is not the pin."""
+def kics_queries() -> Path:
+    """The pinned key, both halves; skips when it is not fetched and fails when
+    what is there is not the pin."""
     root = keys.kics_dir()
     for rel, expected in keys.KICS_FILES.items():
         path = root / rel
@@ -161,7 +203,17 @@ def dockerfile_queries() -> Path:
                 f"run `{FETCH_COMMAND}`",
                 pytrace=False,
             )
-    return root / "assets" / "queries" / "dockerfile"
+    return root / "assets" / "queries"
+
+
+@pytest.fixture(scope="module")
+def dockerfile_queries(kics_queries) -> Path:
+    return kics_queries / "dockerfile"
+
+
+@pytest.fixture(scope="module")
+def kubernetes_queries(kics_queries) -> Path:
+    return kics_queries / "k8s"
 
 
 def _covered(found: list[tuple[str, int, int]], line: int) -> list[str]:
@@ -292,3 +344,126 @@ def test_kics_dockerfile_lines_are_a_floor_through_jmo_scan(
         f"{len(lost)} line(s) hit before are missed now: {lost} (recorded with "
         f"{recorded.get('versions')}, now {measured['versions']})"
     )
+
+
+def _stage(queries: Path, kind: str, stage: Path) -> list[str]:
+    """Each `kind` (positive, negative) sample as a target of its own; the
+    targets' names, sorted."""
+    staged = []
+    for sample in sorted(queries.glob(f"*/test/{kind}*")):
+        if sample.name == EXPECTED or not sample.name.endswith(K8S_SUFFIXES):
+            continue
+        target = stage / target_of(sample.parent.parent.name, sample.name)
+        target.mkdir(parents=True)
+        (target / f"manifest{sample.suffix}").write_bytes(sample.read_bytes())
+        staged.append(target.name)
+    return sorted(staged)
+
+
+def _trivy_by_target(jmo_runner, stage: Path, results: Path) -> dict[str, list]:
+    run = jmo_runner(
+        [
+            "scan",
+            "--repos-dir",
+            str(stage),
+            "--tools",
+            "trivy",
+            "--results-dir",
+            str(results),
+            "--no-store-history",
+        ],
+        timeout=1500,
+    )
+    assert run.returncode == 0, run.stderr[-2000:]
+    found = {}
+    for out in sorted((results / "individual-repos").iterdir()):
+        rows = json.loads((out / "scan-timings.json").read_bytes())["tools"]
+        assert all(r["state"] == "ran" for r in rows), (out.name, rows)
+        found[out.name] = [
+            (f.ruleId, *span[1:])
+            for f in TrivyAdapter().parse(out / "trivy.json")
+            for span in _spans([("trivy", f.location)])
+        ]
+    return found
+
+
+@pytest.mark.requires_tools
+@pytest.mark.timeout(1800)
+def test_kics_kubernetes_lines_are_a_floor_through_jmo_scan(
+    kubernetes_queries, jmo_runner, tmp_path
+) -> None:
+    """Measured first (F6b, 2026-11-05, 25 queries through --k8s-manifest): a
+    line at a finding's start, checkov 0 and trivy 2 of 39; a line inside a
+    finding's span, 35 and 22, since a finding spans its whole resource
+    (positives carried 52 findings each, negatives 44). A check absent from the
+    query's negatives tells the query's issue from the resource: 12 and 9, and
+    read against the query names they are its checks (cpu_limits_not_set:
+    CKV_K8S_11 and KSV-0011). checkov reads no manifest on a repository scan,
+    and grading it would be one `--k8s-manifest` scan per sample, 533; trivy
+    reads them all in two repository scans."""
+    if not scanner_installed("trivy"):
+        pytest.skip("trivy is not installed")
+    entries = expected_entries(kubernetes_queries, K8S_SUFFIXES)
+    lines = sorted(set(entries))
+    staged = {
+        kind: _stage(kubernetes_queries, kind, tmp_path / kind)
+        for kind in ("positive", "negative")
+    }
+    positives = _trivy_by_target(jmo_runner, tmp_path / "positive", tmp_path / "rp")
+    negatives = _trivy_by_target(jmo_runner, tmp_path / "negative", tmp_path / "rn")
+    # A negative that went unscanned would leave its query's checks unsubtracted
+    # and the floor easier to meet, silently.
+    assert sorted(positives) == staged["positive"], "a positive sample was not scanned"
+    assert sorted(negatives) == staged["negative"], "a negative sample was not scanned"
+    assert (len(staged["positive"]), len(staged["negative"])) == (271, 262)
+    negative_rules: dict[str, set[str]] = {}
+    for target, found in negatives.items():
+        negative_rules.setdefault(target.split("--")[0], set()).update(
+            r for r, _, _ in found
+        )
+
+    hit: dict[str, list[str]] = {}
+    spanned = 0
+    for query, file, number in lines:
+        found = positives[target_of(query, file)]
+        checks = delta_hits([number], found, negative_rules.get(query, set()))[number]
+        hit[label((query, file, number))] = ["trivy"] if checks else []
+        spanned += any(start <= number <= end for _, start, end in found)
+    distinct_hit = sum(bool(tools) for tools in hit.values())
+    measured = {
+        "source": {
+            "repository": "Checkmarx/kics",
+            "commit": keys.KICS_COMMIT,
+            "path": "assets/queries/k8s",
+        },
+        "tools": ["trivy"],
+        "counted": (
+            "one target per positive and per negative sample; one jmo scan "
+            "--tools trivy of each set; a line is hit when a trivy finding in its "
+            "positive's output, parsed by JMo's adapter, spans it (startLine.."
+            "endLine) and that check fires on none of the query's negatives"
+        ),
+        "entries": len(entries),
+        "entries_hit": sum(bool(hit[label(e)]) for e in entries),
+        "distinct": len(lines),
+        "distinct_hit": distinct_hit,
+        "distinct_spanned_by_any_finding": spanned,
+        "lines": hit,
+    }
+
+    if os.environ.get(K8S_RECORD):
+        K8S_BASELINE.write_bytes((json.dumps(measured, indent=2) + "\n").encode())
+        pytest.skip(
+            f"recorded {K8S_BASELINE.name}: {distinct_hit} of {len(lines)} lines"
+        )
+
+    recorded = json.loads(K8S_BASELINE.read_bytes())
+    assert recorded["source"]["commit"] == keys.KICS_COMMIT, "baseline of another key"
+    assert set(recorded["lines"]) == set(hit), (
+        "the key's lines are not the recorded ones"
+    )
+    lost = sorted(k for k, tools in recorded["lines"].items() if tools and not hit[k])
+    gained = sorted(k for k, tools in hit.items() if tools and not recorded["lines"][k])
+    if gained:
+        print(f"newly hit ({len(gained)}), record them with {K8S_RECORD}=1:", *gained)
+    assert not lost, f"{len(lost)} line(s) hit before are missed now: {lost}"

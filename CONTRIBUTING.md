@@ -1301,8 +1301,10 @@ The importer does the rest: severity from `security-severity`, then a `severity`
 then SARIF's `warning` default; `file:` URIs decoded to plain paths so the report phase
 can root-strip them; rule metadata by `ruleIndex` or `ruleId`; the canonical fingerprint.
 Add `tests/adapters/test_<tool>_adapter.py` asserting the file registers under its stem
-through `PluginLoader`, and, when you have a real document, a golden fixture under
-`tests/fixtures/golden/<tool>/v<version>/`.
+through `PluginLoader`. A tool in `TOOL_MATRIX` also needs a `CAPTURES` entry in
+`scripts/dev/generate_golden.py` and a golden fixture it captures under
+`tests/fixtures/golden/<adapter>/v<version>/` (the adapter name: `osv_scanner` for
+`osv-scanner`); `tests/adapters/test_adapter_golden.py` fails without one.
 
 Two things the shape depends on:
 

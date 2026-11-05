@@ -1,0 +1,57 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "07a3a19b93998e95",
+    "ruleId": "PrivateKey",
+    "severity": "HIGH",
+    "tool": {
+      "name": "trufflehog",
+      "version": "3.99.7"
+    },
+    "location": {
+      "path": "/golden/target/deploy.pem",
+      "startLine": 1
+    },
+    "message": "PrivateKey secret detected",
+    "title": "PrivateKey secret",
+    "description": "Potential secret detected by TruffleHog",
+    "remediation": "Rotate credentials and purge from history.",
+    "references": [],
+    "tags": [
+      "secrets",
+      "unverified"
+    ],
+    "cvss": null,
+    "risk": {
+      "cwe": [
+        "CWE-798"
+      ],
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "DecoderName": "PLAIN",
+      "DetectorDescription": "Private keys are used for securely connecting and authenticating to various systems and services. Exposure of private keys can lead to unauthorized access and data breaches.",
+      "DetectorName": "PrivateKey",
+      "DetectorType": 15,
+      "SourceID": 1,
+      "SourceMetadata": {
+        "Data": {
+          "Filesystem": {
+            "file": "/golden/target/deploy.pem",
+            "line": 1
+          }
+        }
+      },
+      "SourceName": "trufflehog - filesystem",
+      "SourceType": 15,
+      "VerificationFromCache": false,
+      "Verified": false
+    }
+  }
+]

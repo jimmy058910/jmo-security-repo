@@ -1,0 +1,265 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "jmo-native",
+          "version": "1.1.1",
+          "rules": [
+            {
+              "id": "jmo.nextjs.public-env-holds-server-secret",
+              "shortDescription": {
+                "text": "Public env var name suggests a server secret"
+              },
+              "fullDescription": {
+                "text": "A NEXT_PUBLIC_ / VITE_ prefixed variable is inlined into the browser bundle; a name like $NAME suggests a server-side secret."
+              },
+              "help": {
+                "text": "Rename the variable without the public prefix and read the real value only on the server."
+              },
+              "properties": {
+                "jmo-native/severity": "HIGH",
+                "cwe": "CWE-540"
+              }
+            },
+            {
+              "id": "jmo.supabase.service-role-key-in-client-code",
+              "shortDescription": {
+                "text": "service_role key referenced from client-side code"
+              },
+              "fullDescription": {
+                "text": "The Supabase service_role key bypasses Row Level Security and must never be referenced from code that ships to the browser."
+              },
+              "help": {
+                "text": "Move this reference into server-only code: an API route, a server action, or a Supabase Edge Function."
+              },
+              "properties": {
+                "jmo-native/severity": "HIGH",
+                "cwe": "CWE-284"
+              }
+            },
+            {
+              "id": "jmo.ai.llm-api-key-in-browser-code",
+              "shortDescription": {
+                "text": "LLM client exposes its API key to the browser"
+              },
+              "fullDescription": {
+                "text": "An LLM provider client is constructed with dangerouslyAllowBrowser, which ships the API key to every visitor."
+              },
+              "help": {
+                "text": "Remove dangerouslyAllowBrowser and call the LLM provider from a server route instead."
+              },
+              "properties": {
+                "jmo-native/severity": "HIGH",
+                "cwe": "CWE-798"
+              }
+            },
+            {
+              "id": "jmo.supabase.table-without-rls",
+              "shortDescription": {
+                "text": "Public table has no Row Level Security"
+              },
+              "fullDescription": {
+                "text": "A public-schema table has no Row Level Security policy enabled, so Supabase's PostgREST API exposes every row to any caller holding the anon key."
+              },
+              "help": {
+                "text": "Run `alter table <name> enable row level security;` and add at least one policy."
+              },
+              "properties": {
+                "jmo-native/severity": "HIGH",
+                "cwe": "CWE-862"
+              }
+            },
+            {
+              "id": "jmo.supabase.rls-without-policy",
+              "shortDescription": {
+                "text": "Row Level Security enabled with no policy"
+              },
+              "fullDescription": {
+                "text": "Row Level Security is enabled with no policy defined, which locks the table to every caller, including the application itself; this is often a mistake rather than an intentional lockdown."
+              },
+              "help": {
+                "text": "Add a policy with `create policy ... on <table> ...`, or confirm the lockdown is intentional."
+              },
+              "properties": {
+                "jmo-native/severity": "LOW"
+              }
+            },
+            {
+              "id": "jmo.firebase.rules-open",
+              "shortDescription": {
+                "text": "Firebase rule allows unconditional access"
+              },
+              "fullDescription": {
+                "text": "A Firebase security rule grants read and/or write access unconditionally (`if true`, or no condition at all), exposing the resource to any client."
+              },
+              "help": {
+                "text": "Replace the open rule with an authorization check such as `if request.auth != null`."
+              },
+              "properties": {
+                "jmo-native/severity": "HIGH",
+                "cwe": "CWE-862"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "jmo.nextjs.public-env-holds-server-secret",
+          "message": {
+            "text": "NEXT_PUBLIC_STRIPE_SECRET_KEY is a public-prefixed name inlined into the client bundle"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".env.example"
+                },
+                "region": {
+                  "startLine": 4,
+                  "startColumn": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "jmo.nextjs.public-env-holds-server-secret",
+          "message": {
+            "text": "NEXT_PUBLIC_OPENAI_API_KEY is a public-prefixed name inlined into the client bundle"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/dashboard/chat.tsx"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 23
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "jmo.ai.llm-api-key-in-browser-code",
+          "message": {
+            "text": "an LLM client is constructed with dangerouslyAllowBrowser: true"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/dashboard/chat.tsx"
+                },
+                "region": {
+                  "startLine": 7,
+                  "startColumn": 3
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "jmo.firebase.rules-open",
+          "message": {
+            "text": "firestore.rules allows unconditional read/write access (`if true`)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "firestore.rules"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 7
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "jmo.supabase.service-role-key-in-client-code",
+          "message": {
+            "text": "the Supabase service_role key is referenced from client-side code"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib/supabase.ts"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 3
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "jmo.supabase.table-without-rls",
+          "message": {
+            "text": "table \"orders\" has no Row Level Security enabled"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "supabase/migrations/20260101000000_init.sql"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "jmo.supabase.rls-without-policy",
+          "message": {
+            "text": "table \"messages\" has Row Level Security enabled but no policy"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "supabase/migrations/20260101000000_init.sql"
+                },
+                "region": {
+                  "startLine": 8,
+                  "startColumn": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "jmo.supabase.table-without-rls",
+          "message": {
+            "text": "table \"notes\" has no Row Level Security enabled"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "supabase/migrations/20260101000000_init.sql"
+                },
+                "region": {
+                  "startLine": 12,
+                  "startColumn": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

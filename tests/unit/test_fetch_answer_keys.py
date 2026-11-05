@@ -43,6 +43,37 @@ GOOD_KICS = {
 }
 
 
+def _zip(entries: dict[str, bytes]) -> bytes:
+    """A zip holding `entries` by these exact names: BenchProctor's bundles
+    were made on Windows, so theirs hold backslashes."""
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        for name, data in entries.items():
+            z.writestr(zipfile.ZipInfo(name), data)
+    return buffer.getvalue()
+
+
+BUNDLE = (
+    "Benchmarks/quicktest/typescript/benchproctor-typescript-quicktest-2026.07.22.zip"
+)
+GOOD_BENCHPROCTOR = {
+    BUNDLE: _zip(
+        {
+            "score_sarif.py": b"print('scored')\n",
+            "express_ts\\expectedresults-2026.07.22.csv": b"BenchmarkTest00001,x,true,78\n",
+            "express_ts\\testcode\\benchmark_test_00001.ts": b"exec(x)\n",
+        }
+    )
+}
+
+GOOD_ZIZMOR = {
+    "crates/zizmor/tests/integration/audit/artipacked.rs": b"// tests\n",
+    "crates/zizmor/tests/integration/test-data/artipacked.yml": b"on: push\n",
+}
+
+
 @pytest.fixture
 def keys_dir(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "keys"
@@ -62,10 +93,22 @@ def served(monkeypatch) -> list[str]:
         fak, "VIBEPROOF_FILES", {p: _sha(d) for p, d in GOOD_VIBEPROOF.items()}
     )
     monkeypatch.setattr(fak, "KICS_FILES", {p: _sha(d) for p, d in GOOD_KICS.items()})
+    monkeypatch.setattr(
+        fak, "ZIZMOR_FILES", {p: _sha(d) for p, d in GOOD_ZIZMOR.items()}
+    )
+    monkeypatch.setattr(
+        fak, "BENCHPROCTOR_FILES", {p: _sha(d) for p, d in GOOD_BENCHPROCTOR.items()}
+    )
 
     def download(url: str) -> bytes:
         asked.append(url)
-        for path, data in {**GOOD, **GOOD_VIBEPROOF, **GOOD_KICS}.items():
+        for path, data in {
+            **GOOD,
+            **GOOD_VIBEPROOF,
+            **GOOD_KICS,
+            **GOOD_ZIZMOR,
+            **GOOD_BENCHPROCTOR,
+        }.items():
             if url.endswith("/" + path):
                 return data
         raise OSError(f"no such file: {url}")
@@ -436,22 +479,128 @@ def test_each_kics_file_is_asked_for_by_the_pinned_commit(keys_dir, served) -> N
 
 def test_the_kics_pins_are_every_dockerfile_query_and_its_samples() -> None:
     """KICS v2.2.0's 48 Dockerfile queries: each one's expected lines and its
-    positive samples, 133 of them, and nothing else (measured 2026-11-04)."""
+    positive samples, 133 of them (measured 2026-11-04); and its 142
+    Kubernetes queries: each one's expected lines, its 271 positive samples
+    and its 262 negative ones (measured 2026-11-05). Nothing else."""
     assert re.fullmatch(r"[0-9a-f]{40}", fak.KICS_COMMIT)
-    shape = re.compile(
+    dockerfile = re.compile(
         r"assets/queries/dockerfile/[a-z0-9_]+/test/"
         r"(positive\d*\.dockerfile|positive_expected_result\.json)"
+    )
+    kubernetes = re.compile(
+        r"assets/queries/k8s/[a-z0-9_]+/test/"
+        r"((positive|negative)\d*\.(yaml|json)|positive_expected_result\.json)"
     )
     for path, digest in fak.KICS_FILES.items():
         assert re.fullmatch(r"[0-9a-f]{64}", digest), path
         assert fak.relative_path_problem(path) is None, path
-        assert shape.fullmatch(path), path
-    expected = {p.rsplit("/", 2)[0] for p in fak.KICS_FILES if p.endswith(".json")}
-    samples = {p.rsplit("/", 2)[0] for p in fak.KICS_FILES if p.endswith(".dockerfile")}
-    assert len(expected) == 48
-    assert expected == samples, "a query with expected lines and no sample, or both"
-    assert sum(p.endswith(".dockerfile") for p in fak.KICS_FILES) == 133
+        assert dockerfile.fullmatch(path) or kubernetes.fullmatch(path), path
+    for kind, queries, samples in (("dockerfile", 48, 133), ("k8s", 142, 271)):
+        half = [p for p in fak.KICS_FILES if p.startswith(f"assets/queries/{kind}/")]
+        expected = {p.rsplit("/", 2)[0] for p in half if p.endswith("_result.json")}
+        positives = [p for p in half if "/test/positive" in p and "expected" not in p]
+        assert len(expected) == queries, kind
+        assert {p.rsplit("/", 2)[0] for p in positives} == expected, kind
+        assert len(positives) == samples, kind
+    assert sum("/test/negative" in p for p in fak.KICS_FILES) == 262
 
 
 def test_kics_is_registered_under_the_name_the_command_takes() -> None:
     assert fak.KEYS["kics"] is fak.kics
+
+
+# --- the zizmor key --------------------------------------------------------------
+
+
+def test_the_zizmor_key_lands_under_its_name_and_its_commit(keys_dir, served) -> None:
+    assert fak.zizmor_dir() == keys_dir / "zizmor" / fak.ZIZMOR_COMMIT
+
+    assert fak.zizmor() == []
+
+    for path, data in GOOD_ZIZMOR.items():
+        assert (fak.zizmor_dir() / path).read_bytes() == data
+
+
+def test_each_zizmor_file_is_asked_for_by_the_pinned_commit(keys_dir, served) -> None:
+    fak.zizmor()
+
+    assert sorted(served) == sorted(
+        f"https://raw.githubusercontent.com/zizmorcore/zizmor/{fak.ZIZMOR_COMMIT}/{path}"
+        for path in GOOD_ZIZMOR
+    )
+
+
+def test_the_zizmor_pins_are_its_audit_tests_and_their_inputs() -> None:
+    """zizmor v1.31.1: the 28 audit test files holding a test run as JMo runs
+    zizmor, and the 72 inputs those tests name (measured 2026-11-05)."""
+    assert re.fullmatch(r"[0-9a-f]{40}", fak.ZIZMOR_COMMIT)
+    prefix = "crates/zizmor/tests/integration/"
+    for path, digest in fak.ZIZMOR_FILES.items():
+        assert re.fullmatch(r"[0-9a-f]{64}", digest), path
+        assert fak.relative_path_problem(path) is None, path
+        assert path.startswith((prefix + "audit/", prefix + "test-data/")), path
+    assert sum(p.endswith(".rs") for p in fak.ZIZMOR_FILES) == 28
+    assert sum("/test-data/" in p for p in fak.ZIZMOR_FILES) == 72
+
+
+def test_zizmor_is_registered_under_the_name_the_command_takes() -> None:
+    assert fak.KEYS["zizmor"] is fak.zizmor
+
+
+# --- the benchproctor key --------------------------------------------------------
+
+
+def test_a_bundle_lands_pinned_and_extracted_with_its_separators_read(
+    keys_dir, served
+) -> None:
+    assert fak.benchproctor() == []
+
+    root = fak.benchproctor_dir()
+    assert root == keys_dir / "benchproctor" / fak.BENCHPROCTOR_COMMIT
+    assert (root / BUNDLE).read_bytes() == GOOD_BENCHPROCTOR[BUNDLE]
+    bundle = fak.benchproctor_bundle("typescript")
+    assert (bundle / "express_ts" / "testcode" / "benchmark_test_00001.ts").is_file()
+    assert (bundle / "score_sarif.py").is_file()
+    assert served == [
+        "https://raw.githubusercontent.com/TheAuditorTool/BenchProctor/"
+        f"{fak.BENCHPROCTOR_COMMIT}/{BUNDLE}"
+    ]
+
+
+def test_a_bundle_already_extracted_is_not_extracted_again(keys_dir, served) -> None:
+    fak.benchproctor()
+    marker = fak.benchproctor_bundle("typescript") / "score_sarif.py"
+    marker.write_bytes(b"left alone")
+
+    assert fak.benchproctor() == []
+    assert marker.read_bytes() == b"left alone"
+
+
+@pytest.mark.parametrize("name", ["..\\x.ts", "a/../../x.ts", "/abs/x.ts", "C:\\x.ts"])
+def test_a_bundle_with_an_entry_outside_its_directory_is_refused_whole(
+    keys_dir, monkeypatch, tmp_path, name
+) -> None:
+    bad = _zip({"score_sarif.py": b"x\n", name: b"planted\n"})
+    monkeypatch.setattr(fak, "BENCHPROCTOR_FILES", {BUNDLE: _sha(bad)})
+    monkeypatch.setattr(fak, "download", lambda url: bad)
+
+    (problem,) = fak.benchproctor()
+
+    assert "refused" in problem
+    assert not fak.benchproctor_bundle("typescript").exists()
+    assert not any(p.name == "x.ts" for p in tmp_path.rglob("*"))
+
+
+def test_the_benchproctor_pins_are_the_two_quicktest_bundles() -> None:
+    """TypeScript and JavaScript, 2026.07.22 (its releases halted, so the pin
+    cannot move): 6,571,432 and 5,726,494 bytes, measured 2026-10-29."""
+    assert re.fullmatch(r"[0-9a-f]{40}", fak.BENCHPROCTOR_COMMIT)
+    assert sorted(fak.BENCHPROCTOR_FILES) == sorted(
+        f"Benchmarks/quicktest/{lang}/benchproctor-{lang}-quicktest-2026.07.22.zip"
+        for lang in ("javascript", "typescript")
+    )
+    assert fak.BENCHPROCTOR_FILES[BUNDLE].startswith("80f417b0d7aa")
+
+
+def test_benchproctor_is_registered_under_the_name_the_command_takes() -> None:
+    assert fak.KEYS["benchproctor"] is fak.benchproctor

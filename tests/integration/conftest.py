@@ -3,7 +3,6 @@
 Shared pytest fixtures for integration tests.
 
 This module provides fixtures used across integration tests, including:
-- juice_shop_fixture: Path to the juice-shop minimal test fixture
 - short_tmp_path: Shorter temp path for Windows MAX_PATH avoidance
 - Various setup and teardown helpers
 """
@@ -19,7 +18,6 @@ import pytest
 
 # Path to fixtures
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-JUICE_SHOP_FIXTURE = PROJECT_ROOT / "tests" / "integration" / "juice_shop_fixture"
 BASELINES_DIR = PROJECT_ROOT / "tests" / "integration" / "baselines"
 SAMPLES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "samples"
 
@@ -43,45 +41,6 @@ def short_tmp_path(tmp_path: Path):
     short_dir = Path(tempfile.mkdtemp(prefix="jmo-", dir=short_base))
     yield short_dir
     shutil.rmtree(short_dir, ignore_errors=True)
-
-
-@pytest.fixture
-def juice_shop_fixture() -> Path:
-    """
-    Provide path to juice-shop minimal fixture directory.
-
-    This fixture provides a lightweight (~5MB) subset of the OWASP Juice Shop
-    application for smoke testing security tools. It contains intentionally
-    vulnerable code patterns for testing tool detection capabilities.
-
-    The fixture includes:
-    - package.json/package-lock.json: Known vulnerable npm dependencies
-    - Dockerfile: Dockerfile linting targets
-    - lib/insecurity.ts: SQL injection, weak crypto, hardcoded secrets
-    - routes/*.ts: Authentication bypass, path traversal, IDOR
-    - config/default.ts: Hardcoded API keys and credentials
-    - frontend/src/app/: XSS vulnerabilities
-    - vulnerable.sh: Shell script issues
-    - k8s-deployment.yaml: Kubernetes misconfigurations
-    - terraform/main.tf: AWS/IaC misconfigurations
-
-    Returns:
-        Path to the juice_shop_fixture directory
-
-    Raises:
-        pytest.skip: If the fixture directory doesn't exist
-
-    Example:
-        def test_semgrep_finds_sql_injection(juice_shop_fixture):
-            result = run_semgrep(juice_shop_fixture)
-            assert "sql-injection" in result
-    """
-    if not JUICE_SHOP_FIXTURE.exists():
-        pytest.skip(
-            f"juice_shop_fixture directory not found at {JUICE_SHOP_FIXTURE}. "
-            f"This fixture should be committed to the repository."
-        )
-    return JUICE_SHOP_FIXTURE
 
 
 @pytest.fixture
