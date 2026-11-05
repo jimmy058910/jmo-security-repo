@@ -152,7 +152,7 @@ flag. Two with the same folder name (`alice/app` and `bob/app`, a common case wi
 | `--config FILE` | Config file (default: `jmo.yml`) |
 | `--tools TOOL [TOOL ...]` | Override tools list from config (default: the [tool matrix](TOOLS.md#the-tool-matrix)). `--tools trivy opengrep` and `--tools trivy,opengrep` are the same. A name that is not in the matrix is a usage error (exit 2) naming it, and a tool removed in v2.0.0 says so |
 | `--skip-tools TOOL [TOOL ...]` | Remove tools from the list (same splitting and checking) |
-| `--timeout SECS` | Per-tool timeout in seconds (default: 600) |
+| `--timeout SECS` | Per-tool timeout in seconds (default: `jmo.yml`'s `timeout`, else 600). Given here, it also wins over a tool's minimum (opengrep and zap: 900 s), where `jmo.yml`'s cannot lower one; a `per_tool.<tool>.timeout` wins over both |
 | `--threads N` | Concurrent repos to scan (default: auto) |
 | `--allow-missing-tools` | Skip missing tools instead of failing (creates empty JSON) |
 

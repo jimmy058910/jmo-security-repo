@@ -1361,3 +1361,42 @@ class TestDiscoveryHandsEachJobWhatItCanScan:
 
         assert rc == 1, "every target refused: not a clean scan of a linkless page"
         assert not (env.results / "individual-web").exists()
+
+
+class TestAnExplicitTimeoutWinsOverAFloor:
+    """`jmo scan --timeout N` could not take opengrep or zap below their 900 s
+    floors, and its help did not say so (#1486). Decided 2026-11-05: a timeout
+    given on the command line wins over a floor, as `per_tool.<tool>.timeout`
+    already did; `jmo.yml`'s `timeout` does not, and a `per_tool` value still
+    wins over the command line."""
+
+    def _timeouts(self, env, monkeypatch, *argv: str, config: dict | None = None):
+        seen: dict[str, int] = {}
+
+        class Recording(_WritingRunner):
+            def run_all_parallel(self):
+                for d in self._definitions:
+                    seen[d.name] = d.timeout
+                return super().run_all_parallel()
+
+        for module in JOB_MODULES:
+            monkeypatch.setattr(f"scripts.cli.scan_jobs.{module}.ToolRunner", Recording)
+        if config is not None:
+            (env.results.parent / "jmo.yml").write_bytes(
+                yaml.safe_dump({"outputs": ["json"], **config}).encode()
+            )
+        env.run("--repo", str(env.project), "--tools", "opengrep", "trivy", *argv)
+        return seen
+
+    def test_the_command_lines_timeout_lowers_the_floor(self, env, monkeypatch):
+        seen = self._timeouts(env, monkeypatch, "--timeout", "60")
+        assert seen == {"opengrep": 60, "trivy": 60}
+
+    def test_the_configs_timeout_does_not(self, env, monkeypatch):
+        seen = self._timeouts(env, monkeypatch, config={"timeout": 60})
+        assert seen == {"opengrep": 900, "trivy": 60}
+
+    def test_a_per_tool_timeout_still_wins(self, env, monkeypatch):
+        config = {"per_tool": {"opengrep": {"timeout": 120}}}
+        seen = self._timeouts(env, monkeypatch, "--timeout", "60", config=config)
+        assert seen == {"opengrep": 120, "trivy": 60}

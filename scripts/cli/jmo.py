@@ -285,7 +285,9 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
         "--timeout",
         type=int,
         default=None,
-        help="Per-tool timeout seconds (default: from config or 600)",
+        help="Per-tool timeout in seconds (default: jmo.yml's, else 600). Given "
+        "here, it also wins over a tool's minimum (opengrep and zap: 900 s); "
+        "jmo.yml's does not, and per_tool.<tool>.timeout wins over both",
     )
     parser.add_argument(
         "--threads",
@@ -3298,8 +3300,13 @@ def cmd_scan(args) -> int:
     # Setup results directories for each target type
     orchestrator.setup_results_directories(targets)
 
-    # Prepare per-tool config
-    per_tool_config = eff.get("per_tool", {}) or {}
+    # Prepare per-tool config. A `--timeout` given here wins over a tool's
+    # floor (#1486); `jmo.yml`'s does not.
+    from scripts.cli.scan_utils import cli_timeout_over_floors
+
+    per_tool_config = cli_timeout_over_floors(
+        eff.get("per_tool", {}) or {}, tools, getattr(args, "timeout", None)
+    )
 
     # --- Session checkpointing ---
     from scripts.cli.scan_jobs.iac_scanner import iac_target_name

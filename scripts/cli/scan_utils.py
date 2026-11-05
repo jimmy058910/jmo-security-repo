@@ -310,8 +310,9 @@ TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
     )
 }
 
-# Per-tool minimum timeouts (seconds). A configured default may raise these but
-# never lower them; an explicit `per_tool.<tool>.timeout` wins outright. One
+# Per-tool minimum timeouts (seconds). `jmo.yml`'s `timeout` may raise these but
+# never lower them; `--timeout` on the command line (`cli_timeout_over_floors`)
+# and an explicit `per_tool.<tool>.timeout` win outright. One
 # definition for every target type: when each scanner had its own copy, zap got
 # its 900 s floor on a repository and the 600 s default on a URL.
 TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
@@ -335,6 +336,30 @@ def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) ->
         if isinstance(override, int) and override > 0:
             return override
     return max(default, TOOL_TIMEOUT_DEFAULTS.get(tool, 0))
+
+
+def cli_timeout_over_floors(
+    per_tool_config: Mapping[str, Any], tools: list[str], cli_timeout: int | None
+) -> dict[str, Any]:
+    """`per_tool_config`, with a timeout given on the command line written in
+    as `per_tool.<tool>.timeout` for each tool with a floor (opengrep and zap,
+    900 s), so it wins over the floor as that setting does (#1486). Decided
+    2026-11-05. A tool whose own `per_tool` timeout is set keeps it; `jmo.yml`'s
+    `timeout` is not passed here, so it still meets the floor."""
+    merged = dict(per_tool_config)
+    if not cli_timeout or cli_timeout <= 0:
+        return merged
+    for tool in tools:
+        if tool not in TOOL_TIMEOUT_DEFAULTS:
+            continue
+        cfg = merged.get(tool)
+        cfg = dict(cfg) if isinstance(cfg, dict) else {}
+        own = cfg.get("timeout")
+        if isinstance(own, int) and own > 0:
+            continue
+        cfg["timeout"] = cli_timeout
+        merged[tool] = cfg
+    return merged
 
 
 def tool_flags(
