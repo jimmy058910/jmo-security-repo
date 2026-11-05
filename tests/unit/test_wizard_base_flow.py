@@ -1,7 +1,7 @@
 """Unit tests for base wizard flow classes and utilities.
 
 Tests cover:
-- TargetDetector detection methods (repos, images, IaC, web apps, packages, locks)
+- TargetDetector.detect_repos
 - PromptHelper colored output and prompting
 
 Architecture Note:
@@ -45,314 +45,6 @@ def test_detect_repos_nonexistent_directory():
     detector = TargetDetector()
     repos = detector.detect_repos(Path("/nonexistent"))
     assert len(repos) == 0
-
-
-def test_detect_images_from_docker_compose(tmp_path):
-    """Test detect_images finds images from docker-compose.yml."""
-    detector = TargetDetector()
-
-    compose_content = """
-services:
-  web:
-    image: nginx:latest
-  db:
-    image: postgres:14
-"""
-    (tmp_path / "docker-compose.yml").write_text(compose_content)
-
-    images = detector.detect_images(tmp_path)
-
-    assert "nginx:latest" in images
-    assert "postgres:14" in images
-
-
-def test_detect_images_from_dockerfile(tmp_path):
-    """Test detect_images finds base images from Dockerfile."""
-    detector = TargetDetector()
-
-    dockerfile_content = """
-FROM python:3.11-slim
-FROM node:18-alpine AS builder
-"""
-    (tmp_path / "Dockerfile").write_text(dockerfile_content)
-
-    images = detector.detect_images(tmp_path)
-
-    assert "python:3.11-slim" in images
-    assert "node:18-alpine" in images
-
-
-def test_detect_images_deduplication(tmp_path):
-    """Test detect_images deduplicates images."""
-    detector = TargetDetector()
-
-    (tmp_path / "Dockerfile").write_text("FROM nginx:latest\nFROM nginx:latest")
-    (tmp_path / "docker-compose.yml").write_text(
-        "services:\n  web:\n    image: nginx:latest"
-    )
-
-    images = detector.detect_images(tmp_path)
-
-    assert images.count("nginx:latest") == 1
-
-
-def test_detect_images_no_images(tmp_path):
-    """Test detect_images with no images found."""
-    detector = TargetDetector()
-    images = detector.detect_images(tmp_path)
-    assert len(images) == 0
-
-
-def test_detect_images_invalid_compose(tmp_path):
-    """Test detect_images handles invalid docker-compose.yml gracefully."""
-    detector = TargetDetector()
-    (tmp_path / "docker-compose.yml").write_text("invalid: yaml: content:")
-
-    images = detector.detect_images(tmp_path)
-
-    assert len(images) == 0
-
-
-def test_detect_iac_terraform(tmp_path):
-    """Test detect_iac finds Terraform files."""
-    detector = TargetDetector()
-
-    (tmp_path / "main.tf").touch()
-    (tmp_path / "terraform.tfstate").touch()
-
-    iac_files = detector.detect_iac(tmp_path)
-
-    assert any("main.tf" in str(f) for f in iac_files)
-    assert any("terraform.tfstate" in str(f) for f in iac_files)
-
-
-def test_detect_iac_cloudformation(tmp_path):
-    """Test detect_iac finds CloudFormation files."""
-    detector = TargetDetector()
-
-    (tmp_path / "cloudformation-stack.yml").touch()
-    (tmp_path / "another-cloudformation.yaml").touch()
-
-    iac_files = detector.detect_iac(tmp_path)
-
-    assert any("cloudformation-stack.yml" in str(f) for f in iac_files)
-    assert any("another-cloudformation.yaml" in str(f) for f in iac_files)
-
-
-def test_detect_iac_kubernetes(tmp_path):
-    """Test detect_iac finds Kubernetes manifests."""
-    detector = TargetDetector()
-
-    (tmp_path / "k8s").mkdir()
-    (tmp_path / "k8s" / "deployment.yml").touch()
-    (tmp_path / "kubernetes").mkdir()
-    (tmp_path / "kubernetes" / "service.yml").touch()
-
-    iac_files = detector.detect_iac(tmp_path)
-
-    assert any("deployment.yml" in str(f) for f in iac_files)
-    assert any("service.yml" in str(f) for f in iac_files)
-
-
-def test_detect_iac_no_iac_files(tmp_path):
-    """Test detect_iac with no IaC files."""
-    detector = TargetDetector()
-    iac_files = detector.detect_iac(tmp_path)
-    assert len(iac_files) == 0
-
-
-def test_detect_web_apps_from_compose_ports(tmp_path):
-    """Test detect_web_apps infers URLs from docker-compose ports."""
-    detector = TargetDetector()
-
-    compose_content = """
-services:
-  web:
-    ports:
-      - "8080:80"
-      - "3000:3000"
-"""
-    (tmp_path / "docker-compose.yml").write_text(compose_content)
-
-    urls = detector.detect_web_apps(tmp_path)
-
-    assert "http://localhost:8080" in urls
-    assert "http://localhost:3000" in urls
-
-
-def test_detect_web_apps_from_package_json(tmp_path):
-    """Test detect_web_apps infers default port for React/Next.js."""
-    detector = TargetDetector()
-    (tmp_path / "package.json").write_text('{"name": "my-app"}')
-
-    urls = detector.detect_web_apps(tmp_path)
-
-    assert "http://localhost:3000" in urls
-
-
-def test_detect_web_apps_no_apps(tmp_path):
-    """Test detect_web_apps with no web apps."""
-    detector = TargetDetector()
-    urls = detector.detect_web_apps(tmp_path)
-    assert len(urls) == 0
-
-
-def test_detect_web_apps_invalid_compose(tmp_path):
-    """Test detect_web_apps handles invalid docker-compose.yml gracefully."""
-    detector = TargetDetector()
-    (tmp_path / "docker-compose.yml").write_text("invalid: yaml:")
-
-    urls = detector.detect_web_apps(tmp_path)
-
-    # Should not crash, may return empty list
-    assert isinstance(urls, list)
-
-
-def test_detect_package_files_python(tmp_path):
-    """Test detect_package_files finds Python package manifests."""
-    detector = TargetDetector()
-
-    (tmp_path / "requirements.txt").touch()
-    (tmp_path / "pyproject.toml").touch()
-    (tmp_path / "setup.py").touch()
-    (tmp_path / "Pipfile").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("requirements.txt" in str(f) for f in package_files)
-    assert any("pyproject.toml" in str(f) for f in package_files)
-    assert any("setup.py" in str(f) for f in package_files)
-    assert any("Pipfile" in str(f) for f in package_files)
-
-
-def test_detect_package_files_javascript(tmp_path):
-    """Test detect_package_files finds JavaScript package manifests."""
-    detector = TargetDetector()
-    (tmp_path / "package.json").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("package.json" in str(f) for f in package_files)
-
-
-def test_detect_package_files_go(tmp_path):
-    """Test detect_package_files finds Go modules."""
-    detector = TargetDetector()
-    (tmp_path / "go.mod").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("go.mod" in str(f) for f in package_files)
-
-
-def test_detect_package_files_rust(tmp_path):
-    """Test detect_package_files finds Rust manifests."""
-    detector = TargetDetector()
-    (tmp_path / "Cargo.toml").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("Cargo.toml" in str(f) for f in package_files)
-
-
-def test_detect_package_files_java_maven(tmp_path):
-    """Test detect_package_files finds Maven pom.xml."""
-    detector = TargetDetector()
-    (tmp_path / "pom.xml").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("pom.xml" in str(f) for f in package_files)
-
-
-def test_detect_package_files_java_gradle(tmp_path):
-    """Test detect_package_files finds Gradle build files."""
-    detector = TargetDetector()
-    (tmp_path / "build.gradle").touch()
-    (tmp_path / "build.gradle.kts").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("build.gradle" in str(f) for f in package_files)
-    assert any("build.gradle.kts" in str(f) for f in package_files)
-
-
-def test_detect_package_files_ruby(tmp_path):
-    """Test detect_package_files finds Ruby Gemfile."""
-    detector = TargetDetector()
-    (tmp_path / "Gemfile").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("Gemfile" in str(f) for f in package_files)
-
-
-def test_detect_package_files_dotnet(tmp_path):
-    """Test detect_package_files finds .NET csproj files."""
-    detector = TargetDetector()
-    (tmp_path / "MyApp.csproj").touch()
-
-    package_files = detector.detect_package_files(tmp_path)
-
-    assert any("MyApp.csproj" in str(f) for f in package_files)
-
-
-def test_detect_lock_files_python(tmp_path):
-    """Test detect_lock_files finds Python lock files."""
-    detector = TargetDetector()
-
-    (tmp_path / "poetry.lock").touch()
-    (tmp_path / "Pipfile.lock").touch()
-
-    lock_files = detector.detect_lock_files(tmp_path)
-
-    assert any("poetry.lock" in str(f) for f in lock_files)
-    assert any("Pipfile.lock" in str(f) for f in lock_files)
-
-
-def test_detect_lock_files_javascript(tmp_path):
-    """Test detect_lock_files finds JavaScript lock files."""
-    detector = TargetDetector()
-
-    (tmp_path / "package-lock.json").touch()
-    (tmp_path / "yarn.lock").touch()
-    (tmp_path / "pnpm-lock.yaml").touch()
-
-    lock_files = detector.detect_lock_files(tmp_path)
-
-    assert any("package-lock.json" in str(f) for f in lock_files)
-    assert any("yarn.lock" in str(f) for f in lock_files)
-    assert any("pnpm-lock.yaml" in str(f) for f in lock_files)
-
-
-def test_detect_lock_files_go(tmp_path):
-    """Test detect_lock_files finds Go lock files."""
-    detector = TargetDetector()
-    (tmp_path / "go.sum").touch()
-
-    lock_files = detector.detect_lock_files(tmp_path)
-
-    assert any("go.sum" in str(f) for f in lock_files)
-
-
-def test_detect_lock_files_rust(tmp_path):
-    """Test detect_lock_files finds Rust lock files."""
-    detector = TargetDetector()
-    (tmp_path / "Cargo.lock").touch()
-
-    lock_files = detector.detect_lock_files(tmp_path)
-
-    assert any("Cargo.lock" in str(f) for f in lock_files)
-
-
-def test_detect_lock_files_ruby(tmp_path):
-    """Test detect_lock_files finds Ruby lock files."""
-    detector = TargetDetector()
-    (tmp_path / "Gemfile.lock").touch()
-
-    lock_files = detector.detect_lock_files(tmp_path)
-
-    assert any("Gemfile.lock" in str(f) for f in lock_files)
 
 
 # ========== Category 2: PromptHelper ==========
@@ -406,55 +98,6 @@ def test_prompter_print_step(capsys):
     assert "Step 2/5" in captured.out
     assert "Running scan" in captured.out
     assert "40%" in captured.out
-
-
-def test_prompter_print_success(capsys):
-    """Test PromptHelper print_success outputs success message."""
-    prompter = PromptHelper()
-    prompter.print_success("Operation complete")
-
-    captured = capsys.readouterr()
-    assert "Operation complete" in captured.out
-
-
-def test_prompter_print_info(capsys):
-    """Test PromptHelper print_info outputs info message."""
-    prompter = PromptHelper()
-    prompter.print_info("Information")
-
-    captured = capsys.readouterr()
-    assert "Information" in captured.out
-
-
-def test_prompter_print_warning(capsys):
-    """Test PromptHelper print_warning outputs warning message."""
-    prompter = PromptHelper()
-    prompter.print_warning("Warning message")
-
-    captured = capsys.readouterr()
-    assert "Warning message" in captured.out
-
-
-def test_prompter_print_error(capsys):
-    """Test PromptHelper print_error outputs error message."""
-    prompter = PromptHelper()
-    prompter.print_error("Error occurred")
-
-    captured = capsys.readouterr()
-    assert "Error occurred" in captured.out
-
-
-def test_prompter_print_summary_box(capsys):
-    """Test PromptHelper print_summary_box outputs formatted box."""
-    prompter = PromptHelper()
-    items = ["Item 1", "Item 2", "Item 3"]
-    prompter.print_summary_box("Summary", items)
-
-    captured = capsys.readouterr()
-    assert "Summary" in captured.out
-    assert "Item 1" in captured.out
-    assert "Item 2" in captured.out
-    assert "Item 3" in captured.out
 
 
 def test_prompter_prompt_choice_numeric():
@@ -514,33 +157,6 @@ def test_prompter_prompt_yes_no_default():
         assert result is True
 
 
-def test_prompter_prompt_text_with_input():
-    """Test PromptHelper prompt_text with user input."""
-    prompter = PromptHelper()
-
-    with patch("builtins.input", return_value="my value"):
-        result = prompter.prompt_text("Enter text:")
-        assert result == "my value"
-
-
-def test_prompter_prompt_text_with_default():
-    """Test PromptHelper prompt_text with default."""
-    prompter = PromptHelper()
-
-    with patch("builtins.input", return_value=""):
-        result = prompter.prompt_text("Enter text:", default="default value")
-        assert result == "default value"
-
-
-def test_prompter_confirm_yes():
-    """Test PromptHelper confirm returns True for 'yes'."""
-    prompter = PromptHelper()
-
-    with patch("builtins.input", return_value="y"):
-        result = prompter.confirm("Proceed?")
-        assert result is True
-
-
 def test_prompter_prompt_choice_text_input():
     """Test PromptHelper prompt_choice with text input (case-insensitive)."""
     prompter = PromptHelper()
@@ -560,42 +176,6 @@ def test_prompter_prompt_yes_no_retry():
         assert result is True
 
 
-def test_detect_images_unreadable_dockerfile(tmp_path):
-    """Test detect_images handles unreadable Dockerfile gracefully."""
-    detector = TargetDetector()
-
-    # Create a subdirectory for the Dockerfile that will fail
-    subdir = tmp_path / "subdir"
-    subdir.mkdir()
-    dockerfile = subdir / "Dockerfile"
-    dockerfile.write_bytes(b"\xff\xfe invalid unicode")
-
-    images = detector.detect_images(tmp_path)
-
-    # Should not crash
-    assert isinstance(images, list)
-
-
-def test_detect_web_apps_compose_with_non_string_ports(tmp_path):
-    """Test detect_web_apps handles non-string port mappings."""
-    detector = TargetDetector()
-
-    # Compose with integer port (no colon, so skip)
-    compose_content = """
-services:
-  web:
-    ports:
-      - 8080
-      - "3000:3000"
-"""
-    (tmp_path / "docker-compose.yml").write_text(compose_content)
-
-    urls = detector.detect_web_apps(tmp_path)
-
-    # Should get 3000:3000 but not 8080 (no colon)
-    assert "http://localhost:3000" in urls
-
-
 def test_prompter_print_header_long_title(capsys):
     """Test PromptHelper print_header truncates long titles."""
     prompter = PromptHelper()
@@ -606,18 +186,6 @@ def test_prompter_print_header_long_title(capsys):
 
     captured = capsys.readouterr()
     # Should contain truncation ellipsis
-    assert "…" in captured.out
-
-
-def test_prompter_print_summary_box_long_title(capsys):
-    """Test PromptHelper print_summary_box truncates long titles."""
-    prompter = PromptHelper()
-
-    # Very long title
-    long_title = "B" * 200
-    prompter.print_summary_box(long_title, ["Item 1"])
-
-    captured = capsys.readouterr()
     assert "…" in captured.out
 
 
@@ -633,27 +201,12 @@ def test_prompter_colorize_no_color_env(monkeypatch):
 
 
 def test_target_detector_defaults_to_cwd(tmp_path, monkeypatch):
-    """Test TargetDetector methods default to current working directory."""
-    detector = TargetDetector()
-
-    # Change to tmp_path to avoid picking up project files
+    """With no directory, detect_repos searches the current working directory."""
+    (tmp_path / "app" / ".git").mkdir(parents=True)
+    (tmp_path / "notes").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    # All methods should accept None and not crash
-    repos = detector.detect_repos(None)
-    images = detector.detect_images(None)
-    iac = detector.detect_iac(None)
-    web_apps = detector.detect_web_apps(None)
-    packages = detector.detect_package_files(None)
-    locks = detector.detect_lock_files(None)
-
-    # All should return lists
-    assert isinstance(repos, list)
-    assert isinstance(images, list)
-    assert isinstance(iac, list)
-    assert isinstance(web_apps, list)
-    assert isinstance(packages, list)
-    assert isinstance(locks, list)
+    assert TargetDetector().detect_repos(None) == [tmp_path / "app"]
 
 
 # ========== Category 4: ANSI Support Detection ==========

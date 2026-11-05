@@ -57,3 +57,36 @@ def test_every_top_level_definition_has_a_caller() -> None:
         "defined in wizard_flows/ but never used under scripts/ "
         "(jmo wizard cannot reach it; delete it with its tests):\n" + "\n".join(unused)
     )
+
+
+def test_every_public_method_has_a_caller() -> None:
+    """A method is used through an attribute: `.name` somewhere under scripts/.
+
+    TargetDetector's Dockerfile and lock-file globs disagreed with the scan's own
+    file selection (issue #1411), and the only callers they ever had were the
+    five unreachable flows. A class that is used keeps its dead methods alive
+    under the top-level check above, so this asks the same question per method.
+    """
+    sources = _sources()
+    unused = []
+    for module in sorted(PACKAGE.glob("*.py")):
+        if module.name == "__init__.py":
+            continue
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for member in node.body:
+                if not isinstance(member, ast.FunctionDef) or member.name.startswith(
+                    "_"
+                ):
+                    continue
+                attribute = re.compile(rf"\.{re.escape(member.name)}\b")
+                if not any(attribute.search(text) for text in sources.values()):
+                    unused.append(
+                        f"{module.relative_to(REPO)}: {node.name}.{member.name}"
+                    )
+    assert unused == [], (
+        "public methods in wizard_flows/ that nothing under scripts/ calls:\n"
+        + "\n".join(unused)
+    )

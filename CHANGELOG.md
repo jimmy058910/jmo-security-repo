@@ -213,8 +213,10 @@ All notable changes to JMo Security will be documented in this file.
   `RepoFlow`, `EntireStackFlow`, `CICDFlow`, `DeploymentFlow` or `DependencyFlow`, nor
   their base class `BaseWizardFlow`: only their tests ran them. `docs/examples/wizard-examples.md`
   no longer presents their recommendations and "five workflow types" as wizard features.
-  A test now fails on any definition in `scripts/cli/wizard_flows/` that nothing under
-  `scripts/` uses (#1301).
+  The image, IaC, web-app, package and lock-file detection only they called went with
+  them: its Dockerfile count disagreed with the scan's file selection, but no wizard run
+  ever showed it (#1411). A test now fails on any definition or public method in
+  `scripts/cli/wizard_flows/` that nothing under `scripts/` uses (#1301).
 - **History drops `scans.scan_notes` and `findings.finding_status`.** v1.1.0's migration
   added both by ALTER TABLE, nothing read or wrote either, and a fresh database had
   neither until `jmo history migrate` ran, so one version had two schemas. They are
