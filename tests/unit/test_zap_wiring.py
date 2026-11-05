@@ -376,6 +376,35 @@ SCOPES = [
         ["http://127.0.0.1:8080/x", "http://localhost:8080/x"],
         ["http://127.0.0.1:8081/", "http://127.0.0.2:8080/"],
     ),
+    # An encoded slash, percent, `?` or `#`: decoded, each is another path, and
+    # the scope took in a directory the target is not (#1434). Nothing is
+    # listed inside: by `_node_name`, ZAP's active scan names these pages
+    # decoded, outside the target, which the row's warning says.
+    (
+        "http://h.test/files/a%2Fb/",
+        [],
+        ["http://h.test/files/a/b/x", "http://h.test/files/a/", "http://h.test/"],
+    ),
+    (
+        "http://h.test/files/a%2fb/",
+        [],
+        ["http://h.test/files/a/b/x", "http://h.test/files/a/"],
+    ),
+    (
+        "http://h.test/a%2541/",
+        [],
+        ["http://h.test/a%41/x", "http://h.test/aA/x", "http://h.test/"],
+    ),
+    (
+        "http://h.test/a%3Fb/",
+        [],
+        ["http://h.test/a/x", "http://h.test/"],
+    ),
+    (
+        "http://h.test/a%23b/",
+        [],
+        ["http://h.test/a/x", "http://h.test/"],
+    ),
 ]
 
 
@@ -816,6 +845,60 @@ def _ops(tmp_path: Path, expected: int) -> list[tuple[str, int]]:
     while len(fx.read_log(log)) < expected and time.monotonic() < deadline:
         time.sleep(0.02)
     return [(r["op"], r["status"]) for r in fx.read_log(log)]
+
+
+class TestAnEncodedPathIsNamed:
+    """ZAP's active scan names a page by its decoded path (`_node_name`). A
+    path holding `%2F` or `%25` decodes to another path, and one holding `%3F`
+    or `%23` is cut at the decoded `?` or `#`: the scan may attack nothing
+    under the target, and the row read a plain `ran` (#1434, not measured
+    against ZAP). The scope keeps such a path as typed; the row says why."""
+
+    @pytest.mark.parametrize(
+        ("target", "held"),
+        [
+            ("http://h.test/files/a%2Fb/", "%2F"),
+            ("http://h.test/files/a%2fb/", "%2F"),
+            ("http://h.test/a%2541/", "%25"),
+            ("http://h.test/a%3Fb/", "%3F"),
+            ("http://h.test/a%23b/x", "%23"),
+            ("http://h.test/a%2Fb%3Fc/", "%2F, %3F"),
+        ],
+    )
+    def test_the_row_names_what_the_path_holds(self, tmp_path, target, held):
+        said = _probed(tmp_path, target)
+
+        assert list(said) == [target]
+        assert f"its path holds {held}" in said[target], said
+
+    @pytest.mark.parametrize(
+        "target",
+        [TARGET, "http://h.test/my%20app/", "http://h.test/a?q=%2F", "http://h%2F/"],
+    )
+    def test_a_path_that_decodes_harmlessly_gets_no_note(self, tmp_path, target):
+        """The control: an encoded space, and `%2F` outside the path."""
+        assert _probed(tmp_path, target) == {}
+
+    def test_a_spec_scan_is_named_too(self, tmp_path):
+        """The active scan attacks what the import found, by node name too."""
+        target = "http://h.test/files/a%2Fb/"
+        said = _probed(tmp_path, target, api_spec="/specs/openapi.json")
+
+        assert "its path holds %2F" in said[target], said
+
+    def test_a_redirect_out_of_the_scope_is_named_beside_it(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "scripts.core.tool_descriptors.url_redirect",
+            lambda url, timeout=10.0: "http://elsewhere.test/x?state=1",
+        )
+        target = "http://h.test/files/a%2Fb/"
+
+        (note,) = _probed(tmp_path, target).values()
+
+        assert note.startswith("its path holds %2F"), note
+        assert "; it redirects to http://elsewhere.test/x, outside" in note, note
 
 
 class TestARedirectOutOfTheScopeIsNamed:

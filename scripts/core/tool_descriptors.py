@@ -1733,15 +1733,30 @@ def _java_quote(text: str) -> str:
     return "\\Q" + text.replace("\\E", "\\E\\\\E\\Q") + "\\E"
 
 
-def _zap_node_name(scheme: str, netloc: str, path: str) -> str:
+# Escapes that decode to another path: `%2F` is a `/` and `%25XX` a `%XX`.
+_ZAP_PATH_ESCAPES = re.compile(r"(%2[Ff]|%25)")
+# Those, and the ones ZAP cuts a page's name at once decoded (`?`, `#`).
+_ZAP_NAME_BREAKING = re.compile(r"%2[Ff5]|%3[Ff]|%23")
+
+
+def _zap_node_name(scheme: str, netloc: str, path: str, *, scope: bool = False) -> str:
     """`scheme://netloc/path` as ZAP names its site-tree node: without the
-    scheme's default port, the path percent-decoded."""
+    scheme's default port, the path percent-decoded.
+
+    With `scope`, the spelling the scan's scope takes: `%2F` and `%25` stay
+    encoded, since decoded each is another path, and the scope took in a
+    directory the target is not (#1434). ZAP's own name for such a page is
+    then outside it; `_zap_partly_read` says so on the row."""
     host, colon, port = netloc.rpartition(":")
     default = {"http": 80, "https": 443}.get(scheme.lower())
     if colon and port.isdigit() and int(port) == default:
         netloc = host
-    # TODO(issue-#1434): unquote widens scope for %2F and %25XX
-    return f"{scheme}://{netloc}{unquote(path)}"
+    if scope:
+        pieces = _ZAP_PATH_ESCAPES.split(path)
+        decoded = "".join(p if i % 2 else unquote(p) for i, p in enumerate(pieces))
+    else:
+        decoded = unquote(path)
+    return f"{scheme}://{netloc}{decoded}"
 
 
 # One host, two names: a site served on one and redirecting to the other was
@@ -1763,7 +1778,7 @@ def _zap_scope(target: str) -> tuple[list[str], str]:
     spellings: dict[str, None] = {}
     for netloc in netlocs:
         spellings[f"{parts.scheme}://{netloc}{parts.path}"] = None
-        spellings[_zap_node_name(parts.scheme, netloc, parts.path)] = None
+        spellings[_zap_node_name(parts.scheme, netloc, parts.path, scope=True)] = None
     return list(spellings), (".*" if parts.path else "(?:[/?#].*)?")
 
 
@@ -1843,26 +1858,49 @@ def _zap_partly_read(ctx: ScanContext) -> dict[str, str]:
     zap followed the 301 out of its scope and attacked nothing, rc 0, and the
     row read a plain `ran` (measured on ZAP 2.17.0). A redirect the scope
     holds (the target's own path, the other loopback name) is attacked and
-    needs no word. An `--api-spec` run crawls nothing, so it is not asked."""
+    needs no word. An `--api-spec` run crawls nothing, so it is not asked.
+
+    Any run of a target whose path holds `%2F`, `%25`, `%3F` or `%23`: ZAP's
+    active scan names a page by its decoded path, which for these is another
+    path or one cut short, outside the scope (`_zap_node_name`), so it may
+    attack nothing there (#1434, not measured against ZAP)."""
     if ctx.plan is None:
         return {}
-    try:
-        jobs = yaml.safe_load(ctx.plan.read_bytes())["jobs"]
-    except (OSError, yaml.YAMLError, KeyError, TypeError):
-        return {}
-    if not jobs or jobs[0].get("type") != "spider":
-        return {}
     target = str(ctx.target)
+    notes: list[str] = []
+    held = sorted(
+        {m.upper() for m in _ZAP_NAME_BREAKING.findall(urlsplit(target).path)}
+    )
+    if held:
+        notes.append(
+            f"its path holds {', '.join(held)}, which ZAP's active scan decodes "
+            "in the names it gives pages, so what is under it may not have been "
+            "attacked"
+        )
+    moved = _zap_redirect(ctx.plan, target)
+    if moved is not None:
+        notes.append(
+            f"it redirects to {moved}, outside the scan's scope, and what is "
+            "there was not attacked"
+        )
+    return {target: "; ".join(notes)} if notes else {}
+
+
+def _zap_redirect(plan: Path, target: str) -> str | None:
+    """Where a spider run's `target` redirects outside the scope, without its
+    query, or None (`_zap_partly_read`)."""
+    try:
+        jobs = yaml.safe_load(plan.read_bytes())["jobs"]
+    except (OSError, yaml.YAMLError, KeyError, TypeError):
+        return None
+    if not jobs or jobs[0].get("type") != "spider":
+        return None
     moved = url_redirect(target)
     if moved is None or _in_zap_scope(target, moved):
-        return {}
+        return None
     # Without its query: a sign-on redirect carries its request and state
     # there, and the row reaches the artifacts people paste into issues.
-    place = urlunsplit(urlsplit(moved)._replace(query="", fragment=""))
-    return {
-        target: f"it redirects to {place}, outside the scan's scope, and "
-        "what is there was not attacked"
-    }
+    return urlunsplit(urlsplit(moved)._replace(query="", fragment=""))
 
 
 def _zap_context(target: str) -> dict[str, Any]:
