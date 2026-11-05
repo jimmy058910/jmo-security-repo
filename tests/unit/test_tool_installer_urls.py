@@ -204,7 +204,8 @@ class TestBinaryURLPatterns:
 
         So the installer requested an asset that does not exist and trufflehog
         could not be installed on Windows at all. Extraction dispatches on file
-        extension (binary_installer.py), not platform, so .tar.gz is handled.
+        extension (ToolInstaller._extract_and_find_binary), not platform, so
+        .tar.gz is handled.
         """
         url = BINARY_URLS["trufflehog"]["windows"].format(
             version="3.88.0",

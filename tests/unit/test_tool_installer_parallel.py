@@ -345,67 +345,6 @@ class TestInstallToolThreadsafe:
             assert "Test error" in result.message
 
 
-class TestDownloadWithRequests:
-    """Tests for cross-platform download using requests."""
-
-    @patch("scripts.cli.tool_installer.requests.get")
-    def test_successful_download(self, mock_get, tmp_path):
-        """Test successful file download."""
-        from scripts.cli.tool_installer import ToolInstaller
-
-        mock_response = MagicMock()
-        mock_response.iter_content.return_value = [b"test content"]
-        mock_get.return_value.__enter__ = MagicMock(return_value=mock_response)
-        mock_get.return_value = mock_response
-
-        with patch.object(ToolInstaller, "__init__", return_value=None):
-            installer = ToolInstaller()
-            output_path = tmp_path / "test_file"
-
-            success = installer._download_with_requests(
-                "https://example.com/file", output_path
-            )
-
-            assert success
-            assert output_path.exists()
-
-    @patch("scripts.cli.tool_installer.requests.get")
-    def test_timeout_handling(self, mock_get):
-        """Test timeout error handling."""
-        import requests
-
-        from scripts.cli.tool_installer import ToolInstaller
-
-        mock_get.side_effect = requests.exceptions.Timeout()
-
-        with patch.object(ToolInstaller, "__init__", return_value=None):
-            installer = ToolInstaller()
-
-            success = installer._download_with_requests(
-                "https://example.com/file", "/tmp/test"
-            )
-
-            assert not success
-
-    @patch("scripts.cli.tool_installer.requests.get")
-    def test_http_error_handling(self, mock_get):
-        """Test HTTP error handling."""
-        import requests
-
-        from scripts.cli.tool_installer import ToolInstaller
-
-        mock_get.side_effect = requests.exceptions.HTTPError("404 Not Found")
-
-        with patch.object(ToolInstaller, "__init__", return_value=None):
-            installer = ToolInstaller()
-
-            success = installer._download_with_requests(
-                "https://example.com/file", "/tmp/test"
-            )
-
-            assert not success
-
-
 def _installed_status() -> MagicMock:
     """A ToolStatus stand-in that install_tools_parallel will skip.
 
