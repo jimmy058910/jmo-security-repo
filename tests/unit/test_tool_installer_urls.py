@@ -107,7 +107,7 @@ class TestBinaryURLPatterns:
 
     def test_nuclei_url_x86_64(self):
         """Test nuclei URL for x86_64 Linux."""
-        url = BINARY_URLS["nuclei"].format(
+        url = BINARY_URLS["nuclei"]["default"].format(
             version="3.3.7",
             os="Linux",
             os_lower="linux",

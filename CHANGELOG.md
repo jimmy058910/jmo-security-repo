@@ -710,6 +710,14 @@ All notable changes to JMo Security will be documented in this file.
   failed at its first write. Both now run `mkdir -p` on the results directory (and tsv's
   clone destination) before `docker run`, and the command the wizard prints to run later
   starts with the same line. The wizard's own run already did this.
+- **`jmo tools install` downloads trivy, nuclei and hadolint on macOS, and trivy, nuclei
+  and opa on Windows ARM64.** Their URLs named assets the releases do not have: trivy and
+  nuclei call macOS `macOS` and hadolint `macos`, not `Darwin`, and none of the three
+  publishes a Windows arm64 build, so each was a 404 there. Rendering every download for
+  six platform and architecture pairs found 53 of 66 names in their release; all 66 now
+  are, and Windows ARM64 installs the x86_64 build, as it already did for zizmor and
+  opengrep. `tests/unit/test_release_asset_names.py` renders each one against the
+  releases' asset names.
 - **A tool beside the Python interpreter is found only if pip installed it (#1288).**
   `find_tool` looked in the interpreter's directory for every name, so under a system
   Python in `/usr/bin` it found `docker`, `curl` or `wget` there whatever `PATH` said, and
