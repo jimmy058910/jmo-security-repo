@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
-# install_tools.sh - Bootstrap curated CLIs for Linux/WSL and macOS (v0.5.0)
-# Installs core + curated tools:
-# - Core: python3, pip, jq, curl, git
-# - Linters: shellcheck, shfmt, ruff, bandit
-# - Secrets: trufflehog (verified)
-# - SAST: opengrep
-# - SBOM/Vuln/Misconfig: syft, trivy
-# - IaC: checkov
-# - Dockerfile: hadolint
-# - DAST: OWASP ZAP (web security)
+# install_tools.sh - `make tools`: the developer prerequisites, then every scanner
+# through `jmo tools install` (#1562).
+# - Prerequisites: python3, pip, jq, curl, git, and shfmt (for `make fmt`)
+# - Scanners: `jmo tools install`, the one install path jmo reads. It installs
+#   each at its versions.yaml pin into ~/.jmo and checks its sha256 (#1374).
+#   This script used to install them itself, from `latest`, and ZAP as a snap
+#   jmo never finds.
+# The jmo it runs: $JMO, else this checkout's .venv (`make dev-setup`), else PATH.
 # Usage:
-#   bash scripts/dev/install_tools.sh          # install if missing
-#   bash scripts/dev/install_tools.sh --upgrade # upgrade/refresh when possible
+#   bash scripts/dev/install_tools.sh           # install what is missing
+#   bash scripts/dev/install_tools.sh --upgrade # refresh, and `jmo tools update`
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -26,17 +24,6 @@ log() { echo -e "${BLUE}[install]${NC} $*"; }
 ok() { echo -e "${GREEN}[ok]${NC} $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
 err() { echo -e "${RED}[err]${NC} $*"; }
-
-is_wsl() { grep -qiE "(microsoft|wsl)" /proc/version 2>/dev/null || true; }
-bg_jobs=()
-bg() {
-  "$@" &
-  bg_jobs+=("$!")
-}
-bg_wait() {
-  if [ ${#bg_jobs[@]} -gt 0 ]; then wait "${bg_jobs[@]}" || true; fi
-  bg_jobs=()
-}
 
 OS="$(uname -s)"
 log "Detected OS: $OS"
@@ -80,28 +67,6 @@ apt_install() {
   fi
 }
 
-pipx_or_pip_install() {
-  local pkg="$1"
-  if command -v pipx >/dev/null 2>&1; then
-    if pipx list 2>/dev/null | grep -q "^package $pkg "; then
-      if [ "$UPGRADE" = "1" ]; then pipx upgrade "$pkg" || true; fi
-      ok "pipx package present: $pkg"
-    else
-      pipx install "$pkg" || true
-    fi
-  else
-    if [ "$UPGRADE" = "1" ]; then pip3 install --user -U "$pkg" || true; else pip3 install --user "$pkg" || true; fi
-  fi
-}
-
-install_linux_binary() {
-  # $1: url, $2: dest path
-  local url="$1"
-  shift
-  local dest="$1"
-  curl -fsSL "$url" -o "/tmp/.dl-$(basename "$dest")" && sudo install -m 0755 "/tmp/.dl-$(basename "$dest")" "$dest"
-}
-
 case "$OS" in
 Darwin)
   if ! command -v brew >/dev/null 2>&1; then
@@ -138,37 +103,16 @@ Darwin)
   brew_install python@3 || true
   brew_install jq || true
   brew_install git || true
-  # Single bulk brew install is usually faster (v0.5.0 tool suite)
-  brew tap trufflesecurity/tap >/dev/null 2>&1 || true
-  brew install shellcheck shfmt ruff bandit syft trivy hadolint checkov trufflesecurity/tap/trufflehog || true
-  # opengrep (SAST): a static binary, named by OS and architecture
-  if ! command -v opengrep >/dev/null 2>&1; then
-    case "$(uname -m)" in
-    arm64 | aarch64) OPENGREP_ASSET=opengrep_osx_arm64 ;;
-    *) OPENGREP_ASSET=opengrep_osx_x86 ;;
-    esac
-    sudo curl -fsSL "https://github.com/opengrep/opengrep/releases/latest/download/${OPENGREP_ASSET}" -o /usr/local/bin/opengrep &&
-      sudo chmod +x /usr/local/bin/opengrep ||
-      warn "opengrep installation failed; run: jmo tools install opengrep"
-  else ok "opengrep installed"; fi
-  # OWASP ZAP (DAST)
-  if ! command -v zap.sh >/dev/null 2>&1 && ! command -v zap >/dev/null 2>&1; then
-    brew install --cask owasp-zap || warn "ZAP installation failed; install manually from https://www.zaproxy.org/download/"
-  fi
-  # OPA (Policy-as-Code engine)
-  if ! command -v opa >/dev/null 2>&1; then
-    brew install opa || warn "OPA installation failed; install manually from https://www.openpolicyagent.org/docs/latest/#running-opa"
-  else ok "opa installed"; fi
+  brew_install shfmt || true
   ;;
 Linux)
   # Linux/WSL
   if command -v apt-get >/dev/null 2>&1; then
-    # Batch apt installs to reduce overhead
     sudo apt-get update -y
-    if ! sudo apt-get install -y python3 python3-pip jq curl git shellcheck; then
-      warn "Failed to install core apt packages (python3, jq, curl, git, shellcheck)"
+    if ! sudo apt-get install -y python3 python3-pip jq curl git; then
+      warn "Failed to install core apt packages (python3, jq, curl, git)"
     fi
-    # shfmt via snap or direct download if needed
+    # shfmt, for `make fmt`: apt has none
     if ! command -v shfmt >/dev/null 2>&1; then
       warn "shfmt not in apt; attempting install via Go or binary"
       if command -v go >/dev/null 2>&1; then
@@ -183,81 +127,8 @@ Linux)
         sudo chmod +x /usr/local/bin/shfmt || true
       fi
     fi
-    # Linters (Python)
-    # Run python tool installs in parallel
-    bg pipx_or_pip_install ruff
-    bg pipx_or_pip_install bandit
-    # opengrep (SAST): a static binary, named by architecture
-    if ! command -v opengrep >/dev/null 2>&1; then
-      case "$(uname -m)" in
-      aarch64 | arm64) OPENGREP_ARCH=aarch64 ;;
-      *) OPENGREP_ARCH=x86 ;;
-      esac
-      bg install_linux_binary "https://github.com/opengrep/opengrep/releases/latest/download/opengrep_manylinux_${OPENGREP_ARCH}" /usr/local/bin/opengrep
-    else ok "opengrep installed"; fi
-    # TruffleHog (primary secrets scanner)
-    if ! command -v trufflehog >/dev/null 2>&1; then
-      bg bash -c 'curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin'
-    else ok "trufflehog installed"; fi
-    # SBOM & scanners
-    if ! command -v syft >/dev/null 2>&1; then
-      bg bash -c 'curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin'
-    else ok "syft installed"; fi
-    if ! command -v trivy >/dev/null 2>&1; then
-      bg bash -c 'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/install.sh | sudo sh -s -- -b /usr/local/bin'
-    else ok "trivy installed"; fi
-    # hadolint binary
-    if ! command -v hadolint >/dev/null 2>&1; then
-      case "$(uname -m)" in
-      x86_64 | amd64) HAD_ARCH=x86_64 ;;
-      aarch64 | arm64) HAD_ARCH=arm64 ;;
-      *) HAD_ARCH=x86_64 ;;
-      esac
-      bg bash -c 'sudo curl -sSL "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-'"${HAD_ARCH}"'" -o /usr/local/bin/hadolint && sudo chmod +x /usr/local/bin/hadolint'
-    else ok "hadolint installed"; fi
-    # checkov (python)
-    if ! command -v checkov >/dev/null 2>&1; then
-      bg pipx_or_pip_install checkov
-    else ok "checkov installed"; fi
-    # OWASP ZAP (DAST - web security)
-    if ! command -v zap.sh >/dev/null 2>&1 && ! command -v zap >/dev/null 2>&1; then
-      warn "OWASP ZAP not found; installing via snap or manual download"
-      if command -v snap >/dev/null 2>&1; then
-        bg bash -c 'sudo snap install zaproxy --classic'
-      else
-        warn "ZAP installation requires manual setup; see https://www.zaproxy.org/download/"
-      fi
-    else ok "ZAP installed"; fi
-    # Nuclei (DAST - fast vulnerability scanner)
-    if ! command -v nuclei >/dev/null 2>&1; then
-      case "$(uname -m)" in
-      x86_64 | amd64) NUCLEI_ARCH=amd64 ;;
-      aarch64 | arm64) NUCLEI_ARCH=arm64 ;;
-      *) NUCLEI_ARCH=amd64 ;;
-      esac
-      bg bash -c "NUCLEI_VERSION=\$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
-        curl -sSL \"https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_\${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip\" -o /tmp/nuclei.zip && \
-        sudo unzip -o /tmp/nuclei.zip -d /usr/local/bin && \
-        sudo chmod +x /usr/local/bin/nuclei && \
-        rm /tmp/nuclei.zip && \
-        nuclei -update-templates -silent"
-    else ok "nuclei installed"; fi
-    # OPA (Policy-as-Code engine)
-    if ! command -v opa >/dev/null 2>&1; then
-      case "$(uname -m)" in
-      x86_64 | amd64) OPA_ARCH=amd64 ;;
-      aarch64 | arm64) OPA_ARCH=arm64 ;;
-      *) OPA_ARCH=amd64 ;;
-      esac
-      bg bash -c "OPA_VERSION=\$(curl -s https://api.github.com/repos/open-policy-agent/opa/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
-        curl -sSL \"https://github.com/open-policy-agent/opa/releases/latest/download/opa_linux_${OPA_ARCH}_static\" -o /tmp/opa && \
-        sudo install -m 0755 /tmp/opa /usr/local/bin/opa && \
-        rm /tmp/opa"
-    else ok "opa installed"; fi
-    # Wait for background installers to finish
-    bg_wait
   else
-    warn "Unsupported Linux distribution: please install dependencies manually (python3, pip, jq, curl, opengrep, trufflehog, shellcheck, shfmt)"
+    warn "Unsupported Linux distribution: install python3, pip, jq, curl, git and shfmt yourself"
   fi
   ;;
 *)
@@ -265,4 +136,30 @@ Linux)
   ;;
 esac
 
-ok "Environment bootstrap complete. Ensure that ~/.local/bin is on PATH for pip user installs."
+# The scanners, through jmo: the install path `jmo tools check` and a scan read.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ -z "${JMO:-}" ]; then
+  for candidate in "$REPO_ROOT/.venv/bin/jmo" "$REPO_ROOT/.venv/Scripts/jmo.exe"; do
+    if [ -x "$candidate" ]; then
+      JMO="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "${JMO:-}" ]; then
+  JMO="$(command -v jmo || true)"
+fi
+if [ -z "$JMO" ]; then
+  err "jmo not found: run 'make dev-setup' first, then 'make tools'"
+  exit 1
+fi
+
+if [ "$UPGRADE" = "1" ]; then
+  log "Updating the scanners: $JMO tools update"
+  "$JMO" tools update --yes
+else
+  log "Installing the scanners: $JMO tools install"
+  "$JMO" tools install --yes
+fi
+
+ok "Environment bootstrap complete. jmo installed the scanners under ~/.jmo; check them with: jmo tools check"
