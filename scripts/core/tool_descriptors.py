@@ -990,9 +990,9 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
                 str(ctx.output.resolve()),
                 # No call home to check for a newer release.
                 "--disable-version-check",
-                # Fixed (the program plan's decision): the parity target needs
-                # 467 MB at 4 and only 1 fits 800 MB. Phase 7 owns tuning it.
-                *("-j", "4"),
+                # Fixed: at 4 its tree peaked at 662 MB on app B, at 2 at 507 MB,
+                # the same findings, about 1 s slower (Phase 7, measured).
+                *("-j", "2"),
                 # JMo's exclusions before the user's flags, so an explicit
                 # per_tool entry still wins; repeatable forms accumulate.
                 *ctx.exclusion_args,
@@ -2254,7 +2254,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="opengrep",
-            memory_mb=700,  # 662 MB at -j 4
+            memory_mb=550,  # 507 MB at -j 2
             invocations={"repo": _opengrep_repo},
             # `opengrep --version` prints the bare version (measured, 1.32.0).
             version_probe=VersionProbe(re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE)),

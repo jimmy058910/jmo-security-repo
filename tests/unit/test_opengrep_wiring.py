@@ -292,7 +292,7 @@ def test_the_command_line(tmp_path) -> None:
         str((out / "opengrep.json").resolve()),
         "--disable-version-check",
         "-j",
-        "4",
+        "2",
         *(f"--exclude={d}" for d in (*VENDORED_DIRS, "results")),
         # Run from inside the target, which is named `.`: see
         # `test_a_target_under_a_directory_the_default_ignore_list_names_is_scanned`.
@@ -654,8 +654,8 @@ def test_the_languages_are_chosen_from_the_whole_walk(tmp_path, caplog) -> None:
 
 def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
     """opengrep refuses a second `-j` (rc 2, "option '-j' cannot be repeated",
-    no output: measured) and JMo sets it to 4 (the program plan's decision:
-    only `-j 1` fits 800 MB, and Phase 7 owns tuning it)."""
+    no output: measured) and JMo sets it to 2 (Phase 7's measurement: 507 MB
+    against 662 at 4, the same findings, about 1 s slower)."""
     repo = tmp_path / "repo"
     _plant(repo, ["app.py"])
     out = tmp_path / "out"
@@ -666,7 +666,7 @@ def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
         _, (definition,) = _recorded(repo, out, {"opengrep": {"flags": flags}})
 
     command = definition.command
-    assert command.count("-j") == 1 and command[command.index("-j") + 1] == "4"
+    assert command.count("-j") == 1 and command[command.index("-j") + 1] == "2"
     assert not any(tok.startswith(("--jobs", "-j8")) for tok in command)
     # What is not JMo's is the user's, spliced in before the target.
     assert command[-3:-1] == ["--timeout", "9"]

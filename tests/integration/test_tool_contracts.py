@@ -139,7 +139,7 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         # v1.32.0, 2026-10-29) and `result_item_keys` was never checked, so this
         # contract used to name the one file. Run this way both files are read
         # (2 scanned, 6 results). The command is the descriptor row's (the
-        # configs its languages select, `-j 4`, no version check) minus
+        # configs its languages select, `-j 2`, no version check) minus
         # `--output`, since this harness reads stdout; TestContractInfrastructure
         # holds the two equal. Nothing is fetched: the rules are the committed
         # bundle's.
@@ -155,7 +155,7 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
             "--json",
             "--disable-version-check",
             "-j",
-            "4",
+            "2",
             ".",
         ],
         "ok_return_codes": (0,),

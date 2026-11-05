@@ -527,7 +527,7 @@ class TestTrivyRepoDropsItsSecretPass:
 MEASURED_MEMORY_MB = {
     "trufflehog": 600,  # history run 553-565 MB, tree run 488 MB, each alone
     "gitleaks": 350,  # 328 MB for its two runs' processes
-    "opengrep": 700,  # 662 MB at -j 4
+    "opengrep": 550,  # 507 MB at -j 2
     "syft": 250,  # 199 MB
     "trivy": 250,  # 201 MB
     "checkov": 300,  # 235 MB PSS on terragoat, two processes sharing pages
