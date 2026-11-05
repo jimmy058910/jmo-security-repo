@@ -41,6 +41,8 @@ dependencies = [
     # validation silently. Its one compiled dependency, rpds-py, has wheels for
     # every platform yara-x lacks (#1577) and an sdist.
     "jsonschema>=4.0",
+    # Free memory, read by Phase 7's scan scheduler (nothing imports it until then).
+    "psutil>=7.2",
 ]
 
 [project.urls]
