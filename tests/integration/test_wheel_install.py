@@ -156,6 +156,32 @@ def test_an_installed_wheel_loads_the_findings_schema(
     assert "common_finding" in probe.stdout
 
 
+def test_a_bare_install_validates_findings_against_the_schema(
+    installed_jmo: Path, tmp_path: Path
+) -> None:
+    """jsonschema is a dependency, not the `reporting` extra (#1350, decided
+    2026-11-05): without it the report skipped validation silently, logging
+    nothing, on every install made the documented way."""
+    python = installed_jmo.with_name("python.exe" if os.name == "nt" else "python")
+    probe = subprocess.run(
+        [
+            str(python),
+            "-I",
+            "-c",
+            "from scripts.core.schema_validator import validate_finding; "
+            "print(len(validate_finding({'schemaVersion': '1.2.0'})))",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
+    assert probe.returncode == 0, probe.stderr
+    assert int(probe.stdout) > 0, "an empty finding passed validation"
+
+
 def test_an_installed_wheel_resolves_a_tool_pin(
     installed_jmo: Path, tmp_path: Path
 ) -> None:
