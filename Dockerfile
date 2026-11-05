@@ -244,9 +244,6 @@ RUN strip /usr/local/bin/trufflehog \
 RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
     chmod +x /usr/local/bin/zap
 
-# Mark cache directories as volumes for persistence
-VOLUME ["/root/.cache/trivy"]
-
 # Create working directory
 WORKDIR /scan
 
@@ -313,11 +310,13 @@ RUN echo "=== Verifying tools ===" && \
 # /home/jmo/.jmo must exist, owned by jmo: an empty named volume mounted there
 # (DOCKER_README's osv-scanner database setup) takes this directory's
 # ownership, and without it comes up root:root and unwritable. So must
-# /home/jmo/.cache/trivy, DOCKER_README's trivy-cache volume (#1375).
+# /home/jmo/.cache/trivy, DOCKER_README's trivy-cache volume (#1375): mount it
+# with -v trivy-cache:/home/jmo/.cache/trivy. The image declares no VOLUME:
+# the root one it had was never used, and made an anonymous volume per run.
 RUN userdel -r ubuntu 2>/dev/null || true && \
     useradd -m -u 1000 -s /bin/bash jmo && \
     mkdir -p /root/.local /home/jmo/.cache/trivy /home/jmo/.jmo /home/jmo/.local && \
-    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
+    chown -R jmo:jmo /opt/jmo-security /scan /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user
