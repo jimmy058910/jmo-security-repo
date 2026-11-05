@@ -84,7 +84,9 @@ def test_cli_history_optimize(tmp_path: Path):
     conn.commit()
 
     # Test regular output
-    returncode, stdout, stderr = run_jmo("history", "optimize", "--db", str(db_path))
+    returncode, stdout, stderr = run_jmo(
+        "history", "optimize", "--history-db", str(db_path)
+    )
 
     assert returncode == 0, f"Command failed: {stderr}"
     assert "Optimization complete" in stdout or "✅" in stdout
@@ -93,7 +95,7 @@ def test_cli_history_optimize(tmp_path: Path):
 
     # Test JSON output
     returncode, stdout, stderr = run_jmo(
-        "history", "optimize", "--db", str(db_path), "--json"
+        "history", "optimize", "--history-db", str(db_path), "--json"
     )
 
     assert returncode == 0, f"Command failed: {stderr}"
@@ -120,7 +122,9 @@ def test_cli_history_migrate(tmp_path: Path):
     init_database(db_path)
 
     # Test regular output (should apply v1.1.0 migration)
-    returncode, stdout, stderr = run_jmo("history", "migrate", "--db", str(db_path))
+    returncode, stdout, stderr = run_jmo(
+        "history", "migrate", "--history-db", str(db_path)
+    )
 
     assert returncode == 0, f"Command failed: {stderr}"
     assert "Current schema version" in stdout
@@ -129,7 +133,7 @@ def test_cli_history_migrate(tmp_path: Path):
 
     # Test JSON output
     returncode, stdout, stderr = run_jmo(
-        "history", "migrate", "--db", str(db_path), "--json"
+        "history", "migrate", "--history-db", str(db_path), "--json"
     )
 
     assert returncode == 0, f"Command failed: {stderr}"
@@ -157,7 +161,9 @@ def test_cli_history_verify(tmp_path: Path):
     init_database(db_path)
 
     # Test regular output
-    returncode, stdout, stderr = run_jmo("history", "verify", "--db", str(db_path))
+    returncode, stdout, stderr = run_jmo(
+        "history", "verify", "--history-db", str(db_path)
+    )
 
     assert returncode == 0, f"Command failed (expected success for clean DB): {stderr}"
     assert "integrity verification" in stdout.lower()
@@ -166,7 +172,7 @@ def test_cli_history_verify(tmp_path: Path):
 
     # Test JSON output
     returncode, stdout, stderr = run_jmo(
-        "history", "verify", "--db", str(db_path), "--json"
+        "history", "verify", "--history-db", str(db_path), "--json"
     )
 
     assert returncode == 0, f"Command failed: {stderr}"
@@ -225,7 +231,7 @@ def test_cli_history_repair(tmp_path: Path):
 
     # Test interactive mode (cancel)
     returncode, stdout, stderr = run_jmo(
-        "history", "repair", "--db", str(db_path), input_text="n\n"
+        "history", "repair", "--history-db", str(db_path), input_text="n\n"
     )
 
     assert returncode == 0, "Should succeed on cancel"
@@ -233,7 +239,7 @@ def test_cli_history_repair(tmp_path: Path):
 
     # Test --force flag (should complete repair)
     returncode, stdout, stderr = run_jmo(
-        "history", "repair", "--db", str(db_path), "--force"
+        "history", "repair", "--history-db", str(db_path), "--force"
     )
 
     assert returncode == 0, f"Repair should succeed: {stderr}"
@@ -287,7 +293,7 @@ def test_cli_history_repair(tmp_path: Path):
     conn3.close()  # Close connection before repair to avoid Windows file locking
 
     returncode, stdout, stderr = run_jmo(
-        "history", "repair", "--db", str(db_path2), "--force", "--json"
+        "history", "repair", "--history-db", str(db_path2), "--force", "--json"
     )
 
     assert returncode == 0, f"Command failed: {stderr}"

@@ -23,7 +23,6 @@ from scripts.cli.jmo import build_parser
 PATH_OPTIONS = {
     "--results-dir",
     "--history-db",
-    "--db",
     "--out",
     "--output",
     "--config",

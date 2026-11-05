@@ -149,7 +149,7 @@ class WizardConfig:
 
     @classmethod
     def get_db_path(cls) -> Path:
-        """Get the history database path, respecting custom --db flag.
+        """Get the history database path, respecting a custom --history-db.
 
         Returns:
             Path to SQLite history database

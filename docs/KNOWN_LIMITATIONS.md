@@ -789,12 +789,6 @@ rather than trust it:
 gh issue list --repo jimmy058910/jmo-security-repo --state open --label user-reachable
 ```
 
-- **Three output rough edges:** the scan progress line is written even when
-  stderr is redirected, so a captured log carries `\r` frames; the history
-  database flag is `--history-db` on `scan` and `ci` but `--db` on `diff` and
-  `history list`; bulk tool warnings arrive as one long JSON line.
-  [#1082](https://github.com/jimmy058910/jmo-security-repo/issues/1082)
-
 ---
 
 ## Reporting something not listed here

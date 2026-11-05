@@ -215,7 +215,7 @@ class TestHistoryDatabaseErrors:
                 WizardConfig._custom_db_path = original_custom
 
     def test_custom_db_path_respected(self, tmp_path: Path):
-        """Test that custom --db flag is respected."""
+        """Test that a custom --history-db is respected."""
         from scripts.cli.wizard import WizardConfig, _get_db_path
 
         custom_path = tmp_path / "custom_history.db"

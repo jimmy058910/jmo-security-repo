@@ -642,7 +642,8 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
         help="Skip policy evaluation entirely (overrides config defaults)",
     )
     wizard_parser.add_argument(
-        "--db",
+        "--history-db",
+        dest="db",
         type=_expand_home,
         default=None,
         help="Path to SQLite history database (default: ~/.jmo/history.db)",
@@ -1174,7 +1175,10 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
 
     # Common arguments
     def add_db_arg(parser):
-        """Add --db argument to argparse parser for SQLite database location.
+        """Add --history-db to a parser: the SQLite history database's location.
+
+        One spelling with `jmo scan` and `jmo ci` (#1082); it keeps the dest
+        `db`, which the history and trends commands read.
 
         Adds a command-line argument that allows users to specify a custom path
         for the SQLite history database. Used by history and trends commands.
@@ -1188,7 +1192,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
         Example:
             >>> parser = argparse.ArgumentParser()
             >>> add_db_arg(parser)
-            >>> args = parser.parse_args(['--db', '/custom/path.db'])
+            >>> args = parser.parse_args(['--history-db', '/custom/path.db'])
             >>> print(args.db)
             /custom/path.db
 
@@ -1198,10 +1202,11 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
 
         """
         parser.add_argument(
-            "--db",
+            "--history-db",
+            dest="db",
             default=None,
             type=_expand_home,
-            help="Path to SQLite database (default: .jmo/history.db)",
+            help="Path to the history database (default: .jmo/history.db)",
         )
 
     # STORE
@@ -1485,21 +1490,22 @@ Usage Examples:
         Example:
             >>> parser = argparse.ArgumentParser()
             >>> add_common_trend_args(parser)
-            >>> args = parser.parse_args(['--db', 'custom.db', '--branch', 'dev'])
+            >>> args = parser.parse_args(['--history-db', 'custom.db', '--branch', 'dev'])
             >>> print(args.db, args.branch)
             custom.db dev
 
         Note:
-            --db goes on every trend subcommand that reads the database.
+            --history-db goes on every trend subcommand that reads the database.
             --branch goes on the five that filter by it (analyze, regressions,
             score, insights, developers); show and compare take scan IDs.
 
         """
         parser.add_argument(
-            "--db",
+            "--history-db",
+            dest="db",
             default=None,
             type=_expand_home,
-            help="Path to SQLite database (default: .jmo/history.db)",
+            help="Path to the history database (default: .jmo/history.db)",
         )
         if branch:
             parser.add_argument(
@@ -2036,7 +2042,8 @@ Supports three modes:
 
     # SQLite options
     diff_parser.add_argument(
-        "--db",
+        "--history-db",
+        dest="db",
         type=_expand_home,
         help="Path to the history database (default: .jmo/history.db)",
     )
@@ -2794,7 +2801,14 @@ class ProgressTracker:
         which now maps the ten frames onto a rotating ASCII cycle that still
         animates. The substitutes are one character wide, so the `:<70`
         padding still clears the previous line exactly.
+
+        Only to a terminal: each frame overwrites the last there, but a file
+        keeps them all, and a 20-minute scan redirected to a log left 46 KB of
+        frames around 6 real lines (#1082). The per-target lines go through
+        `log()` and reach a log either way.
         """
+        if not stream_is_tty(sys.stderr):
+            return
         safe_write(f"{progress_line:<70}", sys.stderr)
         sys.stderr.flush()
 
@@ -2977,8 +2991,10 @@ class ProgressTracker:
             message: Log message
         """
         with self._lock:
-            # Clear current \r line, print on new line
-            print("\r" + " " * 70 + "\r", end="", file=sys.stderr, flush=True)
+            # Clear current \r line, print on new line. Only a terminal has a
+            # progress line to clear; in a log it was `\r` frames (#1082).
+            if stream_is_tty(sys.stderr):
+                print("\r" + " " * 70 + "\r", end="", file=sys.stderr, flush=True)
             print(f"[{level}] {message}", file=sys.stderr)
 
     def update_tool(
@@ -3070,10 +3086,13 @@ class ProgressTracker:
                     # Pad to clear leftover characters
                     self._write_progress_line(progress_line)
 
-                    # Print newline and stop refresh when all tools complete
+                    # Print newline and stop refresh when all tools complete.
+                    # The newline ends the progress line, so only a terminal,
+                    # which got one, gets it (#1082).
                     if self.tools_completed >= self.total_tools:
                         self._stop_refresh = True
-                        print(file=sys.stderr)
+                        if stream_is_tty(sys.stderr):
+                            print(file=sys.stderr)
 
 
 def cmd_scan(args) -> int:
@@ -4392,13 +4411,17 @@ class _ScanLogFormatter(logging.Formatter):
             }.get(level, "")
             ts = datetime.now(UTC).strftime("%H:%M:%S")
             return f"{color}{level:5}\x1b[0m {ts} {message}"
-        return json.dumps(
-            {
-                "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                "level": level,
-                "msg": message,
-            }
-        )
+        line = {
+            "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "level": level,
+            "msg": message,
+        }
+        # Detail a log consumer wants and a reader does not, passed as
+        # `extra={"jmo_fields": {...}}` (#1082). It never replaces the line's
+        # own keys.
+        fields = getattr(record, "jmo_fields", None) or {}
+        line.update({k: v for k, v in fields.items() if k not in line})
+        return json.dumps(line)
 
 
 _SCAN_LOG_HANDLER: logging.Handler | None = None

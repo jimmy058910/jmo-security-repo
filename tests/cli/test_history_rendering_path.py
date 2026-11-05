@@ -81,7 +81,9 @@ def populated_db(tmp_path: Path) -> Path:
 def _run_list(db: Path, capsys: pytest.CaptureFixture[str], *extra: str) -> str:
     from scripts.cli.history_commands import cmd_history_list
 
-    args = build_parser().parse_args(["history", "list", "--db", str(db), *extra])
+    args = build_parser().parse_args(
+        ["history", "list", "--history-db", str(db), *extra]
+    )
     rc = cmd_history_list(args)
     assert rc == 0, "history list failed"
     return capsys.readouterr().out

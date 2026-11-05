@@ -279,6 +279,10 @@ All notable changes to JMo Security will be documented in this file.
   scan's yara-x row say the engine is missing and name the extra, where they said "See JMo
   documentation", raised a traceback and "its executable could not be found". A default
   `jmo tools install` leaves yara-x out while its engine is absent, so it succeeds there.
+- **Breaking. The history database is `--history-db` on every command (#1082).** `jmo
+  wizard`, `jmo diff` and every `jmo history` and `jmo trends` subcommand spelled it
+  `--db`, while `jmo scan` and `jmo ci` spelled it `--history-db`, and nothing said so.
+  `--db` is gone, with no alias: it is a usage error (exit 2).
 - **Breaking. A finding names its target, and the same finding in two repositories is two
   findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
   `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a
@@ -565,6 +569,15 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **A scan redirected to a log no longer fills it with progress frames (#1082).** The
+  progress line's `\r` frames overwrite each other on a terminal but pile up in a file: a
+  20-minute scan left a 46 KB log around 6 real lines. They are now written only to a
+  terminal; the per-target lines still reach the log.
+- **"N files could not be analysed" is one short line (#1082).** It carried ten files'
+  reasons, each up to 400 characters, on one line. The line now gives the count, the
+  consequence and where `SUMMARY.md` lists every file; a JSON log carries the detail as
+  fields (`tools`, `unanalysed_count`, `sample`, `detail_file`). With no `SUMMARY.md`
+  written, the sample stays in the line.
 - **A prompt with stdin closed declines instead of crashing (#1553).** `jmo schedule
   delete`, `jmo history prune` and `jmo tools uninstall` caught end of input but not a
   closed stdin (`<&-`), where Python raises `RuntimeError: lost sys.stdin`, so they exited
