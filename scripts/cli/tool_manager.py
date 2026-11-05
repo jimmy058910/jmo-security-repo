@@ -189,7 +189,7 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
     },
     "yara-x": {
         "install": {
-            # The engine ships with JMo; this fetches its rules.
+            # The engine is the yara extra (#1577); this fetches its rules.
             "linux": "jmo tools install yara-x",
             "macos": "jmo tools install yara-x",
             "windows": "jmo tools install yara-x",
@@ -347,8 +347,8 @@ class ToolStatus:
 
 
 # A missing dependency that `jmo tools install <tool>` itself provides: yara-x's
-# pinned rule bundle. Its engine ships with JMo, so it is always installed, and
-# only this puts it on an install list.
+# pinned rule bundle. Where its engine (the yara extra) is installed, only this
+# puts it on an install list.
 INSTALLED_BY_JMO = "yara-rules"
 
 
@@ -867,8 +867,8 @@ class ToolManager:
                 if zap_path.exists():
                     return str(zap_path)
 
-        # yara-x's engine is a Python library and a dependency of JMo
-        # (Phase 6, J2), not a CLI binary: check that it imports.
+        # yara-x's engine is a Python library, the yara extra of JMo (Phase 6,
+        # J2; #1577), not a CLI binary: check that it imports.
         if binary_name == "yara-x":
             try:
                 import importlib.util

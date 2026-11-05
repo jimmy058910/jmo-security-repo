@@ -327,8 +327,8 @@ Alpine and other musl-based Linux, Python running natively on Windows ARM64, Lin
 with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and macOS 13 or older. Python's
 platform markers cannot tell musl from glibc, nor one glibc or macOS version from
 another, so the extra cannot be skipped there automatically. Installed without it,
-`jmo-security` works on those platforms: `jmo tools check` and `jmo tools install
-yara-x` say the engine is missing and why, and a scan reports yara-x as not installed.
+`jmo-security` works on those platforms: `jmo tools check`, `jmo tools install
+yara-x` and a scan's yara-x row say the engine is missing and why.
 
 **What to do:** on those platforms, install `jmo-security` without `[yara]`, and run
 the image when you need yara-x: it carries the engine and its rules.

@@ -11,6 +11,7 @@ rules are a readiness question that both install paths act on.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -119,6 +120,39 @@ def test_a_missing_engine_is_reported_with_the_extra_that_adds_it(
     assert not status.installed
     assert 'install "jmo-security[yara]"' in status.install_hint
     assert status.execution_warning == status.install_hint
+
+
+def test_a_scan_without_the_engine_says_which_extra_adds_it(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The scan's own row and log, not only `jmo tools check`, give the reason
+    # (#1577): "its executable could not be found" says nothing about an extra.
+    from scripts.cli.scan_jobs.repository_scanner import scan_repository
+    from scripts.core.scan_timings import Reason, State
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_bytes(b"import os\n")
+
+    with (
+        caplog.at_level(logging.ERROR),
+        patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner"),
+    ):
+        _, rows = scan_repository(
+            repo=repo,
+            results_dir=tmp_path / "out",
+            tools=["yara-x"],
+            timeout=60,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=lambda _tool: None,
+        )
+
+    row = rows["yara-x"]
+    assert row.state is State.FAILED and row.reason is Reason.NOT_INSTALLED
+    assert 'install "jmo-security[yara]"' in (row.detail or "")
+    assert 'install "jmo-security[yara]"' in caplog.text
 
 
 def test_the_image_installs_the_yara_extra() -> None:

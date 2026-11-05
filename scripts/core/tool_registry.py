@@ -64,7 +64,7 @@ DEPENDENCY_TOOLS: dict[str, str] = {"yara-x": "yara-x"}
 #: only, and as a hard dependency it failed the whole install everywhere else.
 DEPENDENCY_MISSING: dict[str, str] = {
     "yara-x": (
-        "the yara-x engine is not installed: it is the optional extra "
+        "the yara-x engine is not installed, or cannot be imported: it is the optional extra "
         'jmo-security[yara]. Add it with: uv tool install "jmo-security[yara]" '
         '(or pip install "jmo-security[yara]"). yara-x publishes wheels only for '
         "Linux with glibc 2.28+, macOS 14+ and Windows x86_64; elsewhere, use the "

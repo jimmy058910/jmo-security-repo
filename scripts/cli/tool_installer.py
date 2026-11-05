@@ -434,7 +434,7 @@ class ToolInstaller:
                 tool_name="yara-x",
                 success=True,
                 method="dependency",
-                message="engine ships with JMo",
+                message="engine installed (the yara extra)",
                 version_installed=importlib.metadata.version(
                     DEPENDENCY_TOOLS["yara-x"]
                 ),
