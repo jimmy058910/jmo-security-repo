@@ -117,7 +117,8 @@ import os
 import sys
 
 def _audit(event, args):
-    if event == "os.scandir" and args and args[0] is not None:
+    # A path, never an fd: os.fsdecode(int) would raise inside the child.
+    if event == "os.scandir" and args and isinstance(args[0], (str, bytes, os.PathLike)):
         with open({log!r}, "a", encoding="utf-8") as listed:
             listed.write(os.path.abspath(os.fsdecode(args[0])) + "\\n")
 

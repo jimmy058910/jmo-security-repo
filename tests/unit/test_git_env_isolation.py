@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import GIT_LOCAL_ENV_VARS
+from tests.conftest import scrub_git_environment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # A test that calls `git_commit_all`, which runs `git init` and `git config`.
@@ -42,16 +42,19 @@ def _git(*args: str, cwd: Path) -> str:
     ).stdout.strip()
 
 
-def test_the_list_covers_every_variable_git_names() -> None:
+def test_the_scrub_drops_every_variable_git_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`git rev-parse --local-env-vars` is git's own list: the variables it
     clears before running a command in another repository (a submodule)."""
     named = set(_git("rev-parse", "--local-env-vars", cwd=REPO_ROOT).split())
     assert "GIT_DIR" in named  # meta-guard: the listing was read
-    assert named <= set(GIT_LOCAL_ENV_VARS)
+    for name in named:
+        monkeypatch.setenv(name, str(REPO_ROOT / ".git"))
 
+    scrub_git_environment()
 
-def test_none_of_them_reaches_a_test() -> None:
-    assert not set(GIT_LOCAL_ENV_VARS) & set(os.environ)
+    assert not named & set(os.environ)
 
 
 def test_a_suite_run_under_git_dir_leaves_that_repository_alone(
@@ -87,7 +90,9 @@ def test_a_suite_run_under_git_dir_leaves_that_repository_alone(
         capture_output=True,
         encoding="utf-8",
         errors="replace",
-        timeout=300,
+        # Under the Windows shard's 60 s per-test limit, so a hung child is
+        # killed here rather than orphaned.
+        timeout=50,
     )
 
     assert config.read_bytes() == before

@@ -54,9 +54,28 @@ GIT_LOCAL_ENV_VARS = (
 )
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    for name in GIT_LOCAL_ENV_VARS:
+def scrub_git_environment() -> None:
+    """Drop GIT_LOCAL_ENV_VARS and whatever this machine's git names, so a git
+    that adds a variable is covered without an edit here."""
+    names = set(GIT_LOCAL_ENV_VARS)
+    try:
+        names.update(
+            subprocess.run(
+                ["git", "rev-parse", "--local-env-vars"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env={k: v for k, v in os.environ.items() if k not in names},
+            ).stdout.split()
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass  # no git: nothing can act on these anyway
+    for name in names:
         os.environ.pop(name, None)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    scrub_git_environment()
 
 
 # ============================================================================
