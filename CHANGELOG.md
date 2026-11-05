@@ -158,6 +158,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Removed
 
+- **The Homebrew formula and the packaging install-tools scripts (#1286).**
+  `packaging/homebrew/jmo-security.rb` could not install the current package (it asked for
+  Python 3.10, pinned v1.0.0 with an empty sha256, and listed none of rich, rapidfuzz,
+  croniter, requests or yara-x), and its post-install message piped
+  `install-tools-homebrew.sh` from `main` into bash. That script and
+  `install-tools-{linux,windows}` installed none of shellcheck, grype, yara, opa, gitleaks,
+  zizmor or osv-scanner, and nothing else referred to them. `jmo tools install` installs
+  every scanner at its pin. The packaging guides and CONTRIBUTING lose their Homebrew
+  sections.
 - **Breaking. 16 scanners leave; a scan runs 12.** noseyparker, semgrep-secrets, bandit,
   trivy-rbac, prowler, kubescape, akto, scancode, cdxgen, dependency-check, horusec, falco,
   falcoctl, afl++, mobsf and lynis are gone, with their adapters, installer entries,
