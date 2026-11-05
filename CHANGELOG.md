@@ -565,6 +565,15 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **A quoted `~` in a results or history path means the home directory (#1302).**
+  `jmo scan --results-dir '~/x'`, as a quoted cron line or a generated script passes it,
+  wrote its reports into a directory literally named `~` under the working directory, and
+  exited 0. Every path option now expands a leading `~` where the parser reads it: every
+  `--results-dir` and history database, `jmo report`'s results directory and `--out`,
+  `--config`, `--output`, the wizard's `--target`, `--baseline`, `--current` and
+  `--emit-*` files, `jmo diff`'s directories, the trends exports, and the rest. Scan
+  targets were already expanded where the scan reads them. So is the MCP server's
+  `JMO_HISTORY_DB`.
 - **No subprocess in `scripts/cli` or `scripts/core` can wait forever (#1285).** `jmo tools
   uninstall`'s `pip uninstall` and `pip show`, and `jmo schedule install`'s two `crontab`
   calls, had no timeout; a hung `crontab` is now reported as a schedule error after 30 s.

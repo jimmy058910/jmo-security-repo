@@ -243,15 +243,30 @@ class _ToolNamesAction(argparse.Action):
         setattr(namespace, self.dest, names)
 
 
+def _expand_home(value: str) -> str:
+    """A path option's value with a leading `~` expanded (#1302).
+
+    A shell expands an unquoted `~`, but a quoted one (a cron line, a generated
+    script, a config value) reaches JMo as typed, and named a directory called
+    `~` in the working directory. Expanded here, every command reading the
+    option gets the same path.
+    """
+    return os.path.expanduser(value)
+
+
 def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
     """Add common scan configuration arguments."""
     parser.add_argument(
         "--results-dir",
         default="results",
+        type=_expand_home,
         help="Base results directory (default: results)",
     )
     parser.add_argument(
-        "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
+        "--config",
+        type=_expand_home,
+        default="jmo.yml",
+        help="Config file (default: jmo.yml)",
     )
     parser.add_argument(
         "--tools",
@@ -303,6 +318,7 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--history-db",
         default=None,
+        type=_expand_home,
         help="Path to history database (default: .jmo/history.db)",
     )
     parser.add_argument(
@@ -370,21 +386,27 @@ def _add_report_args(subparsers: argparse._SubParsersAction) -> Any:
         "results_dir_pos",
         nargs="?",
         default=None,
+        type=_expand_home,
         help="Directory with individual-repos/* tool outputs",
     )
     rp.add_argument(
         "--results-dir",
         dest="results_dir_opt",
         default=None,
+        type=_expand_home,
         help="Directory with individual-repos/* tool outputs (optional form)",
     )
     rp.add_argument(
         "--out",
         default=None,
+        type=_expand_home,
         help="Output directory (default: <results_dir>/summaries)",
     )
     rp.add_argument(
-        "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
+        "--config",
+        type=_expand_home,
+        default="jmo.yml",
+        help="Config file (default: jmo.yml)",
     )
     rp.add_argument(
         "--fail-on", default=None, help="Severity threshold to exit non-zero"
@@ -478,11 +500,13 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
     )
     diff_group.add_argument(
         "--baseline",
+        type=_expand_home,
         metavar="DIR",
         help="Baseline results directory for diff comparison",
     )
     diff_group.add_argument(
         "--current",
+        type=_expand_home,
         metavar="DIR",
         help="Current results directory for diff comparison",
     )
@@ -499,6 +523,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
     )
     preset_group.add_argument(
         "--target",
+        type=_expand_home,
         metavar="PATH_OR_IMAGE",
         help="Target value (repo path, image name, IaC path, or URL)",
     )
@@ -557,6 +582,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
     advanced_group.add_argument(
         "--results-dir",
         metavar="DIR",
+        type=_expand_home,
         help="Output directory for scan results (default: results)",
     )
 
@@ -566,7 +592,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
         metavar="FILE",
         nargs="?",
         const="jmo-scan.sh",
-        type=str,
+        type=_expand_home,
         help="Generate shell script (default: jmo-scan.sh)",
     )
     wizard_parser.add_argument(
@@ -574,7 +600,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
         metavar="FILE",
         nargs="?",
         const="Makefile.jmo",
-        type=str,
+        type=_expand_home,
         help="Generate Makefile target (default: Makefile.jmo)",
     )
     wizard_parser.add_argument(
@@ -582,7 +608,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
         metavar="FILE",
         nargs="?",
         const=".github/workflows/jmo-security.yml",
-        type=str,
+        type=_expand_home,
         help="Generate GitHub Actions workflow (default: .github/workflows/jmo-security.yml)",
     )
 
@@ -617,7 +643,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
     )
     wizard_parser.add_argument(
         "--db",
-        type=str,
+        type=_expand_home,
         default=None,
         help="Path to SQLite history database (default: ~/.jmo/history.db)",
     )
@@ -920,7 +946,9 @@ def _add_adapters_args(
         "validate",
         help="Validate an adapter plugin file (imports it, so module-level code runs)",
     )
-    validate_parser.add_argument("file", help="Path to adapter plugin file")
+    validate_parser.add_argument(
+        "file", type=_expand_home, help="Path to adapter plugin file"
+    )
 
     return adapters_parser
 
@@ -1012,7 +1040,9 @@ def _add_schedule_args(
         choices=["github-actions", "gitlab-ci"],
         help="Override backend type",
     )
-    export_parser.add_argument("--output", "-o", help="Output file (default: stdout)")
+    export_parser.add_argument(
+        "--output", "-o", type=_expand_home, help="Output file (default: stdout)"
+    )
 
     # INSTALL
     install_parser = schedule_subparsers.add_parser(
@@ -1076,10 +1106,12 @@ See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
     mcp_parser.add_argument(
         "--results-dir",
         default="./results",
+        type=_expand_home,
         help="Path to results directory (default: ./results)",
     )
     mcp_parser.add_argument(
         "--repo-root",
+        type=_expand_home,
         default=".",
         help="Path to repository root (default: current directory)",
     )
@@ -1168,6 +1200,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
         parser.add_argument(
             "--db",
             default=None,
+            type=_expand_home,
             help="Path to SQLite database (default: .jmo/history.db)",
         )
 
@@ -1179,6 +1212,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     store_parser.add_argument(
         "--results-dir",
         required=True,
+        type=_expand_home,
         help="Path to results directory (must contain summaries/findings.json)",
     )
     store_parser.add_argument(
@@ -1464,6 +1498,7 @@ Usage Examples:
         parser.add_argument(
             "--db",
             default=None,
+            type=_expand_home,
             help="Path to SQLite database (default: .jmo/history.db)",
         )
         if branch:
@@ -1515,10 +1550,12 @@ Usage Examples:
     )
     analyze_parser.add_argument(
         "--export-json",
+        type=_expand_home,
         help="Export analysis to JSON file",
     )
     analyze_parser.add_argument(
         "--export-html",
+        type=_expand_home,
         help="Export analysis to HTML file",
     )
     # These four were read by cmd_trends_analyze from the day trend analysis
@@ -1527,18 +1564,22 @@ Usage Examples:
     # exporters themselves are a documented, semver-stable public API.
     analyze_parser.add_argument(
         "--export-csv",
+        type=_expand_home,
         help="Export analysis to CSV file (Excel, Google Sheets)",
     )
     analyze_parser.add_argument(
         "--export-prometheus",
+        type=_expand_home,
         help="Export analysis as Prometheus metrics (.prom)",
     )
     analyze_parser.add_argument(
         "--export-grafana",
+        type=_expand_home,
         help="Export a Grafana dashboard definition (JSON)",
     )
     analyze_parser.add_argument(
         "--export-dashboard",
+        type=_expand_home,
         help="Export trend data for the JMo dashboard (JSON)",
     )
     add_common_trend_args(analyze_parser)
@@ -1678,6 +1719,7 @@ Usage Examples:
     )
     developers_parser.add_argument(
         "--team-file",
+        type=_expand_home,
         help=(
             "JSON file mapping developer email to team name, to aggregate the "
             'rankings by team (e.g. {"alice@example.com": "Backend Team"})'
@@ -1752,6 +1794,7 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
     test_parser.add_argument("policy", help="Policy name (without .rego extension)")
     test_parser.add_argument(
         "--findings-file",
+        type=_expand_home,
         required=True,
         help="Path to JSON file with findings (e.g., results/summaries/findings.json)",
     )
@@ -1801,10 +1844,13 @@ Example:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    attest_parser.add_argument("subject", help="File to attest (e.g., findings.json)")
+    attest_parser.add_argument(
+        "subject", type=_expand_home, help="File to attest (e.g., findings.json)"
+    )
     attest_parser.add_argument(
         "--output",
         "-o",
+        type=_expand_home,
         help="Output path for attestation (default: <subject>.att.json)",
     )
     attest_parser.add_argument(
@@ -1865,9 +1911,14 @@ Example:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    verify_parser.add_argument("subject", help="File to verify (e.g., findings.json)")
     verify_parser.add_argument(
-        "--attestation", "-a", help="Attestation file (default: <subject>.att.json)"
+        "subject", type=_expand_home, help="File to verify (e.g., findings.json)"
+    )
+    verify_parser.add_argument(
+        "--attestation",
+        "-a",
+        type=_expand_home,
+        help="Attestation file (default: <subject>.att.json)",
     )
     verify_parser.add_argument(
         "--signature",
@@ -1932,6 +1983,7 @@ Supports three modes:
     # Mode selection - positional directories OR --scan flags
     diff_parser.add_argument(
         "directories",
+        type=_expand_home,
         nargs="*",
         help="Two directories to compare (baseline current)",
     )
@@ -1955,7 +2007,9 @@ Supports three modes:
         help="Output format (default: md, or suggested by --auto)",
     )
     diff_parser.add_argument(
-        "--output", type=Path, help="Output file path (default: stdout for md/json)"
+        "--output",
+        type=_expand_home,
+        help="Output file path (default: stdout for md/json)",
     )
 
     # Modification detection (Decision 4)
@@ -1983,7 +2037,7 @@ Supports three modes:
     # SQLite options
     diff_parser.add_argument(
         "--db",
-        type=Path,
+        type=_expand_home,
         help="Path to the history database (default: .jmo/history.db)",
     )
 
@@ -3101,7 +3155,6 @@ def cmd_scan(args) -> int:
 
     cfg = load_config(args.config)
     tools = eff["tools"]
-    # TODO(issue-#1302): no expanduser, so a quoted `~` is a literal directory.
     results_dir = Path(args.results_dir)
 
     # One ToolManager for the whole startup path. It memoises check_tool, and

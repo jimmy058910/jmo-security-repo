@@ -851,7 +851,8 @@ def query_findings_db(
     # Resolve database path: env var > .jmo/history.db relative to repo root > default
     db_path_env = os.getenv("JMO_HISTORY_DB")
     if db_path_env:
-        db_path = Path(db_path_env)
+        # A quoted `~` in an MCP client's config reaches here unexpanded (#1302).
+        db_path = Path(db_path_env).expanduser()
     else:
         repo_db = REPO_ROOT / ".jmo" / "history.db"
         if repo_db.exists():
