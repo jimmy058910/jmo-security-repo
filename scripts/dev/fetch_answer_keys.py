@@ -291,6 +291,119 @@ KICS_FILES: dict[str, str] = {
 }
 
 
+ZIZMOR = "zizmor"
+ZIZMOR_VERSION = "1.31.1"
+ZIZMOR_COMMIT = "effdb35fa7868863f11655db256d9008922fa427"  # the v1.31.1 tag
+ZIZMOR_URL = "https://raw.githubusercontent.com/zizmorcore/zizmor/{commit}/{path}"
+# zizmorcore/zizmor (MIT): its integration tests' insta snapshots of zizmor's own
+# output, and the inputs they run on. Only the 28 audit test files that hold a
+# test run as JMo runs zizmor (one input, offline, the regular persona, no
+# config), and the 72 inputs those tests name, graded by
+# tests/integration/test_zizmor_answer_key.py.
+ZIZMOR_FILES: dict[str, str] = {
+    "crates/zizmor/tests/integration/audit/adhoc_packages.rs": "aeedb20eddcd9f7b4c5f2a6ef04f847a73041a5fab293920b2328f7c3dd68838",
+    "crates/zizmor/tests/integration/audit/anonymous_definition.rs": "c91b49d3ae96e7ba6e99365181de6a15c556ee9b7c94db9d106f6ffcab64fa99",
+    "crates/zizmor/tests/integration/audit/archived_uses.rs": "a387cd18a42ba1bea9be247b38cc504164308f186a0a66399668b69520949aa0",
+    "crates/zizmor/tests/integration/audit/artipacked.rs": "ed5eea2174dad6f0c49dbc5a19e4e93207f2316ea294ffcb2455efbc5662a8a6",
+    "crates/zizmor/tests/integration/audit/bot_conditions.rs": "89636573b21f63edad4b6e3fd749196798a7dfbe17673f666ce3293821eeb8c8",
+    "crates/zizmor/tests/integration/audit/cache_poisoning.rs": "2c8bd4c32529ac46cbc0542dc041717a97e167b8fba45a161fb51d14cc30877b",
+    "crates/zizmor/tests/integration/audit/dependabot_cooldown.rs": "8c7ada40c76ce23d8f046d436d0bedefbc1afbb75c9de622a058f36119489f94",
+    "crates/zizmor/tests/integration/audit/github_app.rs": "9cf5f406acf7690569c5ca05af39e8b6f27910bcbe878237e9b78535f639e953",
+    "crates/zizmor/tests/integration/audit/github_env.rs": "1a70e9d6a0a026d2c221842b653eb8ad91fd1d17bc436628bad6c6052c0032b7",
+    "crates/zizmor/tests/integration/audit/insecure_commands.rs": "5095480fd383b7ab95728232a3fff002088065c9b0ea693acd0ba6b73eb0da7a",
+    "crates/zizmor/tests/integration/audit/insecure_url_scheme.rs": "b479f23dac0ec087fa86b12cde58edebe5f3dff3fd5605f00a945633c829b30c",
+    "crates/zizmor/tests/integration/audit/misfeature.rs": "b1e0ee34030332688e417ec3e3717da94963a5d7f852707f857afe614a943ca8",
+    "crates/zizmor/tests/integration/audit/obfuscation.rs": "2012d0d1868da947eca011bf63c08b3642e81d2950c1fc03e4fcb0eecb450c52",
+    "crates/zizmor/tests/integration/audit/overprovisioned_secrets.rs": "7e86632d71674b17ac40e5d940eff7dd575632c6eec3daabab90c1c71db5ec50",
+    "crates/zizmor/tests/integration/audit/secrets_inherit.rs": "7fc28199868b958f290efc7d2919205797978926f4483335e67694253c6f72a7",
+    "crates/zizmor/tests/integration/audit/self_hosted_runner.rs": "ba26064e06f5d02a74bd81c210f48f63a07f6def8d72a4024591af4fb41e9bbc",
+    "crates/zizmor/tests/integration/audit/self_repository.rs": "1877ea1c26e8e57ff7ca3667422f12e923f69fed9d45c1b55c6cfabc7e23d4c9",
+    "crates/zizmor/tests/integration/audit/template_injection.rs": "782e28372877630c414cef847cf991f803d3a71c141026b906a725ac394a824f",
+    "crates/zizmor/tests/integration/audit/typosquat_uses.rs": "862a5a20b01e5a38f82a5e4e1e86e91807c12923c969761acab5e8035fad33c7",
+    "crates/zizmor/tests/integration/audit/undocumented_permissions.rs": "2576a43ea0da5bf729197d902f99d41f57c2d12fbefbb82794c925a90c8f5feb",
+    "crates/zizmor/tests/integration/audit/unpinned_images.rs": "fd68a64b587742a448c79908182e5d3e6977ff05d2a0fc6012afbc07d61c81cf",
+    "crates/zizmor/tests/integration/audit/unpinned_tools.rs": "ad5df455b704486828180212cadad0595dc676b8f86593c988b3ebcde843489a",
+    "crates/zizmor/tests/integration/audit/unpinned_uses.rs": "aa5f2a103e46464e5d697a790a68d798d28b9deb0053709266db0cebe4c0cde6",
+    "crates/zizmor/tests/integration/audit/unredacted_secrets.rs": "7b118d0f3eed637191f67c027071266ac8a49fb38f42b7c72a0c15b25e026dfa",
+    "crates/zizmor/tests/integration/audit/unsound_condition.rs": "b305f186fa37215392bc9330320048f3bf46c457d80b158cda2ace0322c4dfbc",
+    "crates/zizmor/tests/integration/audit/unsound_contains.rs": "a90cd2490b957761a24c39dad09a1ea18211a5c675ac53eb42e420f1fb1db4e4",
+    "crates/zizmor/tests/integration/audit/unsound_ternary.rs": "8e2e111a300231570455c5ab02b9a2c338ee454d638812e5d5a720728709f65f",
+    "crates/zizmor/tests/integration/audit/use_trusted_publishing.rs": "9a65a83181bd475e66db27ddf9b056b2233b3f1c450bf710455db4f4b1e86ab2",
+    "crates/zizmor/tests/integration/test-data/adhoc-packages.yml": "6f3ec4b91427c61d8bf0834d081fb52f41f51ab725e68362dc16dbe99214f1ec",
+    "crates/zizmor/tests/integration/test-data/anonymous-definition.yml": "e9f66a0cf3c656a438f1b2d23f8d88a3691439680108fa072a88b1bd288a1027",
+    "crates/zizmor/tests/integration/test-data/archived-uses/action/action.yml": "0d73fe4dbdfce270c559ba4f3214616af72a631b2a28b3c55dc16626cfd7e1aa",
+    "crates/zizmor/tests/integration/test-data/archived-uses/pre-commit/.pre-commit-config.yaml": "1b970c857cf0049204cae5af53746fb58706e54318dec77c1bac992c7141b25c",
+    "crates/zizmor/tests/integration/test-data/archived-uses.yml": "651d10a200b7a179ea13f773cf4f6241ebd08d3966a6c1ba2b6b733fa35d8dec",
+    "crates/zizmor/tests/integration/test-data/artipacked.yml": "12cba4f8752bfd922aae52069ab2e75b27cafc5ebffabc64e88f02b2c9048788",
+    "crates/zizmor/tests/integration/test-data/bot-conditions.yml": "4fac5e99a1ff1c4c0596760f4c0148a488003bac9a165e7b43d06a7e48c0f39d",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/caching-opt-out.yml": "737ddcd41d23feeaf0162bb49638778ac117843823a79835b5b3653d1c7b746f",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-1081-repro.yml": "c610c82e473326ca350d82ea52c00b47bb2a2319b7ec161ba6a8ed63931ed03e",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-1152-repro.yml": "2499301a6ac315ebfed55e11c7c8bd35f91eeccad2d202933195bcd6ee341d8b",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-1485-repro.yml": "395c2f3cb50d1bb93b04de10ae4aaef3130747d8e6767b3dd4b5c409a3338040",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-1940-repro.yml": "fa639cc0d3f5cf8a1343310c18af606453e3d0a6427fff84c4068076cc5a3106",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-2320-repro.yml": "1de224b4421c68d3a87b085ccf9c72fb8d980a5b3050c7f393e891b7722f79a1",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-343-repro.yml": "96d9bdf91be018c26f5228d2154d87a6c860b1c5b1fce324545bfa7b20a8bd58",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-378-repro.yml": "2f66be77aa95236be95a0e9bd8c841c48a35882ee21b7e7479b5b96b787d69af",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/issue-642-repro.yml": "476f54cadb816195485a790841fb5a5afc9a369a8fe5ba6624fee6a8ce67ddf9",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/no-cache-aware-steps.yml": "6792f5e6666e5abf664febed82b40493e79712c9dd13b362d87c49f371e9558a",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/publisher-step.yml": "a4d02677af83166302d6166258b1394a8ba2a44c0c71e1b8d85d92d4495e8698",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/trigger-heuristics/tag-only.yml": "1d41a5856dc1d1818b01c9aaf305c4f58570e2e473db3fd6aa2a1529b0ab4704",
+    "crates/zizmor/tests/integration/test-data/cache-poisoning/workflow-tag-trigger.yml": "f06414eb85fa9d2ef533b8cdc7621dec8be52814695803286a20306b9a955dab",
+    "crates/zizmor/tests/integration/test-data/dependabot-cooldown/opentofu-no-cooldown/dependabot.yml": "30544cae85851002d843e6651d2ba69e0aa65bb0075bc1dc849bab67045f41af",
+    "crates/zizmor/tests/integration/test-data/github-app/issue-2219-repro.yml": "9a21cd51ace084ff118a240c75858ea4b556e5a15235cc6025280fcef62b84e8",
+    "crates/zizmor/tests/integration/test-data/github-app.yml": "064468311910c14208b986d2f3c2015a596d77cce4935b5401a41e49550c82dd",
+    "crates/zizmor/tests/integration/test-data/github-env/action.yml": "0f34a3b4390934516d3eb6aa80d70c5e4fac676650dbb1be5d9a0ee83f6389cc",
+    "crates/zizmor/tests/integration/test-data/github-env/github-path.yml": "481032c1cc24f0f66634cd0ae7fe343f96ad9226ae8c47471bc443f98bc2dfea",
+    "crates/zizmor/tests/integration/test-data/github-env/issue-397-repro.yml": "27d011d380866c47f806b138b2947ee4dad14daab18f53721759b361c259e48e",
+    "crates/zizmor/tests/integration/test-data/insecure-commands.yml": "9bfed1b1c5fabd327c12f03f7d0da2013380ad361855484938adae64a23db42f",
+    "crates/zizmor/tests/integration/test-data/insecure-url-scheme/.pre-commit-config.yml": "0043cd3b5890c80ce41eac93cd98133084e7ac7153217410243115790008fe66",
+    "crates/zizmor/tests/integration/test-data/misfeature/issue-1414-repro.yml": "2121d923fc0ff28b47beae535f3ddf7f51c148cf9a8180302b58cf9c90cd0b9e",
+    "crates/zizmor/tests/integration/test-data/misfeature/setup-python-pip-install.yml": "8847ced94c835a8317841c2a178600144e5265213ca91bbfafed21aeeba416cf",
+    "crates/zizmor/tests/integration/test-data/misfeature/workflow-cmd-default-shell.yml": "5790eb74dd6c51ef0393ee477c474bd294479f59611331a04043f5af20a75905",
+    "crates/zizmor/tests/integration/test-data/obfuscation/issue-1769-repro.yml": "2ff4c31659fe271cc2b1259020e196c0e41b099245878de9b1a15aebf5cb6297",
+    "crates/zizmor/tests/integration/test-data/obfuscation.yml": "d260badcec43f6a117997c21d3fe77cb603b4a22d5861334d1e57db3f6087e03",
+    "crates/zizmor/tests/integration/test-data/overprovisioned-secrets.yml": "436af94f2f35fa97b5ea2c56e1031ac46a7b83f6e4b2ae2aa8b72df351d3cf82",
+    "crates/zizmor/tests/integration/test-data/secrets-inherit.yml": "200506f08358c2ee9e2bd367612f372ca3f21181824c83a2af63d82bc98543bb",
+    "crates/zizmor/tests/integration/test-data/self-hosted.yml": "b877013af24a29b1a1da10b29e29c8e0cdc306536c7ef86fd07716fc1a07b586",
+    "crates/zizmor/tests/integration/test-data/self-repository.yml": "b22cd9385c4830655ea42aef9c01b5c208121fb60681aba38369695150efbcee",
+    "crates/zizmor/tests/integration/test-data/template-injection/codeql-sinks.yml": "3de4481f02f2a1802c93add129507f3b3bdeb29b6e6bb75991c483bf1e762c6e",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-1638-repro.yml": "9a789b2cb9067f1c606cab945f1f34f86c211e4e1fb0ec93999e426f87326930",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-1802-repro.yml": "545000dbebba8bcdcf3084b52ebf0bddbec498d26acdd08f2038e9c80881f1c1",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-1903-repro.yml": "d2264cf1d9f96a774eb1224c253181b4669141407707751f647186d279a0a6d1",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-2197-repro.yml": "cd637cb3b87a1b4c8adc86a9c0617aa9c5dc9ac6c3529846189c644dc387e498",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-22-repro.yml": "afe795d45eb668538e78a1f5039e07781008e7d09d30ad7eefe881f62fee9f74",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-339-repro.yml": "c55003cac1e2fea2a462b994a8ccfe278bff61343f5ef8803464c6e6cc40ec63",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-418-repro.yml": "7de2fd552c09ad21b4b7f64da32b035074c688cb85996a40721fde61dae3e98a",
+    "crates/zizmor/tests/integration/test-data/template-injection/issue-749-repro.yml": "56a9c52033fa4209e98e1824ac998c61fd2e71569c1e62560ebc5a052435cbdc",
+    "crates/zizmor/tests/integration/test-data/template-injection/pr-317-repro.yml": "fbe757c7883f0c47565a8c3e9088a00d256019a5727928b5e11bc4864990cc92",
+    "crates/zizmor/tests/integration/test-data/template-injection/pwsh-script.yml": "7d7809517cb54a01bdc4ecc04827ec3842693bda635d864a572c33d2e162ed64",
+    "crates/zizmor/tests/integration/test-data/template-injection/static-env.yml": "d76977f50f8c600df795260ff8765883fbcb4c11e1b23bfa43328e1f0452d975",
+    "crates/zizmor/tests/integration/test-data/typosquat-uses/pre-commit/.pre-commit-config.yaml": "7074c3cfa9e2c4caa19333fc5f2ca6a570613996ea49547004c2a5b6e48b353f",
+    "crates/zizmor/tests/integration/test-data/typosquat-uses.yml": "172b19c75c09c13baaccd4d4d100dc8485c30bf7b8b133964c3acf17a9620920",
+    "crates/zizmor/tests/integration/test-data/undocumented-permissions.yml": "e72cf2dee9b9362f3184373d7a4a5f3ddff490ed054de33924a14fdf74765b3c",
+    "crates/zizmor/tests/integration/test-data/unpinned-images/issue-2097-repro.yml": "acd2d865a6634876413158a36de8a5c7db5c5d073bb2e3baad29e9f7f91aaec3",
+    "crates/zizmor/tests/integration/test-data/unpinned-images/matrix-in-image.yml": "1c01a1c20ed57751650405a9c27dd595ed05feb4ae2274b6d65e55d1d1fc5b0f",
+    "crates/zizmor/tests/integration/test-data/unpinned-tools/if-false.yml": "16d9bc6dcb20e8d704609c1239d3f318c0c914809172a8425f6019c9748a22fb",
+    "crates/zizmor/tests/integration/test-data/unpinned-tools/setup-just.yml": "d4ecc44c3f514a424c5a2fc1a7978b1adf41df6d66bdce31b74df79cb7a3b297",
+    "crates/zizmor/tests/integration/test-data/unpinned-tools.yml": "1fd87c1b7d267585f39dfa5c14c7d49efcd5e7e1cd70d96c397ac90d36bea623",
+    "crates/zizmor/tests/integration/test-data/unpinned-uses/issue-1543-repro.yml": "8ad3443678f866d313c8d703082eac8758f0a8511531c2f802d3b52c03c45d1f",
+    "crates/zizmor/tests/integration/test-data/unpinned-uses/menagerie-of-uses.yml": "5a0a6cb2a0075774fd055af44f535db77e34175f76a4df1f21adda1969cea0e7",
+    "crates/zizmor/tests/integration/test-data/unpinned-uses/reusable-workflow-unpinned.yml": "46baa622d8e470331e9966952ec2d0e30398ad2419b34de078fe7c2626818046",
+    "crates/zizmor/tests/integration/test-data/unpinned-uses.yml": "ca6b3f1ec7b63eaedcdfbfeb3ba1951a0af79af6b559aaf0d44f1bc2653e1be5",
+    "crates/zizmor/tests/integration/test-data/unredacted-secrets.yml": "d5fb03b215326a4c80842c6828189b2fafc933694a78ca807fe536fa20384774",
+    "crates/zizmor/tests/integration/test-data/unsound-condition.yml": "b360d22d4ff0533fc57e1eedf3f812eb6432a26d2ba04956be9da2e7a2fd3433",
+    "crates/zizmor/tests/integration/test-data/unsound-contains.yml": "bdccfa2d897b72d751c7088be44627766e271ee0b388276430f7dbd7ddb0bc5b",
+    "crates/zizmor/tests/integration/test-data/unsound-ternary/issue-746-repro.yml": "fabd28ba196729e528edd16bfd54e19e52f5f22b572f01654d11f7a9f9f29375",
+    "crates/zizmor/tests/integration/test-data/use-trusted-publishing/bun-publish.yml": "afde2b58d7a4ab5f8e6e3b4c76d114377c037b30f529309aea443c395ed38b0b",
+    "crates/zizmor/tests/integration/test-data/use-trusted-publishing/cargo-publish.yml": "80e7de786f03938b7d75a646cd8ef4ce230bf1cbf443f4cc0131460b016b090c",
+    "crates/zizmor/tests/integration/test-data/use-trusted-publishing/gem-push.yml": "e5c14475277ab48becd3e23690264b5a2a06985d91646bfcdd1c6a255578cf74",
+    "crates/zizmor/tests/integration/test-data/use-trusted-publishing/npm-publish.yml": "e0a1cf6f9385daafd923915c8d65c17980eb11b5535de9f537691961dc44a32a",
+    "crates/zizmor/tests/integration/test-data/use-trusted-publishing/nuget-push.yml": "861fad4bf8f195630cc01fd26e8655886001d347952302ea5372a8ba00a24e12",
+    "crates/zizmor/tests/integration/test-data/use-trusted-publishing/twine-upload.yml": "ed8303f3f4098ae4b7988c9878b6ef78dc32f2a22ae79d715949ab132364f146",
+    "crates/zizmor/tests/integration/test-data/use-trusted-publishing.yml": "e1f88880c1444e90d8b8e976236fa13cf111f49dd738eef5f76406ce19470d9e",
+}
+
+
 def answer_keys_dir() -> Path:
     """`$JMO_ANSWER_KEYS_DIR`, else `~/.cache/jmo-answer-keys`; an empty
     variable is no override."""
@@ -311,6 +424,11 @@ def vibeproof_dir(root: Path | None = None) -> Path:
 def kics_dir(root: Path | None = None) -> Path:
     """Where the key's files are: `<root>/kics/<commit>`."""
     return (root or answer_keys_dir()) / KICS / KICS_COMMIT
+
+
+def zizmor_dir(root: Path | None = None) -> Path:
+    """Where the key's files are: `<root>/zizmor/<commit>`."""
+    return (root or answer_keys_dir()) / ZIZMOR / ZIZMOR_COMMIT
 
 
 def download(url: str) -> bytes:
@@ -412,10 +530,17 @@ def kics(root: Path | None = None) -> list[str]:
     return _fetch_pinned(kics_dir(root), KICS_COMMIT, KICS_URL, KICS_FILES)
 
 
+def zizmor(root: Path | None = None) -> list[str]:
+    """zizmor's audit tests and their inputs at the pinned tag; the problems
+    met, none when every file is in place."""
+    return _fetch_pinned(zizmor_dir(root), ZIZMOR_COMMIT, ZIZMOR_URL, ZIZMOR_FILES)
+
+
 KEYS: dict[str, Callable[[], list[str]]] = {
     SCA_KITCHEN_SINK: sca_kitchen_sink,
     VIBEPROOF: vibeproof,
     KICS: kics,
+    ZIZMOR: zizmor,
 }
 
 

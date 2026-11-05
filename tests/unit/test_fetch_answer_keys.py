@@ -42,6 +42,11 @@ GOOD_KICS = {
     "assets/queries/dockerfile/q/test/positive_expected_result.json": b"[]\n",
 }
 
+GOOD_ZIZMOR = {
+    "crates/zizmor/tests/integration/audit/artipacked.rs": b"// tests\n",
+    "crates/zizmor/tests/integration/test-data/artipacked.yml": b"on: push\n",
+}
+
 
 @pytest.fixture
 def keys_dir(tmp_path, monkeypatch) -> Path:
@@ -62,10 +67,18 @@ def served(monkeypatch) -> list[str]:
         fak, "VIBEPROOF_FILES", {p: _sha(d) for p, d in GOOD_VIBEPROOF.items()}
     )
     monkeypatch.setattr(fak, "KICS_FILES", {p: _sha(d) for p, d in GOOD_KICS.items()})
+    monkeypatch.setattr(
+        fak, "ZIZMOR_FILES", {p: _sha(d) for p, d in GOOD_ZIZMOR.items()}
+    )
 
     def download(url: str) -> bytes:
         asked.append(url)
-        for path, data in {**GOOD, **GOOD_VIBEPROOF, **GOOD_KICS}.items():
+        for path, data in {
+            **GOOD,
+            **GOOD_VIBEPROOF,
+            **GOOD_KICS,
+            **GOOD_ZIZMOR,
+        }.items():
             if url.endswith("/" + path):
                 return data
         raise OSError(f"no such file: {url}")
@@ -455,3 +468,41 @@ def test_the_kics_pins_are_every_dockerfile_query_and_its_samples() -> None:
 
 def test_kics_is_registered_under_the_name_the_command_takes() -> None:
     assert fak.KEYS["kics"] is fak.kics
+
+
+# --- the zizmor key --------------------------------------------------------------
+
+
+def test_the_zizmor_key_lands_under_its_name_and_its_commit(keys_dir, served) -> None:
+    assert fak.zizmor_dir() == keys_dir / "zizmor" / fak.ZIZMOR_COMMIT
+
+    assert fak.zizmor() == []
+
+    for path, data in GOOD_ZIZMOR.items():
+        assert (fak.zizmor_dir() / path).read_bytes() == data
+
+
+def test_each_zizmor_file_is_asked_for_by_the_pinned_commit(keys_dir, served) -> None:
+    fak.zizmor()
+
+    assert sorted(served) == sorted(
+        f"https://raw.githubusercontent.com/zizmorcore/zizmor/{fak.ZIZMOR_COMMIT}/{path}"
+        for path in GOOD_ZIZMOR
+    )
+
+
+def test_the_zizmor_pins_are_its_audit_tests_and_their_inputs() -> None:
+    """zizmor v1.31.1: the 28 audit test files holding a test run as JMo runs
+    zizmor, and the 72 inputs those tests name (measured 2026-11-05)."""
+    assert re.fullmatch(r"[0-9a-f]{40}", fak.ZIZMOR_COMMIT)
+    prefix = "crates/zizmor/tests/integration/"
+    for path, digest in fak.ZIZMOR_FILES.items():
+        assert re.fullmatch(r"[0-9a-f]{64}", digest), path
+        assert fak.relative_path_problem(path) is None, path
+        assert path.startswith((prefix + "audit/", prefix + "test-data/")), path
+    assert sum(p.endswith(".rs") for p in fak.ZIZMOR_FILES) == 28
+    assert sum("/test-data/" in p for p in fak.ZIZMOR_FILES) == 72
+
+
+def test_zizmor_is_registered_under_the_name_the_command_takes() -> None:
+    assert fak.KEYS["zizmor"] is fak.zizmor
