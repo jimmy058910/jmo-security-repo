@@ -123,7 +123,8 @@ Linux)
         aarch64 | arm64) SHFMT_ARCH=arm64 ;;
         *) SHFMT_ARCH=amd64 ;;
         esac
-        sudo curl -sSL "https://github.com/mvdan/sh/releases/latest/download/shfmt_Linux_${SHFMT_ARCH}" -o /usr/local/bin/shfmt || true
+        # -f: an HTTP error fails here rather than installing its error page.
+        sudo curl -fsSL --retry 3 --retry-delay 5 "https://github.com/mvdan/sh/releases/latest/download/shfmt_Linux_${SHFMT_ARCH}" -o /usr/local/bin/shfmt || true
         sudo chmod +x /usr/local/bin/shfmt || true
       fi
     fi
