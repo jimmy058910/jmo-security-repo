@@ -473,34 +473,7 @@ Before pushing Docker images:
 
 ## Package Manager Testing
 
-Before submitting Homebrew/WinGet PRs, test the packages locally.
-
-### Test Homebrew Formula
-
-```bash
-# Install from local formula
-brew install --build-from-source packaging/homebrew/jmo-security.rb
-
-# Verify installation
-jmo --help
-jmo scan --help
-jmo tools --help
-jmo wizard --help
-
-# Run formula tests
-brew test jmo-security
-
-# Audit formula (checks best practices)
-brew audit --strict --online jmo-security
-
-# Test upgrade path (if updating existing formula)
-brew upgrade jmo-security
-
-# Cleanup
-brew uninstall jmo-security
-```
-
-**Note:** `jmotools` was consolidated into `jmo` in v0.9.0. All commands now use the `jmo` CLI.
+Before submitting a WinGet PR, test the package locally. JMo has no Homebrew formula.
 
 ### Test WinGet Package (Windows)
 
@@ -527,12 +500,12 @@ winget uninstall jmo.jmo-security
 
 ### Pre-release Package Manager Checklist
 
-Before submitting to Homebrew/WinGet:
+Before submitting to WinGet:
 
-- [ ] Test local formula/manifest installation
+- [ ] Test local manifest installation
 - [ ] Verify CLI works (`jmo --help`, `jmo scan --help`, `jmo tools --help`)
 - [ ] Test upgrade path from previous version
-- [ ] Run `brew audit` (macOS) or `wingetcreate validate` (Windows)
+- [ ] Run `wingetcreate validate`
 - [ ] Verify all dependencies bundled correctly
 - [ ] Test on fresh system (VM or Docker container)
 - [ ] Check package size is reasonable
