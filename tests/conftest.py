@@ -30,6 +30,34 @@ IS_MACOS = sys.platform == "darwin"
 # test, and on Linux and macOS `Path.home()` reads it.
 _REAL_HOME = Path.home()
 
+# git's local environment variables, as `git rev-parse --local-env-vars` lists
+# them. Set, they send git to another repository whatever `-C` says, and
+# `git bisect run` in a linked worktree and every git hook export GIT_DIR: on
+# 2026-11-04 a fixture's `git init` re-initialised the real repository as bare
+# (#1575). `pytest_configure` drops them for the session, xdist workers too.
+GIT_LOCAL_ENV_VARS = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
+    "GIT_COMMON_DIR",
+)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    for name in GIT_LOCAL_ENV_VARS:
+        os.environ.pop(name, None)
+
 
 # ============================================================================
 # Platform Skip Decorators
