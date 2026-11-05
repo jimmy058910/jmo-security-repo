@@ -998,7 +998,7 @@ All notable changes to JMo Security will be documented in this file.
   the run. Both GitHub Actions templates, and the CI examples in the docs (GitHub Actions,
   GitLab and Jenkins), now upload the summaries, which hold no secret scanner's raw output.
   They still quote source text: a finding's `context.snippet`, and an opengrep finding's
-  `raw`, quote the code it matched, a hard-coded secret included.
+  `raw`, quote the code it matched, a hard-coded secret included (#1585).
 - **A report takes the secrets out of the secret scanners' raw outputs once it has read
   them (#1329).** `trufflehog.json`, `gitleaks.json` and their `.git.json` history files
   held every secret found, deleted ones included. `jmo report` and `jmo ci` now replace

@@ -156,7 +156,7 @@ stand-ins, so a later report still pairs each secret's tree and history findings
 with no report after it leaves them as the tools wrote them. Upload `summaries/`,
 never the whole results directory. `summaries/` is not free of source text either:
 a finding's `context.snippet`, and an opengrep finding's `raw`, quote the code it
-matched, so a rule that matches a hard-coded secret quotes that secret.
+matched, so a rule that matches a hard-coded secret quotes that secret (issue #1585).
 
 Each target's folder is unique within its type. When two targets would share a
 folder name, they are told apart: repositories each by their parent folder
