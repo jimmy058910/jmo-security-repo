@@ -155,6 +155,19 @@ def test_a_scan_without_the_engine_says_which_extra_adds_it(
     assert 'install "jmo-security[yara]"' in caplog.text
 
 
+def test_a_default_install_leaves_out_an_engine_it_cannot_add(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Decided 2026-11-05: a bare install works everywhere, so a default `jmo
+    # tools install` cannot fail on the one tool it can never install where the
+    # yara extra has no wheel (Alpine). `tools check` still reports it.
+    monkeypatch.setitem(sys.modules, "yara_x", None)
+    manager = ToolManager()
+
+    assert manager.get_missing_tools(["yara-x"]) == []
+    assert not manager.check_tool("yara-x").installed
+
+
 def test_the_image_installs_the_yara_extra() -> None:
     # The image is the way on the platforms the extra cannot reach, so it must
     # carry the engine; docker-smoke's `import yara_x` checks it only when the

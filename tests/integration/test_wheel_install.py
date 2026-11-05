@@ -213,6 +213,13 @@ def test_a_bare_install_runs_and_names_the_extra_yara_x_needs(
     assert "MISSING" in check.stdout
     assert 'install "jmo-security[yara]"' in check.stdout
 
+    # A default install leaves out what it cannot add (decided 2026-11-05), so
+    # `jmo tools install && jmo scan` does not stop where the extra has no wheel.
+    default = _run_jmo(installed_jmo, home, "tools", "install", "--dry-run")
+    assert default.returncode == 0, default.stderr
+    assert "yara-x" not in default.stdout
+
+    # Named, it still fails and says why.
     install = _run_jmo(installed_jmo, home, "tools", "install", "yara-x")
     assert install.returncode != 0
     assert "Traceback" not in install.stderr, install.stderr
