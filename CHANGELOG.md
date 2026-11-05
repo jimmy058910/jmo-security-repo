@@ -491,6 +491,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A JMo installed from its wheel can install and check tools (#1511).** The wheel
+  (`uv tool install`, pipx, pip) carried no `versions.yaml`, so every `jmo tools` command,
+  `tools check` included, raised `FileNotFoundError`. The build now copies the pins into
+  the wheel (`setup.py`, with `MANIFEST.in` for the sdist the release builds from), and
+  `tests/integration/test_wheel_install.py` builds the wheel the release's way, installs it
+  and runs `jmo tools` from it.
 - **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,
