@@ -174,6 +174,22 @@ All notable changes to JMo Security will be documented in this file.
   real-tool scans that passes nothing, or an answer-key step that skips, fails
   (`scripts/dev/require_passed.py`).
 
+- **A scan holds its tools to one memory budget.** Each tool carries its measured memory
+  (`ToolDescriptor.memory_mb`), and a run starts only while the runs going plus it fit
+  the budget, or when nothing else runs (a run larger than the budget runs alone), first
+  come, first served. The budget is `--memory-budget MB` (on `jmo scan` and `jmo ci`),
+  else `jmo.yml`'s `memory_budget_mb`, else half the memory free when the scan starts,
+  never below 700 MB. In a container it reads the cgroup's limit, not the host's memory.
+  On a measured application the default matrix peaked at 1,314 MB, and at 647 MB with
+  `--memory-budget 700`, with the same findings. osv-scanner's per-lockfile retry round,
+  2,447 MB on one fixture, held 643 MB at that budget (#1373).
+- **Ctrl-C stops a scan.** Every running tool's whole process tree is killed, no run
+  starts after it, and jmo exits 130 with no report. The session is kept, so
+  `jmo scan --resume` with the same arguments finishes the scan. A second Ctrl-C quits at
+  once. Before, the signal was logged, the scan ran on, and it exited 0. `jmo ci` writes
+  no report after Ctrl-C either. On Windows every process jmo starts dies with it, however
+  jmo exits (a Job Object).
+
 ### Removed
 
 - **Breaking. 16 scanners leave; a scan runs 12.** noseyparker, semgrep-secrets, bandit,
@@ -560,6 +576,28 @@ All notable changes to JMo Security will be documented in this file.
   with another case, which Windows' file search finds and hadolint does not read. hadolint
   and GitLab image discovery now share one definition of a Dockerfile, which reads names
   case-sensitively, even on Windows, so `dockerfile.py` is not one (#1311).
+
+- **`--threads` bounds tool runs across the whole scan.** It was the number of targets
+  scanned at once, each running 4 tools, so `--threads 4` meant up to 16 tool runs. It is
+  now also the most tool runs at once across the scan. **Behaviour change:** `--threads 1`
+  runs one tool at a time.
+- **A `--timeout` given on the command line wins over opengrep's and zap's 900 s
+  minimum** (#1486). `jmo.yml`'s `timeout` still cannot lower one, and
+  `per_tool.<tool>.timeout` wins over both. For zap the timeout is its whole plan's
+  budget, so a short one scans less.
+- **opengrep runs with `-j 2` and `--timeout 30`.** Its default 5 s per-file timeout
+  dropped every finding in a large minified file when the machine was busy: 19 of
+  juice-shop's 223 and 26 of WebGoat's, depending on what else ran. Now juice-shop
+  reads 223 and WebGoat 444 every time, alone or beside the full matrix. `-j 2` peaks at
+  507 MB against 662 MB at `-j 4`, 1 s slower. A `--timeout` in
+  `per_tool.opengrep.flags` is now refused as JMo's own (#1591).
+- **trufflehog's git-history clone goes to `~/.jmo/tmp`**, not `$TMPDIR`. On a tmpfs
+  `/tmp`, that clone (329 MB for one application) was memory the scan could not see. The
+  folder is removed after the run, and a scan's start removes what a killed jmo left.
+- **Startup asks only the tools a target in the scan reads.** The version checks before a
+  scan asked every requested tool, so a repository scan waited 26 s for zap's `-version`
+  on a first run, though zap reads only URLs. They now run after the targets are found,
+  so a target that does not exist is refused before any tool is asked (#1581).
 
 ### Fixed
 
@@ -1204,6 +1242,18 @@ All notable changes to JMo Security will be documented in this file.
   file, `three.js`, that opengrep drops under memory pressure when the other tools run
   beside it; the rows are now what a full scan reports. The scheduled e2e gate's error
   count is guarded by a test (#1502).
+
+- **A timed-out `--tsv` or GitLab clone leaves no git process behind** (#1308). Killing
+  `git` left its `git-remote-https` helper downloading: two were alive 5 s after a
+  timeout. The clone's whole process tree is killed now, on a timeout or a Ctrl-C.
+- **Two URL targets each get a zap report.** ZAP allows one process per home, and both
+  runs used JMo's: the second exited 1 at once, with no report. zap now runs one at a time
+  in a scan (#1422, in part).
+- **zizmor reads every `.pre-commit-config.yaml`**, and audits its hooks' repositories
+  (archived, typosquatted, or fetched over plain http). JMo never handed it one (#1592).
+- **No progress thread outlives a scan in the same process.** Every in-process scan left
+  one running, 114 by the end of a test session (#1208).
+- The placeholder target `--gitlab-group` discovery still built is gone (#1407).
 
 ### Security
 
