@@ -35,6 +35,12 @@ TOOL_INSTALL_HINTS = {
 }
 
 
+def missing_reason(tool_name: str) -> str:
+    """Why a scan found no executable for `tool_name`, as its row and log say
+    it: a dependency tool's engine names the extra that adds it (#1577)."""
+    return DEPENDENCY_MISSING.get(tool_name, "its executable could not be found")
+
+
 def clear_tool_warnings() -> None:
     """Clear warning tracker. Call at scan start to reset warning state."""
     global _warned_tools
@@ -164,7 +170,7 @@ def find_tool(tool_name: str) -> str | None:
         if zap_launcher is not None:
             return str(zap_launcher)
 
-    # yara-x's engine is a Python wheel and a dependency of JMo, not a CLI:
+    # yara-x's engine is a Python wheel, JMo's yara extra, not a CLI:
     # the installed artifact is a compiled extension with no main() and no
     # console script. JMo drives it through scripts/core/yara_runner.py, so the
     # executable that runs yara-x *is* this interpreter - the same shape the

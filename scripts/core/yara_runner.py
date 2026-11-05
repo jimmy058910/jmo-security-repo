@@ -5,8 +5,8 @@ Invoked as a subprocess, exactly like every other scanner::
 
     python -m scripts.core.yara_runner --rules <dir|file> --target <dir> --output <file>
 
-yara-x, VirusTotal's rewrite of YARA, is a runtime dependency of JMo: its wheel
-is the engine and its pin is `uv.lock`'s (v2.0.0 Phase 6, PR Y). The wheel
+yara-x, VirusTotal's rewrite of YARA, is JMo's `yara` extra: its wheel is the
+engine and its pin is `uv.lock`'s (v2.0.0 Phase 6, PR Y; an extra since #1577). The wheel
 has no command line of JMo's shape, so this module supplies one and the walk.
 Keeping it a subprocess rather than an in-process call preserves the uniform
 ToolRunner model - timeouts, retries, ``ok_return_codes``, and the accounting

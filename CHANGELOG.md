@@ -217,9 +217,9 @@ All notable changes to JMo Security will be documented in this file.
   dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
   macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
   image includes it, and the dev environment pulls it in through its group. Without it,
-  JMo installs and runs everywhere, and `jmo tools check` and `jmo tools install yara-x`
-  say the engine is missing and name the extra, where they said "See JMo documentation"
-  and raised a traceback.
+  JMo installs and runs everywhere, and `jmo tools check`, `jmo tools install yara-x` and a
+  scan's yara-x row say the engine is missing and name the extra, where they said "See JMo
+  documentation", raised a traceback and "its executable could not be found".
 - **Breaking. A finding names its target, and the same finding in two repositories is two
   findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
   `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a
