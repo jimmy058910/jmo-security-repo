@@ -260,6 +260,36 @@ def test_a_list_file_that_stats_but_cannot_be_read_is_rejected(
     assert "Permission denied" in joined, joined
 
 
+@pytest.mark.parametrize("attr, flag", READ_FLAGS, ids=[f for _, f in READ_FLAGS])
+def test_a_list_file_that_is_not_utf8_is_rejected_not_raised(
+    attr, flag, tmp_path, orch
+):
+    """A list saved as UTF-16 by a Windows editor raised UnicodeDecodeError, a
+    ValueError the OSError handler did not catch: a traceback and exit 1 (#1175).
+    No patching: the bytes are the real cause."""
+    listing = tmp_path / "list.txt"
+    listing.write_bytes(b"\xff\xfe/some/path\x00\n")
+
+    targets = orch.discover_targets(_Args(**{attr: str(listing)}))
+
+    joined = "\n".join(targets.rejected)
+    assert flag in joined, joined
+    assert "not valid UTF-8 (byte 0xff at position 0)" in joined, joined
+    assert "uid 1000" not in joined, joined
+
+
+@pytest.mark.parametrize("attr, flag", READ_FLAGS, ids=[f for _, f in READ_FLAGS])
+def test_a_missing_list_file_still_says_it_does_not_exist(attr, flag, tmp_path, orch):
+    """The decode branch's negative control: an absent list file is not called
+    unreadable, nor blamed on its encoding (#1175)."""
+    targets = orch.discover_targets(_Args(**{attr: str(tmp_path / "nope.txt")}))
+
+    joined = "\n".join(targets.rejected)
+    assert flag in joined, joined
+    assert "does not exist" in joined, joined
+    assert "UTF-8" not in joined, joined
+
+
 # --------------------------------------------------------------------------
 # The discriminator, and the structural guard
 # --------------------------------------------------------------------------

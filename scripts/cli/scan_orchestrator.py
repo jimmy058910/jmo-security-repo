@@ -61,7 +61,7 @@ def _user_path(value: str) -> Path:
     return Path(value).expanduser()
 
 
-def _unreadable(exc: OSError) -> str:
+def _unreadable(exc: OSError | UnicodeDecodeError) -> str:
     """Rejection text for a target the process was not allowed to inspect.
 
     The ownership sentence is attached only to ``PermissionError``: a user
@@ -69,7 +69,16 @@ def _unreadable(exc: OSError) -> str:
     no way to guess that the *container's* uid is what could not see it, and
     re-types the path instead of fixing the mount. Anything else keeps the bare
     errno text, because inventing a cause is worse than reporting one.
+
+    A list file that is not UTF-8 (one a Windows editor saved as UTF-16) names
+    its first bad byte instead: there is no errno, and the fix is to re-save
+    the file, not to look at its permissions (#1175).
     """
+    if isinstance(exc, UnicodeDecodeError):
+        return (
+            f"cannot be read: not valid UTF-8 (byte 0x{exc.object[exc.start]:02x} "
+            f"at position {exc.start}); save it as UTF-8"
+        )
     detail = exc.strerror or type(exc).__name__
     if isinstance(exc, PermissionError):
         return (
@@ -122,10 +131,11 @@ def _read_lines(path: Path) -> tuple[list[str], str | None]:
 
     ``exists()`` answering True does not promise ``open()`` will work: a
     traversable directory holding a mode-000 file gives exactly that split.
+    Nor does a readable file promise UTF-8 (#1175).
     """
     try:
         return path.read_text(encoding="utf-8").splitlines(), None
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         return [], _unreadable(exc)
 
 
