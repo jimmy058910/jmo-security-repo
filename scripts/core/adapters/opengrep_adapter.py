@@ -50,6 +50,7 @@ See Also:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +66,90 @@ from scripts.core.plugin_api import (
     adapter_plugin,
 )
 from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME, read_scan_root
+from scripts.core.secret_value_rules import (
+    MESSAGE_SECRET_METAVARS,
+    SECRET_VALUE_RULES,
+    is_secret_value_finding,
+)
+
+#: What a result from a rule that matches a secret's value keeps of opengrep's
+#: `extra` (#1585). The rest quotes the matched code, and so the secret:
+#: `lines`, `metavars`, `dataflow_trace`, a `fix`; `fingerprint` hashes the match.
+SECRET_SAFE_EXTRA = frozenset(
+    {"engine_kind", "is_ignored", "message", "metadata", "severity", "validation_state"}
+)
+#: Stands for a secret in a message. One marker, unlike the secret scanners'
+#: per-secret stand-ins: nothing pairs opengrep findings by their secret.
+REDACTED = "[redacted]"
+_QUOTES = "\"'`"
+_STRING_LITERAL = re.compile(r"([\"'`])((?:\\.|(?!\1).)*)\1")
+
+
+def _metavar_values(extra: dict[str, Any]) -> dict[str, str]:
+    metavars = extra.get("metavars")
+    if not isinstance(metavars, dict):
+        return {}
+    return {
+        name: str(value.get("abstract_content") or "")
+        for name, value in metavars.items()
+        if isinstance(value, dict)
+    }
+
+
+def is_secret_result(result: dict[str, Any]) -> bool:
+    """Whether an opengrep result's rule matches a secret's value: it is listed
+    so, or carries a hard-coded-credential CWE (`secret_value_rules`)."""
+    extra = result.get("extra") or {}
+    metadata = extra.get("metadata") if isinstance(extra, dict) else None
+    cwes = metadata.get("cwe") if isinstance(metadata, dict) else None
+    return is_secret_value_finding(str(result.get("check_id") or ""), cwes or [])
+
+
+def secret_texts(result: dict[str, Any]) -> list[str]:
+    """The texts a secret-class result may hold its secret in, longest first:
+    each metavariable's value and each string literal on its lines, with and
+    without quotes, 6 characters or more (shorter ones are common words in
+    opengrep's log, which is what these are scrubbed from)."""
+    extra = result.get("extra") or {}
+    texts: set[str] = set()
+    for value in _metavar_values(extra).values():
+        texts.update((value, value.strip(_QUOTES)))
+    lines = extra.get("lines")
+    if isinstance(lines, str):
+        texts.update(m.group(2) for m in _STRING_LITERAL.finditer(lines))
+    return sorted((t for t in texts if len(t) >= 6), key=len, reverse=True)
+
+
+def _redacted_message(result: dict[str, Any]) -> str:
+    """The message with the secret it interpolated replaced. A listed rule
+    names the metavariables that hold it; a rule only its CWE marks loses
+    every metavariable value of 6 characters or more."""
+    extra = result.get("extra") or {}
+    message = str(extra.get("message") or "")
+    rule = str(result.get("check_id") or "")
+    values = _metavar_values(extra)
+    if SECRET_VALUE_RULES.get(rule):
+        held = [values[n] for n in MESSAGE_SECRET_METAVARS.get(rule, ()) if n in values]
+    else:
+        held = [v for v in values.values() if len(v) >= 6]
+    for text in sorted(
+        {t for v in held for t in (v, v.strip(_QUOTES)) if t}, key=len, reverse=True
+    ):
+        message = message.replace(text, REDACTED)
+    return message
+
+
+def redact_secret_result(result: dict[str, Any]) -> dict[str, Any]:
+    """`result` itself when its rule does not match a secret's value; else a
+    copy keeping only SECRET_SAFE_EXTRA of `extra`, its message with the secret
+    replaced (#1585). Redacting a redacted result returns an equal one, so a
+    later report, reading the rewritten opengrep.json, computes the same id."""
+    if not is_secret_result(result):
+        return result
+    extra = result.get("extra") or {}
+    kept = {k: v for k, v in extra.items() if k in SECRET_SAFE_EXTRA}
+    kept["message"] = _redacted_message(result)
+    return {**{k: v for k, v in result.items() if k != "extra"}, "extra": kept}
 
 
 def _scan_root(output_path: Path) -> Path | None:
@@ -127,6 +212,11 @@ class OpengrepAdapter(AdapterPlugin):
         for r in results:
             if not isinstance(r, dict):
                 continue
+            # A rule that matches a secret's value: its message, raw record and
+            # snippet would quote the secret (#1585). Redacted before the id is
+            # computed, as trufflehog's adapter drops `Raw`; not enrichment.
+            secret_class = is_secret_result(r)
+            r = redact_secret_result(r)
 
             # Extract rule ID
             check_id = str(
@@ -226,7 +316,7 @@ class OpengrepAdapter(AdapterPlugin):
             # name the report happens to run beside, and attach another
             # repository's lines to the finding.
             context = None
-            if path_str and start_line:
+            if path_str and start_line and not secret_class:
                 if Path(path_str).is_absolute():
                     readable: str | None = path_str
                 elif root is not None:

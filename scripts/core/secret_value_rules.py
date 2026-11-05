@@ -88,6 +88,26 @@ SECRET_VALUE_RULES: dict[str, bool] = {  # nosec B105
 }
 
 
+#: For each listed rule whose message interpolates metavariables (opengrep fills
+#: `$NAME` with what it matched), the ones that hold the secret, () for none.
+#: The adapter replaces their values in the message; prose like `$FUNC`'s
+#: function name stays. A test fails on an interpolating rule not listed here.
+MESSAGE_SECRET_METAVARS: dict[str, tuple[str, ...]] = {
+    "python.lang.security.audit.hardcoded-password-default-argument."
+    "hardcoded-password-default-argument": (),
+    "python.lang.security.audit.logging.logger-credential-leak."
+    "python-logger-credential-disclosure": ("$FORMAT_STRING",),
+    "ruby.rails.security.brakeman.check-rails-secret-yaml.check-rails-secret-yaml": (
+        "$VALUE",
+    ),
+    "ruby.rails.security.brakeman.check-rails-session-secret-handling."
+    "check-rails-session-secret-handling": (),
+    "yaml.kubernetes.security.secrets-in-config-file.secrets-in-config-file": (
+        "$VALUE",
+    ),
+}
+
+
 def _cwe_ids(cwes: object) -> set[str]:
     values = cwes if isinstance(cwes, (list, tuple, set)) else [cwes]
     return {
