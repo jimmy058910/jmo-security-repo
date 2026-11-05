@@ -249,3 +249,26 @@ class TestTheDefaultBudgetSeesAContainersLimit:
             "memory.current": f"{1000 * self.MB}\n",
         }
         assert self._budget(monkeypatch, tmp_path, 30_000, files) == 700
+
+
+def test_a_run_waiting_on_the_gate_is_not_shown_running(tmp_path) -> None:
+    """`run_all_parallel` signalled "start" for every tool before any was
+    admitted, so a run waiting on the gate showed as running, its clock
+    ticking (review of PR 7b). "start" now comes when a run is admitted."""
+    events: list[tuple[str, str]] = []
+    lock = str(tmp_path / "in-use")
+    tools = [_tool("a", 550, ALONE, lock), _tool("b", 550, ALONE, lock)]
+
+    def callback(name, status, *_args, **_kwargs):
+        events.append((name, status))
+
+    with scan_limits(budget_mb=600, slots=4):
+        results = ToolRunner(
+            tools, progress_callback=callback, max_workers=2
+        ).run_all_parallel()
+
+    assert _codes(results) == [0, 0], results
+    starts = [i for i, (_, status) in enumerate(events) if status == "start"]
+    assert len(starts) == 2, events
+    between = events[starts[0] + 1 : starts[1]]
+    assert any(status == "success" for _, status in between), events

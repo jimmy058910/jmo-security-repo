@@ -756,6 +756,11 @@ class ToolRunner:
             limits = _LIMITS
             if limits is not None and not limits.admit(tool.memory_mb):
                 return self._interrupted(tool, 0, None)
+            if self.progress_callback:
+                try:
+                    self.progress_callback(tool.name, "start", 0)
+                except Exception:  # Acceptable: a display must not stop the scan
+                    pass
             try:
                 if tool.temp_dir is not None:
                     tool.temp_dir.mkdir(parents=True, exist_ok=True)
@@ -1121,16 +1126,8 @@ class ToolRunner:
         """
         results: list[ToolResult] = []
 
-        # Signal start of all tools if progress callback exists
-        if self.progress_callback:
-            for tool in self.tools:
-                try:
-                    self.progress_callback(tool.name, "start", 0)
-                except (
-                    Exception
-                ):  # Acceptable: callback protection — must not crash scan flow
-                    pass
-
+        # Each run says "start" as it is admitted (`run_tool`), not here: a run
+        # waiting on the scan's gate showed as running, its clock ticking.
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tool executions
             future_to_tool = {
