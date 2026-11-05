@@ -514,14 +514,16 @@ class TestTheSessionKnowsEveryTarget:
         )
 
         assert last == {
-            "myproj": True,
-            "nginx:latest": True,
-            "terraform:main.tf": True,
-            "http://staging.example.com/app1": True,
-            "group/app": True,
-            "ctx:ns": True,
+            ("repo", "myproj"): True,
+            ("image", "nginx:latest"): True,
+            ("iac", "terraform:main.tf"): True,
+            ("url", "http://staging.example.com/app1"): True,
+            ("gitlab", "group/app"): True,
+            ("k8s", "ctx:ns"): True,
         }
-        assert {target for _type, target, _tool in _tool_runs(env.results)} == set(last)
+        assert {
+            (kind, target) for kind, target, _tool in _tool_runs(env.results)
+        } == set(last)
 
 
 class TestAGitLabCloneIsNormalisedLikeARepository:
@@ -1219,9 +1221,9 @@ class TestTheScanRecordsAndResumesTheImagesItFound:
 
         saved = load_session(path)
         assert saved is not None
-        repository = saved.targets[gitlab]
+        repository = saved.targets[("gitlab", gitlab)]
         assert (repository.target_type, repository.completed) == ("gitlab", True)
-        record = saved.targets[found_image_id(image)]
+        record = saved.targets[("image", found_image_id(image))]
         assert (record.target_type, record.completed, record.found_in) == (
             "image",
             True,

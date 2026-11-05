@@ -293,7 +293,7 @@ def test_a_resumed_target_is_not_touched(tmp_path, monkeypatch):
     for name in ("alpha", "beta"):
         session.register_target("repo", name, ["trivy"])
     done = ToolRun("trivy", State.RAN, seconds=1.0, exit_code=0)
-    session.mark_target_complete("alpha", {"trivy": done})
+    session.mark_target_complete("repo", "alpha", {"trivy": done})
     scanned: list[str] = []
 
     def scan_repository(repo, results_dir, *args, result_name, **kwargs):

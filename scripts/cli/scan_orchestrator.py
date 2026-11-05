@@ -1231,22 +1231,28 @@ class ScanOrchestrator:
         tools = list(self.config.tools)
 
         # Helper to check if a target was already completed in a previous session
-        def _is_completed(target_id: str) -> bool:
+        def _is_completed(target_type: str, target_id: str) -> bool:
             if session is not None:
-                return bool(session.is_target_completed(target_id))
+                return bool(session.is_target_completed(target_type, target_id))
             return False
 
         # A resumed scan does not scan a completed target again, but its rows
         # are still this scan's record: `tool_runs`, history, the reconciler.
         def _resumed(target_type: str, target_id: str) -> None:
-            kept = session.completed_rows(target_id) if session is not None else None
+            kept = (
+                session.completed_rows(target_type, target_id)
+                if session is not None
+                else None
+            )
             if kept is not None:
                 all_results.append((target_type, kept[0], kept[1]))
 
         # Helper to checkpoint after each target completes
-        def _checkpoint(target_id: str, name: str, rows: Mapping[str, ToolRun]) -> None:
+        def _checkpoint(
+            target_type: str, target_id: str, name: str, rows: Mapping[str, ToolRun]
+        ) -> None:
             if session is not None and session_path is not None:
-                session.mark_target_complete(target_id, rows, name=name)
+                session.mark_target_complete(target_type, target_id, rows, name=name)
                 from scripts.cli.scan_session import save_session as _save
 
                 _save(session, session_path)
@@ -1275,7 +1281,7 @@ class ScanOrchestrator:
                     session.register_target(
                         "image", image_id, tools, found_in=gitlab_id
                     )
-                _checkpoint(image_id, image, image_rows)
+                _checkpoint("image", image_id, image, image_rows)
 
         # A tool someone named that no target in this scan reads runs nowhere.
         # Its rows say `skipped` on every target; this line says it once. Only
@@ -1323,7 +1329,7 @@ class ScanOrchestrator:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for repo, result_name in zip(targets.repos, repo_names, strict=True):
-                if _is_completed(result_name):
+                if _is_completed("repo", result_name):
                     skipped_count += 1
                     _resumed("repo", result_name)
                     continue
@@ -1344,7 +1350,7 @@ class ScanOrchestrator:
                 futures.append(("repo", result_name, jobs_dir / result_name, future))
 
             for image, folder in zip(targets.images, image_folders, strict=True):
-                if _is_completed(image):
+                if _is_completed("image", image):
                     skipped_count += 1
                     _resumed("image", image)
                     continue
@@ -1369,7 +1375,7 @@ class ScanOrchestrator:
                 # The name its job records, so a scanner that raises is
                 # recorded under the name success would have used (#1315).
                 iac_id = iac_target_name(iac_type, iac_path)
-                if _is_completed(iac_id):
+                if _is_completed("iac", iac_id):
                     skipped_count += 1
                     _resumed("iac", iac_id)
                     continue
@@ -1390,7 +1396,7 @@ class ScanOrchestrator:
                 futures.append(("iac", iac_id, jobs_dir / folder, future))
 
             for url, folder in zip(targets.urls, url_folders, strict=True):
-                if _is_completed(url):
+                if _is_completed("url", url):
                     skipped_count += 1
                     _resumed("url", url)
                     continue
@@ -1412,7 +1418,7 @@ class ScanOrchestrator:
 
             for gitlab_repo_info in targets.gitlab_repos:
                 gl_id = gitlab_repo_info.get("full_path", "unknown")
-                if _is_completed(gl_id):
+                if _is_completed("gitlab", gl_id):
                     skipped_count += 1
                     _resumed("gitlab", gl_id)
                     continue
@@ -1437,7 +1443,7 @@ class ScanOrchestrator:
                 ctx = k8s_resource_info.get("context", "unknown")
                 ns = k8s_resource_info.get("namespace", "unknown")
                 k8s_id = f"{ctx}:{ns}"
-                if _is_completed(k8s_id):
+                if _is_completed("k8s", k8s_id):
                     skipped_count += 1
                     _resumed("k8s", k8s_id)
                     continue
@@ -1532,7 +1538,7 @@ class ScanOrchestrator:
                 try:
                     if target_type == "gitlab":
                         _record_found(target_id)
-                    _checkpoint(target_id, name, rows)
+                    _checkpoint(target_type, target_id, name, rows)
                     if progress_callback:
                         progress_callback(target_type, target_id, rows, elapsed=elapsed)
                 except Exception as e:

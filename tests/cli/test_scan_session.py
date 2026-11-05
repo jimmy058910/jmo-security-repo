@@ -145,9 +145,9 @@ class TestScanSession:
         )
         session.register_target("repo", "myrepo", ["trivy", "semgrep"])
         assert session.total_targets == 1
-        assert "myrepo" in session.targets
-        assert "trivy" in session.targets["myrepo"].tools
-        assert "semgrep" in session.targets["myrepo"].tools
+        assert ("repo", "myrepo") in session.targets
+        assert "trivy" in session.targets[("repo", "myrepo")].tools
+        assert "semgrep" in session.targets[("repo", "myrepo")].tools
 
     def test_mark_target_complete(self):
         session = ScanSession(
@@ -157,10 +157,10 @@ class TestScanSession:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy", "semgrep"])
-        session.mark_target_complete("myrepo", _rows(trivy=True, semgrep=False))
-        assert session.targets["myrepo"].completed is True
-        assert session.targets["myrepo"].tools["trivy"].status == "completed"
-        assert session.targets["myrepo"].tools["semgrep"].status == "failed"
+        session.mark_target_complete("repo", "myrepo", _rows(trivy=True, semgrep=False))
+        assert session.targets[("repo", "myrepo")].completed is True
+        assert session.targets[("repo", "myrepo")].tools["trivy"].status == "completed"
+        assert session.targets[("repo", "myrepo")].tools["semgrep"].status == "failed"
 
     def test_a_completed_targets_rows_come_back_under_the_jobs_name(self):
         """A resumed scan reports a target it skips under the name its scan job
@@ -169,12 +169,16 @@ class TestScanSession:
         session = ScanSession(session_id="t", config_hash="h", started_at=0.0, pid=1)
         session.register_target("iac", "/work/main.tf", ["checkov"])
         rows = {"checkov": ToolRun("checkov", State.RAN, seconds=2.0, attempts=1)}
-        session.mark_target_complete("/work/main.tf", rows, name="terraform:main.tf")
+        session.mark_target_complete(
+            "iac", "/work/main.tf", rows, name="terraform:main.tf"
+        )
 
-        kept = ScanSession.from_dict(session.to_dict()).completed_rows("/work/main.tf")
+        kept = ScanSession.from_dict(session.to_dict()).completed_rows(
+            "iac", "/work/main.tf"
+        )
 
         assert kept == ("terraform:main.tf", rows)
-        assert session.completed_rows("never-registered") is None
+        assert session.completed_rows("iac", "never-registered") is None
 
     def test_an_image_a_gitlab_target_named_survives_a_round_trip(self):
         """Found mid-scan, so no target list names it: a resumed scan has only
@@ -186,20 +190,23 @@ class TestScanSession:
         found, pending = found_image_id("alpine:3.19"), found_image_id("redis:7")
         session.register_target("image", found, ["trivy"], found_in="group/app")
         session.register_target("image", pending, ["trivy"], found_in="group/app")
-        for target_id in ("group/app", "nginx:latest"):
-            session.mark_target_complete(target_id, _rows(trivy=True))
-        session.mark_target_complete(found, _rows(trivy=True), name="alpine:3.19")
+        for target in (("gitlab", "group/app"), ("image", "nginx:latest")):
+            session.mark_target_complete(*target, _rows(trivy=True))
+        session.mark_target_complete(
+            "image", found, _rows(trivy=True), name="alpine:3.19"
+        )
 
         restored = ScanSession.from_dict(session.to_dict())
 
         assert restored.found_images() == {found: ("alpine:3.19", "group/app")}
-        assert restored.targets[found].found_in == "group/app"
-        assert restored.targets["nginx:latest"].found_in == ""
+        assert restored.targets[("image", found)].found_in == "group/app"
+        assert restored.targets[("image", "nginx:latest")].found_in == ""
 
     def test_a_found_images_id_is_never_another_targets(self):
-        """The session keys a target by id alone. A project whose Dockerfile
-        names its own path untagged (`acme/api`) gave the image the project's
-        id, and one record held both targets."""
+        """A project whose Dockerfile names its own path untagged (`acme/api`)
+        gave the image the project's id, and one record held both targets
+        (#1311). Typed, a found image is also apart from an `--image` of the
+        same reference, a target of the same type."""
         session = ScanSession(session_id="t", config_hash="h", started_at=0.0, pid=1)
         session.register_target("gitlab", "acme/api", ["trufflehog"])
         session.register_target(
@@ -208,6 +215,55 @@ class TestScanSession:
 
         assert found_image_id("acme/api") != "acme/api"
         assert [t.target_type for t in session.targets.values()] == ["gitlab", "image"]
+
+    def test_targets_of_two_types_with_one_id_are_two_records(self):
+        """`--repo ./nginx --image nginx` registered `nginx` twice and the
+        second replaced the first: completing one completed both, and a
+        resumed scan reported one target's rows as the other's (#1406)."""
+        session = ScanSession(session_id="t", config_hash="h", started_at=0.0, pid=1)
+        session.register_target("repo", "nginx", ["trivy"])
+        session.register_target("image", "nginx", ["trivy"])
+        session.mark_target_complete("image", "nginx", _rows(trivy=True), name="nginx")
+
+        for kept in (session, ScanSession.from_dict(session.to_dict())):
+            assert kept.total_targets == 2
+            assert kept.is_target_completed("image", "nginx") is True
+            assert kept.is_target_completed("repo", "nginx") is False
+            assert kept.completed_rows("repo", "nginx") is None
+            assert kept.completed_rows("image", "nginx") == ("nginx", _rows(trivy=True))
+
+    def test_a_session_written_keyed_by_id_alone_still_loads(self):
+        """A file from before #1406 keys each record by its id; each record
+        carries its type, which is what the session keys by now."""
+        old = {
+            "version": SESSION_VERSION,
+            "session_id": "t",
+            "config_hash": "h",
+            "started_at": 0.0,
+            "pid": 1,
+            "targets": {
+                "myrepo": {
+                    "target_type": "repo",
+                    "target_id": "myrepo",
+                    "completed": True,
+                    "tools": {"trivy": {"name": "trivy", "status": "completed"}},
+                    "name": "myrepo",
+                    "rows": {"trivy": _rows(trivy=True)["trivy"].to_dict()},
+                },
+                "nginx:latest": {
+                    "target_type": "image",
+                    "target_id": "nginx:latest",
+                    "completed": False,
+                    "tools": {"trivy": {"name": "trivy", "status": "pending"}},
+                },
+            },
+        }
+
+        session = ScanSession.from_dict(old)
+
+        assert session.is_target_completed("repo", "myrepo") is True
+        assert session.completed_rows("repo", "myrepo") == ("myrepo", _rows(trivy=True))
+        assert session.is_target_completed("image", "nginx:latest") is False
 
     def test_mark_target_complete_records_a_skip_as_skipped(self):
         """A skipped tool is neither completed nor failed, and says why."""
@@ -219,17 +275,18 @@ class TestScanSession:
         )
         session.register_target("repo", "myrepo", ["trivy", "hadolint"])
         session.mark_target_complete(
+            "repo",
             "myrepo",
             {
                 **_rows(trivy=True),
                 "hadolint": ToolRun("hadolint", State.SKIPPED, Reason.NO_DOCKERFILES),
             },
         )
-        assert session.targets["myrepo"].completed is True
-        assert session.targets["myrepo"].tools["trivy"].status == "completed"
-        assert session.targets["myrepo"].tools["hadolint"].status == "skipped"
+        assert session.targets[("repo", "myrepo")].completed is True
+        assert session.targets[("repo", "myrepo")].tools["trivy"].status == "completed"
+        assert session.targets[("repo", "myrepo")].tools["hadolint"].status == "skipped"
         assert (
-            session.targets["myrepo"].tools["hadolint"].error
+            session.targets[("repo", "myrepo")].tools["hadolint"].error
             == "skipped:no Dockerfiles"
         )
 
@@ -241,7 +298,7 @@ class TestScanSession:
             pid=1,
         )
         # Should not raise
-        session.mark_target_complete("nonexistent", _rows(trivy=True))
+        session.mark_target_complete("repo", "nonexistent", _rows(trivy=True))
 
     def test_completed_and_pending_targets(self):
         session = ScanSession(
@@ -254,13 +311,13 @@ class TestScanSession:
         session.register_target("repo", "repo2", ["trivy"])
         session.register_target("repo", "repo3", ["trivy"])
 
-        session.mark_target_complete("repo1", _rows(trivy=True))
-        session.mark_target_complete("repo3", _rows(trivy=True))
+        session.mark_target_complete("repo", "repo1", _rows(trivy=True))
+        session.mark_target_complete("repo", "repo3", _rows(trivy=True))
 
         assert session.completed_count == 2
-        assert "repo2" in session.pending_targets
-        assert "repo1" in session.completed_targets
-        assert "repo3" in session.completed_targets
+        assert ("repo", "repo2") in session.pending_targets
+        assert ("repo", "repo1") in session.completed_targets
+        assert ("repo", "repo3") in session.completed_targets
 
     def test_is_target_completed(self):
         session = ScanSession(
@@ -270,10 +327,10 @@ class TestScanSession:
             pid=1,
         )
         session.register_target("repo", "repo1", ["trivy"])
-        assert session.is_target_completed("repo1") is False
-        session.mark_target_complete("repo1", _rows(trivy=True))
-        assert session.is_target_completed("repo1") is True
-        assert session.is_target_completed("nonexistent") is False
+        assert session.is_target_completed("repo", "repo1") is False
+        session.mark_target_complete("repo", "repo1", _rows(trivy=True))
+        assert session.is_target_completed("repo", "repo1") is True
+        assert session.is_target_completed("repo", "nonexistent") is False
 
     def test_roundtrip_serialization(self):
         session = ScanSession(
@@ -284,7 +341,7 @@ class TestScanSession:
         )
         session.register_target("repo", "repo1", ["trivy", "semgrep"])
         session.register_target("image", "nginx:latest", ["trivy"])
-        session.mark_target_complete("repo1", _rows(trivy=True, semgrep=False))
+        session.mark_target_complete("repo", "repo1", _rows(trivy=True, semgrep=False))
 
         data = session.to_dict()
         session2 = ScanSession.from_dict(data)
@@ -295,8 +352,8 @@ class TestScanSession:
         assert session2.pid == 42
         assert session2.total_targets == 2
         assert session2.completed_count == 1
-        assert session2.targets["repo1"].tools["trivy"].status == "completed"
-        assert session2.targets["repo1"].tools["semgrep"].status == "failed"
+        assert session2.targets[("repo", "repo1")].tools["trivy"].status == "completed"
+        assert session2.targets[("repo", "repo1")].tools["semgrep"].status == "failed"
 
 
 # ── Atomic Write ──────────────────────────────────────────────────
@@ -453,7 +510,7 @@ class TestValidateSessionResults:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", _rows(trivy=True))
+        session.mark_target_complete("repo", "myrepo", _rows(trivy=True))
 
         assert validate_session_results(session, results_dir) is True
 
@@ -468,7 +525,7 @@ class TestValidateSessionResults:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", _rows(trivy=True))
+        session.mark_target_complete("repo", "myrepo", _rows(trivy=True))
 
         assert validate_session_results(session, results_dir) is False
 
@@ -485,7 +542,7 @@ class TestValidateSessionResults:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", _rows(trivy=True))
+        session.mark_target_complete("repo", "myrepo", _rows(trivy=True))
 
         assert validate_session_results(session, results_dir) is False
 
@@ -542,7 +599,7 @@ class TestFormatSummary:
         for i in range(29):
             session.register_target("repo", f"repo{i}", ["trivy"])
         for i in range(18):
-            session.mark_target_complete(f"repo{i}", _rows(trivy=True))
+            session.mark_target_complete("repo", f"repo{i}", _rows(trivy=True))
 
         summary = format_session_summary(session)
         assert "45min ago" in summary
@@ -592,20 +649,20 @@ class TestSessionLifecycle:
         session.register_target("image", "nginx:latest", ["trivy"])
 
         # Complete first target and checkpoint
-        session.mark_target_complete("repo1", _rows(trivy=True, semgrep=True))
+        session.mark_target_complete("repo", "repo1", _rows(trivy=True, semgrep=True))
         save_session(session, session_path)
 
         # Simulate crash: load from disk
         restored = load_session(session_path)
         assert restored is not None
         assert restored.completed_count == 1
-        assert restored.is_target_completed("repo1") is True
-        assert restored.is_target_completed("repo2") is False
-        assert restored.is_target_completed("nginx:latest") is False
+        assert restored.is_target_completed("repo", "repo1") is True
+        assert restored.is_target_completed("repo", "repo2") is False
+        assert restored.is_target_completed("image", "nginx:latest") is False
 
         # Complete remaining targets
-        restored.mark_target_complete("repo2", _rows(trivy=True, semgrep=False))
-        restored.mark_target_complete("nginx:latest", _rows(trivy=True))
+        restored.mark_target_complete("repo", "repo2", _rows(trivy=True, semgrep=False))
+        restored.mark_target_complete("image", "nginx:latest", _rows(trivy=True))
         save_session(restored, session_path)
 
         # Clean exit
@@ -627,7 +684,7 @@ class TestSessionLifecycle:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", _rows(trivy=True))
+        session.mark_target_complete("repo", "myrepo", _rows(trivy=True))
         save_session(session, session_path)
 
         # Config changes
