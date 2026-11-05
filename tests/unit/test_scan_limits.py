@@ -254,21 +254,24 @@ class TestTheDefaultBudgetSeesAContainersLimit:
 def test_a_run_waiting_on_the_gate_is_not_shown_running(tmp_path) -> None:
     """`run_all_parallel` signalled "start" for every tool before any was
     admitted, so a run waiting on the gate showed as running, its clock
-    ticking (review of PR 7b). "start" now comes when a run is admitted."""
-    events: list[tuple[str, str]] = []
+    ticking (review of PR 7b). "start" now comes when a run is admitted: when
+    the second run says it, the first has already ended. (Its "success" is sent
+    by the pool's collecting thread, which may come after; the full suite
+    caught a test that assumed otherwise.)"""
+    finish = ALONE + "open(sys.argv[2], 'w').close()\n"
     lock = str(tmp_path / "in-use")
-    tools = [_tool("a", 550, ALONE, lock), _tool("b", 550, ALONE, lock)]
+    tools = [
+        _tool(name, 550, finish, lock, str(tmp_path / f"done-{name}")) for name in "ab"
+    ]
+    ended_at_start: list[int] = []
 
     def callback(name, status, *_args, **_kwargs):
-        events.append((name, status))
+        if status == "start":
+            ended_at_start.append(len(list(tmp_path.glob("done-*"))))
 
     with scan_limits(budget_mb=600, slots=4):
-        results = ToolRunner(
-            tools, progress_callback=callback, max_workers=2
-        ).run_all_parallel()
+        runner = ToolRunner(tools, progress_callback=callback, max_workers=2)
+        results = runner.run_all_parallel()
 
     assert _codes(results) == [0, 0], results
-    starts = [i for i, (_, status) in enumerate(events) if status == "start"]
-    assert len(starts) == 2, events
-    between = events[starts[0] + 1 : starts[1]]
-    assert any(status == "success" for _, status in between), events
+    assert ended_at_start == [0, 1], ended_at_start
