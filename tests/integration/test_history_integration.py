@@ -145,25 +145,29 @@ class TestHistoryWorkflow:
             store_scan,
         )
 
-        # Store 2 scans
-        store_scan(results_dir, tools=["trivy"], db_path=db_path)
-        time.sleep(2)
-        store_scan(results_dir, tools=["trivy"], db_path=db_path)
-
-        # Verify 2 scans exist
+        # Two scans with explicit times, two hours ago and now. The test used to
+        # sleep 2 s and prune at 1 s, but timestamps are whole seconds, so a
+        # second scan stored a little over a second before the prune (a loaded
+        # machine) was pruned too: 2 deleted where 1 was expected (-n 4).
+        old_id = store_scan(results_dir, tools=["trivy"], db_path=db_path)
+        new_id = store_scan(results_dir, tools=["trivy"], db_path=db_path)
+        now = int(time.time())
         conn = get_connection(db_path)
-        scans_before = list_scans(conn, limit=10)
-        assert len(scans_before) == 2
+        with conn:
+            conn.execute(
+                "UPDATE scans SET timestamp = ? WHERE id = ?", (now - 7200, old_id)
+            )
+            conn.execute("UPDATE scans SET timestamp = ? WHERE id = ?", (now, new_id))
+        assert len(list_scans(conn, limit=10)) == 2
 
-        # Prune scans older than 1 second (should remove first scan)
-        deleted_count = prune_old_scans(conn, older_than_seconds=1)
+        # Prune scans older than an hour: the first goes, the second stays.
+        deleted_count = prune_old_scans(conn, older_than_seconds=3600)
         assert deleted_count == 1
 
-        # Verify only 1 scan remains
         scans_after = list_scans(conn, limit=10)
         conn.close()
 
-        assert len(scans_after) == 1
+        assert [scan["id"] for scan in scans_after] == [new_id]
 
 
 class TestHistoryCLI:
