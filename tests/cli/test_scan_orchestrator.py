@@ -579,10 +579,22 @@ class TestMsysPathDetection:
     def test_detects_windows_path_in_docker(self, monkeypatch):
         """Should detect Windows drive paths when DOCKER_CONTAINER=1."""
         monkeypatch.setenv("DOCKER_CONTAINER", "1")
+        # The image is Linux: pinned, so the Windows shard tests the same thing.
+        monkeypatch.setattr("scripts.cli.scan_orchestrator.sys.platform", "linux")
 
         # Any Windows path inside Docker container is likely MSYS-mangled
         assert _detect_msys_path_mangling("C:/Users/test/project") is True
         assert _detect_msys_path_mangling("D:\\Projects\\myrepo") is True
+
+    def test_docker_variable_on_native_windows_flags_no_drive_path(self, monkeypatch):
+        """On native Windows every path has a drive letter, so the variable alone
+        must not make them all mangled (#1558): only the MSYS telltale does."""
+        monkeypatch.setenv("DOCKER_CONTAINER", "1")
+        monkeypatch.setattr("scripts.cli.scan_orchestrator.sys.platform", "win32")
+
+        assert _detect_msys_path_mangling("C:/Users/test/project") is False
+        assert _detect_msys_path_mangling("D:\\Projects\\myrepo") is False
+        assert _detect_msys_path_mangling("C:/Program Files/Git/scan/x") is True
 
     def test_ignores_windows_path_outside_docker(self, monkeypatch):
         """Should NOT flag Windows paths when NOT in Docker (native Windows use)."""

@@ -152,9 +152,10 @@ def _detect_msys_path_mangling(path_str: str) -> bool:
     if re.match(msys_pattern, path_str):
         return True
 
-    # Also detect any Windows path inside a Docker Linux container
-    # Check if we're in Docker AND the path looks like a Windows path
-    if os.environ.get("DOCKER_CONTAINER") == "1":
+    # Also detect any Windows path inside a Docker Linux container. Only on a
+    # platform that is not Windows: on native Windows every path has a drive
+    # letter, and the variable alone refused them all (#1558).
+    if os.environ.get("DOCKER_CONTAINER") == "1" and sys.platform != "win32":
         # Windows drive letter pattern: C:/ or D:\
         if re.match(r"^[A-Za-z]:[/\\]", path_str):
             return True
