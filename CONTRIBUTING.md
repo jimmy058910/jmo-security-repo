@@ -88,8 +88,6 @@ python -m pip install -U pip setuptools wheel
 
 ```bash
 make dev-setup
-# Optional reporters and YAML: install extras
-pip install -e ".[reporting]"
 ```
 
 - Refresh your environment after pulling:

@@ -1,8 +1,8 @@
 """yara-x is a dependency of JMo, not an installed tool (v2.0.0 Phase 6, PR Y,
-Task Y2, J2).
+Task Y2, J2), and since #1577 the optional one: the `yara` extra.
 
-The engine arrives with `pip install jmo-security`, so there is no versions.yaml
-row and nothing for `jmo tools install` to download for it. What that command
+The engine arrives with `pip install "jmo-security[yara]"`, so there is no
+versions.yaml row and nothing for `jmo tools install` to download for it. What that command
 still provides is the pinned rule bundle, and an engine with no rules reports
 every scan clean (#1282). So "installed" stays "the engine imports", and the
 rules are a readiness question that both install paths act on.

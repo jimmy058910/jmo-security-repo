@@ -49,7 +49,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 | Goal | Action |
 |------|--------|
 | **Scan now (Docker)** | `docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan` |
-| **Install CLI** | `pip install jmo-security` |
+| **Install CLI** | `pip install "jmo-security[yara]"` |
 | **Guided setup** | `jmo wizard` |
 | **Full guide** | [QUICKSTART.md](QUICKSTART.md) |
 
@@ -57,7 +57,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 
 ```bash
 # Install
-pip install jmo-security
+pip install "jmo-security[yara]"
 
 # Scan a repository
 jmo scan --repo ./myapp --human-logs

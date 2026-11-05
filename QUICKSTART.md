@@ -18,13 +18,13 @@
 **Recommended for most users.** Works on macOS, Linux, and Windows with Python 3.12+.
 
 ```bash
-pip install jmo-security
+pip install "jmo-security[yara]"
 # Or with pipx for an isolated install (recommended if you have pipx):
-pipx install jmo-security
+pipx install "jmo-security[yara]"
 jmo wizard
 ```
 
-macOS users with Homebrew: install pipx via `brew install pipx`, then `pipx install jmo-security`.
+macOS users with Homebrew: install pipx via `brew install pipx`, then `pipx install "jmo-security[yara]"`.
 
 ---
 
@@ -59,7 +59,7 @@ There is one image: use `:latest`, or pin a version tag.
 
 ```bash
 # Install JMo Security
-pip install jmo-security
+pip install "jmo-security[yara]"
 
 # Verify installation
 jmo --help

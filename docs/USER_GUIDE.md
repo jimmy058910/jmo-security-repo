@@ -60,13 +60,13 @@ winget install jmo.jmo-security
 
 ```bash
 # Preferred (isolated):
-pipx install "jmo-security[reporting]"
+pipx install "jmo-security[yara]"
 
 # Or using pip (user site):
-pip install --user "jmo-security[reporting]"
+pip install --user "jmo-security[yara]"
 ```
 
-The `reporting` extra bundles PyYAML and jsonschema so YAML output and schema validation work automatically. If you only need JSON/Markdown/SARIF, install the base package (`jmo-security`) instead.
+The `yara` extra is the engine of the YARA-X scanner. It has wheels only for Linux with glibc 2.28 or newer, macOS 14 or newer and Windows x64; elsewhere install `jmo-security` without it ([Known Limitations](KNOWN_LIMITATIONS.md#the-yara-x-scanner-runs-only-where-yara-x-has-a-wheel)).
 
 1. Check tool status and install missing tools
 
@@ -2433,7 +2433,7 @@ jobs:
 
       - name: Run Full Security Scan
         run: |
-          pip install "jmo-security[reporting]"
+          pip install "jmo-security[yara]"
           jmo tools install --yes
           jmo ci --repo . --fail-on HIGH --profile --human-logs
 
