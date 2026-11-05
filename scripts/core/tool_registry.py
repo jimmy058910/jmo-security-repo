@@ -58,6 +58,20 @@ BUILTIN_TOOLS: frozenset[str] = frozenset(
 #: carries no rules.
 DEPENDENCY_TOOLS: dict[str, str] = {"yara-x": "yara-x"}
 
+#: Why a dependency tool's engine can be absent, and how to add it: what
+#: `jmo tools check`, `jmo tools install` and the scan say when it is (#1577).
+#: yara-x is the optional extra `jmo-security[yara]` because it publishes wheels
+#: only, and as a hard dependency it failed the whole install everywhere else.
+DEPENDENCY_MISSING: dict[str, str] = {
+    "yara-x": (
+        "the yara-x engine is not installed: it is the optional extra "
+        'jmo-security[yara]. Add it with: uv tool install "jmo-security[yara]" '
+        '(or pip install "jmo-security[yara]"). yara-x publishes wheels only for '
+        "Linux with glibc 2.28+, macOS 14+ and Windows x86_64; elsewhere, use the "
+        "Docker image"
+    ),
+}
+
 #: Tool name -> the commands that must exist for it to execute (a launcher
 #: script and the runtime it starts, for zap).
 TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {

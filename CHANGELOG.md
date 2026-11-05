@@ -212,6 +212,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
+  publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
+  dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
+  macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
+  image includes it, and the dev environment pulls it in through its group. Without it,
+  JMo installs and runs everywhere, and `jmo tools check` and `jmo tools install yara-x`
+  say the engine is missing and name the extra, where they said "See JMo documentation"
+  and raised a traceback.
 - **Breaking. A finding names its target, and the same finding in two repositories is two
   findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
   `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a

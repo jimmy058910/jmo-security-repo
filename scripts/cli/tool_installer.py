@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import logging
 import os
@@ -70,6 +71,7 @@ from scripts.core.paths import (
 from scripts.core.secure_temp import remove_tree, secure_temp_dir
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
+    DEPENDENCY_MISSING,
     DEPENDENCY_TOOLS,
     ToolInfo,
     ToolRegistry,
@@ -415,11 +417,19 @@ class ToolInstaller:
                 message="Built into JMo, nothing to install",
             )
 
-        # yara-x's engine is a dependency of JMo (Phase 6, J2): nothing to
-        # download and no versions.yaml row. What install provides is the pinned
-        # rule bundle, so it is checked here, before "already installed", which
-        # the engine always is.
+        # yara-x's engine is the yara extra of JMo (Phase 6, J2; #1577): nothing
+        # to download and no versions.yaml row. What install provides is the
+        # pinned rule bundle, so it is checked here, before "already installed".
+        # Without the engine there is nothing for the rules to serve, and this
+        # command cannot add a package to the environment JMo runs in.
         if tool_name == "yara-x":
+            if importlib.util.find_spec("yara_x") is None:
+                return InstallResult(
+                    tool_name="yara-x",
+                    success=False,
+                    method="dependency",
+                    message=DEPENDENCY_MISSING["yara-x"],
+                )
             engine = InstallResult(
                 tool_name="yara-x",
                 success=True,

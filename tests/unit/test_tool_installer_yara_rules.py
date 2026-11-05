@@ -171,6 +171,20 @@ def test_force_fetches_the_rules_again(tmp_path: Path) -> None:
     fetch.assert_called_once()
 
 
+def test_without_its_engine_yara_x_install_says_which_extra_adds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A bare install has no engine (#1577), and `jmo tools install` cannot add
+    # a package to the environment JMo itself runs in: say how, fetch nothing.
+    monkeypatch.setitem(sys.modules, "yara_x", None)
+
+    result, fetch = _routed(tmp_path, pinned=False)
+
+    assert not result.success
+    assert 'install "jmo-security[yara]"' in result.message
+    fetch.assert_not_called()
+
+
 # Task Y4: the image carries pinned rules outside ~/.jmo (#1282), so in a
 # container what a scan reads and where an install writes are two paths.
 

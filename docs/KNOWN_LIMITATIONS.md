@@ -306,20 +306,21 @@ scan above went from 0 files to 1, and the row from `failed` to `ran`. The flag 
 gitignored files for every repository that config scans, so set it for the one scan that
 needs it.
 
-### JMo installs only where YARA-X has a wheel
+### The yara-x scanner runs only where YARA-X has a wheel
 
-YARA-X, the engine behind the yara-x scanner, is a required dependency, and it is
-published only as prebuilt wheels: Linux with glibc 2.28 or newer on x86_64 and arm64,
-macOS 14 or newer, and Windows x64. There is no source package, so on any other
-platform `pip install jmo-security` (or `uv tool install`, or pipx) finds no `yara-x`
-it can install and installs nothing: Alpine and other musl-based Linux, Python running
-natively on Windows ARM64, Linux with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and
-macOS 13 or older. A platform condition on the dependency cannot help, since Python's
-markers can tell neither musl from glibc nor one glibc or macOS version from another.
-Making YARA-X optional is
-[#1577](https://github.com/jimmy058910/jmo-security-repo/issues/1577).
+YARA-X, the engine behind the yara-x scanner, is published only as prebuilt wheels:
+Linux with glibc 2.28 or newer on x86_64 and arm64, macOS 14 or newer, and Windows
+x64. There is no source package, so it is the optional extra `jmo-security[yara]`,
+which the documented install includes. On any other platform that install fails:
+Alpine and other musl-based Linux, Python running natively on Windows ARM64, Linux
+with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and macOS 13 or older. Python's
+platform markers cannot tell musl from glibc, nor one glibc or macOS version from
+another, so the extra cannot be skipped there automatically. Installed without it,
+`jmo-security` works on those platforms: `jmo tools check` and `jmo tools install
+yara-x` say the engine is missing and why, and a scan reports yara-x as not installed.
 
-**What to do:** on those platforms, run JMo from its Docker image.
+**What to do:** on those platforms, install `jmo-security` without `[yara]`, and run
+the image when you need yara-x: it carries the engine and its rules.
 
 ### YARA-X runs only the rules JMo may redistribute
 

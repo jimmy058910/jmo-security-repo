@@ -80,9 +80,9 @@ FILE_TYPES: tuple[tuple[bytes, str], ...] = (
 def _import_yara_x() -> Any | None:
     """Return the yara_x module, or None if this interpreter cannot import it.
 
-    It ships with JMo, so None means a broken install. Isolated into a function
-    so tests can force that case: it must fail as loudly as any other way of
-    scanning nothing.
+    None means the yara extra is not installed (#1577), or is broken. Isolated
+    into a function so tests can force that case: it must fail as loudly as
+    any other way of scanning nothing.
     """
     try:
         # Deferred deliberately: this import IS the availability probe.
@@ -329,10 +329,13 @@ def main(argv: list[str] | None = None) -> int:
 def _scan(args: argparse.Namespace, out_path: Path) -> int:
     yara_x = _import_yara_x()
     if yara_x is None:
+        # Deferred: the registry is heavier than this runner, and only this
+        # failure reads it.
+        from scripts.core.tool_registry import DEPENDENCY_MISSING
+
         _log(
-            "yara-x: the yara-x engine cannot be imported by this interpreter "
-            f"({sys.executable}), so nothing was scanned. It ships with JMo: "
-            "reinstall jmo-security"
+            f"yara-x: nothing was scanned, because {DEPENDENCY_MISSING['yara-x']} "
+            f"(interpreter: {sys.executable})"
         )
         return EXIT_ERROR
 

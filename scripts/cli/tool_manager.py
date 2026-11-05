@@ -21,6 +21,7 @@ from pathlib import Path
 from scripts.core.tool_descriptors import DESCRIPTORS, VersionProbe
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
+    DEPENDENCY_MISSING,
     TOOL_EXECUTION_COMMANDS,
     TOOL_MATRIX,
     ToolRegistry,
@@ -491,7 +492,9 @@ class ToolManager:
         if tool_info:
             install_hint = get_install_hint(tool_info, self.platform)
         else:
-            install_hint = f"See JMo documentation for {tool_name}"
+            install_hint = DEPENDENCY_MISSING.get(
+                tool_name, f"See JMo documentation for {tool_name}"
+            )
 
         # Check execution readiness (Fix 1.4 - Issue #4)
         execution_ready = True
@@ -534,7 +537,9 @@ class ToolManager:
                 )
         else:
             execution_ready = False
-            execution_warning = "Tool binary not found"
+            execution_warning = DEPENDENCY_MISSING.get(
+                tool_name, "Tool binary not found"
+            )
             # Pre-install dependency check: detect missing deps BEFORE install
             # This allows wizard to prompt for dependency installation first
             missing_deps = self._check_preinstall_deps(tool_name)

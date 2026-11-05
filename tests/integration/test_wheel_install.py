@@ -136,3 +136,22 @@ def test_an_installed_wheel_resolves_a_tool_pin(
     dry = _run_jmo(installed_jmo, home, "tools", "install", "--dry-run", "opengrep")
     assert dry.returncode == 0, dry.stderr
     assert "Would install" in dry.stdout and "opengrep" in dry.stdout
+
+
+def test_a_bare_install_runs_and_names_the_extra_yara_x_needs(
+    installed_jmo: Path, tmp_path: Path
+) -> None:
+    """yara-x is the yara extra (#1577), so the bare wheel installs without it,
+    as it must on platforms yara-x has no wheel for, and says how to add it."""
+    home = tmp_path / "home"
+
+    check = _run_jmo(installed_jmo, home, "tools", "check", "yara-x")
+    assert "Traceback" not in check.stderr, check.stderr
+    assert "MISSING" in check.stdout
+    assert 'install "jmo-security[yara]"' in check.stdout
+
+    install = _run_jmo(installed_jmo, home, "tools", "install", "yara-x")
+    assert install.returncode != 0
+    assert "Traceback" not in install.stderr, install.stderr
+    assert 'install "jmo-security[yara]"' in install.stdout + install.stderr
+    assert not (home / ".jmo" / "yara-rules").exists(), "rules fetched with no engine"
