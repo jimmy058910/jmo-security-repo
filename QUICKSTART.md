@@ -6,25 +6,28 @@
 
 ## Prerequisites
 
-- **Docker** (recommended) OR **Python 3.12+**
+- **uv** (recommended), **Docker**, or **Python 3.12+** for pip
 - **Git** (for repository scanning)
 
 ---
 
 ## Installation (Choose One)
 
-### Option 1: pip / pipx (30 seconds)
+### Option 1: uv (30 seconds)
 
-**Recommended for most users.** Works on macOS, Linux, and Windows with Python 3.12+.
+**Recommended for most users.** Works on macOS, Linux and Windows, and needs no Python of
+your own: uv brings the one JMo runs on. [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
+if you do not have it.
 
 ```bash
-pip install "jmo-security[yara]"
-# Or with pipx for an isolated install (recommended if you have pipx):
-pipx install "jmo-security[yara]"
+uv tool install "jmo-security[yara]"
 jmo wizard
 ```
 
-macOS users with Homebrew: install pipx via `brew install pipx`, then `pipx install "jmo-security[yara]"`.
+With Python 3.12+ you can use pip or pipx instead: `pip install "jmo-security[yara]"`, or
+`pipx install "jmo-security[yara]"` for an isolated install.
+
+On Alpine and other musl Linux, Windows ARM64, glibc older than 2.28 or macOS 13, leave out `[yara]`: YARA-X has no wheel there, and JMo installs and runs without it ([Known Limitations](docs/KNOWN_LIMITATIONS.md#the-yara-x-scanner-runs-only-where-yara-x-has-a-wheel)).
 
 ---
 
@@ -55,11 +58,11 @@ There is one image: use `:latest`, or pin a version tag.
 
 ---
 
-### Option 3: pip install (5 minutes)
+### Option 3: Install, then the scanners (5 minutes)
 
 ```bash
-# Install JMo Security
-pip install "jmo-security[yara]"
+# Install JMo Security (or: pip install "jmo-security[yara]")
+uv tool install "jmo-security[yara]"
 
 # Verify installation
 jmo --help

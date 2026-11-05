@@ -4,23 +4,19 @@ This guide walks you through everything from a 2‑minute quick start to advance
 
 Note: The CLI is available as the console command `jmo` (via PyPI) and also as a script at `scripts/cli/jmo.py` in this repo. The examples below use the `jmo` command, but you can replace it with `python3 scripts/cli/jmo.py` if running from source.
 
-## Package Manager Installation
+## Installation
 
-### Homebrew (macOS/Linux)
+### uv (recommended, macOS/Linux/Windows)
 
-**Easiest installation method - zero Python setup required:**
+**One command, and no Python of your own: uv brings the one JMo runs on.**
+[Install uv](https://docs.astral.sh/uv/getting-started/installation/) if you do not have it.
 
 ```bash
-brew install jmo-security
+uv tool install "jmo-security[yara]"
 jmo --help
 ```
 
-**Benefits:**
-
-- Zero Python setup required
-- Automatic dependency management
-- System-wide installation
-- Auto-updates via `brew upgrade`
+On Alpine and other musl Linux, Windows ARM64, glibc older than 2.28 or macOS 13, leave out `[yara]`: YARA-X has no wheel there, and JMo installs and runs without it ([Known Limitations](KNOWN_LIMITATIONS.md#the-yara-x-scanner-runs-only-where-yara-x-has-a-wheel)).
 
 ### WinGet (Windows 10+)
 
@@ -42,18 +38,14 @@ jmo --help
 
 ## Quick start (2 minutes)
 
-Prereqs: Linux, WSL, or macOS with Python 3.12+.
+Prereqs: Linux, WSL, macOS or Windows. uv needs no Python of your own; pip and pipx need Python 3.12+.
 
 1. Install the CLI
 
-### Option 1: Package Manager (Recommended)
+### Option 1: uv (Recommended)
 
 ```bash
-# macOS/Linux
-brew install jmo-security
-
-# Windows
-winget install jmo.jmo-security
+uv tool install "jmo-security[yara]"
 ```
 
 ### Option 2: Python Package
