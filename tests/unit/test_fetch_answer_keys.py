@@ -42,6 +42,32 @@ GOOD_KICS = {
     "assets/queries/dockerfile/q/test/positive_expected_result.json": b"[]\n",
 }
 
+
+def _zip(entries: dict[str, bytes]) -> bytes:
+    """A zip holding `entries` by these exact names: BenchProctor's bundles
+    were made on Windows, so theirs hold backslashes."""
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        for name, data in entries.items():
+            z.writestr(zipfile.ZipInfo(name), data)
+    return buffer.getvalue()
+
+
+BUNDLE = (
+    "Benchmarks/quicktest/typescript/benchproctor-typescript-quicktest-2026.07.22.zip"
+)
+GOOD_BENCHPROCTOR = {
+    BUNDLE: _zip(
+        {
+            "score_sarif.py": b"print('scored')\n",
+            "express_ts\\expectedresults-2026.07.22.csv": b"BenchmarkTest00001,x,true,78\n",
+            "express_ts\\testcode\\benchmark_test_00001.ts": b"exec(x)\n",
+        }
+    )
+}
+
 GOOD_ZIZMOR = {
     "crates/zizmor/tests/integration/audit/artipacked.rs": b"// tests\n",
     "crates/zizmor/tests/integration/test-data/artipacked.yml": b"on: push\n",
@@ -70,6 +96,9 @@ def served(monkeypatch) -> list[str]:
     monkeypatch.setattr(
         fak, "ZIZMOR_FILES", {p: _sha(d) for p, d in GOOD_ZIZMOR.items()}
     )
+    monkeypatch.setattr(
+        fak, "BENCHPROCTOR_FILES", {p: _sha(d) for p, d in GOOD_BENCHPROCTOR.items()}
+    )
 
     def download(url: str) -> bytes:
         asked.append(url)
@@ -78,6 +107,7 @@ def served(monkeypatch) -> list[str]:
             **GOOD_VIBEPROOF,
             **GOOD_KICS,
             **GOOD_ZIZMOR,
+            **GOOD_BENCHPROCTOR,
         }.items():
             if url.endswith("/" + path):
                 return data
@@ -515,3 +545,62 @@ def test_the_zizmor_pins_are_its_audit_tests_and_their_inputs() -> None:
 
 def test_zizmor_is_registered_under_the_name_the_command_takes() -> None:
     assert fak.KEYS["zizmor"] is fak.zizmor
+
+
+# --- the benchproctor key --------------------------------------------------------
+
+
+def test_a_bundle_lands_pinned_and_extracted_with_its_separators_read(
+    keys_dir, served
+) -> None:
+    assert fak.benchproctor() == []
+
+    root = fak.benchproctor_dir()
+    assert root == keys_dir / "benchproctor" / fak.BENCHPROCTOR_COMMIT
+    assert (root / BUNDLE).read_bytes() == GOOD_BENCHPROCTOR[BUNDLE]
+    bundle = fak.benchproctor_bundle("typescript")
+    assert (bundle / "express_ts" / "testcode" / "benchmark_test_00001.ts").is_file()
+    assert (bundle / "score_sarif.py").is_file()
+    assert served == [
+        "https://raw.githubusercontent.com/TheAuditorTool/BenchProctor/"
+        f"{fak.BENCHPROCTOR_COMMIT}/{BUNDLE}"
+    ]
+
+
+def test_a_bundle_already_extracted_is_not_extracted_again(keys_dir, served) -> None:
+    fak.benchproctor()
+    marker = fak.benchproctor_bundle("typescript") / "score_sarif.py"
+    marker.write_bytes(b"left alone")
+
+    assert fak.benchproctor() == []
+    assert marker.read_bytes() == b"left alone"
+
+
+@pytest.mark.parametrize("name", ["..\\x.ts", "a/../../x.ts", "/abs/x.ts", "C:\\x.ts"])
+def test_a_bundle_with_an_entry_outside_its_directory_is_refused_whole(
+    keys_dir, monkeypatch, tmp_path, name
+) -> None:
+    bad = _zip({"score_sarif.py": b"x\n", name: b"planted\n"})
+    monkeypatch.setattr(fak, "BENCHPROCTOR_FILES", {BUNDLE: _sha(bad)})
+    monkeypatch.setattr(fak, "download", lambda url: bad)
+
+    (problem,) = fak.benchproctor()
+
+    assert "refused" in problem
+    assert not fak.benchproctor_bundle("typescript").exists()
+    assert not any(p.name == "x.ts" for p in tmp_path.rglob("*"))
+
+
+def test_the_benchproctor_pins_are_the_two_quicktest_bundles() -> None:
+    """TypeScript and JavaScript, 2026.07.22 (its releases halted, so the pin
+    cannot move): 6,571,432 and 5,726,494 bytes, measured 2026-10-29."""
+    assert re.fullmatch(r"[0-9a-f]{40}", fak.BENCHPROCTOR_COMMIT)
+    assert sorted(fak.BENCHPROCTOR_FILES) == sorted(
+        f"Benchmarks/quicktest/{lang}/benchproctor-{lang}-quicktest-2026.07.22.zip"
+        for lang in ("javascript", "typescript")
+    )
+    assert fak.BENCHPROCTOR_FILES[BUNDLE].startswith("80f417b0d7aa")
+
+
+def test_benchproctor_is_registered_under_the_name_the_command_takes() -> None:
+    assert fak.KEYS["benchproctor"] is fak.benchproctor

@@ -32,7 +32,9 @@ import contextlib
 import hashlib
 import http.client
 import os
+import shutil
 import sys
+import zipfile
 from collections.abc import Callable, Mapping
 from pathlib import Path, PureWindowsPath
 
@@ -1082,6 +1084,23 @@ ZIZMOR_FILES: dict[str, str] = {
 }
 
 
+BENCHPROCTOR = "benchproctor"
+BENCHPROCTOR_COMMIT = "ad70ff85c2325626ccbda2a6565d354732d032ff"
+BENCHPROCTOR_URL = (
+    "https://raw.githubusercontent.com/TheAuditorTool/BenchProctor/{commit}/{path}"
+)
+# TheAuditorTool/BenchProctor (Apache-2.0): the 2026.07.22 quicktest bundles for
+# TypeScript and JavaScript (its releases halted, so the pin cannot move). Each
+# zip holds two frameworks' generated test cases, their labels
+# (`expectedresults-2026.07.22.csv`) and the bundle's scorer (`score_sarif.py`);
+# graded by tests/integration/test_benchproctor.py (Phase 6, F7). The zips are
+# extracted into the cache once they verify.
+BENCHPROCTOR_FILES: dict[str, str] = {
+    "Benchmarks/quicktest/typescript/benchproctor-typescript-quicktest-2026.07.22.zip": "80f417b0d7aa7dbaa5ab25898a9be559484a411c46c287a0c828f6df415859c4",
+    "Benchmarks/quicktest/javascript/benchproctor-javascript-quicktest-2026.07.22.zip": "ce18f02c168f5bcf97674fa62428d70bebf67942ab5fcccd4f231cf37e9d3a3e",
+}
+
+
 def answer_keys_dir() -> Path:
     """`$JMO_ANSWER_KEYS_DIR`, else `~/.cache/jmo-answer-keys`; an empty
     variable is no override."""
@@ -1102,6 +1121,16 @@ def vibeproof_dir(root: Path | None = None) -> Path:
 def kics_dir(root: Path | None = None) -> Path:
     """Where the key's files are: `<root>/kics/<commit>`."""
     return (root or answer_keys_dir()) / KICS / KICS_COMMIT
+
+
+def benchproctor_dir(root: Path | None = None) -> Path:
+    """Where the key's files are: `<root>/benchproctor/<commit>`."""
+    return (root or answer_keys_dir()) / BENCHPROCTOR / BENCHPROCTOR_COMMIT
+
+
+def benchproctor_bundle(language: str, root: Path | None = None) -> Path:
+    """Where one language's bundle is extracted: `<key>/extracted/<language>`."""
+    return benchproctor_dir(root) / "extracted" / language
 
 
 def zizmor_dir(root: Path | None = None) -> Path:
@@ -1214,11 +1243,56 @@ def zizmor(root: Path | None = None) -> list[str]:
     return _fetch_pinned(zizmor_dir(root), ZIZMOR_COMMIT, ZIZMOR_URL, ZIZMOR_FILES)
 
 
+def extract_zip(archive: Path, dest: Path) -> list[str]:
+    """Every file entry of `archive` under `dest`, a backslash read as a
+    separator (BenchProctor's bundles were made on Windows). Refused whole, with
+    nothing written, when any entry would land outside `dest`."""
+    with zipfile.ZipFile(archive) as bundle:
+        entries = [entry for entry in bundle.infolist() if not entry.is_dir()]
+        outside = [e.filename for e in entries if relative_path_problem(e.filename)]
+        if outside:
+            return [
+                f"{archive.name}: refused, entries outside its directory: {outside[:3]}"
+            ]
+        for entry in entries:
+            target = dest / entry.filename.replace("\\", "/")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(bundle.read(entry))
+    return []
+
+
+def benchproctor(root: Path | None = None) -> list[str]:
+    """BenchProctor's two quicktest bundles at the pinned commit, extracted; the
+    problems met, none when both are in place. A bundle is extracted again only
+    when its marker does not name the pinned hash."""
+    dest = benchproctor_dir(root)
+    problems = _fetch_pinned(
+        dest, BENCHPROCTOR_COMMIT, BENCHPROCTOR_URL, BENCHPROCTOR_FILES
+    )
+    if problems:
+        return problems
+    for path, expected in BENCHPROCTOR_FILES.items():
+        language = path.split("/")[2]
+        out = benchproctor_bundle(language, root)
+        marker = out.with_name(f"{language}.extracted")
+        if marker.is_file() and marker.read_bytes().decode() == expected:
+            continue
+        shutil.rmtree(out, ignore_errors=True)
+        refused = extract_zip(dest / path, out)
+        if refused:
+            shutil.rmtree(out, ignore_errors=True)
+            problems += refused
+        else:
+            marker.write_bytes(expected.encode())
+    return problems
+
+
 KEYS: dict[str, Callable[[], list[str]]] = {
     SCA_KITCHEN_SINK: sca_kitchen_sink,
     VIBEPROOF: vibeproof,
     KICS: kics,
     ZIZMOR: zizmor,
+    BENCHPROCTOR: benchproctor,
 }
 
 

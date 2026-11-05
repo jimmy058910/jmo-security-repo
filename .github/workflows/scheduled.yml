@@ -1287,14 +1287,17 @@ jobs:
       - name: Run the answer-key tests
         # juice-shop's and WebGoat's baselines and juice-shop's marked lines
         # (one scan of each, at its pinned commit), sca-kitchen-sink's lockfile
-        # formats, KICS's Dockerfile line floor, vibeproof's native pack key and
-        # zizmor's own snapshots. Until this step no job selected any of them.
+        # formats, KICS's Dockerfile and Kubernetes line floors, vibeproof's
+        # native pack key, zizmor's own snapshots, and BenchProctor's TypeScript
+        # and JavaScript scores for the rule bundle. Until this step no job
+        # selected any of them.
         run: |
           pytest tests/integration/test_baseline_validation.py \
             tests/integration/test_lockfile_formats.py \
             tests/integration/test_kics_line_floor.py \
             tests/integration/test_native_answer_key.py \
             tests/integration/test_zizmor_answer_key.py \
+            tests/integration/test_benchproctor.py \
             -v \
             --tb=short \
             --timeout=2400 \
