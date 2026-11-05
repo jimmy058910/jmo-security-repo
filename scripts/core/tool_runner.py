@@ -166,10 +166,11 @@ def _run_bounded(
     env: dict[str, str],
     stdout: int,
     stderr: int,
-    encoding: str,
-    errors: str,
+    encoding: str | None,
+    errors: str | None,
     timeout: float | None,
     cwd: Path | None = None,
+    stdin: int | None = None,
 ) -> subprocess.CompletedProcess:
     """``subprocess.run``, but a timeout kills the whole process tree.
 
@@ -189,6 +190,7 @@ def _run_bounded(
         encoding=encoding,
         errors=errors,
         cwd=cwd,
+        stdin=stdin,
         # POSIX only: makes the child a process-group leader so killpg reaches
         # its descendants. Not valid on Windows, where taskkill /T is used.
         start_new_session=(sys.platform != "win32"),
@@ -206,6 +208,34 @@ def _run_bounded(
             out, err = "", ""
         raise subprocess.TimeoutExpired(command, timeout or 0, output=out, stderr=err)
     return subprocess.CompletedProcess(command, proc.returncode, out, err)
+
+
+def run_bounded(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    stdout: int,
+    stderr: int,
+    encoding: str | None,
+    errors: str | None,
+    timeout: float | None,
+    cwd: Path | None = None,
+    stdin: int | None = None,
+) -> subprocess.CompletedProcess:
+    """`_run_bounded` for a caller outside this module: a command whose
+    timeout kills its whole process tree, as a scanner's does. A clone's
+    `git-remote-https` outlived a `subprocess.run` timeout (#1308)."""
+    return _run_bounded(
+        command,
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+        encoding=encoding,
+        errors=errors,
+        timeout=timeout,
+        cwd=cwd,
+        stdin=stdin,
+    )
 
 
 @dataclass
