@@ -446,7 +446,7 @@ class TestExternals:
             "filename": "Shell.PHP",
             "filepath": str(tmp_path / "sub"),
             "extension": ".php",
-            "filetype": "",
+            "filetype": "PHP",
             "owner": owner,
         }
 
@@ -457,17 +457,74 @@ class TestExternals:
             (b"\x7fELF\x02", "ELF"),
             (b"{\\rtf1\\ansi", "RTF"),
             (b"MDMP\x93\xa7", "MDMP"),
+            # The text entries (#1578). `<?php` is five bytes and
+            # `On Error Resume` fifteen: more than the four once read.
+            (b"<?php system($_GET['c']);", "PHP"),
+            (b"Function Run()", "VBS"),
+            (b"On Error Resume Next", "VBS"),
+            (b"@echo off", "BATCH"),
+            (b"@ECHO OFF", "BATCH"),
+            (b"<% Response.Write(1) %>", "JSP"),
+            (b"\xff\xfe<\x00%\x00", "JSP"),
+            (b"\xfe\xff\x00<\x00%", "JSP"),
+            # LOKI takes the table's first match: `<%` (JSP) comes before every
+            # ASP signature, so LOKI labels `<%@` JSP and never ASP.
+            (b'<%@ Page Language="C#" %>', "JSP"),
+            (b"\xff\xfe<\x00%\x00@\x00", "JSP"),
+            (b"TVqQAAMAAAAEAAAA", "Base64 EXE"),
             (b"plain text", ""),
         ],
     )
     def test_filetype_is_read_from_the_first_bytes(self, tmp_path, head, label):
-        """The binary entries of signature-base's own type table, the one LOKI
-        reads. `not filetype == "EXE"` guards a rule that also requires `MZ`:
-        with no label it would fire on every such executable."""
+        """The entries of signature-base's own type table, the one LOKI reads,
+        whose type a kept rule tests. `not filetype == "EXE"` guards a rule
+        that also requires `MZ`: with no label it would fire on every such
+        executable."""
         path = tmp_path / "f.bin"
         path.write_bytes(head + b"\x00" * 16)
 
         assert yara_runner.loki_externals(path)["filetype"] == label
+
+    def test_a_script_renamed_to_jpg_is_reported_as_cloaked(self, tmp_path):
+        """signature-base's SUSP_Known_Type_Cloaked_as_JPG reports a known file
+        type behind a `.jpg` name. Before #1578 it fired for an executable and
+        never for a PHP, JSP or VBS script, an upload-filter bypass."""
+        rule = b"""rule cloaked_as_jpg {
+    condition:
+        (extension == ".jpg" or extension == ".jpeg") and (
+            filetype == "EXE" or filetype == "PHP" or filetype == "JSP" or
+            filetype == "VBS" or filetype == "ASP" or filetype == "BATCH" or
+            filetype contains "Base64"
+        )
+}
+"""
+        rules = _rules_dir(tmp_path, cloaked=rule)
+        target = _target_dir(
+            tmp_path,
+            **{
+                "exe.jpg": b"MZ\x90\x00" + b"\x00" * 60,
+                "php.jpg": b"<?php system($_GET['c']); ?>",
+                "jsp.jpg": b'<%@ page import="java.io.*" %>',
+                "vbs.jpeg": b"On Error Resume Next\r\nCreateObject(1)",
+                "bat.jpg": b"@echo off\r\ndel *.*",
+                "b64.jpg": b"TVqQAAMAAAAEAAAA//8AALgAAAAA",
+                "photo.jpg": b"\xff\xd8\xff\xe0\x00\x10JFIF",
+                "shell.php": b"<?php system($_GET['c']); ?>",
+            },
+        )
+        out = tmp_path / "yara-x.json"
+
+        rc = _run(rules, target, out)
+
+        assert rc == 1
+        assert _matched(out, target) == [
+            "b64.jpg",
+            "bat.jpg",
+            "exe.jpg",
+            "jsp.jpg",
+            "php.jpg",
+            "vbs.jpeg",
+        ]
 
 
 class TestSizeCap:
