@@ -569,6 +569,9 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **The wizard's native GitHub Actions workflow installs YARA-X.** It ran `pip install
+  jmo-security`, which no longer brings YARA-X now that it is the `[yara]` extra (#1577),
+  so its scans ran without it; it installs `jmo-security[yara]`.
 - **`jmo wizard --yes` and `--target DIR` scan a project as one target.** A directory
   with no `.git` was read as a directory of repositories, and `--yes` with no target
   always read the working directory that way, so a project (or a repository, under

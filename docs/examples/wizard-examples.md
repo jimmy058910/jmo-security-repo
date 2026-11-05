@@ -1560,7 +1560,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install JMo Security
-        run: pip install jmo-security
+        run: pip install "jmo-security[yara]"
 
       - name: Install Security Tools
         run: |

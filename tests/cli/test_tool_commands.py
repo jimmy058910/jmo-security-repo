@@ -3513,3 +3513,44 @@ def test_check_json_output_omits_the_key_when_nothing_is_missing():
 
     payload = json.loads("\n".join(captured))
     assert "osv_scanner_missing_databases" not in payload
+
+
+def test_install_does_not_call_a_tool_that_cannot_run_installed(capsys):
+    """With nothing on its install list, `jmo tools install` said "All tools
+    are already installed!" though a default tool could not run: yara-x without
+    its `[yara]` extra (#1577), which this command cannot install. It names
+    what is not ready instead."""
+    from unittest.mock import MagicMock, patch
+
+    from scripts.cli.tool_commands import cmd_tools_install
+    from scripts.cli.tool_manager import ToolStatus
+
+    yara = ToolStatus(
+        name="yara-x",
+        installed=False,
+        execution_ready=False,
+        install_hint="pip install 'jmo-security[yara]'",
+    )
+    trivy = ToolStatus(name="trivy", installed=True, installed_version="0.74.0")
+    manager = MagicMock()
+    manager.get_missing_tools.return_value = []
+    manager.check_matrix.return_value = {"yara-x": yara, "trivy": trivy}
+    args = argparse.Namespace(
+        tools=None,
+        critical_only=False,
+        yes=True,
+        dry_run=False,
+        print_script=False,
+        sequential=False,
+        jobs=4,
+        force=False,
+    )
+
+    with patch("scripts.cli.tool_commands.ToolManager", return_value=manager):
+        rc = cmd_tools_install(args)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "All tools are already installed" not in out
+    assert "yara-x" in out and "jmo-security[yara]" in out
+    assert "trivy" not in out

@@ -547,6 +547,26 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         missing = manager.get_missing_tools([*TOOL_MATRIX, POLICY_ENGINE])
 
     if not missing:
+        # Nothing this command can install is not the same as every tool ready:
+        # a default tool can be off the list and still not run (yara-x without
+        # its [yara] extra, #1577). Statuses are cached, so this re-checks
+        # nothing. A named tool has already said where it stands, above.
+        not_ready = (
+            []
+            if tools_arg
+            else [
+                s
+                for s in manager.check_matrix([*TOOL_MATRIX, POLICY_ENGINE]).values()
+                if not s.execution_ready
+            ]
+        )
+        if not_ready:
+            print(colorize("Nothing to install, but these tools cannot run:", "yellow"))
+            for status in not_ready:
+                print(
+                    f"  {status.name}: {status.execution_warning or status.install_hint}"
+                )
+            return 0
         print(colorize("All tools are already installed!", "green"))
         return 0
 
