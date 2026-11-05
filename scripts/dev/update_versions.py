@@ -822,6 +822,50 @@ def find_workflow_literal_pins(
     return copies
 
 
+#: A Dockerfile's two pin shapes, as `sync_dockerfiles` rewrites them.
+_DOCKERFILE_VERSION_VAR = re.compile(r'\b([A-Z][A-Z0-9_]*)_VERSION="[^"]*"')
+_DOCKERFILE_PIP_PIN = re.compile(r"(?<![\w.-])([A-Za-z0-9][A-Za-z0-9._-]*)==[0-9]")
+
+
+def find_dropped_tools(
+    dockerfile_text: str, version_map: dict[str, tuple[str, str | None, str]]
+) -> list[str]:
+    """What the Dockerfile installs that versions.yaml does not list (#1563).
+
+    `--sync` rewrites the pin of each tool versions.yaml lists and looks at
+    nothing else, so a tool dropped there and left in the Dockerfile read
+    "already in sync". Three shapes a leftover takes: a `<TOOL>_VERSION`
+    download no entry maps to, a pip `package==X` no entry's `pypi_package`
+    names, and a removed tool (`REMOVED_TOOLS`) named as a word of its own on
+    a line that is not a comment, as apt's `yara` was (`yara-x` and
+    `yara-rules` are other words).
+    """
+    from scripts.core.tool_descriptors import REMOVED_TOOLS
+
+    stems = {stem for stem, _, _ in version_map.values()}
+    packages = {pkg for _, pkg, _ in version_map.values() if pkg}
+    removed = [
+        (tool, re.compile(rf"(?<![\w./-]){re.escape(tool)}(?![\w-])"))
+        for tool in sorted(REMOVED_TOOLS)
+    ]
+    found: list[str] = []
+    for line in dockerfile_text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        found += [
+            f"{m[1]}_VERSION"
+            for m in _DOCKERFILE_VERSION_VAR.finditer(line)
+            if m[1] not in stems
+        ]
+        found += [
+            f"{m[1]}=="
+            for m in _DOCKERFILE_PIP_PIN.finditer(line)
+            if m[1] not in packages
+        ]
+        found += [tool for tool, pattern in removed if pattern.search(line)]
+    return sorted(set(found))
+
+
 def sync_dockerfiles(dry_run: bool = False) -> bool:
     """Sync the Dockerfile with versions.yaml, and refuse a pin copied into a workflow.
 
@@ -876,6 +920,19 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
 
         content = dockerfile_path.read_text(encoding="utf-8")
         original_content = content
+
+        dropped = find_dropped_tools(content, version_map)
+        if dropped:
+            err(
+                f"{dockerfile_path.name} installs {len(dropped)} thing(s) "
+                "versions.yaml does not list, so --sync can never update them: "
+                + ", ".join(dropped)
+            )
+            err(
+                "Remove each from the Dockerfile, or add its tool back to "
+                "versions.yaml (#1563)."
+            )
+            all_success = False
 
         # Replace version variables
         for tool, (var_stem, pkg, version) in version_map.items():

@@ -24,9 +24,17 @@ const PORT = process.env.PORT || 3000;
 // Trust proxy - required for Vercel/serverless deployments to get real client IP
 app.set('trust proxy', 1);
 
-// Initialize Resend client
-// TODO(issue-#1437): create the client lazily; resend 6 throws at load without a key
-const resend = new Resend(process.env.RESEND_API_KEY);
+// The Resend client, built on the first request that sends mail. resend 6
+// throws "Missing API key" in its constructor, so building it at load stopped
+// the server from starting without a key, and the handler's own "not
+// configured" answer could never run (#1437).
+let resend = null;
+function resendClient() {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 // CORS configuration - allow GitHub Pages origin
 const corsOptions = {
@@ -392,7 +400,7 @@ Privacy Policy: https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html
 `;
 
     // Send email via Resend
-    const response = await resend.emails.send({
+    const response = await resendClient().emails.send({
       from: 'JMo Security <marketing@jmotools.com>',
       to: [email],
       subject: 'Welcome to JMo Security! 🎉',
