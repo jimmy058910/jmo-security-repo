@@ -12,6 +12,7 @@ URL and container image validation to prevent injection attacks.
 
 from __future__ import annotations
 
+import codecs
 import fnmatch
 import logging
 import os
@@ -61,7 +62,7 @@ def _user_path(value: str) -> Path:
     return Path(value).expanduser()
 
 
-def _unreadable(exc: OSError | UnicodeDecodeError) -> str:
+def _unreadable(exc: OSError | UnicodeDecodeError, offset: int = 0) -> str:
     """Rejection text for a target the process was not allowed to inspect.
 
     The ownership sentence is attached only to ``PermissionError``: a user
@@ -72,12 +73,14 @@ def _unreadable(exc: OSError | UnicodeDecodeError) -> str:
 
     A list file that is not UTF-8 (one a Windows editor saved as UTF-16) names
     its first bad byte instead: there is no errno, and the fix is to re-save
-    the file, not to look at its permissions (#1175).
+    the file, not to look at its permissions (#1175). `offset` is how many
+    bytes were dropped before decoding (a byte-order mark), so the position
+    is the byte's place in the file.
     """
     if isinstance(exc, UnicodeDecodeError):
         return (
             f"cannot be read: not valid UTF-8 (byte 0x{exc.object[exc.start]:02x} "
-            f"at position {exc.start}); save it as UTF-8"
+            f"at position {exc.start + offset}); save it as UTF-8"
         )
     detail = exc.strerror or type(exc).__name__
     if isinstance(exc, PermissionError):
@@ -132,11 +135,22 @@ def _read_lines(path: Path) -> tuple[list[str], str | None]:
     ``exists()`` answering True does not promise ``open()`` will work: a
     traversable directory holding a mode-000 file gives exactly that split.
     Nor does a readable file promise UTF-8 (#1175).
+
+    A leading byte-order mark is dropped, which PowerShell 5.1's
+    `Out-File -Encoding utf8` and Notepad's "UTF-8 with BOM" write: kept, it
+    was glued to the first entry, and an existing path was refused as missing
+    (#1485). Dropped here rather than by `utf-8-sig`, so a bad byte after it
+    is still named at its place in the file.
     """
     try:
-        return path.read_text(encoding="utf-8").splitlines(), None
-    except (OSError, UnicodeDecodeError) as exc:
+        raw = path.read_bytes()
+    except OSError as exc:
         return [], _unreadable(exc)
+    mark = len(codecs.BOM_UTF8) if raw.startswith(codecs.BOM_UTF8) else 0
+    try:
+        return raw[mark:].decode("utf-8").splitlines(), None
+    except UnicodeDecodeError as exc:
+        return [], _unreadable(exc, offset=mark)
 
 
 def _detect_msys_path_mangling(path_str: str) -> bool:

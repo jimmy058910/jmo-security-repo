@@ -244,14 +244,14 @@ READ_FLAGS = [
 def test_a_list_file_that_stats_but_cannot_be_read_is_rejected(
     attr, flag, tmp_path, monkeypatch, orch
 ):
-    """``exists()`` answering True does not promise ``read_text()`` will work.
+    """``exists()`` answering True does not promise a read will work.
 
     A traversable directory holding a mode-000 file gives exactly this: the
     stat succeeds, the open does not.
     """
     listing = tmp_path / "list.txt"
     listing.write_text("# empty\n", encoding="utf-8")
-    _raise_on(monkeypatch, listing, "read_text")
+    _raise_on(monkeypatch, listing, "read_bytes")
 
     targets = orch.discover_targets(_Args(**{attr: str(listing)}))
 
@@ -290,6 +290,49 @@ def test_a_missing_list_file_still_says_it_does_not_exist(attr, flag, tmp_path, 
     assert "UTF-8" not in joined, joined
 
 
+def test_a_list_file_with_a_byte_order_mark_keeps_its_first_entry(tmp_path, orch):
+    """PowerShell 5.1's `Out-File -Encoding utf8` and Notepad's "UTF-8 with BOM"
+    start the file with U+FEFF, which stayed glued to the first entry: an
+    existing directory was rejected as missing, and a URL or an image reference
+    as malformed (#1485)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    bom = "\ufeff"
+    for name, line in (
+        ("targets.txt", str(repo)),
+        ("images.txt", "nginx:1.27"),
+        ("urls.txt", "http://localhost:8080/"),
+    ):
+        (tmp_path / name).write_bytes(f"{bom}{line}\n".encode())
+
+    targets = orch.discover_targets(
+        _Args(
+            targets=str(tmp_path / "targets.txt"),
+            images_file=str(tmp_path / "images.txt"),
+            urls_file=str(tmp_path / "urls.txt"),
+        )
+    )
+
+    assert targets.rejected == [], targets.rejected
+    assert [p.name for p in targets.repos] == ["repo"]
+    assert targets.images == ["nginx:1.27"]
+    assert targets.urls == ["http://localhost:8080/"]
+
+
+def test_a_bad_byte_after_a_byte_order_mark_is_named_at_its_file_offset(tmp_path, orch):
+    """The mark is dropped before decoding, and the refusal still counts the
+    bad byte's place in the file, mark included: one says position 8 for the
+    byte a hex editor shows at 8."""
+    listing = tmp_path / "list.txt"
+    listing.write_bytes(b"\xef\xbb\xbfgood\n\xff\n")
+
+    targets = orch.discover_targets(_Args(targets=str(listing)))
+
+    assert "not valid UTF-8 (byte 0xff at position 8)" in "\n".join(targets.rejected), (
+        targets.rejected
+    )
+
+
 # --------------------------------------------------------------------------
 # The discriminator, and the structural guard
 # --------------------------------------------------------------------------
@@ -322,7 +365,7 @@ def test_no_discovery_method_probes_the_filesystem_directly():
     """
     import scripts.cli.scan_orchestrator as mod
 
-    unguarded = {"exists", "is_dir", "iterdir", "read_text"}
+    unguarded = {"exists", "is_dir", "iterdir", "read_text", "read_bytes"}
     tree = ast.parse(inspect.getsource(mod))
     visited: list[str] = []
     offenders: list[str] = []
