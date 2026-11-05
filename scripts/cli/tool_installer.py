@@ -1729,7 +1729,8 @@ class ToolInstaller:
     ) -> InstallResult:
         """Install app that extracts to a directory (e.g., ZAP).
 
-        Downloads archive, extracts to ~/.jmo/{tool_name}/, and verifies.
+        Downloads archive, extracts to {install_dir}/{tool_name}/ (by default
+        ~/.jmo/bin/{tool_name}/, where find_tool looks), and verifies.
         Supports platform-specific URLs (a dict keyed by platform).
         Security: Uses safe_tar_extract/safe_zip_extract to prevent path traversal.
         """

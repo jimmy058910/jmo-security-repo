@@ -221,6 +221,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **`make tools` installs the scanners through `jmo tools install` (#1562).**
+  `scripts/dev/install_tools.sh` installed them itself, from `latest`, unpinned and
+  unchecked, three by piping an install script from `main`, and ZAP on Linux as a snap
+  jmo never looked for, so a machine set up with `make tools` reported zap missing. It
+  now installs only the developer prerequisites (python3, pip, jq, curl, git, shfmt) and
+  runs `jmo tools install --yes`, or `jmo tools update --yes` for `make tools-upgrade`.
 - **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
   publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
   dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
