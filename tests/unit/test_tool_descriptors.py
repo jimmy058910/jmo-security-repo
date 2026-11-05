@@ -518,3 +518,36 @@ class TestTrivyRepoDropsItsSecretPass:
             command[i + 1] for i, tok in enumerate(command) if tok == "--scanners"
         ]
         assert occurrences == ["vuln,misconfig", "secret"], command
+
+
+# --- memory cost classes (v2.0.0 Phase 7, Task B1) ----------------------------
+# Each run's own peak, measured 2026-11-05 through `jmo scan --tools <t>` under
+# scripts/dev/peakmem.py, rounded up to the next 50 MB. The scan-wide gate sums
+# them, so a value changes only with a new measurement: the plan's B1 record.
+MEASURED_MEMORY_MB = {
+    "trufflehog": 600,  # history run 553-565 MB, tree run 488 MB, each alone
+    "gitleaks": 350,  # 328 MB for its two runs' processes
+    "opengrep": 700,  # 662 MB at -j 4
+    "syft": 250,  # 199 MB
+    "trivy": 250,  # 201 MB
+    "checkov": 300,  # 235 MB PSS on terragoat, two processes sharing pages
+    "hadolint": 100,  # finished under one sample
+    "shellcheck": 100,  # 39 MB
+    "zizmor": 100,  # 20 MB
+    "jmo-native": 100,  # 33 MB
+    "yara-x": 200,  # 153 MB
+    "osv-scanner": 650,  # about 600 MB a run: npm's whole offline database
+    "zap": 600,  # java 554 MB: the 512 MB heap and the JVM
+    "nuclei": 1450,  # 1,404 MB: its whole template set
+}
+
+
+def test_every_tool_carries_its_measured_memory_class() -> None:
+    """The gate sums a run's class against the budget: a tool without one would
+    be admitted for free, and a guessed one would gate on a fiction."""
+    assert {name: d.memory_mb for name, d in DESCRIPTORS.items()} == MEASURED_MEMORY_MB
+
+
+def test_a_memory_class_is_a_positive_multiple_of_50() -> None:
+    for name, d in DESCRIPTORS.items():
+        assert d.memory_mb > 0 and d.memory_mb % 50 == 0, name

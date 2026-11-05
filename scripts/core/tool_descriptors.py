@@ -524,6 +524,12 @@ class ToolDescriptor:
     own_config_detail: Callable[[Path], str] | None = None
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
+    # A run's memory, in MB: its measured peak rounded up to the next 50
+    # (`scripts/dev/peakmem.py`, the Phase 7 plan's Task B1 record). The scan's
+    # memory gate admits a run while the running total plus this fits its
+    # budget. Per run: a tool with two invocations (trufflehog's tree and
+    # history) holds it twice when both run at once.
+    memory_mb: int = 0
     binary: str | None = None  # executable name, where it differs from `name`
     # Ships inside JMo and runs on its interpreter: nothing to install, pin or
     # update, and its version is JMo's own.
@@ -2186,6 +2192,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
     for d in (
         ToolDescriptor(
             name="trufflehog",
+            memory_mb=600,  # history run 553-565 MB, tree run 488 MB, each alone
             invocations={"repo": _trufflehog_repo},
             version_probe=VersionProbe(re.compile(r"trufflehog\s+v?(\d+\.\d+\.\d+)")),
             exclusion_style=ExclusionStyle.PATTERN_FILE,
@@ -2208,6 +2215,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="gitleaks",
+            memory_mb=350,  # 328 MB for its two runs
             invocations={"repo": _gitleaks_repo},
             # `gitleaks version` prints the bare version (measured, 8.30.1).
             version_probe=VersionProbe(
@@ -2246,6 +2254,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="opengrep",
+            memory_mb=700,  # 662 MB at -j 4
             invocations={"repo": _opengrep_repo},
             # `opengrep --version` prints the bare version (measured, 1.32.0).
             version_probe=VersionProbe(re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE)),
@@ -2302,6 +2311,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="syft",
+            memory_mb=250,  # 199 MB
             invocations={"repo": _syft_repo, "image": _syft_image},
             version_probe=VersionProbe(_VERSION, command=["syft", "version"]),
             exclusion_style=ExclusionStyle.SEPARATE,
@@ -2318,6 +2328,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="trivy",
+            memory_mb=250,  # 201 MB
             own_config=("trivy.yaml", ".trivyignore"),
             invocations={
                 # No `secret`: gitleaks and trufflehog already read a repository's
@@ -2358,6 +2369,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="checkov",
+            memory_mb=300,  # 235 MB PSS on terragoat; its processes share pages
             invocations={
                 "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
@@ -2393,6 +2405,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="hadolint",
+            memory_mb=100,  # under one sample
             invocations={"repo": _file_fed("-f", "json", from_root=True)},
             own_config=(".hadolint.yaml", ".hadolint.yml"),
             version_probe=VersionProbe(
@@ -2414,6 +2427,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="shellcheck",
+            memory_mb=100,  # 39 MB
             invocations={"repo": _file_fed("--format=json")},
             own_config=(".shellcheckrc", "shellcheckrc"),
             own_config_dirs=_shellcheck_own_config_dirs,
@@ -2432,6 +2446,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="zizmor",
+            memory_mb=100,  # 20 MB
             invocations={"repo": _zizmor_repo},
             # `zizmor --version` prints `zizmor 1.30.1` (measured).
             version_probe=VersionProbe(re.compile(r"zizmor\s+v?(\d+\.\d+\.\d+)")),
@@ -2478,6 +2493,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="jmo-native",
+            memory_mb=100,  # 33 MB
             invocations={"repo": _native_repo},
             # `--version` prints `jmo-native <JMo's version>`.
             version_probe=VersionProbe(
@@ -2504,6 +2520,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="yara-x",
+            memory_mb=200,  # 153 MB
             invocations={"repo": _yara_x_repo},
             version_probe=VersionProbe(
                 re.compile(r"v?(\d+\.\d+\.\d+)"),
@@ -2530,6 +2547,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="osv-scanner",
+            memory_mb=650,  # about 600 MB a run: npm's whole offline database
             invocations={"repo": _osv_scanner_repo},
             # `osv-scanner --version` prints `osv-scanner version: 2.6.0`, then
             # `osv-scalibr version: 0.5.2` (measured).
@@ -2567,6 +2585,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="zap",
+            memory_mb=600,  # java 554 MB: the 512 MB heap and the JVM
             invocations={"url": _zap_url},
             version_probe=VersionProbe(
                 # Not the JVM's version, a four-part version's first three
@@ -2604,6 +2623,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="nuclei",
+            memory_mb=1450,  # 1,404 MB: its whole template set
             invocations={"url": _nuclei_url},
             version_probe=VersionProbe(_VERSION, command=["nuclei", "-version"]),
             exclusion_style=ExclusionStyle.NOT_FILESYSTEM,
