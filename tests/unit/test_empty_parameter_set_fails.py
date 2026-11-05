@@ -20,9 +20,12 @@ a subprocess that fails for an unrelated reason cannot pass for the guard.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -42,7 +45,6 @@ def test_each(value):
 def _run_pytest(tmp_path: Path, values: str) -> subprocess.CompletedProcess[str]:
     test_file = tmp_path / "test_throwaway.py"
     test_file.write_bytes(_TEST_BODY.format(values=values).encode("utf-8"))
-    # TODO(issue-#1501): drop PYTEST_ADDOPTS from the child's env.
     return subprocess.run(
         [
             sys.executable,
@@ -67,6 +69,9 @@ def _run_pytest(tmp_path: Path, values: str) -> subprocess.CompletedProcess[str]
         errors="replace",
         timeout=120,
         cwd=tmp_path,
+        # The options above and no others: a `--basetemp` the parent took from
+        # PYTEST_ADDOPTS holds this cwd, and the child refused it (#1501).
+        env={k: v for k, v in os.environ.items() if k != "PYTEST_ADDOPTS"},
     )
 
 
@@ -82,6 +87,21 @@ def test_empty_parameter_set_is_a_collection_error(tmp_path: Path) -> None:
 
 def test_non_empty_parameter_set_still_runs(tmp_path: Path) -> None:
     result = _run_pytest(tmp_path, '["present"]')
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "1 passed" in output, output
+
+
+def test_the_child_ignores_the_parents_pytest_addopts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1501: a `--basetemp` the parent took from PYTEST_ADDOPTS reached the
+    child too, whose working directory (this tmp_path) lies inside it, and
+    pytest refused it, failing both tests above."""
+    monkeypatch.setenv("PYTEST_ADDOPTS", f"--basetemp={tmp_path.parent}")
+
+    result = _run_pytest(tmp_path, '["present"]')
+
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "1 passed" in output, output
