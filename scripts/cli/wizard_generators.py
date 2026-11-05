@@ -34,7 +34,9 @@ if TYPE_CHECKING:
 # never touched this file, which is why it decayed silently. Deriving it removes
 # the failure mode instead of adding a fourth entry to that checklist.
 JMO_DOCKER_IMAGE = "ghcr.io/jimmy058910/jmo-security"
-JMO_DOCKER_TAG = f"v{__version__}"  # pinned to this release, not :latest
+# release.yml tags with docker/metadata-action's `type=semver`, which drops the
+# `v`: GHCR has `1.1.1`, never `v1.1.1`, and the `v` form failed every pull.
+JMO_DOCKER_TAG = __version__  # pinned to this release, not :latest
 JMO_DOCKER_IMAGE_FULL = f"{JMO_DOCKER_IMAGE}:{JMO_DOCKER_TAG}"
 
 

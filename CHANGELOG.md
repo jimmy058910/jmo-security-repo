@@ -569,6 +569,11 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **The wizard's Docker commands name an image that exists.** They used
+  `ghcr.io/jimmy058910/jmo-security:v<version>`, but a release tags its images without
+  the `v` (`1.1.1`, `1.1`, `1`, `latest`), so every `docker run` the wizard printed,
+  ran or wrote into a script, Makefile or workflow failed with "not found" (exit 125).
+  The tag is now the release's own, and a test reads release.yml's tag patterns.
 - **The wizard's native GitHub Actions workflow installs YARA-X.** It ran `pip install
   jmo-security`, which no longer brings YARA-X now that it is the `[yara]` extra (#1577),
   so its scans ran without it; it installs `jmo-security[yara]`.

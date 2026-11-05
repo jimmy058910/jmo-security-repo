@@ -149,8 +149,44 @@ def test_docker_tag_tracks_the_shipped_version():
     """
     from scripts.cli.jmo import __version__
 
-    assert f"v{__version__}" == JMO_DOCKER_TAG
-    assert JMO_DOCKER_IMAGE_FULL.endswith(f":v{__version__}")
+    assert __version__ == JMO_DOCKER_TAG
+    assert JMO_DOCKER_IMAGE_FULL.endswith(f":{JMO_DOCKER_TAG}")
+
+
+def test_docker_tag_is_one_the_release_publishes():
+    """The tag must be one release.yml pushes, rendered from its own patterns.
+
+    It was `v{version}`, and docker/metadata-action's `type=semver` drops the
+    `v`: GHCR holds `1.1.1`, never `v1.1.1`, so every Docker command the wizard
+    printed or wrote failed with "not found" (rc 125). Both sides are read
+    here, so a pattern change in release.yml fails this until the wizard
+    follows.
+    """
+    import re
+
+    import yaml
+
+    from scripts.cli.jmo import __version__
+
+    release = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
+    steps = [
+        step
+        for job in yaml.safe_load(release.read_text(encoding="utf-8"))["jobs"].values()
+        for step in job.get("steps", [])
+        if "docker/metadata-action" in str(step.get("uses", ""))
+    ]
+    assert steps, "release.yml has no docker/metadata-action step"
+    major, minor, *_ = __version__.split(".")
+    published = set()
+    for step in steps:
+        for pattern in re.findall(r"type=semver,pattern=(\S+)", step["with"]["tags"]):
+            published.add(
+                pattern.replace("{{version}}", __version__)
+                .replace("{{major}}", major)
+                .replace("{{minor}}", minor)
+            )
+    assert __version__ in published, published  # the extractor found the pattern
+    assert JMO_DOCKER_TAG in published, (JMO_DOCKER_TAG, published)
 
 
 def test_generate_command_tsv_mode():
