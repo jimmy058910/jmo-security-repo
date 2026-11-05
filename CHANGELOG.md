@@ -555,7 +555,9 @@ All notable changes to JMo Security will be documented in this file.
   and `JMO_SCAN_LABEL`, which JMo does not read. The examples now mount
   `/scan/.jmo` and `/home/jmo/.cache/trivy`, and the compose examples name the database
   with `--history-db` / `--db` on a volume at `/home/jmo/.jmo`. The image creates
-  `/home/jmo/.cache/trivy` owned by `jmo`, so a named volume there is writable. The
+  `/home/jmo/.cache/trivy` owned by `jmo`, so a named volume there is writable, and no
+  longer declares `VOLUME /root/.cache/trivy`, which nothing used and which made an
+  anonymous volume on every run. The
   guide's reset step deleted `~/.jmo`, the installed tools included; it now deletes the
   project's `.jmo`.
 - **An installed JMo validates findings against the CommonFinding schema (#1350).** The
