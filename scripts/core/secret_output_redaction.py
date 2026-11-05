@@ -37,7 +37,7 @@ from typing import Any, TypeGuard
 from scripts.core.adapters.common import _flatten_to_dicts
 from scripts.core.adapters.opengrep_adapter import (
     REDACTED,
-    redact_secret_result,
+    redact_results,
     secret_texts,
 )
 from scripts.core.adapters.trufflehog_adapter import (
@@ -175,11 +175,18 @@ def _replace(path: Path, data: bytes) -> None:
 OPENGREP_LOG = Path(".opengrep") / "semgrep.log"
 
 
+def _spellings(secret: str) -> set[str]:
+    """A secret as opengrep's log may write it: as is, and escaped as Python's
+    repr and JSON escape it (a quote or backslash in it appears escaped)."""
+    return {secret, repr(secret)[1:-1], json.dumps(secret)[1:-1]}
+
+
 def _redact_opengrep_output(path: Path) -> int:
-    """Redact the results of rules that match a secret's value in
-    `opengrep.json`, as the adapter redacts their findings, and replace their
-    secrets in opengrep's log beside it (#1585). The adapter reads the rewritten
-    file to the same findings and ids. Returns how many results changed."""
+    """Redact `opengrep.json` as the adapter redacts its findings
+    (`redact_results`), and replace the secrets it quoted in opengrep's log
+    beside it (#1585). The log goes first: its secrets are found through the
+    JSON, so a JSON rewritten before a log that then could not be would leave
+    them there for good. Returns how many results changed."""
     try:
         document = json.loads(path.read_bytes().decode("utf-8", "ignore"))
     except (OSError, ValueError, RecursionError) as e:
@@ -190,18 +197,46 @@ def _redact_opengrep_output(path: Path) -> int:
     results = document.get("results") if isinstance(document, dict) else None
     if not isinstance(results, list):
         return 0
-    texts: set[str] = set()
-    changed = 0
-    for i, result in enumerate(results):
-        if not isinstance(result, dict):
-            continue
-        redacted = redact_secret_result(result)
-        if redacted != result:
-            texts.update(secret_texts(result))
-            results[i] = redacted
-            changed += 1
+    redacted = redact_results(results)
+    changed = sum(1 for old, new in zip(results, redacted, strict=True) if old != new)
     if not changed:
         return 0
+    spellings = sorted(
+        {s for secret in secret_texts(results) for s in _spellings(secret)},
+        key=len,
+        reverse=True,
+    )
+    log = path.parent / OPENGREP_LOG
+    try:
+        text = log.read_bytes().decode("utf-8", "surrogateescape")
+    except FileNotFoundError:
+        text = None
+    except OSError as e:
+        logger.warning(
+            "%s could not be read, so it and %s may still hold secrets: %s",
+            log,
+            path.name,
+            e,
+        )
+        return 0
+    if text is not None:
+        scrubbed = text
+        for secret in spellings:
+            scrubbed = scrubbed.replace(secret, REDACTED)
+        if scrubbed != text:
+            try:
+                _replace(log, scrubbed.encode("utf-8", "surrogateescape"))
+            except OSError as e:
+                logger.warning(
+                    "%s could not be rewritten, so it and %s may still hold "
+                    "secrets: %s: %s",
+                    log,
+                    path.name,
+                    type(e).__name__,
+                    e,
+                )
+                return 0
+    document["results"] = redacted
     try:
         _replace(path, json.dumps(document).encode("utf-8"))
     except OSError as e:
@@ -212,27 +247,6 @@ def _redact_opengrep_output(path: Path) -> int:
             e,
         )
         return 0
-    log = path.parent / OPENGREP_LOG
-    try:
-        text = log.read_bytes().decode("utf-8", "surrogateescape")
-    except FileNotFoundError:
-        return changed
-    except OSError as e:
-        logger.warning("%s could not be read, so it may still hold secrets: %s", log, e)
-        return changed
-    scrubbed = text
-    for secret in sorted(texts, key=len, reverse=True):
-        scrubbed = scrubbed.replace(secret, REDACTED)
-    if scrubbed != text:
-        try:
-            _replace(log, scrubbed.encode("utf-8", "surrogateescape"))
-        except OSError as e:
-            logger.warning(
-                "%s could not be rewritten, so it may still hold secrets: %s: %s",
-                log,
-                type(e).__name__,
-                e,
-            )
     return changed
 
 
