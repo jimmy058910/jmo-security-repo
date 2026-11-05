@@ -565,6 +565,11 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **No subprocess in `scripts/cli` or `scripts/core` can wait forever (#1285).** `jmo tools
+  uninstall`'s `pip uninstall` and `pip show`, and `jmo schedule install`'s two `crontab`
+  calls, had no timeout; a hung `crontab` is now reported as a schedule error after 30 s.
+  A test fails on any new call without `timeout=`, except the wizard's scan, whose tools
+  each run under their own.
 - **An exported schedule workflow mounts a checkout whose path holds a space.** Its
   `docker run -v $(pwd):/workspace` left the substitution unquoted, so the shell split
   such a path into two arguments; it is now `-v "$(pwd)":/workspace`.

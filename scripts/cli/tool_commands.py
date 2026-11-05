@@ -1082,6 +1082,7 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                timeout=120,
             )
             if result.returncode == 0:
                 print(colorize("done", "green"))
@@ -1124,6 +1125,7 @@ def _check_pip_package(package: str) -> bool:
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=30,
         )
         return result.returncode == 0
     except Exception:
