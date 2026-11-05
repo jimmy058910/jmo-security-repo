@@ -24,7 +24,12 @@ from pathlib import Path
 
 import pytest
 
+from scripts.core.adapters.common import safe_load_ndjson_file
 from scripts.core.normalize_and_report import gather_results
+from scripts.core.secret_output_redaction import (
+    STAND_IN_PREFIX,
+    redact_secret_outputs,
+)
 
 ALPHA = "jmo-fixture-secret-alpha-31d5e8a0"  # in the tree and in history
 BRAVO = "jmo-fixture-secret-bravo-7c42f9b1"  # in the tree only
@@ -286,3 +291,63 @@ def test_an_output_that_cannot_be_rewritten_is_named_and_the_report_runs(
     warned = [r.getMessage() for r in caplog.records if "still hold" in r.getMessage()]
     assert len(warned) == 4, warned
     assert any("trufflehog.git.json" in message for message in warned)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # One line holding an array, beside a plain record.
+        json.dumps([_th_tree(ALPHA, "a.pem"), _th_tree(BRAVO, "b.pem")])
+        + "\n"
+        + json.dumps(_th_tree(CHARLIE, "c.pem"))
+        + "\n",
+        # A nested array, the whole file one JSON document.
+        json.dumps([[_th_tree(ALPHA, "a.pem")], _th_tree(BRAVO, "b.pem")]),
+        # A pretty-printed array.
+        json.dumps([_th_tree(ALPHA, "a.pem"), _th_tree(BRAVO, "b.pem")], indent=2),
+    ],
+    ids=["array-on-a-line", "nested-array", "pretty-array"],
+)
+def test_every_record_the_adapter_reads_is_redacted(tmp_path: Path, body: str) -> None:
+    """The adapter reads a trufflehog file through `safe_load_ndjson_file`,
+    which flattens arrays at any depth; whatever it reads, the redaction must
+    have reached (review of #1329: two of these shapes kept their secrets)."""
+    path = tmp_path / "trufflehog.json"
+    path.write_bytes(body.encode())
+    assert len(list(safe_load_ndjson_file(path))) >= 2  # meta: the adapter reads them
+
+    redact_secret_outputs([path])
+
+    records = list(safe_load_ndjson_file(path))
+    assert records
+    assert all(r["Raw"].startswith(STAND_IN_PREFIX) for r in records), records
+    assert not [s for s in SECRETS if s.encode() in path.read_bytes()]
+
+
+def test_an_output_too_deep_to_read_is_named_and_the_rest_redacted(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """json.loads raises RecursionError, not a decode error, on deep nesting;
+    it must not end the report."""
+    deep = tmp_path / "gitleaks.json"
+    deep.write_bytes(b"[" * 100_000 + b"]" * 100_000)
+    target = _target(tmp_path / "results")
+
+    with caplog.at_level(logging.WARNING):
+        redact_secret_outputs([deep, *sorted(target.glob("*.json"))])
+
+    assert any("gitleaks.json" in r.getMessage() for r in caplog.records)
+    assert _leaks(tmp_path / "results") == {}
+
+
+def test_an_empty_output_is_left_without_a_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A tool killed after creating its file leaves it empty: nothing to hold."""
+    for name in ("gitleaks.json", "trufflehog.json"):
+        (tmp_path / name).write_bytes(b"")
+
+    with caplog.at_level(logging.WARNING):
+        redact_secret_outputs(sorted(tmp_path.glob("*.json")))
+
+    assert caplog.records == []

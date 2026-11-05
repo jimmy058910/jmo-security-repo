@@ -32,6 +32,9 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, TypeGuard
 
+# The adapter's own reader flattens arrays at any depth; whatever it reads, the
+# redaction has to reach.
+from scripts.core.adapters.common import _flatten_to_dicts
 from scripts.core.adapters.trufflehog_adapter import (
     SECRET_BEARING_FIELDS,
     _is_pytest_name_matched_as_lob_key,
@@ -74,20 +77,20 @@ def _redact_trufflehog_record(record: dict[str, Any], stand_in: StandIn) -> int:
 
 
 def _redact_trufflehog(text: str, stand_in: StandIn) -> tuple[str, int, int]:
-    """trufflehog writes NDJSON; a JSON array is read too, as the adapter does.
+    """trufflehog writes NDJSON. The file is read as the adapter reads it
+    (`safe_load_ndjson_file`): whole when it is one JSON document, else line
+    by line, and every record found in a document or line at any depth of
+    arrays.
 
     Returns the new text, how many fields changed, and how many non-empty lines
     did not parse (left as they are, and named by the caller)."""
     try:
         document = json.loads(text)
-    except json.JSONDecodeError:
+    except ValueError:
         document = None
     if isinstance(document, (dict, list)):
-        records = document if isinstance(document, list) else [document]
         changed = sum(
-            _redact_trufflehog_record(r, stand_in)
-            for r in records
-            if isinstance(r, dict)
+            _redact_trufflehog_record(r, stand_in) for r in _flatten_to_dicts(document)
         )
         return json.dumps(document), changed, 0
 
@@ -97,14 +100,15 @@ def _redact_trufflehog(text: str, stand_in: StandIn) -> tuple[str, int, int]:
         body = line.rstrip("\r\n")
         try:
             record = json.loads(body) if body.strip() else None
-        except json.JSONDecodeError:
+        except ValueError:
             record = None
             unparsed += 1
-        if isinstance(record, dict):
-            n = _redact_trufflehog_record(record, stand_in)
-            if n:
-                changed += n
-                line = json.dumps(record) + line[len(body) :]
+        n = sum(
+            _redact_trufflehog_record(r, stand_in) for r in _flatten_to_dicts(record)
+        )
+        if n:
+            changed += n
+            line = json.dumps(record) + line[len(body) :]
         out.append(line)
     return "".join(out), changed, unparsed
 
@@ -130,7 +134,7 @@ def _redact_snippets(node: Any, stand_in: StandIn) -> int:
 def _redact_gitleaks(text: str, stand_in: StandIn) -> tuple[str, int, int]:
     try:
         document = json.loads(text)
-    except json.JSONDecodeError:
+    except ValueError:
         return text, 0, 1
     changed = _redact_snippets(document, stand_in)
     return json.dumps(document, indent=1), changed, 0
@@ -184,7 +188,19 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
                 "%s could not be read, so it may still hold secrets: %s", path, e
             )
             continue
-        new_text, changed, unparsed = redact(text, stand_in)
+        if not text.strip():
+            # A tool stopped after creating its file: nothing to hold.
+            continue
+        try:
+            new_text, changed, unparsed = redact(text, stand_in)
+        except RecursionError:
+            # Nested deeper than Python's JSON reader goes; the adapter
+            # cannot read it either.
+            logger.warning(
+                "%s is nested too deeply to read, so it may still hold secrets",
+                path,
+            )
+            continue
         if unparsed:
             logger.warning(
                 "%s: %d part(s) do not parse as JSON and are left as they are; "
