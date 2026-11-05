@@ -217,6 +217,13 @@ All notable changes to JMo Security will be documented in this file.
   them: its Dockerfile count disagreed with the scan's file selection, but no wizard run
   ever showed it (#1411). A test now fails on any definition or public method in
   `scripts/cli/wizard_flows/` that nothing under `scripts/` uses (#1301).
+- **Breaking. `--gitlab-group` is gone until JMo can list a group's projects.** It never
+  did: the scan cloned `<instance>/group:<name>.git`, which is not a project, so nothing
+  was scanned, and on Windows its results path named an NTFS alternate data stream. `jmo
+  scan` and `jmo ci` now reject the flag (exit 2), the wizard asks for one repository
+  instead of offering "Entire group", and a schedule whose `gitlab` target holds `group`
+  is refused by name when it is created, validated, exported or installed. Scan each
+  project with `--gitlab-repo` (docs/KNOWN_LIMITATIONS.md, #1407).
 - **History drops `scans.scan_notes` and `findings.finding_status`.** v1.1.0's migration
   added both by ALTER TABLE, nothing read or wrote either, and a fresh database had
   neither until `jmo history migrate` ran, so one version had two schemas. They are

@@ -146,8 +146,6 @@ def build_gitlab_args(target: TargetConfig, use_docker: bool = False) -> list[st
     # Docker forwards it by name in build_command_parts).
     if target.gitlab_repo:
         args.extend(["--gitlab-repo", target.gitlab_repo])
-    elif target.gitlab_group:
-        args.extend(["--gitlab-group", target.gitlab_group])
 
     return args
 

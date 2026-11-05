@@ -5,7 +5,7 @@ Tests cover:
 - Container image arguments (single, batch)
 - IaC arguments (terraform, cloudformation, k8s-manifest)
 - URL arguments (single, batch, api)
-- GitLab arguments (repo, group)
+- GitLab arguments (repo)
 - Kubernetes arguments (single namespace, all namespaces)
 - Complete command building for native and Docker modes
 
@@ -292,7 +292,6 @@ def test_build_gitlab_args_repo_mode():
     target.gitlab_url = "https://gitlab.com"
     target.gitlab_token = "token123"
     target.gitlab_repo = "mygroup/myrepo"
-    target.gitlab_group = None
 
     args = build_gitlab_args(target, use_docker=False)
 
@@ -305,30 +304,12 @@ def test_build_gitlab_args_repo_mode():
     assert "mygroup/myrepo" in args
 
 
-def test_build_gitlab_args_group_mode():
-    """Test build_gitlab_args with group mode."""
-    target = MagicMock()
-    target.gitlab_url = "https://gitlab.com"
-    target.gitlab_token = "token123"
-    target.gitlab_repo = None
-    target.gitlab_group = "mygroup"
-
-    args = build_gitlab_args(target, use_docker=False)
-
-    assert "--gitlab-url" in args
-    assert "--gitlab-token" not in args
-    assert "--gitlab-group" in args
-    assert "mygroup" in args
-    assert "--gitlab-repo" not in args
-
-
 def test_build_gitlab_args_minimal():
     """Test build_gitlab_args with minimal config (no token)."""
     target = MagicMock()
     target.gitlab_url = "https://gitlab.com"
     target.gitlab_token = None
     target.gitlab_repo = "mygroup/myrepo"
-    target.gitlab_group = None
 
     args = build_gitlab_args(target, use_docker=False)
 
@@ -562,7 +543,6 @@ def test_build_command_parts_docker_gitlab(tmp_path):
     target.gitlab_url = "https://gitlab.com"
     target.gitlab_token = "secret"
     target.gitlab_repo = "org/repo"
-    target.gitlab_group = None
     config.target = target
 
     cmd = build_command_parts(config)
@@ -690,7 +670,6 @@ def test_build_gitlab_args_no_url():
     target.gitlab_url = None
     target.gitlab_token = None
     target.gitlab_repo = None
-    target.gitlab_group = None
 
     args = build_gitlab_args(target, use_docker=False)
 

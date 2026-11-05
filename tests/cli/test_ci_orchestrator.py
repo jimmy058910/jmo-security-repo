@@ -59,7 +59,6 @@ def complete_args():
         # GitLab integration
         gitlab_url = "https://gitlab.com"
         gitlab_token = "glpat-token"
-        gitlab_group = "mygroup"
         gitlab_repo = "myrepo"
         # Kubernetes cluster scanning
         k8s_context = "minikube"
@@ -140,7 +139,6 @@ def test_cmd_ci_complete_args(complete_args):
     assert scan_args.api_spec == "/path/to/api.yaml"
     assert scan_args.gitlab_url == "https://gitlab.com"
     assert scan_args.gitlab_token == "glpat-token"
-    assert scan_args.gitlab_group == "mygroup"
     assert scan_args.gitlab_repo == "myrepo"
     assert scan_args.k8s_context == "minikube"
     assert scan_args.k8s_namespace == "default"
@@ -390,7 +388,6 @@ def test_cmd_ci_gitlab_args():
     class Args:
         gitlab_url = "https://gitlab.com"
         gitlab_token = "glpat-token"
-        gitlab_group = "mygroup"
         gitlab_repo = "myrepo"
         results_dir = "results"
 
@@ -403,7 +400,6 @@ def test_cmd_ci_gitlab_args():
     scan_args = mock_scan.call_args[0][0]
     assert scan_args.gitlab_url == "https://gitlab.com"
     assert scan_args.gitlab_token == "glpat-token"
-    assert scan_args.gitlab_group == "mygroup"
     assert scan_args.gitlab_repo == "myrepo"
 
 

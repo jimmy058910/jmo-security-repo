@@ -436,8 +436,6 @@ def _display_target_details(target: TargetConfig) -> None:
         print(f"    Token: {'***' if target.gitlab_token else 'NOT SET'}")
         if target.gitlab_repo:
             print(f"    Repo: {target.gitlab_repo}")
-        elif target.gitlab_group:
-            print(f"    Group: {target.gitlab_group}")
     elif target.type == "k8s":
         print(f"    Context: {target.k8s_context}")
         if target.k8s_all_namespaces:

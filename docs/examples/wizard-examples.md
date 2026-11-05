@@ -578,22 +578,6 @@ jmo scan --gitlab-repo mygroup/myrepo --gitlab-token $GITLAB_TOKEN --results-dir
 - Never stores tokens in config files
 - Token auto-redacted in logs/output
 
-**GitLab Group Scanning:**
-
-Scan all repos in a GitLab group:
-
-```bash
-# Set token
-export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-
-# Run wizard, select gitlab → group
-jmo wizard
-
-# Enter group: myorg
-```
-
-Wizard discovers all repos in `myorg` and scans them.
-
 ### Kubernetes Cluster Scanning
 
 Scan live Kubernetes clusters for security issues:

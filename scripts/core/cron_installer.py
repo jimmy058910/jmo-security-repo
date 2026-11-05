@@ -374,11 +374,6 @@ class CronInstaller:
                 if not validate_path_safe(gitlab_repo, "gitlab_repo"):
                     raise CronValidationError(f"Invalid GitLab repo: '{gitlab_repo}'")
                 jmo_cmd += f" --gitlab-repo {shlex.quote(gitlab_repo)}"
-            if "group" in gitlab:
-                gitlab_group = gitlab["group"]
-                if not validate_schedule_name(gitlab_group):
-                    raise CronValidationError(f"Invalid GitLab group: '{gitlab_group}'")
-                jmo_cmd += f" --gitlab-group {shlex.quote(gitlab_group)}"
             # Token expected in environment variable GITLAB_TOKEN
 
         # 6. Kubernetes Clusters (requires kubectl config)

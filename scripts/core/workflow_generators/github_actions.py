@@ -132,7 +132,7 @@ class GitHubActionsGenerator:
         - Container images (--image)
         - IaC files (--terraform-state, --cloudformation, --k8s-manifest)
         - Web URLs (--url, --api-spec)
-        - GitLab repos (--gitlab-repo, --gitlab-group)
+        - GitLab repos (--gitlab-repo)
         - Kubernetes clusters (--k8s-context, --k8s-namespace)
 
         Args:
@@ -194,8 +194,6 @@ class GitHubActionsGenerator:
                 args.extend(["--gitlab-url", gitlab_url])
             if "repo" in gitlab:
                 args.extend(["--gitlab-repo", gitlab["repo"]])
-            if "group" in gitlab:
-                args.extend(["--gitlab-group", gitlab["group"]])
             if "token" in gitlab:
                 args.extend(["--gitlab-token", "${{ secrets.GITLAB_TOKEN }}"])
 

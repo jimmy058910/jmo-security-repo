@@ -461,9 +461,6 @@ jmo scan --urls-file urls.txt --tools zap
 # Scan GitLab repository
 jmo scan --gitlab-repo mygroup/myrepo --gitlab-token TOKEN --tools trufflehog
 
-# Scan entire GitLab group
-jmo scan --gitlab-group mygroup --gitlab-token TOKEN --tools trufflehog
-
 # Scan Kubernetes cluster
 jmo scan --k8s-context prod --k8s-namespace default --tools trivy
 
@@ -548,8 +545,7 @@ https://staging.example.com
 
 - `--gitlab-url URL`: GitLab instance URL (default: `https://gitlab.com`)
 - `--gitlab-token TOKEN`: GitLab access token (or use `GITLAB_TOKEN` env var)
-- `--gitlab-group GROUP`: Scan all repositories in a group
-- `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
+- `--gitlab-repo REPO`: The GitLab repository to scan (format: `group/repo`). JMo does not list a group's projects yet ([Known Limitations](KNOWN_LIMITATIONS.md#a-gitlab-group-cannot-be-scanned-as-a-whole))
 
 **Tools used:** Full repository scanner (TruffleHog, Gitleaks, Syft, Trivy, YARA-X, plus Opengrep, Hadolint, ShellCheck, zizmor, OSV-Scanner, jmo-native and Checkov when their content is present)
 
@@ -560,10 +556,10 @@ https://staging.example.com
 ```bash
 # Via environment variable (recommended)
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
-jmo scan --gitlab-group mygroup
+jmo scan --gitlab-repo mygroup/myrepo
 
 # Via CLI argument
-jmo scan --gitlab-group mygroup --gitlab-token "glpat-xxxxxxxxxxxxxxxxxxxx"
+jmo scan --gitlab-repo mygroup/myrepo --gitlab-token "glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
 
 **Permissions required:** `read_api`, `read_repository` scopes
@@ -743,17 +739,16 @@ EOF
 jmo scan --urls-file environments.txt --tools zap --results-dir ./dast-scan
 ```
 
-#### Scenario 4: GitLab Organization-Wide Audit
+#### Scenario 4: A Self-Hosted GitLab Repository
 
-Scan all repositories in your GitLab organization:
+Scan a repository on your own GitLab instance (one `--gitlab-repo` per scan; JMo does not list a group's projects yet):
 
 ```bash
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
 
-# Scan entire organization/group
 jmo scan \
   --gitlab-url https://gitlab.company.com \
-  --gitlab-group engineering \
+  --gitlab-repo engineering/api \
   --tools trufflehog \
   --results-dir ./gitlab-audit \
   --threads 4

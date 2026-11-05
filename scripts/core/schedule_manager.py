@@ -115,7 +115,7 @@ class InvalidGitLabUrlError(ValueError):
 
 
 # The only keys of `targets["gitlab"]` that any consumer reads.
-GITLAB_TARGET_KEYS: tuple[str, ...] = ("repo", "group", "url", "token")
+GITLAB_TARGET_KEYS: tuple[str, ...] = ("repo", "url", "token")
 
 
 def gitlab_target_url(gitlab: Any) -> str | None:
@@ -134,8 +134,10 @@ def gitlab_target_url(gitlab: Any) -> str | None:
     this check: `{"repo": ..., "gitlab_url": ...}` exported with no `--gitlab-url`
     and the instance's token went to gitlab.com. So a key outside
     `GITLAB_TARGET_KEYS` is refused (named: a key is not a secret, a value may
-    be), as is a target that is not a mapping, and a URL with no `repo` or
-    `group` to clone from it.
+    be), as is a target that is not a mapping, and a URL with no `repo` to
+    clone from it. A `group` is refused by name: `--gitlab-group` was removed
+    until JMo lists a group's projects (issue #1407), and a schedule written
+    before then still holds one.
 
     Raises:
         InvalidGitLabUrlError: The target is not a mapping, has an unknown key,
@@ -146,6 +148,12 @@ def gitlab_target_url(gitlab: Any) -> str | None:
         raise InvalidGitLabUrlError(
             "targets.gitlab must be a mapping with the keys "
             + ", ".join(GITLAB_TARGET_KEYS)
+        )
+    if "group" in gitlab:
+        raise InvalidGitLabUrlError(
+            "targets.gitlab.group is not supported: JMo cannot list a group's "
+            "projects yet, and the scan it made instead cloned nothing. Name "
+            "one project in gitlab.repo (group/project)."
         )
     unknown = sorted(str(key) for key in gitlab if key not in GITLAB_TARGET_KEYS)
     if unknown:
@@ -171,10 +179,10 @@ def gitlab_target_url(gitlab: Any) -> str | None:
         raise InvalidGitLabUrlError(
             f"gitlab.url is a URL `jmo scan --gitlab-url` would refuse: {exc}"
         ) from None
-    if not (gitlab.get("repo") or gitlab.get("group")):
+    if not gitlab.get("repo"):
         raise InvalidGitLabUrlError(
-            "gitlab.url names an instance, and gitlab.repo or gitlab.group "
-            "names nothing to clone from it"
+            "gitlab.url names an instance, and gitlab.repo names nothing to "
+            "clone from it"
         )
     return url
 
@@ -367,8 +375,6 @@ class ScanSchedule:
         gitlab: dict[str, Any] = {}
         if "gitlab_repo" in kwargs:
             gitlab["repo"] = kwargs.pop("gitlab_repo")
-        if "gitlab_group" in kwargs:
-            gitlab["group"] = kwargs.pop("gitlab_group")
         # A self-hosted instance's address. The target is checked whole, then
         # stored as `jmo scan` clones from it; a blank one is the gitlab.com
         # default and is not stored.
