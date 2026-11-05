@@ -548,6 +548,16 @@ All notable changes to JMo Security will be documented in this file.
   in the table's order, as LOKI does. Measured with signature-base's own
   `SUSP_Known_Type_Cloaked_as_JPG` at the pin: 1 of 6 renamed samples reported before,
   6 of 6 after, and a real JPEG in neither.
+- **The Docker guide's history and trivy-cache examples work with the non-root image
+  (#1375).** They mounted `/root/...`, which the image's user `jmo` cannot use, put the
+  history database under `~/.jmo` where a scan never writes it (it is `.jmo/history.db`
+  under the working directory, `/scan`), and set `JMO_HISTORY_DB_PATH`, `JMO_LOG_LEVEL`
+  and `JMO_SCAN_LABEL`, which JMo does not read. The examples now mount
+  `/scan/.jmo` and `/home/jmo/.cache/trivy`, and the compose examples name the database
+  with `--history-db` / `--db` on a volume at `/home/jmo/.jmo`. The image creates
+  `/home/jmo/.cache/trivy` owned by `jmo`, so a named volume there is writable. The
+  guide's reset step deleted `~/.jmo`, the installed tools included; it now deletes the
+  project's `.jmo`.
 - **An installed JMo validates findings against the CommonFinding schema (#1350).** The
   validator looked for the schema under `docs/schemas/`, which only a source checkout
   has, and `jsonschema` was the `reporting` extra, so an install made the documented way

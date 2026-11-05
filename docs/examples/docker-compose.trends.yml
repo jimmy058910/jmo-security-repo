@@ -21,10 +21,11 @@
 #   docker compose -f docker-compose.trends.yml run developers
 #
 # Features:
-#   - Named volumes for persistent SQLite history database
+#   - A named volume for the SQLite history database, at /home/jmo/.jmo: the
+#     image runs as the non-root user jmo, the source is mounted read-only, and
+#     the history database is named on each command (--history-db, --db)
 #   - Bind mounts for source code and results
 #   - Service dependencies for multi-stage workflows
-#   - Environment variable configuration
 
 version: '3.8'
 
@@ -41,17 +42,15 @@ services:
       # Mount .git directory for developer attribution (read-only)
       - ./.git:/scan/.git:ro
       # Persistent history database (CRITICAL for trend analysis)
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       # Results output directory
       - ./results:/results
     command: >
       scan
       --repo /scan
+      --history-db /home/jmo/.jmo/history.db
       --results-dir /results/baseline
       --human-logs
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
-      - JMO_LOG_LEVEL=INFO
     networks:
       - jmo-network
 
@@ -64,16 +63,14 @@ services:
     volumes:
       - ./:/scan:ro
       - ./.git:/scan/.git:ro
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       scan
       --repo /scan
+      --history-db /home/jmo/.jmo/history.db
       --results-dir /results/current
       --human-logs
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
-      - JMO_LOG_LEVEL=INFO
     networks:
       - jmo-network
     depends_on:
@@ -88,15 +85,13 @@ services:
     volumes:
       - ./:/scan:ro
       - ./.git:/scan/.git:ro
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends analyze
+      --db /home/jmo/.jmo/history.db
       --days 30
       --format text
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
-      - JMO_LOG_LEVEL=INFO
     networks:
       - jmo-network
     depends_on:
@@ -109,14 +104,13 @@ services:
     image: jmo-security:latest
     container_name: jmo-show-history
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends show
+      --db /home/jmo/.jmo/history.db
       --limit 10
       --format text
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
 
@@ -127,14 +121,13 @@ services:
     image: jmo-security:latest
     container_name: jmo-check-regressions
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends regressions
+      --db /home/jmo/.jmo/history.db
       --days 7
       --format text
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
     depends_on:
@@ -147,13 +140,12 @@ services:
     image: jmo-security:latest
     container_name: jmo-security-score
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends score
+      --db /home/jmo/.jmo/history.db
       --format text
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
 
@@ -166,14 +158,13 @@ services:
     volumes:
       - ./:/scan:ro
       - ./.git:/scan/.git:ro  # REQUIRED for git blame
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends developers
+      --db /home/jmo/.jmo/history.db
       --limit 10
       --format text
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
 
@@ -184,13 +175,11 @@ services:
     image: jmo-security:latest
     container_name: jmo-export-html
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends export html
       --output /results/trends-report.html
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
     depends_on:
@@ -203,13 +192,11 @@ services:
     image: jmo-security:latest
     container_name: jmo-export-json
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends export json
       --output /results/trends-data.json
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
     depends_on:
@@ -222,13 +209,11 @@ services:
     image: jmo-security:latest
     container_name: jmo-export-csv
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends export csv
       --output /results/trends-data.csv
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
     depends_on:
@@ -241,13 +226,11 @@ services:
     image: jmo-security:latest
     container_name: jmo-export-prometheus
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends export prometheus
       --output /results/metrics.prom
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
     depends_on:
@@ -260,15 +243,14 @@ services:
     image: jmo-security:latest
     container_name: jmo-compare-scans
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends compare
+      --db /home/jmo/.jmo/history.db
       --scan-id-1 latest
       --scan-id-2 previous
       --format text
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
     depends_on:
@@ -281,14 +263,12 @@ services:
     image: jmo-security:latest
     container_name: jmo-remediation-velocity
     volumes:
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
       trends velocity
       --days 30
       --format text
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
     networks:
       - jmo-network
 
@@ -301,21 +281,18 @@ services:
     volumes:
       - ./:/scan:ro
       - ./.git:/scan/.git:ro
-      - jmo-history:/root/.jmo
+      - jmo-history:/home/jmo/.jmo
       - ./results:/results
     # Use shell script to chain commands
     entrypoint: /bin/bash
     command: >
       -c "
-      jmo scan --repo /scan --results-dir /results/latest --human-logs &&
-      jmo trends analyze --days 30 --format text &&
+      jmo scan --repo /scan --history-db /home/jmo/.jmo/history.db --results-dir /results/latest --human-logs &&
+      jmo trends analyze --db /home/jmo/.jmo/history.db --days 30 --format text &&
       jmo trends export html --output /results/trends-report.html &&
       jmo trends export json --output /results/trends-data.json &&
       echo 'Full workflow complete! Check results/ for outputs.'
       "
-    environment:
-      - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
-      - JMO_LOG_LEVEL=INFO
     networks:
       - jmo-network
 

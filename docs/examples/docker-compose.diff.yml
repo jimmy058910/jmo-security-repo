@@ -34,9 +34,6 @@ services:
       --repo /scan
       --results-dir /results
       --human-logs
-    environment:
-      # Optional: Set baseline context
-      - JMO_SCAN_LABEL=baseline
     networks:
       - jmo-diff-net
 
@@ -54,8 +51,6 @@ services:
       --repo /scan
       --results-dir /results
       --human-logs
-    environment:
-      - JMO_SCAN_LABEL=current
     depends_on:
       baseline-scan:
         condition: service_completed_successfully
