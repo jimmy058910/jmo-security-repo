@@ -1,4 +1,4 @@
-"""Everything in `scripts/cli/wizard_flows/` must be something `jmo wizard` can reach.
+"""Everything in the wizard's modules must be something `jmo wizard` can reach.
 
 Five scan-flow classes (RepoFlow, EntireStackFlow, CICDFlow, DeploymentFlow,
 DependencyFlow) lived here for releases with no caller outside their own tests
@@ -6,6 +6,10 @@ DependencyFlow) lived here for releases with no caller outside their own tests
 their recommendations as wizard features, and no user could reach any of it.
 The wizard's own Dockerfile count disagreed with the scan's (issue #1411), and
 nobody noticed, because only those unreachable flows ever counted.
+
+The same held for `wizard_generators.py`: `generate_gitlab_ci` and
+`generate_docker_compose` had only test callers, and so had the four
+`generate_makefile_target` templates no caller selected.
 
 The check is by name: a definition with no other mention anywhere under
 `scripts/` has no caller. A mention in a docstring or an unrelated object of
@@ -22,6 +26,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 PACKAGE = REPO / "scripts" / "cli" / "wizard_flows"
+# The modules checked: the package (its __init__ only re-exports) and the
+# artifact generators the wizard writes files with.
+MODULES = [
+    *(m for m in sorted(PACKAGE.glob("*.py")) if m.name != "__init__.py"),
+    REPO / "scripts" / "cli" / "wizard_generators.py",
+]
 
 
 def _sources() -> dict[Path, str]:
@@ -34,9 +44,7 @@ def _sources() -> dict[Path, str]:
 
 def _top_level_definitions() -> list[tuple[Path, str]]:
     found = []
-    for module in sorted(PACKAGE.glob("*.py")):
-        if module.name == "__init__.py":
-            continue
+    for module in MODULES:
         tree = ast.parse(module.read_text(encoding="utf-8"))
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
@@ -54,7 +62,7 @@ def test_every_top_level_definition_has_a_caller() -> None:
         if mentions == 0:
             unused.append(f"{module.relative_to(REPO)}: {name}")
     assert unused == [], (
-        "defined in wizard_flows/ but never used under scripts/ "
+        "defined in a wizard module but never used under scripts/ "
         "(jmo wizard cannot reach it; delete it with its tests):\n" + "\n".join(unused)
     )
 
@@ -69,9 +77,7 @@ def test_every_public_method_has_a_caller() -> None:
     """
     sources = _sources()
     unused = []
-    for module in sorted(PACKAGE.glob("*.py")):
-        if module.name == "__init__.py":
-            continue
+    for module in MODULES:
         tree = ast.parse(module.read_text(encoding="utf-8"))
         for node in tree.body:
             if not isinstance(node, ast.ClassDef):
@@ -87,6 +93,6 @@ def test_every_public_method_has_a_caller() -> None:
                         f"{module.relative_to(REPO)}: {node.name}.{member.name}"
                     )
     assert unused == [], (
-        "public methods in wizard_flows/ that nothing under scripts/ calls:\n"
+        "public methods in a wizard module that nothing under scripts/ calls:\n"
         + "\n".join(unused)
     )

@@ -1,7 +1,8 @@
 """Every `jmo` command the wizard writes into a file must be one `jmo` accepts.
 
-`jmo wizard` generates Makefiles, shell scripts, GitHub Actions workflows,
-GitLab CI files and docker-compose files. Those are not documentation -- a user
+`jmo wizard` generates Makefiles, shell scripts and GitHub Actions workflows
+(it generated GitLab CI and docker-compose files too, until v2.0.0 found
+nothing called those generators). Those are not documentation -- a user
 commits them and a pipeline runs them. Measured on `origin/dev`, thirteen of the
 `jmo ci` / `jmo report` invocations in `wizard_generators.py` exited **2**:
 
@@ -45,14 +46,10 @@ import pytest
 
 from scripts.cli import jmo
 from scripts.cli.wizard_generators import (
-    generate_docker_compose,
     generate_github_actions,
-    generate_gitlab_ci,
     generate_makefile_target,
     generate_shell_script,
 )
-
-WORKFLOW_TYPES = ("repo", "stack", "cicd", "deployment", "dependency")
 
 # The subcommands that used to select a profile; `jmo <name>` is now an unknown
 # subcommand. `deep` was only ever a profile name, never a subcommand.
@@ -62,8 +59,6 @@ REMOVED_PROFILE_SUBCOMMANDS = ("fast", "balanced", "full")
 # `jmo ` is still extracted -- an unknown subcommand is exactly the kind of
 # breakage worth failing on.
 _JMO_CALL = re.compile(r"\bjmo\s+([a-z][a-z-]*)\b(.*)$")
-# docker-compose inline form: `command: report /scan/results --profile-name x`
-_COMPOSE_INLINE = re.compile(r"^\s*command:\s+([a-z][a-z-]*)\s+(.+)$")
 
 
 @dataclass
@@ -84,31 +79,6 @@ class _Config:
     fail_on: str | None = None
     use_docker: bool = False
     target: _Target = field(default_factory=_Target)
-
-
-def _folded_compose_commands(text: str) -> list[list[str]]:
-    """Pull `command: >` folded blocks out of a docker-compose document.
-
-    The subcommand and its flags sit on their own indented lines, so a
-    line-oriented scan misses them entirely -- which is how three of the
-    thirteen broken invocations survived every existing test.
-    """
-    out: list[list[str]] = []
-    lines = text.splitlines()
-    for i, line in enumerate(lines):
-        if not re.match(r"^\s*command:\s*>\s*$", line):
-            continue
-        indent = len(line) - len(line.lstrip())
-        parts: list[str] = []
-        for follow in lines[i + 1 :]:
-            if not follow.strip():
-                break
-            if len(follow) - len(follow.lstrip()) <= indent:
-                break
-            parts.extend(follow.split())
-        if parts:
-            out.append(parts)
-    return out
 
 
 def _logical_lines(text: str) -> list[str]:
@@ -140,14 +110,9 @@ def extract_commands(text: str) -> list[list[str]]:
         line = line.split("||")[0].split("#")[0].strip()
         if not line:
             continue
-        inline = _COMPOSE_INLINE.match(raw)
-        if inline and "jmo" not in raw:
-            found.append([inline.group(1), *inline.group(2).split()])
-            continue
         call = _JMO_CALL.search(line)
         if call:
             found.append([call.group(1), *call.group(2).split()])
-    found.extend(_folded_compose_commands(text))
     return found
 
 
@@ -180,15 +145,9 @@ def generated_artifacts() -> list[tuple[str, str]]:
     """(label, content) for every artifact the wizard can write."""
     cfg = _Config()
     artifacts: list[tuple[str, str]] = []
-    for wf in WORKFLOW_TYPES:
-        artifacts.append(
-            (
-                f"makefile:{wf}",
-                generate_makefile_target(cfg, _wizard_command("HIGH"), wf),
-            )
-        )
-        artifacts.append((f"gitlab-ci:{wf}", generate_gitlab_ci(wf)))
-        artifacts.append((f"docker-compose:{wf}", generate_docker_compose(wf)))
+    artifacts.append(
+        ("makefile", generate_makefile_target(cfg, _wizard_command("HIGH")))
+    )
     for fail_on in ("", "HIGH"):
         artifacts.append(
             (
@@ -237,9 +196,7 @@ def test_extractor_meta_guard():
     docker-compose were generated once per profile. It is derived instead: every
     artifact the wizard writes must yield at least one command, which is the
     property the floor stood in for and cannot go stale when the artifact set
-    changes. The named checks pin the three artifact shapes -- a plain
-    `jmo ...` line, a docker-compose inline `command:`, and a `command: >`
-    folded block, which is the shape three broken invocations hid in -- plus the
+    changes. The named checks pin the plain `jmo ...` line and the
     continuation-joined GitHub Actions `run:` block, whose flags used to go
     unread.
     """
@@ -252,11 +209,6 @@ def test_extractor_meta_guard():
     subcommands = {cmd[0] for _label, cmd in ALL_COMMANDS}
     for expected in ("scan", "ci", "report"):
         assert expected in subcommands, f"extractor found no `{expected}` invocation"
-
-    compose = generate_docker_compose("cicd")
-    folded = _folded_compose_commands(compose)
-    assert folded, "folded `command: >` blocks are not being extracted"
-    assert folded[0][0] == "ci", folded
 
     # The scan step only: the native workflow also runs `jmo tools install --yes`.
     gha = [

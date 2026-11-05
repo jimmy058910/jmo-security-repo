@@ -213,6 +213,8 @@ All notable changes to JMo Security will be documented in this file.
   `RepoFlow`, `EntireStackFlow`, `CICDFlow`, `DeploymentFlow` or `DependencyFlow`, nor
   their base class `BaseWizardFlow`: only their tests ran them. `docs/examples/wizard-examples.md`
   no longer presents their recommendations and "five workflow types" as wizard features.
+  Their artifact generators went too: GitLab CI and docker-compose files, and four
+  Makefile templates, which no wizard path ever wrote.
   The image, IaC, web-app, package and lock-file detection only they called went with
   them: its Dockerfile count disagreed with the scan's file selection, but no wizard run
   ever showed it (#1411). A test now fails on any definition or public method in
