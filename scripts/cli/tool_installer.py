@@ -1963,6 +1963,8 @@ class ToolInstaller:
         builds, and the image installs yara-x's rules through this (#1573).
         The retry is here rather than in curl's flags: curl older than 7.71
         rejects `--retry-all-errors`, and wget does not retry an HTTP error.
+        Like `--retry-all-errors`, it retries every failure, a 404 included:
+        a missing asset costs 15 s of retries before it is reported.
         """
         command = self._get_download_command(url, output_path)
         if not command:

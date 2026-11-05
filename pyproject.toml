@@ -127,7 +127,7 @@ dev = [
     # Security floor for click (transitive via mcp[cli]'s typer):
     #   click>=8.3.3: PYSEC-2026-2132
     "click>=8.3.3",
-    # Policy-as-Code (Feature #5). OPA binary installs separately via scripts/dev/install_tools.sh.
+    # Policy-as-Code (Feature #5). The OPA binary installs with `jmo tools install opa`.
     "packaging",                    # Version comparison in OPA version checks
     # SLSA Attestation (Feature #6, v1.0.0)
     "sigstore>=2.0.0",              # Keyless signing (Fulcio + Rekor)

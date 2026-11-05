@@ -149,8 +149,11 @@ fmt:
 # `ruff format --check` step instead, which this target has no equivalent of),
 # so skipping it here would reopen #890 for the formatter specifically.
 lint:
-	@if command -v shellcheck >/dev/null 2>&1; then \
-		find scripts -type f -name '*.sh' -print0 | xargs -0 -I{} shellcheck {} || true; \
+	@# `make tools` installs shellcheck with jmo, into ~/.jmo/bin, off PATH (#1562).
+	@sc="$$(command -v shellcheck || true)"; \
+	if [ -z "$$sc" ] && [ -x "$$HOME/.jmo/bin/shellcheck" ]; then sc="$$HOME/.jmo/bin/shellcheck"; fi; \
+	if [ -n "$$sc" ]; then \
+		find scripts -type f -name '*.sh' -print0 | xargs -0 -I{} "$$sc" {} || true; \
 	else echo 'shellcheck not found'; fi
 	@if command -v ruff >/dev/null 2>&1; then ruff check scripts/ tests/; else echo 'ruff not found'; fi
 	@if command -v bandit >/dev/null 2>&1; then \
