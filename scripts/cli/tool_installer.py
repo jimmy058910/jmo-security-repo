@@ -28,7 +28,6 @@ from contextlib import contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 
-import requests
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -1211,47 +1210,6 @@ class ToolInstaller:
                 message=str(e),
             )
 
-    def _download_with_requests(
-        self,
-        url: str,
-        output_path: Path,
-        timeout: int = 300,
-    ) -> bool:
-        """
-        Download a file using the requests library (cross-platform).
-
-        Avoids Windows curl alias issues by using pure Python.
-
-        Args:
-            url: URL to download from
-            output_path: Path to save the downloaded file
-            timeout: Request timeout in seconds
-
-        Returns:
-            True if download succeeded, False otherwise
-        """
-        try:
-            response = requests.get(url, stream=True, timeout=timeout)
-            response.raise_for_status()
-
-            with open(output_path, "wb") as f:
-                f.writelines(response.iter_content(chunk_size=8192))
-
-            return True
-
-        except requests.exceptions.Timeout:
-            logger.error(f"Download timed out after {timeout}s: {url}")
-            return False
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error downloading {url}: {e}")
-            return False
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request error downloading {url}: {e}")
-            return False
-        except OSError as e:
-            logger.error(f"File error saving download: {e}")
-            return False
-
     def _try_install_method(
         self,
         tool_name: str,
@@ -1530,8 +1488,8 @@ class ToolInstaller:
                 # Move to install directory
                 # On Windows, ensure .exe extension for executable binaries.
                 # Keyed on the destination platform, NOT on how upstream
-                # packaged the download - see BinaryInstaller for the measured
-                # consequence (trufflehog silently never scanning).
+                # packaged the download: trufflehog, a .tar.gz on Windows, was
+                # installed with no .exe and silently never scanned (measured).
                 if self.platform == "windows" and not tool_name.lower().endswith(
                     ".exe"
                 ):

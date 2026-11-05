@@ -44,7 +44,7 @@ CMD_METACHARACTERS = "&|^<>%"
 BATCH_SUFFIXES = (".bat", ".cmd")
 
 # Which launcher JMo resolves each tool to on Windows (`find_tool`):
-# - a downloaded binary (`BINARY_URLS`): `BinaryInstaller` names it `<tool>.exe`;
+# - a downloaded binary (`BINARY_URLS`): `ToolInstaller` names it `<tool>.exe`;
 # - jmo-native, and yara-x (a library of JMo's): the interpreter, `python.exe`;
 # - checkov, in its own venv: `checkov.cmd` (its package declares none);
 # - zap: `zap.bat`, picked beside `zap.sh` (`_platform_launcher`).
