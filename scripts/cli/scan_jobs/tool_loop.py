@@ -788,7 +788,12 @@ def run_tools(
                 # An explicit, user-requested empty result - not a silent one:
                 # the row says it did not run.
                 stub(tool, out_dir / f"{tool}.json")
-                rows[tool] = ToolRun(tool, State.SKIPPED, Reason.NOT_INSTALLED)
+                rows[tool] = ToolRun(
+                    tool,
+                    State.SKIPPED,
+                    Reason.NOT_INSTALLED,
+                    detail=missing_reason(tool),
+                )
             else:
                 logger.error(
                     "%s: requested but %s - it "
