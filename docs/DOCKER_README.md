@@ -292,7 +292,7 @@ Carrying every scanner does not mean every scanner runs. The target's content de
 
 - **Multi-stage builds:** Separate builder and runtime stages keep download and build tooling out of the runtime image
 - **Layer caching cleanup:** Aggressive removal of apt cache, pip cache, and Python bytecode
-- **Volume mounting support:** Use `-v trivy-cache:/root/.cache/trivy` for persistent Trivy DB caching
+- **Volume mounting support:** Use `-v trivy-cache:/home/jmo/.cache/trivy` for persistent Trivy DB caching
 
 **Note:** Trivy database pre-download was intentionally removed (adds 800MB to image) in favor of volume caching approach for better size/performance trade-off.
 
@@ -513,14 +513,14 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 # First scan: Downloads Trivy DB to named volume (~30-60s for initial download)
 docker run --rm \
   -v "$(pwd):/scan" \
-  -v trivy-cache:/root/.cache/trivy \
+  -v trivy-cache:/home/jmo/.cache/trivy \
   ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan
 
 # Subsequent scans: Reuses cached DB (30-60s faster - no download!)
 docker run --rm \
   -v "$(pwd):/scan" \
-  -v trivy-cache:/root/.cache/trivy \
+  -v trivy-cache:/home/jmo/.cache/trivy \
   ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan
 ```
@@ -553,7 +553,7 @@ docker volume rm trivy-cache
   run: |
     docker run --rm \
       -v ${{ github.workspace }}:/scan \
-      -v trivy-cache:/root/.cache/trivy \
+      -v trivy-cache:/home/jmo/.cache/trivy \
       ghcr.io/jimmy058910/jmo-security:latest \
       ci --repo /scan --fail-on HIGH
 ```
@@ -571,8 +571,7 @@ the ecosystem and lockfile, until `jmo tools update` fills the cache.
 
 ```bash
 # One-time, against a persistent ~/.jmo volume (note the container's HOME:
-# the image runs as USER jmo, not root, so this is /home/jmo/.jmo, NOT
-# /root/.jmo -- unlike some of the -v root paths elsewhere on this page).
+# the image runs as USER jmo, not root, so this is /home/jmo/.jmo).
 docker run --rm \
   -v jmo-home:/home/jmo/.jmo \
   ghcr.io/jimmy058910/jmo-security:latest \
@@ -589,7 +588,7 @@ docker run --rm \
 Without that volume (or without ever running `tools update` inside it), every
 container start is "fresh" again: the database never persisted, so
 osv-scanner's row keeps reading `failed:offline database missing` on every
-run. This is separate from the Trivy database above and from `~/.jmo/history.db`
+run. This is separate from the Trivy database above and from `.jmo/history.db`
 below; a volume mounted at one of those paths does not cover this one, and
 vice versa -- each needs its own `-v` if you want it to persist.
 
@@ -702,29 +701,32 @@ JMo Security includes comprehensive trend analysis capabilities that work seamle
 
 **CRITICAL: Volume persistence is REQUIRED for trend analysis.**
 
-Trend analysis relies on a SQLite history database (`~/.jmo/history.db`) that must persist across container runs. Without volume mounting, each scan starts fresh with no historical data.
+Trend analysis relies on a SQLite history database, `.jmo/history.db` under the working directory (`/scan` in the image), that must persist across container runs. Without volume mounting, each scan starts fresh with no historical data.
 
 ### Basic Trend Analysis Workflow
 
 #### Step 1: Run First Scan with History Persistence
 
 ```bash
-# Create persistent .jmo directory
-mkdir -p ~/.jmo
+# Create the history directory first: a directory Docker creates for a bind
+# mount is root's, and the image runs as the non-root user jmo
+mkdir -p .jmo
 
 # Run first scan (creates baseline in history database)
 docker run --rm \
   -v "$(pwd):/scan" \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results-baseline
 ```
 
 **What this does:**
 
-- `-v ~/.jmo:/root/.jmo` - Mounts persistent directory for SQLite database
+- `-v "$(pwd)/.jmo:/scan/.jmo"` - Persists the history database. A scan stores it at
+  `.jmo/history.db` under its working directory, which is `/scan` in the image, so it
+  lands in your project's `.jmo/`
 - Scan results automatically saved to history database
-- Database location: `~/.jmo/history.db`
+- Database location on the host: `./.jmo/history.db`
 
 #### Step 2: Make Code Changes and Run Second Scan
 
@@ -732,7 +734,7 @@ docker run --rm \
 # After fixing some security issues
 docker run --rm \
   -v "$(pwd):/scan" \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results-current
 ```
@@ -742,7 +744,7 @@ docker run --rm \
 ```bash
 # View trend analysis for last 30 days
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends analyze --days 30 --format text
 ```
@@ -760,7 +762,7 @@ docker run --rm \
 
 ```bash
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends show --limit 10 --format text
 ```
@@ -770,7 +772,7 @@ docker run --rm \
 ```bash
 # Detect new HIGH/CRITICAL findings in last 7 days
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends regressions --days 7 --format text
 ```
@@ -780,7 +782,7 @@ docker run --rm \
 ```bash
 # Current security posture (0-100)
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends score --format text
 ```
@@ -790,7 +792,7 @@ docker run --rm \
 ```bash
 # Interactive diff between two scans
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends compare --scan-id-1 latest --scan-id-2 previous --format text
@@ -803,7 +805,7 @@ docker run --rm \
 docker run --rm \
   -v "$(pwd):/scan" \
   -v "$(pwd)/.git:/scan/.git:ro" \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends developers --limit 10 --format text
 ```
@@ -816,7 +818,7 @@ docker run --rm \
 
 ```bash
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends export html --output /results/trends-report.html
@@ -834,7 +836,7 @@ docker run --rm \
 
 ```bash
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends export json --output /results/trends-data.json
@@ -844,7 +846,7 @@ docker run --rm \
 
 ```bash
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends export csv --output /results/trends-data.csv
@@ -854,7 +856,7 @@ docker run --rm \
 
 ```bash
 docker run --rm \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd)/results:/results" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends export prometheus --output /results/metrics.prom
@@ -873,7 +875,7 @@ docker run --rm \
 
 ```bash
 # Download docker-compose.trends.yml from repository
-curl -O https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/docker-compose.trends.yml
+curl -O https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/docs/examples/docker-compose.trends.yml
 
 # Run baseline scan
 docker compose -f docker-compose.trends.yml run scan-baseline
@@ -931,7 +933,7 @@ jobs:
           mkdir -p .jmo
           docker run --rm \
             -v ${{ github.workspace }}:/scan \
-            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            -v ${{ github.workspace }}/.jmo:/scan/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
             scan --repo /scan --results-dir /scan/results
 
@@ -939,7 +941,7 @@ jobs:
       - name: Check for regressions
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            -v ${{ github.workspace }}/.jmo:/scan/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
             trends regressions --format terminal
 
@@ -947,7 +949,7 @@ jobs:
       - name: Export trend report
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            -v ${{ github.workspace }}/.jmo:/scan/.jmo \
             -v ${{ github.workspace }}/results:/results \
             ghcr.io/jimmy058910/jmo-security:latest \
             trends analyze --export html --export-file /results/trends-report.html
@@ -987,19 +989,19 @@ security-scan-with-trends:
     - |
       docker run --rm \
         -v $PWD:/scan \
-        -v $PWD/.jmo:/root/.jmo \
+        -v $PWD/.jmo:/scan/.jmo \
         ghcr.io/jimmy058910/jmo-security:latest \
         scan --repo /scan --results-dir /scan/results
     # Check regressions
     - |
       docker run --rm \
-        -v $PWD/.jmo:/root/.jmo \
+        -v $PWD/.jmo:/scan/.jmo \
         ghcr.io/jimmy058910/jmo-security:latest \
         trends regressions --format terminal
     # Export HTML report
     - |
       docker run --rm \
-        -v $PWD/.jmo:/root/.jmo \
+        -v $PWD/.jmo:/scan/.jmo \
         -v $PWD/results:/results \
         ghcr.io/jimmy058910/jmo-security:latest \
         trends analyze --export html --export-file /results/trends-report.html
@@ -1015,25 +1017,16 @@ security-scan-with-trends:
 - DinD (Docker-in-Docker) service for nested containers
 - Artifacts persist trend reports for review
 
-### Environment Variable Configuration
+### Another History Database or Log Level
 
-Override default behavior with environment variables:
+The history database and the log level are flags, not environment variables:
 
 ```bash
 docker run --rm \
   -v "$(pwd):/scan" \
-  -v ~/.jmo:/root/.jmo \
-  -e JMO_HISTORY_DB_PATH=/root/.jmo/custom-history.db \
-  -e JMO_LOG_LEVEL=DEBUG \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan
+  scan --repo /scan --history-db /scan/.jmo/custom-history.db --log-level DEBUG
 ```
-
-**Configuration precedence:**
-
-1. Environment variables (highest priority)
-2. Mounted config files (`jmo.yml`)
-3. Default values
 
 ### Troubleshooting Trends in Docker
 
@@ -1043,8 +1036,8 @@ docker run --rm \
 
 **Solutions:**
 
-1. Verify volume mount: `docker run --rm -v ~/.jmo:/root/.jmo ...`
-2. Check database exists: `ls -lh ~/.jmo/history.db`
+1. Verify volume mount: `docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" ...`
+2. Check database exists: `ls -lh .jmo/history.db`
 3. Run at least one scan first to populate database
 
 #### "Permission denied" on .jmo directory
@@ -1055,11 +1048,11 @@ docker run --rm \
 
 ```bash
 # Fix permissions
-chmod 755 ~/.jmo
+chmod 755 .jmo
 
 # Run as current user (-e HOME=/tmp: opengrep needs a writable HOME)
 docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp \
-  -v ~/.jmo:/root/.jmo ...
+  -v "$(pwd)/.jmo:/scan/.jmo" ...
 ```
 
 #### "Git repository not found" for developer attribution
@@ -1073,7 +1066,7 @@ docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp \
 docker run --rm \
   -v "$(pwd):/scan" \
   -v "$(pwd)/.git:/scan/.git:ro" \
-  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
   ghcr.io/jimmy058910/jmo-security:latest \
   trends developers --limit 10
 ```
@@ -1086,10 +1079,10 @@ Named volumes and bind mounts persist data intentionally. To reset:
 
 ```bash
 # Remove history database
-rm ~/.jmo/history.db
+rm .jmo/history.db
 
-# Or remove entire .jmo directory
-rm -rf ~/.jmo
+# Or remove the project's entire .jmo directory
+rm -rf .jmo
 ```
 
 #### Cache not working in CI/CD

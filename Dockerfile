@@ -312,10 +312,11 @@ RUN echo "=== Verifying tools ===" && \
 # Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
 # /home/jmo/.jmo must exist, owned by jmo: an empty named volume mounted there
 # (DOCKER_README's osv-scanner database setup) takes this directory's
-# ownership, and without it comes up root:root and unwritable.
+# ownership, and without it comes up root:root and unwritable. So must
+# /home/jmo/.cache/trivy, DOCKER_README's trivy-cache volume (#1375).
 RUN userdel -r ubuntu 2>/dev/null || true && \
     useradd -m -u 1000 -s /bin/bash jmo && \
-    mkdir -p /root/.local /home/jmo/.cache /home/jmo/.jmo /home/jmo/.local && \
+    mkdir -p /root/.local /home/jmo/.cache/trivy /home/jmo/.jmo /home/jmo/.local && \
     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security
 
@@ -350,10 +351,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trends` work.
 #
 # CI mode with caching (30s faster on subsequent runs):
-# docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy \
+# docker run --rm -v $(pwd):/scan -v trivy-cache:/home/jmo/.cache/trivy \
 #   ghcr.io/jimmy058910/jmo-security:latest ci --repo /scan --fail-on HIGH
 #
 # Size optimizations:
 # - Multi-stage builds: download tooling stays in the builder stage
 # - Nuclei template filtering, Python bytecode cleanup, binary stripping, Java cleanup, Git metadata exclusion
-# - Volume mounting: Use -v trivy-cache:/root/.cache/trivy for persistent caching
+# - Volume mounting: Use -v trivy-cache:/home/jmo/.cache/trivy for persistent caching
