@@ -146,8 +146,6 @@ def build_gitlab_args(target: TargetConfig, use_docker: bool = False) -> list[st
     # Docker forwards it by name in build_command_parts).
     if target.gitlab_repo:
         args.extend(["--gitlab-repo", target.gitlab_repo])
-    elif target.gitlab_group:
-        args.extend(["--gitlab-group", target.gitlab_group])
 
     return args
 
@@ -164,6 +162,23 @@ def build_k8s_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
         args.extend(["--k8s-namespace", target.k8s_namespace])
 
     return args
+
+
+def docker_output_dirs(config: WizardConfig) -> list[str]:
+    """The host directories a Docker-mode scan writes through its mounts.
+
+    Docker creates a missing bind-mount source owned by root, and the image
+    runs as uid 1000, which cannot write it: the scan fails at its first write
+    (measured, #1305). Whatever runs the command creates these first:
+    `execute_scan`, and the script and Makefile the wizard emits (#1307).
+    Resolved as `build_command_parts` mounts them.
+    """
+    if not config.use_docker:
+        return []
+    dirs = [str(Path(config.results_dir).resolve())]
+    if config.target.type == "repo" and config.target.repo_mode == "tsv":
+        dirs.append(str(Path(config.target.tsv_dest).resolve()))
+    return dirs
 
 
 def build_command_parts(config: WizardConfig) -> list[str]:

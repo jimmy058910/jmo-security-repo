@@ -215,7 +215,6 @@ def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) 
     parser.add_argument(
         "--gitlab-token", help="GitLab access token (or use GITLAB_TOKEN env var)"
     )
-    parser.add_argument("--gitlab-group", help="GitLab group to scan")
     parser.add_argument("--gitlab-repo", help="Single GitLab repo (format: group/repo)")
 
     # Kubernetes cluster scanning

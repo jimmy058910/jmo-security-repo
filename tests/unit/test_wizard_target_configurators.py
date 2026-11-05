@@ -5,7 +5,7 @@ Tests cover:
 - Container image target configuration (single, batch)
 - IaC target configuration (terraform, cloudformation, k8s-manifest)
 - URL target configuration (single, batch, api)
-- GitLab target configuration (repo, group)
+- GitLab target configuration (repo)
 - Kubernetes target configuration (single namespace, all namespaces)
 
 Architecture Note:
@@ -705,17 +705,13 @@ def test_configure_gitlab_target_repo_mode_with_env_token():
     mock_print_step = MagicMock()
 
     with (
-        patch(
-            "scripts.cli.wizard_flows.target_configurators._prompter"
-        ) as mock_prompter,
+        patch("scripts.cli.wizard_flows.target_configurators._prompter"),
         patch(
             "scripts.cli.wizard_flows.target_configurators.os.getenv",
             return_value="token123",
         ),
         patch("builtins.input", side_effect=["https://gitlab.com", "mygroup/myrepo"]),
     ):
-        mock_prompter.prompt_choice.return_value = "repo"
-
         result = configure_gitlab_target(mock_config, mock_print_step)
 
         assert result.type == "gitlab"
@@ -730,9 +726,7 @@ def test_configure_gitlab_target_repo_mode_manual_token():
     mock_print_step = MagicMock()
 
     with (
-        patch(
-            "scripts.cli.wizard_flows.target_configurators._prompter"
-        ) as mock_prompter,
+        patch("scripts.cli.wizard_flows.target_configurators._prompter"),
         patch(
             "scripts.cli.wizard_flows.target_configurators.os.getenv", return_value=None
         ),
@@ -741,8 +735,6 @@ def test_configure_gitlab_target_repo_mode_manual_token():
             side_effect=["https://gitlab.com", "manual_token", "mygroup/myrepo"],
         ),
     ):
-        mock_prompter.prompt_choice.return_value = "repo"
-
         result = configure_gitlab_target(mock_config, mock_print_step)
 
         assert result.gitlab_token == "manual_token"
@@ -755,9 +747,7 @@ def test_configure_gitlab_target_repo_mode_no_token():
     mock_print_step = MagicMock()
 
     with (
-        patch(
-            "scripts.cli.wizard_flows.target_configurators._prompter"
-        ) as mock_prompter,
+        patch("scripts.cli.wizard_flows.target_configurators._prompter"),
         patch(
             "scripts.cli.wizard_flows.target_configurators.os.getenv", return_value=None
         ),
@@ -765,37 +755,12 @@ def test_configure_gitlab_target_repo_mode_no_token():
             "builtins.input", side_effect=["https://gitlab.com", "", "mygroup/myrepo"]
         ),
     ):
-        mock_prompter.prompt_choice.return_value = "repo"
-
         result = configure_gitlab_target(mock_config, mock_print_step)
 
         # Token not set when empty (code doesn't set it at all)
         # Just verify the result object exists and has expected type
         assert result.type == "gitlab"
         assert result.gitlab_url == "https://gitlab.com"
-
-
-def test_configure_gitlab_target_group_mode():
-    """Test configure_gitlab_target with group mode."""
-    mock_config = MagicMock()
-    mock_print_step = MagicMock()
-
-    with (
-        patch(
-            "scripts.cli.wizard_flows.target_configurators._prompter"
-        ) as mock_prompter,
-        patch(
-            "scripts.cli.wizard_flows.target_configurators.os.getenv",
-            return_value="token123",
-        ),
-        patch("builtins.input", side_effect=["https://gitlab.com", "mygroup"]),
-    ):
-        mock_prompter.prompt_choice.return_value = "group"
-
-        result = configure_gitlab_target(mock_config, mock_print_step)
-
-        assert result.type == "gitlab"
-        assert result.gitlab_group == "mygroup"
 
 
 # ========== Category 6: Kubernetes Target Configuration ==========

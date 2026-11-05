@@ -134,7 +134,6 @@ flag. Two with the same folder name (`alice/app` and `bob/app`, a common case wi
 |------|-------------|
 | `--gitlab-url URL` | GitLab instance URL (e.g., `https://gitlab.com`) |
 | `--gitlab-token TOKEN` | GitLab access token (or use `GITLAB_TOKEN` env var) |
-| `--gitlab-group GROUP` | GitLab group to scan |
 | `--gitlab-repo REPO` | Single GitLab repo (format: `group/repo`) |
 
 **Kubernetes Live Cluster:**

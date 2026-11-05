@@ -2,12 +2,10 @@
 Tests for wizard_generators.py - Artifact generation functions.
 
 Coverage targets:
-- generate_makefile_target with all workflow types (repo, stack, cicd, deployment, dependency)
+- generate_makefile_target
 - generate_shell_script basic generation
 - generate_github_actions with Docker and native modes
 - generate_github_actions with all target types (repo, image, url, iac, gitlab, k8s)
-- generate_gitlab_ci with all workflow types
-- generate_docker_compose with all workflow types
 - Proper escaping and formatting in generated files
 - Environment variable handling
 - Secrets detection and setup steps
@@ -25,15 +23,11 @@ import yaml
 
 from scripts.cli.wizard_generators import (
     JMO_DOCKER_IMAGE_FULL,
-    generate_docker_compose,
     generate_github_actions,
-    generate_gitlab_ci,
     generate_makefile_target,
     generate_shell_script,
 )
 from scripts.core.tool_registry import TOOL_MATRIX
-
-WORKFLOW_TYPES = ("repo", "stack", "cicd", "deployment", "dependency")
 
 
 # Mock config classes
@@ -46,9 +40,12 @@ class MockTarget:
     image_name: str | None = None
     url: str | None = None
     iac_type: str | None = None
+    iac_path: str = ""
     gitlab_repo: str | None = None
     gitlab_url: str = "https://gitlab.com"
     k8s_context: str | None = None
+    k8s_namespace: str = ""
+    k8s_all_namespaces: bool = False
 
 
 @dataclass
@@ -72,7 +69,7 @@ def mock_config():
 # generate_makefile_target tests
 def test_generate_makefile_target_repo_workflow(mock_config):
     """Test Makefile generation for repo workflow."""
-    result = generate_makefile_target(mock_config, "jmo scan --repo .", "repo")
+    result = generate_makefile_target(mock_config, "jmo scan --repo .")
 
     assert ".PHONY: security-scan" in result
     assert ".PHONY: security-report" in result
@@ -82,93 +79,9 @@ def test_generate_makefile_target_repo_workflow(mock_config):
     assert "rm -rf results/" in result
 
 
-def test_generate_makefile_target_dependency_workflow(mock_config):
-    """Test Makefile generation for dependency workflow (same as repo)."""
-    result = generate_makefile_target(mock_config, "jmo scan --repo .", "dependency")
-
-    # Should use basic template like repo
-    assert ".PHONY: security-scan" in result
-    assert ".PHONY: security-report" in result
-    assert ".PHONY: security-clean" in result
-
-
-def test_generate_makefile_target_stack_workflow(mock_config):
-    """Test Makefile generation for stack workflow (enhanced)."""
-    result = generate_makefile_target(mock_config, "jmo scan --repos-dir .", "stack")
-
-    # Should have one scan target per target type
-    assert ".PHONY: security-scan-all" in result
-    assert ".PHONY: security-scan-repos" in result
-    assert ".PHONY: security-scan-images" in result
-    assert ".PHONY: security-scan-iac" in result
-    assert "\tjmo scan --repos-dir .\n" in result
-    assert "\tjmo scan --images-file detected-images.txt\n" in result
-    assert "\tjmo scan --terraform-state terraform/*.tfstate\n" in result
-    assert ".PHONY: help" in result
-
-    # The fast/deep variants were profile selections; one scan job replaces them
-    assert "security-scan-fast" not in result
-    assert "security-scan-deep" not in result
-
-    # Should have help target
-    assert "@echo" in result
-    assert "Available Targets:" in result
-
-
-def test_generate_makefile_target_cicd_workflow(mock_config):
-    """Test Makefile generation for CI/CD workflow."""
-    result = generate_makefile_target(mock_config, "jmo ci --repos-dir .", "cicd")
-
-    assert ".PHONY: security-audit-ci" in result
-    assert ".PHONY: security-audit-fast" in result
-    assert ".PHONY: security-check-pipelines" in result
-    assert ".PHONY: security-check-images" in result
-    assert "jmo ci --repos-dir ." in result
-    assert ".PHONY: help" in result
-
-
-def test_generate_makefile_target_cicd_quick_job_narrows_with_tools(mock_config):
-    """The quick PR target narrows the tool list; it no longer picks a profile."""
-    result = generate_makefile_target(mock_config, "jmo ci --repos-dir .", "cicd")
-
-    assert (
-        "security-audit-fast:\n"
-        "\tjmo ci --repos-dir . --tools trufflehog opengrep --fail-on HIGH\n"
-    ) in result
-
-
-def test_generate_makefile_target_deployment_workflow(mock_config):
-    """Test Makefile generation for deployment workflow."""
-    result = generate_makefile_target(
-        mock_config, "jmo ci --image myapp:latest", "deployment"
-    )
-
-    assert ".PHONY: security-check-staging" in result
-    assert ".PHONY: security-check-production" in result
-    assert ".PHONY: security-sbom" in result
-    assert ".PHONY: security-full-check" in result
-    assert "jmo ci --image myapp:latest" in result
-    assert ".PHONY: help" in result
-
-    # Staging and production differ by threshold only
-    assert "\tjmo ci --fail-on HIGH --image myapp:staging\n" in result
-    assert "\tjmo ci --fail-on CRITICAL --image myapp:production\n" in result
-    assert "\tjmo scan --tools syft --image myapp:latest\n" in result
-
-
-def test_generate_makefile_target_unknown_workflow(mock_config):
-    """Test Makefile generation with unknown workflow (fallback)."""
-    result = generate_makefile_target(mock_config, "jmo scan --repo .", "unknown_type")
-
-    # Should use default template
-    assert ".PHONY: security-scan" in result
-    assert "jmo scan --repo ." in result
-
-
-@pytest.mark.parametrize("workflow", WORKFLOW_TYPES)
-def test_generate_makefile_target_selects_no_profile(mock_config, workflow):
-    """No Makefile template names a profile, in a command or in its help text."""
-    result = generate_makefile_target(mock_config, "jmo scan --repo .", workflow)
+def test_generate_makefile_target_selects_no_profile(mock_config):
+    """The Makefile names no profile, in a command or in its help text."""
+    result = generate_makefile_target(mock_config, "jmo scan --repo .")
 
     assert "--profile" not in result
     assert "profile" not in result.lower()
@@ -375,10 +288,11 @@ def test_generate_github_actions_native_mode_iac_terraform(mock_config):
     mock_config.use_docker = False
     mock_config.target.type = "iac"
     mock_config.target.iac_type = "terraform"
+    mock_config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(mock_config)
 
-    assert "--terraform-state infrastructure" in result
+    assert "--terraform-state infra/stack.yaml" in result
 
 
 def test_generate_github_actions_native_mode_iac_cloudformation(mock_config):
@@ -386,10 +300,11 @@ def test_generate_github_actions_native_mode_iac_cloudformation(mock_config):
     mock_config.use_docker = False
     mock_config.target.type = "iac"
     mock_config.target.iac_type = "cloudformation"
+    mock_config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(mock_config)
 
-    assert "--cloudformation infrastructure" in result
+    assert "--cloudformation infra/stack.yaml" in result
 
 
 def test_generate_github_actions_native_mode_iac_k8s_manifest(mock_config):
@@ -397,10 +312,11 @@ def test_generate_github_actions_native_mode_iac_k8s_manifest(mock_config):
     mock_config.use_docker = False
     mock_config.target.type = "iac"
     mock_config.target.iac_type = "k8s-manifest"
+    mock_config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(mock_config)
 
-    assert "--k8s-manifest infrastructure" in result
+    assert "--k8s-manifest infra/stack.yaml" in result
 
 
 def test_generate_github_actions_native_mode_gitlab(mock_config):
@@ -620,134 +536,3 @@ def test_generate_github_actions_defaults_without_jmo_yml(
 
     assert "--threads 4" in result
     assert "--timeout 600" in result
-
-
-# generate_gitlab_ci tests
-def test_generate_gitlab_ci_default_workflow():
-    """Test GitLab CI generation with default workflow."""
-    result = generate_gitlab_ci("repo")
-
-    assert "stages:" in result
-    assert "- security-scan" in result
-    assert "security-scan:" in result
-    assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
-    assert "    - jmo scan --repo .\n" in result
-    assert "artifacts:" in result
-    assert "sast: results/summaries/findings.sarif" in result
-
-
-def test_generate_gitlab_ci_stack_workflow():
-    """Test GitLab CI generation with stack workflow."""
-    result = generate_gitlab_ci("stack")
-
-    assert "- security-scan" in result
-    assert "- report" in result
-    assert "security-scan-all:" in result
-    assert "security-report:" in result
-    assert "    - jmo scan --repos-dir .\n" in result
-    assert "jmo report ./results" in result
-    assert "dependencies:" in result
-
-
-def test_generate_gitlab_ci_cicd_workflow():
-    """Test GitLab CI generation with CI/CD workflow."""
-    result = generate_gitlab_ci("cicd")
-
-    assert "- security-audit" in result
-    assert "ci-security-audit:" in result
-    assert "    - jmo ci --repos-dir . --fail-on HIGH\n" in result
-
-
-def test_generate_gitlab_ci_deployment_workflow():
-    """Test GitLab CI generation with deployment workflow."""
-    result = generate_gitlab_ci("deployment")
-
-    assert "- pre-deployment" in result
-    assert "deployment-security-check:" in result
-    assert "jmo ci --fail-on CRITICAL --image" in result
-    assert "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" in result
-    assert "when: manual" in result
-
-
-def test_generate_gitlab_ci_dependency_workflow():
-    """Test GitLab CI generation with dependency workflow (uses default)."""
-    result = generate_gitlab_ci("dependency")
-
-    # Should use default template
-    assert "security-scan:" in result
-    assert "    - jmo scan --repo .\n" in result
-
-
-@pytest.mark.parametrize("workflow", WORKFLOW_TYPES)
-def test_generate_gitlab_ci_selects_no_profile(workflow):
-    """No GitLab CI template names a profile."""
-    assert "profile" not in generate_gitlab_ci(workflow).lower()
-
-
-# generate_docker_compose tests
-def test_generate_docker_compose_default_workflow():
-    """Test docker-compose generation with default workflow."""
-    result = generate_docker_compose("repo")
-
-    assert "version: '3.8'" in result
-    assert "services:" in result
-    assert "jmo-security:" in result
-    assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
-    assert "volumes:" in result
-    assert ".:/scan:ro" in result
-    assert "./results:/scan/results" in result
-    assert "scan" in result
-    assert "--repo /scan" in result
-    assert "JMO_THREADS=auto" in result
-
-
-def test_generate_docker_compose_stack_workflow():
-    """Test docker-compose generation with stack workflow."""
-    result = generate_docker_compose("stack")
-
-    assert "jmo-security:" in result
-    assert "jmo-report:" in result
-    assert "depends_on:" in result
-    assert "- jmo-security" in result
-    assert "scan" in result
-    assert "--repos-dir /scan" in result
-    # `jmo report` has no profile-selection flag at all. This used to assert
-    # `--profile {profile}`, which made the generated command exit 2.
-    assert "report /scan/results" in result
-
-
-def test_generate_docker_compose_cicd_workflow():
-    """Test docker-compose generation with CI/CD workflow."""
-    result = generate_docker_compose("cicd")
-
-    assert "jmo-security:" in result
-    assert "ci" in result
-    assert "--repos-dir /scan" in result
-    assert "--fail-on HIGH" in result
-
-
-def test_generate_docker_compose_deployment_workflow():
-    """Test docker-compose generation with deployment workflow."""
-    result = generate_docker_compose("deployment")
-
-    assert "jmo-security:" in result
-    assert "/var/run/docker.sock:/var/run/docker.sock:ro" in result
-    assert "ci" in result
-    assert "--image myapp:latest" in result
-    assert "--fail-on CRITICAL" in result
-
-
-def test_generate_docker_compose_dependency_workflow():
-    """Test docker-compose generation with dependency workflow (uses default)."""
-    result = generate_docker_compose("dependency")
-
-    # Should use default template
-    assert "jmo-security:" in result
-    assert "scan" in result
-    assert "--repo /scan" in result
-
-
-@pytest.mark.parametrize("workflow", WORKFLOW_TYPES)
-def test_generate_docker_compose_selects_no_profile(workflow):
-    """No docker-compose template names a profile."""
-    assert "profile" not in generate_docker_compose(workflow).lower()

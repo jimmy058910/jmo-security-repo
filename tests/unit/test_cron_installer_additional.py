@@ -238,27 +238,16 @@ def test_generate_cron_entry_with_gitlab_repo(basic_schedule):
     assert "--gitlab-repo mygroup/myrepo" in entry
 
 
-def test_generate_cron_entry_with_gitlab_group(basic_schedule):
-    """Test _generate_cron_entry with GitLab group target."""
-    basic_schedule.spec.jobTemplate.targets = {"gitlab": {"group": "mygroup"}}
-
-    installer = CronInstaller()
-    entry = installer._generate_cron_entry(basic_schedule)
-
-    assert "--gitlab-group mygroup" in entry
-
-
-def test_generate_cron_entry_with_gitlab_repo_and_group(basic_schedule):
-    """Test _generate_cron_entry with both GitLab repo and group."""
+def test_generate_cron_entry_refuses_a_gitlab_group(basic_schedule):
+    """A group target, from a schedule written before `--gitlab-group` was
+    removed (#1407), is refused rather than installed as a scan of nothing."""
     basic_schedule.spec.jobTemplate.targets = {
         "gitlab": {"repo": "mygroup/myrepo", "group": "anothergroup"}
     }
 
     installer = CronInstaller()
-    entry = installer._generate_cron_entry(basic_schedule)
-
-    assert "--gitlab-repo mygroup/myrepo" in entry
-    assert "--gitlab-group anothergroup" in entry
+    with pytest.raises(CronValidationError, match="list a group's projects"):
+        installer._generate_cron_entry(basic_schedule)
 
 
 # ========== Category 7: _generate_cron_entry() - Kubernetes Clusters ==========

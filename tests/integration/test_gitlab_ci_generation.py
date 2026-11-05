@@ -222,7 +222,7 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
                     "cloudformation": "./stack.yaml",
                     "k8s_manifest": "./deploy.yaml",
                 },
-                "gitlab": {"repo": "group/project", "group": "platform"},
+                "gitlab": {"repo": "group/project"},
                 "kubernetes": {"context": "prod", "namespace": "payments"},
             },
             results={"base_dir": "./results", "retention_days": 60},
@@ -264,7 +264,6 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
 
     # GitLab targets
     assert "--gitlab-repo group/project" in script
-    assert "--gitlab-group platform" in script
 
     # Kubernetes targets
     assert "--k8s-context prod" in script

@@ -70,7 +70,6 @@ class TargetConfig:
         self.gitlab_url: str = "https://gitlab.com"
         self.gitlab_token: str = ""  # Prefer GITLAB_TOKEN env var
         self.gitlab_repo: str = ""  # group/repo format
-        self.gitlab_group: str = ""
 
         # Kubernetes targets (v0.6.0+)
         self.k8s_context: str = ""
@@ -95,7 +94,6 @@ class TargetConfig:
             "gitlab_url": self.gitlab_url,
             "gitlab_token": "***" if self.gitlab_token else "",  # Redact token
             "gitlab_repo": self.gitlab_repo,
-            "gitlab_group": self.gitlab_group,
             "k8s_context": self.k8s_context,
             "k8s_namespace": self.k8s_namespace,
             "k8s_all_namespaces": self.k8s_all_namespaces,

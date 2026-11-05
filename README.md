@@ -138,8 +138,8 @@ jmo scan --terraform-state terraform.tfstate
 # Live web app
 jmo scan --url https://example.com --tools zap
 
-# GitLab repos
-jmo scan --gitlab-group myorg --gitlab-token $TOKEN
+# A GitLab repository
+jmo scan --gitlab-repo myorg/myrepo --gitlab-token $TOKEN
 
 # Kubernetes cluster
 jmo scan --k8s-context prod --k8s-all-namespaces

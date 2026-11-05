@@ -1,7 +1,8 @@
 """Every `jmo` command the wizard writes into a file must be one `jmo` accepts.
 
-`jmo wizard` generates Makefiles, shell scripts, GitHub Actions workflows,
-GitLab CI files and docker-compose files. Those are not documentation -- a user
+`jmo wizard` generates Makefiles, shell scripts and GitHub Actions workflows
+(it generated GitLab CI and docker-compose files too, until v2.0.0 found
+nothing called those generators). Those are not documentation -- a user
 commits them and a pipeline runs them. Measured on `origin/dev`, thirteen of the
 `jmo ci` / `jmo report` invocations in `wizard_generators.py` exited **2**:
 
@@ -34,23 +35,21 @@ from __future__ import annotations
 import argparse
 import io
 import re
+import shlex
 import sys
 from contextlib import redirect_stderr
 from dataclasses import dataclass, field
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from scripts.cli import jmo
 from scripts.cli.wizard_generators import (
-    generate_docker_compose,
     generate_github_actions,
-    generate_gitlab_ci,
     generate_makefile_target,
     generate_shell_script,
 )
-
-WORKFLOW_TYPES = ("repo", "stack", "cicd", "deployment", "dependency")
 
 # The subcommands that used to select a profile; `jmo <name>` is now an unknown
 # subcommand. `deep` was only ever a profile name, never a subcommand.
@@ -60,8 +59,6 @@ REMOVED_PROFILE_SUBCOMMANDS = ("fast", "balanced", "full")
 # `jmo ` is still extracted -- an unknown subcommand is exactly the kind of
 # breakage worth failing on.
 _JMO_CALL = re.compile(r"\bjmo\s+([a-z][a-z-]*)\b(.*)$")
-# docker-compose inline form: `command: report /scan/results --profile-name x`
-_COMPOSE_INLINE = re.compile(r"^\s*command:\s+([a-z][a-z-]*)\s+(.+)$")
 
 
 @dataclass
@@ -82,31 +79,6 @@ class _Config:
     fail_on: str | None = None
     use_docker: bool = False
     target: _Target = field(default_factory=_Target)
-
-
-def _folded_compose_commands(text: str) -> list[list[str]]:
-    """Pull `command: >` folded blocks out of a docker-compose document.
-
-    The subcommand and its flags sit on their own indented lines, so a
-    line-oriented scan misses them entirely -- which is how three of the
-    thirteen broken invocations survived every existing test.
-    """
-    out: list[list[str]] = []
-    lines = text.splitlines()
-    for i, line in enumerate(lines):
-        if not re.match(r"^\s*command:\s*>\s*$", line):
-            continue
-        indent = len(line) - len(line.lstrip())
-        parts: list[str] = []
-        for follow in lines[i + 1 :]:
-            if not follow.strip():
-                break
-            if len(follow) - len(follow.lstrip()) <= indent:
-                break
-            parts.extend(follow.split())
-        if parts:
-            out.append(parts)
-    return out
 
 
 def _logical_lines(text: str) -> list[str]:
@@ -138,14 +110,9 @@ def extract_commands(text: str) -> list[list[str]]:
         line = line.split("||")[0].split("#")[0].strip()
         if not line:
             continue
-        inline = _COMPOSE_INLINE.match(raw)
-        if inline and "jmo" not in raw:
-            found.append([inline.group(1), *inline.group(2).split()])
-            continue
         call = _JMO_CALL.search(line)
         if call:
             found.append([call.group(1), *call.group(2).split()])
-    found.extend(_folded_compose_commands(text))
     return found
 
 
@@ -178,15 +145,9 @@ def generated_artifacts() -> list[tuple[str, str]]:
     """(label, content) for every artifact the wizard can write."""
     cfg = _Config()
     artifacts: list[tuple[str, str]] = []
-    for wf in WORKFLOW_TYPES:
-        artifacts.append(
-            (
-                f"makefile:{wf}",
-                generate_makefile_target(cfg, _wizard_command("HIGH"), wf),
-            )
-        )
-        artifacts.append((f"gitlab-ci:{wf}", generate_gitlab_ci(wf)))
-        artifacts.append((f"docker-compose:{wf}", generate_docker_compose(wf)))
+    artifacts.append(
+        ("makefile", generate_makefile_target(cfg, _wizard_command("HIGH")))
+    )
     for fail_on in ("", "HIGH"):
         artifacts.append(
             (
@@ -235,9 +196,7 @@ def test_extractor_meta_guard():
     docker-compose were generated once per profile. It is derived instead: every
     artifact the wizard writes must yield at least one command, which is the
     property the floor stood in for and cannot go stale when the artifact set
-    changes. The named checks pin the three artifact shapes -- a plain
-    `jmo ...` line, a docker-compose inline `command:`, and a `command: >`
-    folded block, which is the shape three broken invocations hid in -- plus the
+    changes. The named checks pin the plain `jmo ...` line and the
     continuation-joined GitHub Actions `run:` block, whose flags used to go
     unread.
     """
@@ -250,11 +209,6 @@ def test_extractor_meta_guard():
     subcommands = {cmd[0] for _label, cmd in ALL_COMMANDS}
     for expected in ("scan", "ci", "report"):
         assert expected in subcommands, f"extractor found no `{expected}` invocation"
-
-    compose = generate_docker_compose("cicd")
-    folded = _folded_compose_commands(compose)
-    assert folded, "folded `command: >` blocks are not being extracted"
-    assert folded[0][0] == "ci", folded
 
     # The scan step only: the native workflow also runs `jmo tools install --yes`.
     gha = [
@@ -465,3 +419,204 @@ def test_a_known_bad_command_is_actually_rejected():
         "the parser accepted `ci --profile fast`, so the guard proves nothing"
     )
     assert "unrecognized arguments" in err.lower(), err
+
+
+# --------------------------------------------------------------------------
+# The wizard's GitHub Actions workflow names its target, in both modes (#1554)
+# --------------------------------------------------------------------------
+
+_URL_WITH_METACHARACTERS = "https://app.example.test/search?q=1&next=$(id)"
+
+# target type -> (fields set on the wizard's TargetConfig, {parsed dest: value})
+_WORKFLOW_TARGETS: dict[str, tuple[dict[str, object], dict[str, object]]] = {
+    "repo": ({"repo_mode": "repo", "repo_path": "."}, {"repo": "."}),
+    "image": (
+        {"image_name": "registry.example.test/app:1.0"},
+        {"image": "registry.example.test/app:1.0"},
+    ),
+    "url": (
+        {"url": _URL_WITH_METACHARACTERS},
+        {"url": _URL_WITH_METACHARACTERS},
+    ),
+    "iac": (
+        {"iac_type": "terraform", "iac_path": "infra/prod.tfstate"},
+        {"terraform_state": "infra/prod.tfstate"},
+    ),
+    "gitlab": (
+        {"gitlab_repo": "team/app", "gitlab_url": "https://gitlab.example.test"},
+        {"gitlab_repo": "team/app", "gitlab_url": "https://gitlab.example.test"},
+    ),
+    "k8s": (
+        {"k8s_context": "prod", "k8s_namespace": "payments"},
+        {"k8s_context": "prod", "k8s_namespace": "payments"},
+    ),
+}
+
+
+def _workflow_jmo_line(target_type: str, use_docker: bool) -> str:
+    """The one `jmo scan` line of the wizard's workflow, continuations joined."""
+    from scripts.cli.wizard_flows.config_models import WizardConfig
+
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.target.type = target_type
+    for name, value in _WORKFLOW_TARGETS[target_type][0].items():
+        setattr(config.target, name, value)
+    lines = [
+        line.strip()
+        for line in _logical_lines(generate_github_actions(config))
+        if re.match(r"\s*jmo (scan|ci)\b", line)
+    ]
+    assert len(lines) == 1, lines
+    return lines[0]
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+@pytest.mark.parametrize("target_type", sorted(_WORKFLOW_TARGETS))
+def test_the_workflow_scans_the_wizards_target(target_type, use_docker):
+    """Docker mode named a target only for repo, image and url: a GitLab, IaC
+    or K8s workflow ran `jmo scan` on nothing. Read through the shell and the
+    real parser, so a dropped flag or a value the shell splits both fail."""
+    words = shlex.split(_workflow_jmo_line(target_type, use_docker))
+    parsed = jmo.build_parser().parse_args(words[1:])
+    for dest, value in _WORKFLOW_TARGETS[target_type][1].items():
+        got = getattr(parsed, dest)
+        assert (got[-1] if isinstance(got, list) else got) == value, (dest, words)
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+def test_workflow_values_reach_the_shell_quoted(use_docker):
+    """`&` backgrounded the scan and `$(...)` ran a command: the URL went into
+    the `run:` block bare. Tokenised as a shell does, no operator may appear."""
+    line = _workflow_jmo_line("url", use_docker)
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    words = list(lexer)
+    operators = [w for w in words if w and set(w) <= set("();<>|&")]
+    assert operators == [], (operators, line)
+    assert _URL_WITH_METACHARACTERS in words
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+def test_an_iac_file_outside_the_checkout_is_refused(use_docker, tmp_path, monkeypatch):
+    """The workflow runs on a checkout of the repository the wizard ran in. A
+    file outside it cannot exist on the runner, and its absolute path would be
+    this machine's, written into a committed workflow."""
+    from scripts.cli.wizard_flows.config_models import WizardConfig
+
+    (tmp_path / "repo").mkdir()
+    monkeypatch.chdir(tmp_path / "repo")
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.target.type = "iac"
+    config.target.iac_type = "terraform"
+    config.target.iac_path = str(tmp_path / "elsewhere" / "prod.tfstate")
+
+    with pytest.raises(ValueError, match="outside") as refused:
+        generate_github_actions(config)
+    assert str(tmp_path) not in str(refused.value)
+
+
+# --------------------------------------------------------------------------
+# Docker artifacts create the directories they mount (#1307)
+# --------------------------------------------------------------------------
+
+# Stands in for docker: names every `-v` source that does not exist yet, as a
+# Linux engine would create it, owned by root, where the image's user cannot
+# write. Then records that it ran.
+_FAKE_DOCKER = """#!/bin/sh
+while [ $# -gt 0 ]; do
+  if [ "$1" = "-v" ]; then
+    src="${2%%:*}"
+    [ -e "$src" ] || echo "missing: $src" >> "$FAKE_DOCKER_LOG"
+    shift
+  fi
+  shift
+done
+echo ran >> "$FAKE_DOCKER_LOG"
+"""
+
+
+def _docker_config(tmp_path, repo_mode: str):
+    from scripts.cli.wizard_flows.config_models import WizardConfig
+
+    (tmp_path / "repo").mkdir()
+    (tmp_path / "repos.tsv").write_text("url\n", encoding="utf-8")
+    config = WizardConfig()
+    config.use_docker = True
+    config.results_dir = str(tmp_path / "out" / "results")
+    config.target.type = "repo"
+    config.target.repo_mode = repo_mode
+    config.target.repo_path = str(tmp_path / "repo")
+    config.target.tsv_path = str(tmp_path / "repos.tsv")
+    config.target.tsv_dest = str(tmp_path / "clones")
+    return config
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="runs the artifact under bash")
+@pytest.mark.parametrize("repo_mode", ["repo", "tsv"])
+@pytest.mark.parametrize("artifact", ["script", "make"])
+def test_docker_artifacts_create_the_directories_they_mount(
+    artifact, repo_mode, tmp_path
+):
+    """Run as emitted, with the results directory (and tsv's clone destination)
+    absent: every mount source must exist by the time docker runs."""
+    import os
+    import shutil
+    import subprocess
+
+    from scripts.cli.wizard import generate_command
+
+    config = _docker_config(tmp_path, repo_mode)
+    command = generate_command(config)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text(_FAKE_DOCKER, encoding="utf-8")
+    docker.chmod(0o755)
+    log = tmp_path / "docker.log"
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "FAKE_DOCKER_LOG": str(log),
+    }
+
+    if artifact == "script":
+        path = tmp_path / "scan.sh"
+        path.write_bytes(generate_shell_script(config, command).encode("utf-8"))
+        # As its shebang says: `set -o pipefail` is bash's, and Ubuntu's dash
+        # rejects it (Debian's accepts it, which hid this locally).
+        argv = ["bash", str(path)]
+    else:
+        if shutil.which("make") is None:
+            pytest.skip("make is not installed")
+        path = tmp_path / "Makefile.security"
+        path.write_bytes(generate_makefile_target(config, command).encode("utf-8"))
+        argv = ["make", "-f", str(path), "security-scan"]
+
+    done = subprocess.run(
+        argv, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60
+    )
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert log.read_text(encoding="utf-8").splitlines() == ["ran"]
+
+
+def test_the_printed_docker_command_says_to_create_its_directories(tmp_path, capsys):
+    """Declined at "Execute now?", the wizard prints the command to run later;
+    run by hand, the directories it mounts must come first."""
+    import shlex
+
+    from scripts.cli import wizard
+
+    config = _docker_config(tmp_path, "tsv")
+    with patch.object(wizard, "_prompt_yes_no", return_value=False):
+        assert wizard.execute_scan(config) == 0
+
+    later = capsys.readouterr().out.split("run it later:")[1].splitlines()
+    lines = [line.strip() for line in later if line.strip()]
+    # Resolved, as the mounts are: /var is a symlink on macOS.
+    dirs = [Path(config.results_dir).resolve(), (tmp_path / "clones").resolve()]
+    expected = shlex.join(["mkdir", "-p", *map(str, dirs)])
+    assert lines[0] == expected, lines
+    assert lines[1].startswith("docker run"), lines

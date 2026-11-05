@@ -25,7 +25,10 @@ from pathlib import Path
 
 from scripts.cli.cpu_utils import get_cpu_count
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
-from scripts.cli.wizard_flows.command_builder import build_command_parts
+from scripts.cli.wizard_flows.command_builder import (
+    build_command_parts,
+    docker_output_dirs,
+)
 
 # Phase 1 refactor: Import from new modules
 from scripts.cli.wizard_flows.config_models import (
@@ -436,8 +439,6 @@ def _display_target_details(target: TargetConfig) -> None:
         print(f"    Token: {'***' if target.gitlab_token else 'NOT SET'}")
         if target.gitlab_repo:
             print(f"    Repo: {target.gitlab_repo}")
-        elif target.gitlab_group:
-            print(f"    Group: {target.gitlab_group}")
     elif target.type == "k8s":
         print(f"    Context: {target.k8s_context}")
         if target.k8s_all_namespaces:
@@ -645,15 +646,22 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
     _print_step(6, WIZARD_TOTAL_STEPS, "Execute Scan")
 
     command = generate_command(config)
+    # Run by hand, a Docker command needs the directories it mounts first: the
+    # engine creates a missing one as root, where the image cannot write.
+    output_dirs = docker_output_dirs(config)
+    lines = [shlex.join(["mkdir", "-p", *output_dirs])] if output_dirs else []
+    lines.append(command)
 
     print("\n" + _colorize("Generated command:", "bold"))
-    print(_colorize(f"  {command}", "green"))
+    for line in lines:
+        print(_colorize(f"  {line}", "green"))
     print()
 
     # In non-interactive mode, auto-execute without prompting
     if not yes and not _prompt_yes_no("Execute now?", default=True):
         print("\nCommand saved. You can run it later:")
-        print(f"  {command}")
+        for line in lines:
+            print(f"  {line}")
         return 0
 
     print(_colorize("\nStarting scan...", "blue"))
@@ -670,13 +678,11 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
         if config.target.type == "gitlab" and config.target.gitlab_token:
             env["GITLAB_TOKEN"] = config.target.gitlab_token
 
-        if config.use_docker:
-            # Docker creates a missing bind-mount source as root, and the
-            # image's user (uid 1000) cannot write it (measured: `mkdir:
-            # Permission denied`). Create what the container writes first.
-            Path(config.results_dir).mkdir(parents=True, exist_ok=True)
-            if config.target.type == "repo" and config.target.repo_mode == "tsv":
-                Path(config.target.tsv_dest).mkdir(parents=True, exist_ok=True)
+        # Docker creates a missing bind-mount source as root, and the image's
+        # user (uid 1000) cannot write it (measured: `mkdir: Permission
+        # denied`). Create what the container writes first.
+        for directory in output_dirs:
+            Path(directory).mkdir(parents=True, exist_ok=True)
 
         result = subprocess.run(
             command_list,

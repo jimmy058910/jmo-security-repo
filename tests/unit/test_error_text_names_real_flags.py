@@ -189,7 +189,9 @@ def f():
 _LIVE_ANCHORS = {
     ("scripts/cli/history_commands.py", "--results-dir"),
     ("scripts/cli/diff_commands.py", "--scan"),
-    ("scripts/cli/wizard_generators.py", "--fail-on"),
+    # The URL refusal's message; the --fail-on literals went with the Makefile
+    # templates no wizard path wrote (issue #1301).
+    ("scripts/cli/wizard_generators.py", "--gitlab-url"),
     ("scripts/cli/jmo.py", "--repos-dir"),
 }
 

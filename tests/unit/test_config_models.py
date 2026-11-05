@@ -58,7 +58,6 @@ class TestTargetConfig:
             "gitlab_url",
             "gitlab_token",
             "gitlab_repo",
-            "gitlab_group",
             "k8s_context",
             "k8s_namespace",
             "k8s_all_namespaces",

@@ -138,6 +138,17 @@ are write-once, so the risk is low — but it is untested, not proven.
 
 **What to do:** on Windows, give concurrent scans separate `--results-dir` paths.
 
+### A GitLab group cannot be scanned as a whole
+
+JMo scans one GitLab repository per `--gitlab-repo`. Up to v1.x, `--gitlab-group`
+was accepted but never listed the group's projects: it cloned
+`<instance>/group:<name>.git`, which is not a project, so the clone failed and
+nothing was scanned. v2.0.0 removed the flag, the wizard's "Entire group" choice
+and the schedule key `gitlab.group` (a stored schedule that still has it is
+refused by name) until JMo lists a group's projects through the GitLab API.
+
+**What to do:** scan each project with its own `--gitlab-repo group/project`.
+
 ### Secret scanning skips `.git/`, `.jmo/` and vendored trees
 
 TruffleHog and Gitleaks read the working tree with `.git/` and `.jmo/` excluded,

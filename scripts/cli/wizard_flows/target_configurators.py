@@ -333,37 +333,17 @@ def configure_gitlab_target(
                 )
             )
 
-    # Repo or group
-    print("\nGitLab scope:")
-    modes = [
-        ("repo", "Single repository (group/repo)"),
-        ("group", "Entire group (all repos)"),
-    ]
-    for key, desc in modes:
-        print(f"  [{key:10}] {desc}")
-
-    mode = _prompter.prompt_choice(
-        "\nSelect scope:", [k for k, _ in modes], default="repo"
+    # One repository: a whole group needs its projects listed through the
+    # GitLab API, which JMo does not do yet (issue #1407).
+    config.gitlab_repo = _prompt_text(
+        "Repository (format: group/repo)", default="mygroup/myrepo"
     )
-
-    if mode == "repo":
-        config.gitlab_repo = _prompt_text(
-            "Repository (format: group/repo)", default="mygroup/myrepo"
+    print(
+        _prompter.colorize(
+            f"Will scan GitLab repo: {config.gitlab_url}/{config.gitlab_repo}",
+            "green",
         )
-        print(
-            _prompter.colorize(
-                f"Will scan GitLab repo: {config.gitlab_url}/{config.gitlab_repo}",
-                "green",
-            )
-        )
-    else:
-        config.gitlab_group = _prompt_text("Group name", default="mygroup")
-        print(
-            _prompter.colorize(
-                f"Will scan all repos in group: {config.gitlab_url}/{config.gitlab_group}",
-                "green",
-            )
-        )
+    )
 
     return config
 

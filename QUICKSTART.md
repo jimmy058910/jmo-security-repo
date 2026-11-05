@@ -182,8 +182,8 @@ jmo scan --url https://example.com --tools zap
 # Kubernetes cluster
 jmo scan --k8s-context prod --k8s-all-namespaces
 
-# GitLab repos
-jmo scan --gitlab-group myorg --gitlab-token $TOKEN
+# A GitLab repository
+jmo scan --gitlab-repo myorg/myrepo --gitlab-token $TOKEN
 
 # Everything together
 jmo scan --repo . --image myapp:latest --url https://myapp.com

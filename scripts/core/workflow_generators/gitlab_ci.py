@@ -257,8 +257,6 @@ class GitLabCIGenerator:
                 cmd_parts.append(f"--gitlab-url {shlex.quote(gitlab_url)}")
             if "repo" in gitlab:
                 cmd_parts.append(f"--gitlab-repo {shlex.quote(gitlab['repo'])}")
-            if "group" in gitlab:
-                cmd_parts.append(f"--gitlab-group {shlex.quote(gitlab['group'])}")
             if "token" in gitlab:
                 cmd_parts.append("--gitlab-token ${GITLAB_TOKEN}")
 

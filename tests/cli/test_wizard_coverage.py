@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from scripts.cli.wizard_flows.config_models import TargetConfig
 from scripts.cli.wizard_generators import (
     JMO_DOCKER_IMAGE_FULL,
     generate_github_actions,
@@ -37,7 +38,9 @@ def create_wizard_config(**kwargs: Any) -> MagicMock:
         "threads": None,
         "timeout": None,
         "fail_on": "",
-        "target": MagicMock(spec=[]),
+        # The real model, so a generator reading a field it has is never
+        # tripped by a fake that left the field out.
+        "target": TargetConfig(),
     }
 
     # Update with provided values
@@ -255,11 +258,12 @@ def test_github_actions_iac_terraform():
     )
     config.target.type = "iac"
     config.target.iac_type = "terraform"
+    config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(config)
 
     # Verify Terraform flag
-    assert "--terraform-state infrastructure" in result
+    assert "--terraform-state infra/stack.yaml" in result
 
 
 def test_github_actions_iac_cloudformation():
@@ -269,11 +273,12 @@ def test_github_actions_iac_cloudformation():
     )
     config.target.type = "iac"
     config.target.iac_type = "cloudformation"
+    config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(config)
 
     # Verify CloudFormation flag
-    assert "--cloudformation infrastructure" in result
+    assert "--cloudformation infra/stack.yaml" in result
 
 
 def test_github_actions_iac_k8s_manifest():
@@ -283,11 +288,12 @@ def test_github_actions_iac_k8s_manifest():
     )
     config.target.type = "iac"
     config.target.iac_type = "k8s-manifest"
+    config.target.iac_path = "infra/stack.yaml"
 
     result = generate_github_actions(config)
 
     # Verify K8s manifest flag
-    assert "--k8s-manifest infrastructure" in result
+    assert "--k8s-manifest infra/stack.yaml" in result
 
 
 # ========== Test Category 6: Repo Mode Variations ==========

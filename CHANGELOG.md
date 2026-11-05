@@ -209,6 +209,23 @@ All notable changes to JMo Security will be documented in this file.
   unchanged. What was still useful moved: the adapter-test categories into the
   `coverage-gap-finder` agent, the documentation map into `doc-sync-checker`, and the
   `scan-timings.json` / `timings.json` distinction into `docs/SCAN_OPTIMIZATION.md`.
+- **Five wizard flows nobody could reach are gone.** `jmo wizard` never constructed
+  `RepoFlow`, `EntireStackFlow`, `CICDFlow`, `DeploymentFlow` or `DependencyFlow`, nor
+  their base class `BaseWizardFlow`: only their tests ran them. `docs/examples/wizard-examples.md`
+  no longer presents their recommendations and "five workflow types" as wizard features.
+  Their artifact generators went too: GitLab CI and docker-compose files, and four
+  Makefile templates, which no wizard path ever wrote.
+  The image, IaC, web-app, package and lock-file detection only they called went with
+  them: its Dockerfile count disagreed with the scan's file selection, but no wizard run
+  ever showed it (#1411). A test now fails on any definition or public method in
+  `scripts/cli/wizard_flows/` that nothing under `scripts/` uses (#1301).
+- **Breaking. `--gitlab-group` is gone until JMo can list a group's projects.** It never
+  did: the scan cloned `<instance>/group:<name>.git`, which is not a project, so nothing
+  was scanned, and on Windows its results path named an NTFS alternate data stream. `jmo
+  scan` and `jmo ci` now reject the flag (exit 2), the wizard asks for one repository
+  instead of offering "Entire group", and a schedule whose `gitlab` target holds `group`
+  is refused by name when it is created, validated, exported or installed. Scan each
+  project with `--gitlab-repo` (docs/KNOWN_LIMITATIONS.md, #1407).
 - **History drops `scans.scan_notes` and `findings.finding_status`.** v1.1.0's migration
   added both by ALTER TABLE, nothing read or wrote either, and a fresh database had
   neither until `jmo history migrate` ran, so one version had two schemas. They are
@@ -515,6 +532,24 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **An exported schedule workflow mounts a checkout whose path holds a space.** Its
+  `docker run -v $(pwd):/workspace` left the substitution unquoted, so the shell split
+  such a path into two arguments; it is now `-v "$(pwd)":/workspace`.
+- **The wizard's GitHub Actions workflow scans the target it was given (#1554).** In
+  Docker mode it named a target only for a repository, an image or a URL, so a GitLab,
+  IaC or Kubernetes workflow ran `jmo scan` on nothing. Both modes now build the target
+  flags one way: an IaC workflow names the wizard's file relative to the checkout (native
+  mode named a fixed `infrastructure` path), and refuses a file outside the working
+  directory, which the runner's checkout cannot hold; a Kubernetes one carries
+  `--k8s-namespace` or `--k8s-all-namespaces` as the wizard was told (native mode had
+  dropped both); and every value is shell-quoted, so a URL holding `&` no longer puts the scan in the
+  background and one holding `$(...)` no longer runs a command.
+- **The wizard's Docker script and Makefile create the directories they mount (#1307).**
+  On a Linux engine, a missing bind-mount source is created owned by root, which the
+  image's user cannot write, so `--emit-script` and `--emit-make` produced a scan that
+  failed at its first write. Both now run `mkdir -p` on the results directory (and tsv's
+  clone destination) before `docker run`, and the command the wizard prints to run later
+  starts with the same line. The wizard's own run already did this.
 - **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,
@@ -1038,6 +1073,18 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Security
 
+- **No value you write reaches a GitHub Actions workflow holding `${{` (#1552).** GitHub
+  evaluates `${{ ... }}` anywhere in a workflow before the shell runs, quoted or not, so
+  `jmo schedule create --image 'alpine${{ secrets.GITHUB_TOKEN }}'` followed by `jmo
+  schedule export` wrote a workflow that put the token in its scan command, and a value
+  could send any secret the workflow reads to a host it named. A schedule holding the
+  sequence anywhere, in a value or a key, is refused when it is created or updated,
+  whatever its backend (any schedule can be exported to GitHub Actions), and one already
+  stored or edited by hand is refused by `validate` and `export`; the message names the
+  field, not the value. The wizard's own workflow refuses it in a target too. The exported
+  workflow also stops putting `--gitlab-token '${{ secrets.GITLAB_TOKEN }}'` on `docker
+  run`'s command line, where the process list showed the token: the step sets
+  `GITLAB_TOKEN` in its environment and `-e GITLAB_TOKEN` forwards it by name.
 - **The workflow `jmo wizard` generates uploads `results/summaries/`, not all of
   `results/` (#1329).** The raw trufflehog and gitleaks outputs under `results/individual-*/`
   held every secret found in plaintext, and a CI artifact is readable by anyone who can read

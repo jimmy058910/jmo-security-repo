@@ -1,8 +1,8 @@
 """A schedule keeps the self-hosted GitLab URL it was given, in every command it makes.
 
-`targets["gitlab"]` held a repository or a group and no URL, and the cron line,
-the GitHub Actions workflow and the GitLab CI job emitted `--gitlab-repo` or
-`--gitlab-group` without `--gitlab-url`. `jmo scan` then defaulted the URL to
+`targets["gitlab"]` held a repository and no URL, and the cron line, the
+GitHub Actions workflow and the GitLab CI job emitted `--gitlab-repo` without
+`--gitlab-url`. `jmo scan` then defaulted the URL to
 `https://gitlab.com`, so a schedule for a self-hosted instance cloned its
 project from gitlab.com and offered it the self-hosted instance's token (the
 defect `tests/cli/test_gitlab_scanner.py::TestAGitlabUrlIsClonedFromTheHostItNames`
@@ -104,18 +104,13 @@ def _value_of(argv: list[str], flag: str) -> str:
 
 @pytest.mark.parametrize("consumer", CONSUMERS)
 class TestEveryGeneratorEmitsTheUrl:
-    @pytest.mark.parametrize(
-        ("target", "flag"),
-        [({"repo": "dev/app"}, "--gitlab-repo"), ({"group": "dev"}, "--gitlab-group")],
-        ids=["repo", "group"],
-    )
-    def test_a_self_hosted_url_is_emitted_with_the_target(self, consumer, target, flag):
+    def test_a_self_hosted_url_is_emitted_with_the_target(self, consumer):
         build, _error = GENERATORS[consumer]
 
-        argv = _words(build(_schedule({**target, "url": URL})))
+        argv = _words(build(_schedule({"repo": "dev/app", "url": URL})))
 
         assert _value_of(argv, "--gitlab-url") == URL
-        assert flag in argv
+        assert "--gitlab-repo" in argv
 
     @pytest.mark.parametrize("url", [None, "", "   "], ids=["none", "empty", "blank"])
     def test_no_url_is_no_flag(self, consumer, url):
@@ -230,10 +225,10 @@ class TestAScheduleCannotStoreAUrlTheScanWouldRefuse:
     @pytest.mark.parametrize("url", [None, "", "  "], ids=["none", "empty", "blank"])
     def test_the_factory_stores_no_url_for_the_default(self, url):
         schedule = ScanSchedule.from_simple_args(
-            name="com", cron="0 2 * * *", gitlab_group="dev", gitlab_url=url
+            name="com", cron="0 2 * * *", gitlab_repo="dev/app", gitlab_url=url
         )
 
-        assert schedule.spec.jobTemplate.targets["gitlab"] == {"group": "dev"}
+        assert schedule.spec.jobTemplate.targets["gitlab"] == {"repo": "dev/app"}
 
     def test_the_factory_refuses_a_url_the_scan_would_refuse(self):
         with pytest.raises(InvalidGitLabUrlError, match="ssh://"):
@@ -309,7 +304,7 @@ class TestAScheduleCannotStoreAUrlTheScanWouldRefuse:
         assert "hunter2" not in said.err + said.out
 
 
-KNOWN_KEYS = ("repo", "group", "url", "token")
+KNOWN_KEYS = ("repo", "url", "token")
 CORP = "https://gl.corp.example"
 
 
@@ -345,12 +340,10 @@ class TestAMisspeltUrlKeyIsRefused:
         assert all(allowed in message for allowed in KNOWN_KEYS)
         assert "gl.corp.example" not in message
 
-    def test_the_four_keys_it_reads_are_accepted(self, consumer):
+    def test_the_three_keys_it_reads_are_accepted(self, consumer):
         build, _error = GENERATORS[consumer]
 
-        text = build(
-            _schedule({"repo": "dev/app", "group": "dev", "url": URL, "token": True})
-        )
+        text = build(_schedule({"repo": "dev/app", "url": URL, "token": True}))
 
         assert f"--gitlab-url {URL}" in text
 
@@ -416,13 +409,13 @@ class TestAUrlWithNothingToCloneIsRefused:
     def test_a_generator_refuses_it(self, consumer, gitlab):
         build, error = GENERATORS[consumer]
 
-        with pytest.raises(error, match="gitlab.repo or gitlab.group"):
+        with pytest.raises(error, match="gitlab.repo names nothing"):
             build(_schedule(gitlab))
 
 
 class TestAUrlWithNothingToCloneIsNotStored:
     def test_the_factory_refuses_it(self):
-        with pytest.raises(InvalidGitLabUrlError, match="gitlab.repo or gitlab.group"):
+        with pytest.raises(InvalidGitLabUrlError, match="gitlab.repo names nothing"):
             ScanSchedule.from_simple_args(
                 name="lonely", cron="0 2 * * *", gitlab_url=URL
             )
@@ -435,11 +428,16 @@ class TestAUrlWithNothingToCloneIsNotStored:
         assert "gitlab" not in schedule.spec.jobTemplate.targets
 
     def test_the_manager_refuses_to_create_it(self, manager):
-        with pytest.raises(InvalidGitLabUrlError, match="gitlab.repo or gitlab.group"):
+        with pytest.raises(InvalidGitLabUrlError, match="gitlab.repo names nothing"):
             manager.create(_schedule({"url": URL}))
 
-    def test_a_url_with_a_group_alone_is_still_stored(self, manager):
-        manager.create(_schedule({"group": "dev", "url": URL}))
+    def test_a_group_is_not_stored(self, manager, tmp_path):
+        """`--gitlab-group` is gone until a group's projects can be listed (#1407)."""
+        with pytest.raises(InvalidGitLabUrlError, match="list a group's projects"):
+            manager.create(_schedule({"group": "dev", "url": URL}))
+
+        stored = json.loads((tmp_path / "schedules.json").read_text(encoding="utf-8"))
+        assert stored["schedules"] == []
 
 
 class TestValidateChecksWhatExportChecks:
@@ -473,10 +471,18 @@ class TestValidateChecksWhatExportChecks:
             ),
             ({"repo": "dev/app", "url": "ssh://git@gl.evil.example"}, "ssh://"),
             ({"repo": "dev/app", "gitlab_url": CORP}, "'gitlab_url'"),
-            ({"url": URL}, "gitlab.repo or gitlab.group"),
+            ({"url": URL}, "gitlab.repo names nothing"),
             ("dev/app", "targets.gitlab must be a mapping"),
+            ({"group": "dev", "url": URL}, "list a group's projects"),
         ],
-        ids=["userinfo", "ssh", "misspelt-key", "nothing-to-clone", "not-a-mapping"],
+        ids=[
+            "userinfo",
+            "ssh",
+            "misspelt-key",
+            "nothing-to-clone",
+            "not-a-mapping",
+            "group-written-before-v2",
+        ],
     )
     def test_a_target_export_refuses_is_not_valid(
         self, stored, tmp_path, capsys, gitlab, named
