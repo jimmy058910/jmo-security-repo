@@ -825,6 +825,9 @@ def find_workflow_literal_pins(
 #: A Dockerfile's two pin shapes, as `sync_dockerfiles` rewrites them.
 _DOCKERFILE_VERSION_VAR = re.compile(r'\b([A-Z][A-Z0-9_]*)_VERSION="[^"]*"')
 _DOCKERFILE_PIP_PIN = re.compile(r"(?<![\w.-])([A-Za-z0-9][A-Za-z0-9._-]*)==[0-9]")
+# A pip extra, `jmo-security[yara]`: the bracket names extras of the package
+# before it, so a word inside it is not a tool installed by name.
+_PIP_EXTRAS = re.compile(r"(?<=[\w.-])\[[\w.,\s-]*\]")
 
 
 def find_dropped_tools(
@@ -862,7 +865,8 @@ def find_dropped_tools(
             for m in _DOCKERFILE_PIP_PIN.finditer(line)
             if m[1] not in packages
         ]
-        found += [tool for tool, pattern in removed if pattern.search(line)]
+        bare = _PIP_EXTRAS.sub("", line)
+        found += [tool for tool, pattern in removed if pattern.search(bare)]
     return sorted(set(found))
 
 
