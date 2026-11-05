@@ -850,26 +850,10 @@ class TestDockerToolVerification:
         # Should show version info or "not found" - but not crash
         assert_no_jmo_traceback(combined)
 
-    def test_all_expected_tools_functional(self):
-        """Verify the image's tools are functional."""
-        image = f"{DOCKER_REGISTRY}:latest"
-
-        ensure_image(image)
-
-        # Get tool list
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "tools", "check"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-
-        # Count tools that show as OK
-        output = result.stdout.lower()
-        ok_count = output.count("ok") + output.count("✓") + output.count("installed")
-
-        # Should have reasonable number of working tools
-        assert ok_count > 0 or result.returncode == 0
+    # No "every tool is functional" check here: one that counted "ok" in
+    # `tools check`'s table passed when one tool of fourteen read OK (#1365).
+    # TestDockerImage.test_docker_image_tools is that check, per tool, from
+    # `tools check --json`.
 
 
 @pytest.mark.docker
