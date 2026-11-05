@@ -2755,6 +2755,13 @@ class ProgressTracker:
         self._start_time = time.time()
         self._start_refresh_thread()
 
+    def __enter__(self) -> ProgressTracker:
+        self.start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.stop()
+
     def stop(self):
         """Stop the background refresh thread."""
         self._stop_refresh = True
@@ -3525,10 +3532,13 @@ def cmd_scan(args) -> int:
             if not scan_config.allow_missing_tools:
                 raise
             return 1
+        finally:
+            # Its refresh thread wakes 4 times a second until stopped: never
+            # stopped here, every in-process scan left one behind, 114 alive
+            # at the end of a `tests/cli` session (#1208).
+            progress.stop()
 
     if stop_requested():
-        if not use_rich_progress:
-            progress.stop()
         if scan_session is not None:
             save_session(scan_session, session_path)
         done = scan_session.completed_count if scan_session is not None else 0
