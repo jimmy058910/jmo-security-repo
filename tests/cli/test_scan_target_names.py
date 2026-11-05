@@ -120,7 +120,7 @@ def env(tmp_path: Path, monkeypatch):
             f"scripts.cli.scan_jobs.{module}.ToolRunner", _WritingRunner
         )
     monkeypatch.setattr(
-        "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run", _clone_or_run
+        "scripts.cli.scan_jobs.gitlab_scanner._git_clone", _clone_or_run
     )
 
     results = tmp_path / "results"
@@ -632,7 +632,7 @@ class TestAGitLabTargetScansTheImagesItNames:
         self, env, monkeypatch
     ):
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
         )
 
@@ -668,7 +668,7 @@ class TestAGitLabTargetScansTheImagesItNames:
         as_image = {r["tool"]: (r["state"], r["reason"]) for r in meta["tool_runs"]}
 
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
         )
         assert env.run(*GITLAB, "--tools", tools) == 0
@@ -707,7 +707,7 @@ class TestAGitLabTargetScansTheImagesItNames:
             "scripts.cli.scan_jobs.image_scanner.ToolRunner", _NoSuchImage
         )
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"Dockerfile": f"FROM {missing}\n".encode()}),
         )
 
@@ -746,7 +746,7 @@ class TestAGitLabTargetScansTheImagesItNames:
             "scripts.cli.scan_jobs.repository_scanner.ToolRunner", _Recording
         )
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"README.md": b"# results\n"}, clones),
         )
 
@@ -792,7 +792,7 @@ class TestAGitLabTargetScansTheImagesItNames:
             "scripts.cli.scan_jobs.image_scanner.ToolRunner", _Recording
         )
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"README.md": b"# app\n"}),
         )
         monkeypatch.setattr(
@@ -821,7 +821,7 @@ class TestAGitLabTargetScansTheImagesItNames:
         """`/` and `:` both become `_`: one repository naming both would put
         both images in one folder, and the last writer stood for both (#1312)."""
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding(
                 {
                     "Dockerfile": b"FROM registry/app:1\n",
@@ -852,7 +852,7 @@ class TestAGitLabTargetScansTheImagesItNames:
         the reconciler fails the scan and history keeps one of them. The
         `--image` target is the one, and the GitLab target says so."""
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
         )
 
@@ -879,7 +879,7 @@ class TestAGitLabTargetScansTheImagesItNames:
         """Whichever job claims it first scans it, into its own folder; the
         other names that target and scans nothing more."""
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
         )
         # The CLI takes one `--gitlab-repo`; discovery is what hands the scan
@@ -944,7 +944,7 @@ class TestAGitLabTargetScansTheImagesItNames:
             "scripts.cli.scan_jobs.image_scanner.ToolRunner", _NoSuchImage
         )
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"Dockerfile": f"FROM {missing}\n".encode()}),
         )
 
@@ -1048,7 +1048,7 @@ class TestOnlyAnImageReferenceBecomesAnImageTarget:
         self, env, monkeypatch, files, images
     ):
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding(files),
         )
 
@@ -1063,7 +1063,7 @@ class TestOnlyAnImageReferenceBecomesAnImageTarget:
         """A token Docker could not pull either: the WARNING says where it is,
         and the scan exits 0, since no target was asked for or created."""
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding(
                 {
                     "Dockerfile": b"ARG SUITE\nFROM debian:%%SUITE%%\n",
@@ -1098,7 +1098,7 @@ class TestOnlyAnImageReferenceBecomesAnImageTarget:
         validator accepts too, so discovery is patched to name it."""
         refused = "--file=/tmp/owned.json"
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"README.md": b"# app\n"}),
         )
         monkeypatch.setattr(
@@ -1131,7 +1131,7 @@ class TestImagesAreFoundOnlyForAToolThatReadsOne:
         self, env, monkeypatch, caplog, tools
     ):
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding(
                 {
                     "Dockerfile": b"FROM alpine:3.19\n",
@@ -1202,7 +1202,7 @@ class TestTheScanRecordsAndResumesTheImagesItFound:
         )
 
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             _clone_holding({"Dockerfile": f"FROM {image}\n".encode()}),
         )
         # trufflehog reads a repository and no image: its two rows differ,
@@ -1272,7 +1272,7 @@ class TestDiscoveryHandsEachJobWhatItCanScan:
             return _clone_or_run(cmd, *args, **kwargs)
 
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run", recording
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone", recording
         )
 
         rc = env.run(
