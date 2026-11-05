@@ -97,9 +97,11 @@ def _redact_trufflehog(text: str, stand_in: StandIn) -> tuple[str, int, int]:
     out: list[str] = []
     changed = unparsed = 0
     for line in text.splitlines(keepends=True):
-        body = line.rstrip("\r\n")
+        # As the adapter reads it: the line stripped of whitespace, which
+        # includes the U+2028 or NEL that str.splitlines() also breaks at.
+        body = line.strip()
         try:
-            record = json.loads(body) if body.strip() else None
+            record = json.loads(body) if body else None
         except ValueError:
             record = None
             unparsed += 1
@@ -108,7 +110,7 @@ def _redact_trufflehog(text: str, stand_in: StandIn) -> tuple[str, int, int]:
         )
         if n:
             changed += n
-            line = json.dumps(record) + line[len(body) :]
+            line = json.dumps(record) + line[len(line.splitlines()[0]) :]
         out.append(line)
     return "".join(out), changed, unparsed
 
@@ -173,7 +175,7 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
     key = os.urandom(32)
 
     def stand_in(secret: str) -> str:
-        digest = hmac.new(key, secret.encode("utf-8", "surrogateescape"), "sha256")
+        digest = hmac.new(key, secret.encode("utf-8"), "sha256")
         return STAND_IN_PREFIX + digest.hexdigest()[:32]
 
     total = 0
@@ -182,7 +184,9 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
         if redact is None:
             continue
         try:
-            text = path.read_bytes().decode("utf-8", "surrogateescape")
+            # Decoded as the adapter decodes it, dropping bytes that are not
+            # UTF-8: what it reads is what has to be redacted.
+            text = path.read_bytes().decode("utf-8", "ignore")
         except OSError as e:
             logger.warning(
                 "%s could not be read, so it may still hold secrets: %s", path, e
@@ -211,7 +215,7 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
         if not changed:
             continue
         try:
-            _replace(path, new_text.encode("utf-8", "surrogateescape"))
+            _replace(path, new_text.encode("utf-8"))
         except OSError as e:
             logger.warning(
                 "%s could not be rewritten, so it may still hold %d secret "

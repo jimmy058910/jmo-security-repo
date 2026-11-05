@@ -52,18 +52,32 @@ def _stale(path: Path) -> None:
 
 
 def _entries(git_dir: Path) -> dict[str, tuple[int, int, int]]:
+    """Every entry under .git, and .git itself: a lock file created and
+    removed again leaves only the directory's mtime changed."""
     return {
         p.relative_to(git_dir).as_posix(): (
             p.lstat().st_ino,
             p.lstat().st_mtime_ns,
             p.lstat().st_size,
         )
-        for p in sorted(git_dir.rglob("*"))
+        for p in [git_dir, *sorted(git_dir.rglob("*"))]
     }
 
 
-def test_reading_the_context_writes_nothing_in_the_targets_git(repo: Path) -> None:
-    _stale(repo / "a.txt")
+@pytest.mark.parametrize("stale", [True, False], ids=["stale-index", "settled-index"])
+def test_reading_the_context_takes_no_lock_in_the_targets_git(
+    repo: Path, stale: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Plain `git status` took .git/index.lock on every run, and rewrote the
+    index when its stat data was stale."""
+    # Only the repository's own config: a developer's `core.splitIndex` would
+    # have git touch its shared index, which is not a lock.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    if stale:
+        _stale(repo / "a.txt")
+    else:
+        _git(repo, "status", "--porcelain")  # settle the index first
     before = _entries(repo / ".git")
 
     context = get_git_context(repo)

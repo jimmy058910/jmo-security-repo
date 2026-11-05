@@ -692,10 +692,10 @@ def get_git_context(repo_path: Path) -> dict[str, Any]:
         tag = result.stdout.strip() if result.returncode == 0 else None
 
         # Check for uncommitted changes - still needs separate call. Without
-        # --no-optional-locks, status refreshes stale stat data in the index
-        # and writes it back through .git/index.lock: the scan wrote in the
-        # repository it read, and a git command run there meanwhile failed on
-        # the lock (#1582).
+        # --no-optional-locks, every status takes .git/index.lock to refresh
+        # the index, and writes the index back when its stat data is stale:
+        # the scan wrote in the repository it read, and a git command run
+        # there meanwhile failed on the lock (#1582).
         result = subprocess.run(
             ["git", "--no-optional-locks", "status", "--porcelain"],
             cwd=repo_path,

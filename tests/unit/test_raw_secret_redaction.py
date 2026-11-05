@@ -305,15 +305,34 @@ def test_an_output_that_cannot_be_rewritten_is_named_and_the_report_runs(
         json.dumps([[_th_tree(ALPHA, "a.pem")], _th_tree(BRAVO, "b.pem")]),
         # A pretty-printed array.
         json.dumps([_th_tree(ALPHA, "a.pem"), _th_tree(BRAVO, "b.pem")], indent=2),
+        # Records split by the line breaks str.splitlines() also splits on.
+        json.dumps(_th_tree(ALPHA, "a.pem"))
+        + "\u2028"
+        + json.dumps(_th_tree(BRAVO, "b.pem"))
+        + "\x85"
+        + json.dumps(_th_tree(CHARLIE, "c.pem")),
+        # A byte that is not UTF-8 after a record, which the adapter drops.
+        (json.dumps(_th_tree(ALPHA, "a.pem")) + "\n").encode()
+        + b"\xff"
+        + (json.dumps(_th_tree(BRAVO, "b.pem")) + "\n").encode(),
     ],
-    ids=["array-on-a-line", "nested-array", "pretty-array"],
+    ids=[
+        "array-on-a-line",
+        "nested-array",
+        "pretty-array",
+        "unicode-line-breaks",
+        "invalid-byte",
+    ],
 )
-def test_every_record_the_adapter_reads_is_redacted(tmp_path: Path, body: str) -> None:
-    """The adapter reads a trufflehog file through `safe_load_ndjson_file`,
-    which flattens arrays at any depth; whatever it reads, the redaction must
-    have reached (review of #1329: two of these shapes kept their secrets)."""
+def test_every_record_the_adapter_reads_is_redacted(
+    tmp_path: Path, body: str | bytes
+) -> None:
+    """The adapter reads a trufflehog file through `safe_load_ndjson_file`:
+    decoded dropping bytes that are not UTF-8, split with str.splitlines(),
+    and arrays flattened at any depth. Whatever it reads, the redaction must
+    have reached (reviews of #1329: these shapes kept their secrets)."""
     path = tmp_path / "trufflehog.json"
-    path.write_bytes(body.encode())
+    path.write_bytes(body if isinstance(body, bytes) else body.encode())
     assert len(list(safe_load_ndjson_file(path))) >= 2  # meta: the adapter reads them
 
     redact_secret_outputs([path])

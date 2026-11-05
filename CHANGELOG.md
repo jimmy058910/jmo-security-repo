@@ -224,8 +224,11 @@ All notable changes to JMo Security will be documented in this file.
   `PR.AA-01` for credentials, `PR.PS-01` for IaC (in place of both `PR.IP-1` and
   `PR.PT-3`), `ID.RA-01` for SAST, DAST, CWE-79 and CWE-89 (in place of `DE.CM-8`, which
   has no CSF 2.0 counterpart), and `PR.DS-01`, `PR.DS-02` and `GV.SC-03` as before, with
-  their own text. A report or policy that matched an old id needs the new one. The PCI DSS
-  entries are not yet checked against the PCI SSC's document.
+  their own text. A report or policy that matched an old id needs the new one. In
+  COMPLIANCE_SUMMARY.md the SAST, DAST, CWE-79 and CWE-89 mappings now count under IDENTIFY,
+  not DETECT, and `jmo diff` against a scan stored before this shows those findings'
+  compliance as changed. The PCI DSS entries are not yet checked against the PCI SSC's
+  document.
 - **Breaking. A finding names its target, and the same finding in two repositories is two
   findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
   `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a
@@ -505,11 +508,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
-- **Storing a scan in history no longer writes in the scanned repository (#1582).** Its
-  `git status` refreshed stale stat data in the repository's index and wrote it back through
-  `.git/index.lock`, so a scan changed `.git/index`, and a git command run there at the same
-  moment failed with "Unable to create ... index.lock: File exists" (measured). It now runs
-  `git --no-optional-locks status`, which reads the same answer and writes nothing.
+- **Storing a scan in history no longer takes a lock in the scanned repository (#1582).**
+  Its `git status` took `.git/index.lock` on every run, and when the index's stat data was
+  stale it wrote the index back through it, so a scan changed `.git/index`, and a git
+  command run there at the same moment failed with "Unable to create ... index.lock: File
+  exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
+  answer and takes no lock.
 - **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,
