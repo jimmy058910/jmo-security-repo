@@ -91,7 +91,6 @@ services:
       trends analyze
       --db /home/jmo/.jmo/history.db
       --days 30
-      --format text
     networks:
       - jmo-network
     depends_on:
@@ -107,10 +106,9 @@ services:
       - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
-      trends show
+      history list
       --db /home/jmo/.jmo/history.db
       --limit 10
-      --format text
     networks:
       - jmo-network
 
@@ -126,8 +124,7 @@ services:
     command: >
       trends regressions
       --db /home/jmo/.jmo/history.db
-      --days 7
-      --format text
+      --last 7
     networks:
       - jmo-network
     depends_on:
@@ -145,7 +142,6 @@ services:
     command: >
       trends score
       --db /home/jmo/.jmo/history.db
-      --format text
     networks:
       - jmo-network
 
@@ -163,8 +159,7 @@ services:
     command: >
       trends developers
       --db /home/jmo/.jmo/history.db
-      --limit 10
-      --format text
+      --top 10
     networks:
       - jmo-network
 
@@ -178,8 +173,9 @@ services:
       - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
-      trends export html
-      --output /results/trends-report.html
+      trends analyze
+      --db /home/jmo/.jmo/history.db
+      --export-html /results/trends-report.html
     networks:
       - jmo-network
     depends_on:
@@ -195,8 +191,9 @@ services:
       - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
-      trends export json
-      --output /results/trends-data.json
+      trends analyze
+      --db /home/jmo/.jmo/history.db
+      --export-json /results/trends-data.json
     networks:
       - jmo-network
     depends_on:
@@ -212,8 +209,9 @@ services:
       - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
-      trends export csv
-      --output /results/trends-data.csv
+      trends analyze
+      --db /home/jmo/.jmo/history.db
+      --export-csv /results/trends-data.csv
     networks:
       - jmo-network
     depends_on:
@@ -229,15 +227,17 @@ services:
       - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
-      trends export prometheus
-      --output /results/metrics.prom
+      trends analyze
+      --db /home/jmo/.jmo/history.db
+      --export-prometheus /results/metrics.prom
     networks:
       - jmo-network
     depends_on:
       - analyze-trends
 
   # ============================================================================
-  # Compare Scans Service (Interactive Diff)
+  # Compare Scans Service: the last two scans side by side. `trends compare`
+  # takes two scan ids, which `jmo history list` names.
   # ============================================================================
   compare-scans:
     image: jmo-security:latest
@@ -246,31 +246,14 @@ services:
       - jmo-history:/home/jmo/.jmo
       - ./results:/results
     command: >
-      trends compare
+      trends analyze
       --db /home/jmo/.jmo/history.db
-      --scan-id-1 latest
-      --scan-id-2 previous
-      --format text
+      --last 2
+      --verbose
     networks:
       - jmo-network
     depends_on:
       - scan-current
-
-  # ============================================================================
-  # Remediation Velocity Service
-  # ============================================================================
-  remediation-velocity:
-    image: jmo-security:latest
-    container_name: jmo-remediation-velocity
-    volumes:
-      - jmo-history:/home/jmo/.jmo
-      - ./results:/results
-    command: >
-      trends velocity
-      --days 30
-      --format text
-    networks:
-      - jmo-network
 
   # ============================================================================
   # Full Workflow Service (Scan + Analyze + Export)
@@ -288,9 +271,9 @@ services:
     command: >
       -c "
       jmo scan --repo /scan --history-db /home/jmo/.jmo/history.db --results-dir /results/latest --human-logs &&
-      jmo trends analyze --db /home/jmo/.jmo/history.db --days 30 --format text &&
-      jmo trends export html --output /results/trends-report.html &&
-      jmo trends export json --output /results/trends-data.json &&
+      jmo trends analyze --db /home/jmo/.jmo/history.db --days 30
+      --export-html /results/trends-report.html
+      --export-json /results/trends-data.json &&
       echo 'Full workflow complete! Check results/ for outputs.'
       "
     networks:

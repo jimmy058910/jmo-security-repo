@@ -111,7 +111,7 @@ networks:
 #    'ghcr.io/jimmy058910/jmo-security:<version>' in all services
 #
 # 5. Scan with fewer tools for a faster run:
-#    Add '--tools trufflehog semgrep trivy' to BOTH scan commands
+#    Add '--tools trufflehog opengrep trivy' to BOTH scan commands
 #    (baseline and current must use the same tool list for a meaningful diff)
 #
 # 6. Run only baseline scan:

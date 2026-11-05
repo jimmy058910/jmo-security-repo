@@ -47,7 +47,7 @@ security-diff:
     - echo "📊 Scanning baseline ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME)..."
     - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - git checkout $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-    - jmo scan --repo . --tools trufflehog semgrep trivy --results-dir $BASELINE_DIR/
+    - jmo scan --repo . --tools trufflehog opengrep trivy --results-dir $BASELINE_DIR/
     - echo "✅ Baseline scan complete"
 
     # ========================================================================
@@ -55,7 +55,7 @@ security-diff:
     # ========================================================================
     - echo "📊 Scanning current ($CI_COMMIT_REF_NAME)..."
     - git checkout $CI_COMMIT_REF_NAME
-    - jmo scan --repo . --tools trufflehog semgrep trivy --results-dir $CURRENT_DIR/
+    - jmo scan --repo . --tools trufflehog opengrep trivy --results-dir $CURRENT_DIR/
     - echo "✅ Current scan complete"
 
     # ========================================================================
@@ -177,11 +177,11 @@ security-diff-informational:
     - echo "📊 Scanning baseline ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME)..."
     - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - git checkout $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-    - jmo scan --repo . --tools trufflehog semgrep trivy --results-dir $BASELINE_DIR/
+    - jmo scan --repo . --tools trufflehog opengrep trivy --results-dir $BASELINE_DIR/
     - echo "✅ Baseline scan complete"
     - echo "📊 Scanning current ($CI_COMMIT_REF_NAME)..."
     - git checkout $CI_COMMIT_REF_NAME
-    - jmo scan --repo . --tools trufflehog semgrep trivy --results-dir $CURRENT_DIR/
+    - jmo scan --repo . --tools trufflehog opengrep trivy --results-dir $CURRENT_DIR/
     - jmo diff $BASELINE_DIR/ $CURRENT_DIR/ --format md --output diff.md --severity CRITICAL,HIGH,MEDIUM
     - jmo diff $BASELINE_DIR/ $CURRENT_DIR/ --format json --output diff.json
     # Informational only - no gating
