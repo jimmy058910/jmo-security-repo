@@ -565,6 +565,11 @@ All notable changes to JMo Security will be documented in this file.
   in the table's order, as LOKI does. Measured with signature-base's own
   `SUSP_Known_Type_Cloaked_as_JPG` at the pin: 1 of 6 renamed samples reported before,
   6 of 6 after, and a real JPEG in neither.
+- **The wheel and the Docker image carry the CommonFinding schema (#1350).** The
+  validator looked for it under `docs/schemas/`, which only a source checkout has, so
+  an installed JMo skipped validation. The build copies it into the wheel beside the
+  validator, `.dockerignore` lets `docs/schemas/` into the image, and the image's build
+  now fails if the schema cannot be loaded.
 - **A JMo installed from its wheel can install and check tools (#1511).** The wheel
   (`uv tool install`, pipx, pip) carried no `versions.yaml`, so every `jmo tools` command,
   `tools check` included, raised `FileNotFoundError`. The build now copies the pins into

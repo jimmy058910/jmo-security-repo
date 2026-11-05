@@ -20,6 +20,9 @@ from setuptools.command.build_py import build_py
 SHIPPED = {
     # The tool pins every `jmo tools` command reads (#1511).
     "versions.yaml": "scripts/core/versions.yaml",
+    # The CommonFinding schema the report validates against (#1350); docs/ is
+    # its published home.
+    "docs/schemas/common_finding.v1.json": "scripts/core/schemas/common_finding.v1.json",
 }
 
 

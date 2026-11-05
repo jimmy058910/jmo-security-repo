@@ -37,6 +37,7 @@ PACKAGING_INPUTS = (
     "LICENSE-APACHE",
     "THIRD_PARTY_LICENSES.md",
     "versions.yaml",
+    "docs/schemas/common_finding.v1.json",
 )
 
 pytestmark = pytest.mark.slow
@@ -53,6 +54,7 @@ def wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     src = tmp_path_factory.mktemp("src")
     for name in PACKAGING_INPUTS:
         if (REPO_ROOT / name).is_file():
+            (src / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO_ROOT / name, src / name)
     shutil.copytree(
         REPO_ROOT / "scripts",
@@ -117,6 +119,41 @@ def test_the_wheel_carries_the_tool_pins(wheel: Path) -> None:
         assert "scripts/core/versions.yaml" in zf.namelist()
         packaged = zf.read("scripts/core/versions.yaml")
     assert packaged == (REPO_ROOT / "versions.yaml").read_bytes()
+
+
+def test_the_wheel_carries_the_findings_schema(wheel: Path) -> None:
+    """The CommonFinding schema ships as package data, byte for byte (#1350)."""
+    member = "scripts/core/schemas/common_finding.v1.json"
+    with zipfile.ZipFile(wheel) as zf:
+        assert member in zf.namelist()
+        packaged = zf.read(member)
+    schema = REPO_ROOT / "docs" / "schemas" / "common_finding.v1.json"
+    assert packaged == schema.read_bytes()
+
+
+def test_an_installed_wheel_loads_the_findings_schema(
+    installed_jmo: Path, tmp_path: Path
+) -> None:
+    """Before #1350 every installed JMo skipped schema validation: the
+    validator looked for the schema at a docs/ path only a checkout has."""
+    python = installed_jmo.with_name("python.exe" if os.name == "nt" else "python")
+    probe = subprocess.run(
+        [
+            str(python),
+            "-I",
+            "-c",
+            "from scripts.core.schema_validator import load_schema; "
+            "print(load_schema()['$id'])",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
+    assert probe.returncode == 0, probe.stderr
+    assert "common_finding" in probe.stdout
 
 
 def test_an_installed_wheel_resolves_a_tool_pin(
