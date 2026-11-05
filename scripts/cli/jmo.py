@@ -3199,49 +3199,6 @@ def cmd_scan(args) -> int:
         pass
     args._startup_tool_manager = _startup_tm
 
-    # Check for critical tool updates (non-blocking warning).
-    #
-    # Deliberately after `tools` is resolved: this used to run first and, with
-    # nothing to scope it, probed every tool in the registry - 32 `--version`
-    # subprocesses for a scan that requested one. A scan can only be affected by
-    # a tool it actually runs.
-    _warn_critical_updates(tools, manager=_startup_tm)
-
-    # Tool availability pre-flight (skipped in Docker mode). It offers to
-    # install, and it can be cancelled; it no longer removes a missing tool,
-    # whose row on every target it reads says `not installed`. The names were
-    # validated against the matrix above, so none carries anything a shell
-    # would read.
-    missing_tools: list[str] = []
-    if not os.environ.get("DOCKER_CONTAINER"):
-        tools, missing_tools = _check_scan_tools(args, tools)
-        if not tools:
-            # The user cancelled at the prompt, which logged it. An empty
-            # request never reaches here: it is refused above.
-            return 1
-        if getattr(args, "allow_missing_tools", False) and set(tools) <= set(
-            missing_tools
-        ):
-            # #811: the flag records an explicit empty result for a tool the
-            # user knows they lack. With every tool missing there is nothing to
-            # scan with, and a CI job asserting only `rc != 0` must be able to
-            # tell this from the failure it meant to test, so it is said.
-            _log(
-                args,
-                "ERROR",
-                "--allow-missing-tools was given, but none of the requested "
-                "tool(s) are installed, so there is nothing to scan with: "
-                f"{', '.join(missing_tools)}",
-            )
-            return 1
-        if missing_tools:
-            _log(
-                args,
-                "WARN",
-                f"{len(missing_tools)} requested tool(s) are not installed and "
-                f"will not run: {', '.join(missing_tools)}",
-            )
-
     # Create ScanConfig from effective settings
     scan_config = ScanConfig(
         tools=tools,
@@ -3287,6 +3244,54 @@ def cmd_scan(args) -> int:
 
     # Log scan targets summary
     _log(args, "INFO", f"Scan targets: {targets.summary()}")
+
+    # Startup asks only the requested tools some target here reads, so after
+    # discovery: zap's `-version` alone was 25.9 s of a repository scan's 44.5 s
+    # startup, where zap cannot run (#1581). A tool left out still gets its
+    # `skipped` row. A refused target is refused above, before any is asked.
+    from scripts.cli.scan_orchestrator import tools_read_by
+
+    runnable = tools_read_by(targets, tools)
+
+    # Check for critical tool updates (non-blocking warning). Scoped, as an
+    # empty list and never None: unscoped it probes every tool in the registry,
+    # 32 `--version` subprocesses for a scan that requested one.
+    _warn_critical_updates(runnable, manager=_startup_tm)
+
+    # Tool availability pre-flight (skipped in Docker mode). It offers to
+    # install, and it can be cancelled; it no longer removes a missing tool,
+    # whose row on every target it reads says `not installed`. The names were
+    # validated against the matrix above, so none carries anything a shell
+    # would read.
+    missing_tools: list[str] = []
+    if runnable and not os.environ.get("DOCKER_CONTAINER"):
+        checked, missing_tools = _check_scan_tools(args, runnable)
+        if not checked:
+            # The user cancelled at the prompt, which logged it.
+            return 1
+        if getattr(args, "allow_missing_tools", False) and set(runnable) <= set(
+            missing_tools
+        ):
+            # #811: the flag records an explicit empty result for a tool the
+            # user knows they lack. With every tool these targets read missing
+            # there is nothing to scan with, and a CI job asserting only
+            # `rc != 0` must be able to tell this from the failure it meant to
+            # test, so it is said.
+            _log(
+                args,
+                "ERROR",
+                "--allow-missing-tools was given, but none of the requested "
+                "tool(s) that read these targets are installed, so there is "
+                f"nothing to scan with: {', '.join(missing_tools)}",
+            )
+            return 1
+        if missing_tools:
+            _log(
+                args,
+                "WARN",
+                f"{len(missing_tools)} requested tool(s) are not installed and "
+                f"will not run: {', '.join(missing_tools)}",
+            )
 
     total_targets = (
         len(targets.repos)

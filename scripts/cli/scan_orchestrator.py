@@ -524,6 +524,26 @@ def _record_raised_scan(
         )
 
 
+def tools_read_by(targets: ScanTargets, tools: list[str]) -> list[str]:
+    """The `tools` that read a target type `targets` holds, in their order.
+    A tool outside it runs nowhere in this scan: its rows say `skipped`, and
+    startup asks it nothing (#1581). Against the types present together, not
+    each alone: nuclei reads no repository, but runs when the scan also has a
+    URL."""
+    read: set[str] = set()
+    for target_type, present in (
+        ("repo", targets.repos),
+        ("image", targets.images),
+        ("iac", targets.iac_files),
+        ("url", targets.urls),
+        ("gitlab", targets.gitlab_repos),
+        ("k8s", targets.k8s_resources),
+    ):
+        if present:
+            read.update(TOOL_SCAN_TYPES[target_type])
+    return [t for t in tools if t in read]
+
+
 class ScanOrchestrator:
     """
     Orchestrate multi-target security scans.
@@ -1309,17 +1329,7 @@ class ScanOrchestrator:
         # in isolation: nuclei is skipped on a repository, but runs if the same
         # scan also has URLs.
         if self.config.explicit_tools:
-            routed: set[str] = set()
-            for target_type, present in (
-                ("repo", targets.repos),
-                ("image", targets.images),
-                ("iac", targets.iac_files),
-                ("url", targets.urls),
-                ("gitlab", targets.gitlab_repos),
-                ("k8s", targets.k8s_resources),
-            ):
-                if present:
-                    routed.update(TOOL_SCAN_TYPES[target_type])
+            routed = set(tools_read_by(targets, tools))
             unrouted = [t for t in tools if t not in routed]
             if unrouted:
                 logger.warning(
