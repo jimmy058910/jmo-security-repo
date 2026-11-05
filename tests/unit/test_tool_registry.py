@@ -556,8 +556,8 @@ _PLATFORMS = ("linux", "macos", "windows")
 def _install_routes(tool: str, platform: str, monkeypatch, tmp_path) -> list[str]:
     """Drive `install_tool(tool)` as if on `platform`; return every route reached.
 
-    A route is a handler that would perform the install: pip, apt, an official
-    install script, the isolated venv, or a download whose URL the installer
+    A route is a handler that would perform the install: pip, the isolated
+    venv, or a download whose URL the installer
     resolved for `platform`. Every recorder reports failure, so install_tool
     walks its whole priority list and nothing is installed.
     """
@@ -586,8 +586,6 @@ def _install_routes(tool: str, platform: str, monkeypatch, tmp_path) -> list[str
 
     monkeypatch.setattr(installer, "_isolated_pip_install", recorder("isolated_venv"))
     monkeypatch.setattr(installer, "_install_pip", recorder("pip"))
-    monkeypatch.setattr(installer, "_install_apt", recorder("apt"))
-    monkeypatch.setattr(installer, "_install_via_script", recorder("install_script"))
     monkeypatch.setattr(installer, "_get_download_command", download)
     monkeypatch.setattr(installer, "_get_arch", lambda: "x86_64")
 
@@ -628,4 +626,18 @@ def test_a_binary_url_the_installer_cannot_key_leaves_no_route(monkeypatch, tmp_
     assert _install_routes("hadolint", "macos", monkeypatch, tmp_path) == []
     windows = _install_routes("hadolint", "windows", monkeypatch, tmp_path)
     assert len(windows) == 1
-    assert windows[0].endswith("/hadolint-Windows-x86_64.exe")
+    assert windows[0].endswith("/hadolint-windows-x86_64.exe")
+
+
+@pytest.mark.parametrize("platform", _PLATFORMS)
+@pytest.mark.parametrize("tool", ["trivy", "syft", "shellcheck"])
+def test_a_binary_tool_installs_only_from_its_pinned_release(
+    tool, platform, monkeypatch, tmp_path
+):
+    """Checksummed static binaries only (#1374): on Linux and macOS, apt
+    (shellcheck: the distribution's version, not the pin) and the upstream
+    install.sh fetched from `main` (trivy, syft) ran before the pinned
+    release download that `jmo tools install` checks against its sha256."""
+    routes = _install_routes(tool, platform, monkeypatch, tmp_path)
+
+    assert routes and all(r.startswith("download https://github.com/") for r in routes)

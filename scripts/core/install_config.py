@@ -33,18 +33,21 @@ MAX_CLEANUP_RETRIES = 3
 # ============================================================================
 # INSTALLATION METHOD PRIORITIES
 # ============================================================================
-# Installation method priorities per platform
-# "install_script" uses official install scripts from tool maintainers (most reliable)
-# "binary" downloads pre-built binaries from GitHub releases
+# Installation method priorities per platform: pip for the Python tool
+# (checkov, in its own venv), then the pinned release binary, checked against
+# its release's sha256 where the project publishes one.
 #
 # npm and brew are gone (v2.0.0). npm served only cdxgen; brew was the first
 # macOS choice and never honoured the pinned version (PINNED_INSTALL_METHODS
 # excludes it), so macOS now installs the same pinned binary as everyone else.
+# apt and the official install scripts went in #1374: apt installed the
+# distribution's shellcheck, not the pin, and the scripts (trivy, syft) were
+# fetched from `main` and run before the checked binary.
 
 INSTALL_PRIORITIES: dict[Platform, list[str]] = {
-    "linux": ["apt", "pip", "install_script", "binary"],
-    "macos": ["pip", "install_script", "binary"],
-    "windows": ["pip", "binary", "manual"],
+    "linux": ["pip", "binary"],
+    "macos": ["pip", "binary"],
+    "windows": ["pip", "binary"],
 }
 
 
@@ -202,11 +205,13 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "windows": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_windows_{arch_amd}.zip",
         "default": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_{os_lower}_{arch_amd}.tar.gz",
     },
-    # hadolint: "Linux-x86_64" (capital L, hyphen, lowercase arch)
-    # Windows provides .exe directly, Linux/macOS provide binary without extension
+    # hadolint: "hadolint-linux-x86_64", "hadolint-macos-arm64",
+    # "hadolint-windows-x86_64.exe" (v2.15.1's assets, listed 2026-11-05). The
+    # checksum file names them so, and is matched by name (#1374).
     "hadolint": {
-        "windows": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-Windows-x86_64.exe",
-        "default": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-{os}-{arch}",
+        "windows": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-windows-x86_64.exe",
+        "macos": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-macos-{arch}",
+        "default": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-linux-{arch}",
     },
     # shellcheck: lowercase "linux.x86_64" with dots
     # Windows is a single arch-less .zip - the {os_lower}.{arch_aarch} scheme
@@ -261,14 +266,32 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
 
 
 # ============================================================================
-# OFFICIAL INSTALL SCRIPTS
+# RELEASE CHECKSUMS (#1374)
 # ============================================================================
-# Official install scripts (preferred over direct binary downloads)
-# These are maintained by tool authors and handle platform detection correctly
+# Where each tool's release publishes the sha256 of its assets, in `sha256sum`
+# form (scripts/core/checksums.py). A download is checked against it before it
+# is extracted or installed; a mismatch, or an asset the file does not list,
+# fails the install and leaves the installed binary alone. {asset} is the
+# downloaded file's name, for a project that writes one file per asset.
+# Read at each pinned tag on 2026-11-05.
+CHECKSUM_URLS: dict[str, str] = {
+    "trivy": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_checksums.txt",
+    "syft": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_checksums.txt",
+    "trufflehog": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_checksums.txt",
+    "gitleaks": "https://github.com/gitleaks/gitleaks/releases/download/v{version}/gitleaks_{version}_checksums.txt",
+    "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_checksums.txt",
+    "hadolint": "https://github.com/hadolint/hadolint/releases/download/v{version}/checksums.sha256",
+    "osv-scanner": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_SHA256SUMS",
+    "opa": "https://github.com/open-policy-agent/opa/releases/download/v{version}/{asset}.sha256",
+}
 
-INSTALL_SCRIPTS: dict[str, str] = {
-    "trivy": "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh",
-    "syft": "https://raw.githubusercontent.com/anchore/syft/main/install.sh",
+# The tools whose project publishes no checksum file, and what it publishes
+# instead: `jmo tools install` installs them and says they were not verified.
+UNCHECKSUMMED: dict[str, str] = {
+    "zizmor": "zizmor publishes no checksums",
+    "shellcheck": "shellcheck publishes no checksums",
+    "opengrep": "opengrep publishes signatures (.sig), no checksums",
+    "zap": "ZAP publishes its checksums only in its release notes",
 }
 
 

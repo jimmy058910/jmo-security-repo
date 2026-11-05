@@ -1017,6 +1017,19 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Security
 
+- **`jmo tools install` checks each download against the sha256 its release publishes
+  (#1374).** It verified nothing, so an interrupted, redirected or tampered download was
+  installed and run as it was. Eight of the twelve downloaded tools publish a checksum
+  file (trivy, syft, trufflehog, gitleaks, nuclei, hadolint, osv-scanner, opa): the
+  download is checked before it is extracted or installed, and a mismatch, an asset the
+  file does not list, or a checksum file that cannot be fetched fails the install and
+  leaves the binary already installed alone. zizmor, shellcheck, opengrep and ZAP publish
+  no checksum file; they install with `[WARN] not verified: <why>` under their row. Every
+  binary now comes from its pinned release: Linux no longer installs shellcheck with
+  `apt` (the distribution's version, not the pin), and Linux and macOS no longer run
+  trivy's and syft's install scripts, which were fetched from their `main` branches.
+  hadolint's URLs use its release's own asset names. Measured with real installs from
+  GitHub at the pins: 8 verified, 4 reported unverified, 12 installed.
 - **The workflow `jmo wizard` generates uploads `results/summaries/`, not all of
   `results/` (#1329).** The raw trufflehog and gitleaks outputs under `results/individual-*/`
   hold every secret found in plaintext, and a CI artifact is readable by anyone who can read

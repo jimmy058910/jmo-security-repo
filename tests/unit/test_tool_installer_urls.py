@@ -11,11 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.core.install_config import (
-    BINARY_URLS,
-    INSTALL_PRIORITIES,
-    INSTALL_SCRIPTS,
-)
+from scripts.core.install_config import BINARY_URLS
 
 
 def _get_url_templates(url_config: str | dict[str, str]) -> list[str]:
@@ -158,9 +154,10 @@ class TestBinaryURLPatterns:
             arch_aarch="x86_64",
             trivy_arch="64bit",
         )
+        # The release's own name: its checksum file lists it so (#1374).
         assert url == (
             "https://github.com/hadolint/hadolint/releases/download/v2.12.0/"
-            "hadolint-Linux-x86_64"
+            "hadolint-linux-x86_64"
         )
 
     # Windows-specific URL tests
@@ -193,7 +190,7 @@ class TestBinaryURLPatterns:
         )
         assert url == (
             "https://github.com/hadolint/hadolint/releases/download/v2.12.0/"
-            "hadolint-Windows-x86_64.exe"
+            "hadolint-windows-x86_64.exe"
         )
 
     def test_trufflehog_url_windows(self):
@@ -222,50 +219,6 @@ class TestBinaryURLPatterns:
             "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.0/"
             "trufflehog_3.88.0_windows_amd64.tar.gz"
         )
-
-
-class TestInstallScripts:
-    """Test install script configuration."""
-
-    def test_install_scripts_are_https(self):
-        """All install scripts must use HTTPS."""
-        for tool, url in INSTALL_SCRIPTS.items():
-            assert url.startswith("https://"), (
-                f"{tool} install script uses insecure URL: {url}"
-            )
-
-    def test_install_scripts_are_raw_github(self):
-        """Install scripts should be from raw.githubusercontent.com."""
-        for tool, url in INSTALL_SCRIPTS.items():
-            assert "raw.githubusercontent.com" in url or "github.io" in url, (
-                f"{tool} install script URL may not be reliable: {url}"
-            )
-
-
-class TestInstallPriorities:
-    """Test installation method priority configuration."""
-
-    def test_linux_has_all_methods(self):
-        """Linux should have all major install methods."""
-        linux_methods = INSTALL_PRIORITIES["linux"]
-        assert "apt" in linux_methods
-        assert "pip" in linux_methods
-        assert "binary" in linux_methods
-        assert "install_script" in linux_methods
-
-    def test_install_script_before_binary(self):
-        """Install script should be tried before binary (more reliable)."""
-        linux_methods = INSTALL_PRIORITIES["linux"]
-        script_idx = linux_methods.index("install_script")
-        binary_idx = linux_methods.index("binary")
-        assert script_idx < binary_idx, (
-            "install_script should be tried before binary download"
-        )
-
-    def test_windows_has_no_install_script(self):
-        """Windows doesn't support bash install scripts."""
-        windows_methods = INSTALL_PRIORITIES["windows"]
-        assert "install_script" not in windows_methods
 
 
 class TestArchPlaceholders:
