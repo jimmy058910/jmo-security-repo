@@ -622,7 +622,17 @@ class ToolManager:
             List of ToolStatus for missing tools
         """
         statuses = self.check_matrix(tools)
-        return [s for s in statuses.values() if needs_install(s)]
+        # A dependency tool's engine is an extra of JMo, which `jmo tools
+        # install` cannot add. Absent, it stays off the default list, so a bare
+        # install's `jmo tools install` succeeds where the extra has no wheel
+        # (decided 2026-11-05, #1577); `tools check`, the scan's row and
+        # `jmo tools install <tool>` named still say why.
+        return [
+            s
+            for s in statuses.values()
+            if needs_install(s)
+            and not (s.name in DEPENDENCY_MISSING and not s.installed)
+        ]
 
     def get_outdated_tools(
         self,
