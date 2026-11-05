@@ -530,6 +530,9 @@ class ToolDescriptor:
     # budget. Per run: a tool with two invocations (trufflehog's tree and
     # history) holds it twice when both run at once.
     memory_mb: int = 0
+    # One run of it at a time in a scan, whatever its targets: zap allows one
+    # process per home directory, and every zap run uses JMo's (#1422).
+    exclusive: bool = False
     binary: str | None = None  # executable name, where it differs from `name`
     # Ships inside JMo and runs on its interpreter: nothing to install, pin or
     # update, and its version is JMo's own.
@@ -1751,9 +1754,10 @@ def _native_repo(ctx: ScanContext) -> list[Invocation]:
 ZAP_PLAN = ".zap-plan.yaml"
 
 
-# TODO(issue-#1422): one ZAP home for every run: a second concurrent zap fails; heap fixed
+# TODO(issue-#1422): the heap is fixed
 def zap_home() -> Path:
-    """The ZAP home every zap run uses: JMo's own, reused across runs.
+    """The ZAP home every zap run uses: JMo's own, reused across runs. ZAP
+    allows one process per home, so zap is `exclusive`: one run at a time.
 
     ZAP stores `-config` values and plan settings in its home's `config.xml`
     and applies them to every later run: an upstream proxy stored there sent a
@@ -2594,6 +2598,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="zap",
             memory_mb=600,  # java 554 MB: the 512 MB heap and the JVM
+            # A second run on JMo's ZAP home exits 1 with no report (#1422).
+            exclusive=True,
             invocations={"url": _zap_url},
             version_probe=VersionProbe(
                 # Not the JVM's version, a four-part version's first three

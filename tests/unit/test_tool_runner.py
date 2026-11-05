@@ -2076,3 +2076,90 @@ class TestFailureKind:
 
         assert result.status == "success"
         assert not (elsewhere / "out.json").exists()
+
+
+class TestExclusiveRunsOneAtATime:
+    """An `exclusive` tool runs once at a time in the process, whatever runner
+    holds it: two URL targets each have a runner, and zap allows one process
+    per home (#1422). The command is a stand-in that refuses to start while
+    another run holds its lock directory, as ZAP refuses a home in use."""
+
+    LOCKED_RUN = (
+        "import os, sys, time\n"
+        "try:\n"
+        "    os.mkdir(sys.argv[1])\n"
+        "except FileExistsError:\n"
+        "    sys.exit(7)\n"
+        "time.sleep(0.6)\n"
+        "os.rmdir(sys.argv[1])\n"
+    )
+
+    def _two_at_once(self, tmp_path, *, exclusive: bool) -> list[ToolResult]:
+        import threading
+
+        lock_dir = tmp_path / "in-use"
+        results: list[ToolResult] = []
+
+        def run() -> None:
+            tool = ToolDefinition(
+                name="zap",
+                command=[sys.executable, "-c", self.LOCKED_RUN, str(lock_dir)],
+                output_file=None,
+                timeout=30,
+                ok_return_codes=(0,),
+                capture_stdout=True,
+                exclusive=exclusive,
+            )
+            results.append(ToolRunner([tool]).run_tool(tool))
+
+        threads = [threading.Thread(target=run) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        return results
+
+    def test_two_exclusive_runs_never_overlap(self, tmp_path):
+        results = self._two_at_once(tmp_path, exclusive=True)
+        assert [r.status for r in results] == ["success", "success"], results
+        # Each counts from its own start, not from when it began to wait.
+        assert all(r.duration < 5 for r in results)
+
+    def test_without_it_the_two_overlap(self, tmp_path):
+        """The control: the stand-in does catch two runs at once."""
+        results = self._two_at_once(tmp_path, exclusive=False)
+        assert sorted(r.returncode for r in results) == [0, 7], results
+
+    def test_ctrl_c_ends_the_wait_and_the_run_never_starts(self, tmp_path):
+        import threading
+
+        from scripts.core import tool_runner
+
+        marker = tmp_path / "started"
+        tool = ToolDefinition(
+            name="exclusive-under-test",
+            command=[sys.executable, "-c", f"open({str(marker)!r}, 'w')"],
+            output_file=None,
+            timeout=30,
+            exclusive=True,
+        )
+        held = tool_runner._exclusive(tool.name)
+        held.acquire()
+        results: list[ToolResult] = []
+        waiter = threading.Thread(
+            target=lambda: results.append(ToolRunner([tool]).run_tool(tool))
+        )
+        try:
+            waiter.start()
+            time.sleep(0.5)
+            assert waiter.is_alive(), "the run did not wait for the lock"
+            tool_runner.request_stop()
+            waiter.join(timeout=5)
+            assert not waiter.is_alive(), "Ctrl-C did not end the wait"
+        finally:
+            tool_runner.clear_stop()
+            held.release()
+            waiter.join(timeout=5)
+        assert results[0].failure == "interrupted"
+        assert results[0].duration == 0.0
+        assert not marker.exists()

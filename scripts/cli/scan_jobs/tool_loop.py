@@ -770,6 +770,7 @@ def run_tools(
             capture_stdout=inv.capture_stdout,
             cwd=inv.cwd,
             env=inv.env,
+            exclusive=_descriptor(tool).exclusive,
         )
 
     rows: TargetRows = {}

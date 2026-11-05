@@ -86,7 +86,8 @@ definition and sends its operations to `--url`; then it waits for the passive sc
 the active scan and writes `zap.json`. `per_tool.zap.timeout` is the plan's whole budget,
 so zap stops and reports before JMo's timeout. It runs with a ZAP home of JMo's own,
 `~/.jmo/zap-home`, which starts each run without the settings the last one stored, so a
-scan neither reads nor changes your `~/ZAP`. The scan stays inside the URL you give, its
+scan neither reads nor changes your `~/ZAP`. ZAP allows one process per home, so a scan
+with several URLs runs zap on them one at a time. The scan stays inside the URL you give, its
 path included; `127.0.0.1` and `localhost` are one host there. Before a run that spiders,
 JMo asks the URL once, following no redirect: when it answers with a redirect outside that
 scope, zap still runs, and its row reads `partly audited` and names where the site went,

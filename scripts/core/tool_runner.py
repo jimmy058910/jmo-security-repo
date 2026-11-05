@@ -90,6 +90,9 @@ class ToolDefinition:
     # Merged over the environment `run_tool` builds (osv-scanner's database
     # directory, Phase 4).
     env: Mapping[str, str] | None = None
+    # One run of this tool at a time in the process, whatever runner holds it
+    # (`ToolDescriptor.exclusive`: zap, #1422).
+    exclusive: bool = False
 
     @property
     def retry_config(self) -> RetryConfig:
@@ -184,6 +187,18 @@ def request_stop() -> int:
 
 def stop_requested() -> bool:
     return _STOP.is_set()
+
+
+# One lock per `exclusive` tool, held for the whole of a run, retries included:
+# two zap runs on JMo's one ZAP home, and the second exits 1 with no report
+# (#1422).
+_EXCLUSIVE: dict[str, threading.Lock] = {}
+_EXCLUSIVE_LOCK = threading.Lock()
+
+
+def _exclusive(name: str) -> threading.Lock:
+    with _EXCLUSIVE_LOCK:
+        return _EXCLUSIVE.setdefault(name, threading.Lock())
 
 
 def clear_stop() -> None:
@@ -565,6 +580,21 @@ class ToolRunner:
         return "crash"
 
     def run_tool(self, tool: ToolDefinition) -> ToolResult:
+        """Run one tool (`_run_tool`); an `exclusive` one waits until no other
+        run of it is running, and its duration and timeout count from when it
+        starts. Ctrl-C ends the wait: the run never starts."""
+        if not tool.exclusive:
+            return self._run_tool(tool)
+        lock = _exclusive(tool.name)
+        while not lock.acquire(timeout=0.25):
+            if _STOP.is_set():
+                return self._interrupted(tool, 0, None)
+        try:
+            return self._run_tool(tool)
+        finally:
+            lock.release()
+
+    def _run_tool(self, tool: ToolDefinition) -> ToolResult:
         """
         Run a single tool with timeout and typed retry support.
 
@@ -882,15 +912,16 @@ class ToolRunner:
 
     @staticmethod
     def _interrupted(
-        tool: ToolDefinition, attempt: int, start_time: float
+        tool: ToolDefinition, attempt: int, start_time: float | None
     ) -> ToolResult:
-        """The result of a run Ctrl-C stopped, or kept from starting."""
+        """The result of a run Ctrl-C stopped, or kept from starting (no
+        `start_time`: it never started)."""
         return ToolResult(
             tool=tool.name,
             status="error",
             returncode=-1,
             attempts=attempt,
-            duration=time.perf_counter() - start_time,
+            duration=0.0 if start_time is None else time.perf_counter() - start_time,
             output_file=tool.output_file,
             capture_stdout=tool.capture_stdout,
             error_message="stopped by Ctrl-C",
