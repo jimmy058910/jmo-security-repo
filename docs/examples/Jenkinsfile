@@ -188,8 +188,9 @@ pipeline {
 
     post {
         always {
-            // Archive scan results
-            archiveArtifacts artifacts: "${RESULTS_DIR}/**/*", allowEmptyArchive: true
+            // Archive the reports, not the raw tool outputs beside them, which
+            // hold source text (docs/RESULTS_GUIDE.md)
+            archiveArtifacts artifacts: "${RESULTS_DIR}/summaries/**/*", allowEmptyArchive: true
 
             // Publish HTML dashboard
             publishHTML([

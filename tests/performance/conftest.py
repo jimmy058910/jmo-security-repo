@@ -73,7 +73,11 @@ def benchmark_findings() -> list[dict[str, Any]]:
                 ],
                 "cisControlsV8_1": [{"control": "16.1", "title": "Test", "ig": "IG1"}],
                 "nistCsf2_0": [
-                    {"function": "PR", "category": "PR.DS", "subcategory": "PR.DS-1"}
+                    {
+                        "function": "PROTECT",
+                        "category": "PR.DS",
+                        "subcategory": "PR.DS-01",
+                    }
                 ],
                 "pciDss4_0": [{"requirement": "6.2.4", "priority": "P1"}],
                 "mitreAttack": [

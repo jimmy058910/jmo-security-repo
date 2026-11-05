@@ -50,6 +50,7 @@ from scripts.core.scan_timings import (
     ToolRun,
     read_scan_root,
 )
+from scripts.core.secret_output_redaction import redact_secret_outputs
 from scripts.core.tool_diagnostics import (
     ToolDiagnostic,
     extract_tool_diagnostics,
@@ -750,6 +751,17 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                 # true. This generic one stays as a genuine backstop, because a
                 # future can fail for reasons unrelated to its callable.
                 logger.error(f"Unexpected error loading findings: {e}", exc_info=True)
+
+    # Every output has been read: take the secrets out of the secret scanners'
+    # raw outputs, an earlier scan's withheld ones included (#1329). Each secret
+    # gets a stand-in of its own, so a later report pairs as this one did.
+    redact_secret_outputs(
+        path
+        for target_dir in target_dirs
+        if target_dir.is_dir()
+        for target in sorted(p for p in target_dir.iterdir() if p.is_dir())
+        for path in sorted(target.glob("*.json"))
+    )
 
     # Normalize `location.path` to one repo-relative POSIX spelling **before**
     # dedup (#861). Order matters: dedup keys on `id`, and `id` is derived from

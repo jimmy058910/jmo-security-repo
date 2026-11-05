@@ -495,6 +495,51 @@ def _drop_legacy_target_type_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+#: v1.1.0's migration added these by ALTER TABLE, with an index on the second;
+#: nothing ever read or wrote either, and the schema above has neither (#1337).
+#: Each is dropped by its own statements, index first: SQLite refuses to drop an
+#: indexed column.
+_V1_1_0_COLUMN_DROPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("scans", "scan_notes", ("ALTER TABLE scans DROP COLUMN scan_notes",)),
+    (
+        "findings",
+        "finding_status",
+        (
+            "DROP INDEX IF EXISTS idx_findings_status",
+            "ALTER TABLE findings DROP COLUMN finding_status",
+        ),
+    ),
+)
+
+
+def _drop_v1_1_0_columns(conn: sqlite3.Connection) -> bool:
+    """Drop `scans.scan_notes` and `findings.finding_status`, in place.
+
+    Any database `jmo history migrate` ran on has them, a fresh one included:
+    every database records 1.0.0 (`SCHEMA_VERSION`), so v1.1.0's migration
+    runs first. Two schemas for one version is the drift the legacy-shape tests
+    exist to catch. DROP COLUMN, never a rebuild (`findings` cascades from
+    `scans`). A 1.1.0 table's `CHECK(profile)` blocks only the drop of
+    `profile` itself, not these (measured, SQLite 3.53.1). `init_database`
+    calls this inside the same transaction as the other drops, so a drop
+    SQLite refuses leaves the database as it was.
+
+    Returns:
+        True when either column was present and has been dropped.
+    """
+    dropped = False
+    for table, column, statements in _V1_1_0_COLUMN_DROPS:
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            continue
+        if not conn.in_transaction:
+            conn.execute("BEGIN")
+        for statement in statements:
+            conn.execute(statement)
+        dropped = True
+    return dropped
+
+
 def _has_own_config(conn: sqlite3.Connection) -> bool:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(scan_tool_runs)")}
     return "own_config" in columns
@@ -568,9 +613,11 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
                 conn.execute(view_sql)
 
             # A database written before v2.0.0 still has the profile column,
-            # and one written before PR B3 still has target_type.
+            # and one written before PR B3 still has target_type. One that
+            # `jmo history migrate` ran on has v1.1.0's two as well.
             _drop_legacy_profile_column(conn)
             _drop_legacy_target_type_column(conn)
+            _drop_v1_1_0_columns(conn)
 
             # Record schema version
             cursor = conn.cursor()
@@ -644,9 +691,13 @@ def get_git_context(repo_path: Path) -> dict[str, Any]:
         )
         tag = result.stdout.strip() if result.returncode == 0 else None
 
-        # Check for uncommitted changes - still needs separate call
+        # Check for uncommitted changes - still needs separate call. Without
+        # --no-optional-locks, every status takes .git/index.lock to refresh
+        # the index, and writes the index back when its stat data is stale:
+        # the scan wrote in the repository it read, and a git command run
+        # there meanwhile failed on the lock (#1582).
         result = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "--no-optional-locks", "status", "--porcelain"],
             cwd=repo_path,
             capture_output=True,
             # Porcelain output is file paths, which are UTF-8 and often

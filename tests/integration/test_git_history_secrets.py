@@ -69,11 +69,12 @@ def scan(tmp_path: Path, monkeypatch):
         lambda name, *a, **k: real.get(name),
     )
 
-    def run(repo: Path) -> tuple[list[dict], list[dict]]:
+    def run(repo: Path, command: str = "scan") -> tuple[list[dict], list[dict]]:
+        """`jmo scan` then `jmo report`, or (`command="ci"`) `jmo ci`."""
         results = tmp_path / f"results-{repo.name}"
         argv = [
             "jmo",
-            "scan",
+            command,
             "--repo",
             str(repo),
             "--tools",
@@ -85,12 +86,16 @@ def scan(tmp_path: Path, monkeypatch):
             "--history-db",
             str(tmp_path / "history.db"),
         ]
-        with patch.object(sys, "argv", argv):
-            assert jmo.cmd_scan(jmo.parse_args()) == 0
-        with patch.object(
-            sys, "argv", ["jmo", "report", str(results), "--config", str(cfg)]
-        ):
-            assert jmo.cmd_report(jmo.parse_args()) == 0
+        if command == "ci":
+            with patch.object(sys, "argv", argv):
+                assert jmo.cmd_ci(jmo.parse_args()) == 0
+        else:
+            with patch.object(sys, "argv", argv):
+                assert jmo.cmd_scan(jmo.parse_args()) == 0
+            with patch.object(
+                sys, "argv", ["jmo", "report", str(results), "--config", str(cfg)]
+            ):
+                assert jmo.cmd_report(jmo.parse_args()) == 0
         findings = json.loads((results / "summaries" / "findings.json").read_bytes())
         meta = json.loads((results / ".scan_metadata.json").read_bytes())
         return findings["findings"], meta["tool_runs"]
@@ -105,6 +110,43 @@ def _by_tool(findings: list[dict]) -> dict[str, list[tuple[str, str | None]]]:
         commit = (f.get("secretContext") or {}).get("commit")
         out[f["tool"]["name"]].append((f["location"]["path"], commit))
     return {t: sorted(v, key=str) for t, v in out.items()}
+
+
+def _raw_records(tmp_path: Path) -> str:
+    """What each secret scanner wrote, a line per record, for an assertion
+    message: where, which rule or detector, which commit, and which secret by
+    the stand-in the report put in its place, never the secret. A flake that
+    reported one key twice (#1561) left nothing to tell a duplicate record
+    from two distinct ones."""
+    lines = []
+    for path in sorted(tmp_path.glob("results-*/individual-repos/*/*.json")):
+        tool = path.name.split(".", 1)[0]
+        if tool == "trufflehog":
+            for text in path.read_text(encoding="utf-8").splitlines():
+                if not text.strip():
+                    continue
+                r = json.loads(text)
+                data = r.get("SourceMetadata", {}).get("Data", {})
+                where = data.get("Git") or data.get("Filesystem") or {}
+                lines.append(
+                    f"{path.name}: {where.get('file')}:{where.get('line')} "
+                    f"{r.get('DetectorName')}/{r.get('DecoderName')} "
+                    f"commit={str(where.get('commit', ''))[:12]} raw={r.get('Raw')}"
+                )
+        elif tool == "gitleaks":
+            document = json.loads(path.read_bytes())
+            for run in document.get("runs", []):
+                for r in run.get("results", []):
+                    for loc in r.get("locations", []):
+                        phys = loc.get("physicalLocation", {})
+                        region = phys.get("region", {})
+                        lines.append(
+                            f"{path.name}: {phys.get('artifactLocation', {}).get('uri')}"
+                            f":{region.get('startLine')} {r.get('ruleId')} "
+                            f"commit={r.get('partialFingerprints', {}).get('commitSha', '')[:12]} "
+                            f"snippet={region.get('snippet', {}).get('text')}"
+                        )
+    return "raw records:\n" + "\n".join(lines)
 
 
 def _key_text(pem: bytes) -> str:
@@ -132,7 +174,7 @@ def test_a_key_only_in_history_is_reported_with_its_commit(tmp_path, scan) -> No
     expected = sorted(
         [("keys/live.pem", added_live), ("old/gone.pem", added_gone)], key=str
     )
-    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected)
+    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected), _raw_records(tmp_path)
     for f in findings:
         context = f["secretContext"]
         assert set(context) == {"commit", "author", "date"}, context
@@ -151,6 +193,49 @@ def test_a_key_only_in_history_is_reported_with_its_commit(tmp_path, scan) -> No
     }
 
 
+def test_no_key_text_is_left_in_results_after_jmo_ci(tmp_path, scan) -> None:
+    """The raw outputs under `individual-repos/` held every key the scanners
+    found, the deleted one included, and a results directory gets uploaded as
+    a CI artifact (#1329). Once the report has read them, none is left; a
+    second report reads the same findings from what is."""
+    repo = tmp_path / "leaky"
+    (repo / "keys").mkdir(parents=True)
+    (repo / "old").mkdir()
+    live, gone = generated_rsa_pem(), generated_rsa_pem()
+    (repo / "keys" / "live.pem").write_bytes(live)
+    git_commit_all(repo, "add live key", DAY1)
+    (repo / "old" / "gone.pem").write_bytes(gone)
+    git_commit_all(repo, "add gone key", DAY2)
+    (repo / "old" / "gone.pem").unlink()
+    git_commit_all(repo, "delete gone key", DAY3)
+
+    findings, rows = scan(repo, command="ci")
+
+    assert {(r["tool"], r["state"], r["invocations"]) for r in rows} == {
+        (tool, "ran", 2) for tool in TOOLS
+    }
+    results = tmp_path / f"results-{repo.name}"
+    outputs = sorted(p.name for p in (results / "individual-repos" / "leaky").iterdir())
+    for tool in TOOLS:
+        assert {f"{tool}.json", f"{tool}.git.json"} <= set(outputs), outputs
+    left = {
+        p.relative_to(results).as_posix()
+        for p in results.rglob("*")
+        if p.is_file()
+        and any(_key_text(key).encode() in p.read_bytes() for key in (live, gone))
+    }
+    assert left == set()
+
+    with patch.object(sys, "argv", ["jmo", "report", str(results)]):
+        assert jmo.cmd_report(jmo.parse_args()) == 0
+    again = json.loads((results / "summaries" / "findings.json").read_bytes())
+    assert sorted(f["id"] for f in again["findings"]) == sorted(
+        f["id"] for f in findings
+    )
+    assert _by_tool(again["findings"]) == _by_tool(findings)
+    assert len(findings) == 2 * len(TOOLS)
+
+
 def test_a_line_inserted_above_a_committed_key_still_leaves_one(tmp_path, scan) -> None:
     """The tree says line 2, history says line 1 (measured): the pairing is by
     the secret, not by where it is."""
@@ -164,7 +249,9 @@ def test_a_line_inserted_above_a_committed_key_still_leaves_one(tmp_path, scan) 
 
     findings, _ = scan(repo)
 
-    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
     # It keeps the tree's location.
     assert {f["location"]["startLine"] for f in findings} == {2}
 
@@ -193,7 +280,9 @@ def test_a_shallow_clone_names_no_commit_rather_than_the_wrong_one(
 
     findings, rows = scan(clone)
 
-    assert _by_tool(findings) == {tool: [("keys/live.pem", None)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("keys/live.pem", None)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
     for row in rows:
         assert (row["state"], row["invocations"]) == ("ran", 1), row
         assert row["detail"].startswith("history not read: a shallow clone,"), row
@@ -210,7 +299,9 @@ def test_a_path_a_url_would_misread_still_reads_history(tmp_path, scan) -> None:
 
     findings, rows = scan(repo)
 
-    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("keys/live.pem", added)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
     assert {(r["tool"], r["state"], r["invocations"]) for r in rows} == {
         (tool, "ran", 2) for tool in TOOLS
     }
@@ -243,7 +334,9 @@ def test_history_is_excluded_like_the_tree(tmp_path, scan) -> None:
 
     findings, _ = scan(repo)
 
-    assert _by_tool(findings) == {tool: [("kept.pem", added)] for tool in TOOLS}
+    assert _by_tool(findings) == {tool: [("kept.pem", added)] for tool in TOOLS}, (
+        _raw_records(tmp_path)
+    )
 
 
 def test_a_key_rotated_in_place_is_two_findings(tmp_path, scan) -> None:
@@ -265,5 +358,5 @@ def test_a_key_rotated_in_place_is_two_findings(tmp_path, scan) -> None:
     findings, _ = scan(repo)
 
     expected = sorted([("keys/live.pem", first), ("keys/live.pem", None)], key=str)
-    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected)
+    assert _by_tool(findings) == dict.fromkeys(TOOLS, expected), _raw_records(tmp_path)
     assert len({f["id"] for f in findings}) == len(findings)
