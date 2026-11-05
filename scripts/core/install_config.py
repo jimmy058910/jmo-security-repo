@@ -195,10 +195,13 @@ YARA_RULES_REVIEWED: dict[str, Review] = {
 #                  "aarch64" on Linux, "arm64" on macOS (opengrep)
 
 BINARY_URLS: dict[str, str | dict[str, str]] = {
-    # trivy: Windows uses lowercase "windows-64bit.zip", Linux uses "Linux-64bit.tar.gz"
+    # trivy: "Linux-64bit.tar.gz", "macOS-ARM64.tar.gz", "windows-64bit.zip"
+    # (v0.74.0's assets, listed 2026-11-05). No Windows arm64 build, so Windows
+    # is the 64bit one on every architecture, as for zizmor.
     "trivy": {
-        "windows": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_windows-{trivy_arch}.zip",
-        "default": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_{os}-{trivy_arch}.tar.gz",
+        "windows": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_windows-64bit.zip",
+        "macos": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_macOS-{trivy_arch}.tar.gz",
+        "default": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_Linux-{trivy_arch}.tar.gz",
     },
     # Anchore syft: Windows uses .zip, Linux uses .tar.gz
     "syft": {
@@ -255,11 +258,18 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "windows": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_windows_{arch_amd}.exe",
         "default": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_{os_lower}_{arch_amd}",
     },
-    "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
+    # nuclei: "linux_amd64.zip", "macOS_arm64.zip", "windows_amd64.zip"
+    # (v3.11.1's assets, listed 2026-11-05). No Windows arm64 build.
+    "nuclei": {
+        "windows": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_windows_amd64.zip",
+        "macos": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_macOS_{arch_amd}.zip",
+        "default": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_linux_{arch_amd}.zip",
+    },
     # OPA (Open Policy Agent): "opa_linux_amd64" (no version in filename)
     # Windows provides .exe directly, Linux/macOS provide binary without extension
     "opa": {
-        "windows": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_windows_{arch_amd}.exe",
+        # No Windows arm64 build (v1.21.4's assets, listed 2026-11-05).
+        "windows": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_windows_amd64.exe",
         "default": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_{os_lower}_{arch_amd}",
     },
 }

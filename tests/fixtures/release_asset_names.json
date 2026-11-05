@@ -1,0 +1,263 @@
+{
+  "gitleaks": {
+    "assets": [
+      "gitleaks_{version}_checksums.txt",
+      "gitleaks_{version}_darwin_arm64.tar.gz",
+      "gitleaks_{version}_darwin_x64.tar.gz",
+      "gitleaks_{version}_linux_arm64.tar.gz",
+      "gitleaks_{version}_linux_armv6.tar.gz",
+      "gitleaks_{version}_linux_armv7.tar.gz",
+      "gitleaks_{version}_linux_x32.tar.gz",
+      "gitleaks_{version}_linux_x64.tar.gz",
+      "gitleaks_{version}_windows_arm64.zip",
+      "gitleaks_{version}_windows_x32.zip",
+      "gitleaks_{version}_windows_x64.zip"
+    ],
+    "captured_at": "8.30.1",
+    "repo": "gitleaks/gitleaks"
+  },
+  "hadolint": {
+    "assets": [
+      "checksums.sha256",
+      "hadolint-linux-arm64",
+      "hadolint-linux-x86_64",
+      "hadolint-macos-arm64",
+      "hadolint-macos-x86_64",
+      "hadolint-windows-x86_64.exe"
+    ],
+    "captured_at": "2.15.1",
+    "repo": "hadolint/hadolint"
+  },
+  "nuclei": {
+    "assets": [
+      "nuclei_{version}_checksums.txt",
+      "nuclei_{version}_linux_386.zip",
+      "nuclei_{version}_linux_amd64.zip",
+      "nuclei_{version}_linux_arm.zip",
+      "nuclei_{version}_linux_arm64.zip",
+      "nuclei_{version}_macOS_amd64.zip",
+      "nuclei_{version}_macOS_arm64.zip",
+      "nuclei_{version}_windows_386.zip",
+      "nuclei_{version}_windows_amd64.zip"
+    ],
+    "captured_at": "3.11.1",
+    "repo": "projectdiscovery/nuclei"
+  },
+  "opa": {
+    "assets": [
+      "opa_darwin_amd64",
+      "opa_darwin_amd64.sha256",
+      "opa_darwin_arm64",
+      "opa_darwin_arm64.sha256",
+      "opa_darwin_arm64_static",
+      "opa_darwin_arm64_static.sha256",
+      "opa_linux_amd64",
+      "opa_linux_amd64.sha256",
+      "opa_linux_amd64_static",
+      "opa_linux_amd64_static.sha256",
+      "opa_linux_arm64",
+      "opa_linux_arm64.sha256",
+      "opa_linux_arm64_static",
+      "opa_linux_arm64_static.sha256",
+      "opa_windows_amd64.exe",
+      "opa_windows_amd64.exe.sha256"
+    ],
+    "captured_at": "1.21.4",
+    "repo": "open-policy-agent/opa"
+  },
+  "opengrep": {
+    "assets": [
+      "opengrep-core_linux_aarch64.tar.gz",
+      "opengrep-core_linux_x86.tar.gz",
+      "opengrep-core_osx_aarch64.tar.gz",
+      "opengrep-core_osx_x86.tar.gz",
+      "opengrep-core_windows_x86.zip",
+      "opengrep_manylinux_aarch64",
+      "opengrep_manylinux_aarch64.cert",
+      "opengrep_manylinux_aarch64.sig",
+      "opengrep_manylinux_x86",
+      "opengrep_manylinux_x86.cert",
+      "opengrep_manylinux_x86.sig",
+      "opengrep_musllinux_aarch64",
+      "opengrep_musllinux_aarch64.cert",
+      "opengrep_musllinux_aarch64.sig",
+      "opengrep_musllinux_x86",
+      "opengrep_musllinux_x86.cert",
+      "opengrep_musllinux_x86.sig",
+      "opengrep_osx_arm64",
+      "opengrep_osx_arm64.cert",
+      "opengrep_osx_arm64.sig",
+      "opengrep_osx_x86",
+      "opengrep_osx_x86.cert",
+      "opengrep_osx_x86.sig",
+      "opengrep_windows_x86.exe",
+      "opengrep_windows_x86.exe.cert",
+      "opengrep_windows_x86.exe.sig"
+    ],
+    "captured_at": "1.32.0",
+    "repo": "opengrep/opengrep"
+  },
+  "osv-scanner": {
+    "assets": [
+      "multiple.intoto.jsonl",
+      "osv-scanner_SHA256SUMS",
+      "osv-scanner_darwin_amd64",
+      "osv-scanner_darwin_arm64",
+      "osv-scanner_linux_amd64",
+      "osv-scanner_linux_arm64",
+      "osv-scanner_windows_amd64.exe",
+      "osv-scanner_windows_arm64.exe"
+    ],
+    "captured_at": "2.7.0",
+    "repo": "google/osv-scanner"
+  },
+  "shellcheck": {
+    "assets": [
+      "shellcheck-v{version}.darwin.aarch64.tar.gz",
+      "shellcheck-v{version}.darwin.aarch64.tar.xz",
+      "shellcheck-v{version}.darwin.x86_64.tar.gz",
+      "shellcheck-v{version}.darwin.x86_64.tar.xz",
+      "shellcheck-v{version}.linux.aarch64.tar.gz",
+      "shellcheck-v{version}.linux.aarch64.tar.xz",
+      "shellcheck-v{version}.linux.armv6hf.tar.gz",
+      "shellcheck-v{version}.linux.armv6hf.tar.xz",
+      "shellcheck-v{version}.linux.riscv64.tar.gz",
+      "shellcheck-v{version}.linux.riscv64.tar.xz",
+      "shellcheck-v{version}.linux.x86_64.tar.gz",
+      "shellcheck-v{version}.linux.x86_64.tar.xz",
+      "shellcheck-v{version}.zip"
+    ],
+    "captured_at": "0.11.0",
+    "repo": "koalaman/shellcheck"
+  },
+  "syft": {
+    "assets": [
+      "syft_{version}_checksums.txt",
+      "syft_{version}_checksums.txt.sigstore.json",
+      "syft_{version}_darwin_amd64.sbom",
+      "syft_{version}_darwin_amd64.tar.gz",
+      "syft_{version}_darwin_arm64.sbom",
+      "syft_{version}_darwin_arm64.tar.gz",
+      "syft_{version}_linux_amd64.deb",
+      "syft_{version}_linux_amd64.rpm",
+      "syft_{version}_linux_amd64.sbom",
+      "syft_{version}_linux_amd64.tar.gz",
+      "syft_{version}_linux_arm64.deb",
+      "syft_{version}_linux_arm64.rpm",
+      "syft_{version}_linux_arm64.sbom",
+      "syft_{version}_linux_arm64.tar.gz",
+      "syft_{version}_linux_ppc64le.deb",
+      "syft_{version}_linux_ppc64le.rpm",
+      "syft_{version}_linux_ppc64le.sbom",
+      "syft_{version}_linux_ppc64le.tar.gz",
+      "syft_{version}_linux_riscv64.deb",
+      "syft_{version}_linux_riscv64.rpm",
+      "syft_{version}_linux_riscv64.sbom",
+      "syft_{version}_linux_riscv64.tar.gz",
+      "syft_{version}_linux_s390x.deb",
+      "syft_{version}_linux_s390x.rpm",
+      "syft_{version}_linux_s390x.sbom",
+      "syft_{version}_linux_s390x.tar.gz",
+      "syft_{version}_windows_amd64.sbom",
+      "syft_{version}_windows_amd64.zip",
+      "syft_{version}_windows_arm64.sbom",
+      "syft_{version}_windows_arm64.zip"
+    ],
+    "captured_at": "1.55.0",
+    "repo": "anchore/syft"
+  },
+  "trivy": {
+    "assets": [
+      "bom.json",
+      "trivy_{version}_FreeBSD-64bit.tar.gz",
+      "trivy_{version}_FreeBSD-64bit.tar.gz.sigstore.json",
+      "trivy_{version}_Linux-32bit.deb",
+      "trivy_{version}_Linux-32bit.deb.sigstore.json",
+      "trivy_{version}_Linux-32bit.rpm",
+      "trivy_{version}_Linux-32bit.rpm.sigstore.json",
+      "trivy_{version}_Linux-32bit.tar.gz",
+      "trivy_{version}_Linux-32bit.tar.gz.sigstore.json",
+      "trivy_{version}_Linux-64bit.deb",
+      "trivy_{version}_Linux-64bit.deb.sigstore.json",
+      "trivy_{version}_Linux-64bit.rpm",
+      "trivy_{version}_Linux-64bit.rpm.sigstore.json",
+      "trivy_{version}_Linux-64bit.tar.gz",
+      "trivy_{version}_Linux-64bit.tar.gz.sigstore.json",
+      "trivy_{version}_Linux-ARM.deb",
+      "trivy_{version}_Linux-ARM.deb.sigstore.json",
+      "trivy_{version}_Linux-ARM.rpm",
+      "trivy_{version}_Linux-ARM.rpm.sigstore.json",
+      "trivy_{version}_Linux-ARM.tar.gz",
+      "trivy_{version}_Linux-ARM.tar.gz.sigstore.json",
+      "trivy_{version}_Linux-ARM64.deb",
+      "trivy_{version}_Linux-ARM64.deb.sigstore.json",
+      "trivy_{version}_Linux-ARM64.rpm",
+      "trivy_{version}_Linux-ARM64.rpm.sigstore.json",
+      "trivy_{version}_Linux-ARM64.tar.gz",
+      "trivy_{version}_Linux-ARM64.tar.gz.sigstore.json",
+      "trivy_{version}_Linux-PPC64LE.deb",
+      "trivy_{version}_Linux-PPC64LE.deb.sigstore.json",
+      "trivy_{version}_Linux-PPC64LE.rpm",
+      "trivy_{version}_Linux-PPC64LE.rpm.sigstore.json",
+      "trivy_{version}_Linux-PPC64LE.tar.gz",
+      "trivy_{version}_Linux-PPC64LE.tar.gz.sigstore.json",
+      "trivy_{version}_Linux-s390x.deb",
+      "trivy_{version}_Linux-s390x.deb.sigstore.json",
+      "trivy_{version}_Linux-s390x.rpm",
+      "trivy_{version}_Linux-s390x.rpm.sigstore.json",
+      "trivy_{version}_Linux-s390x.tar.gz",
+      "trivy_{version}_Linux-s390x.tar.gz.sigstore.json",
+      "trivy_{version}_checksums.txt",
+      "trivy_{version}_checksums.txt.sigstore.json",
+      "trivy_{version}_macOS-64bit.tar.gz",
+      "trivy_{version}_macOS-64bit.tar.gz.sigstore.json",
+      "trivy_{version}_macOS-ARM64.tar.gz",
+      "trivy_{version}_macOS-ARM64.tar.gz.sigstore.json",
+      "trivy_{version}_windows-64bit.zip",
+      "trivy_{version}_windows-64bit.zip.sigstore.json"
+    ],
+    "captured_at": "0.74.0",
+    "repo": "aquasecurity/trivy"
+  },
+  "trufflehog": {
+    "assets": [
+      "trufflehog_{version}_checksums.txt",
+      "trufflehog_{version}_checksums.txt.pem",
+      "trufflehog_{version}_checksums.txt.sig",
+      "trufflehog_{version}_darwin_amd64.tar.gz",
+      "trufflehog_{version}_darwin_arm64.tar.gz",
+      "trufflehog_{version}_linux_amd64.tar.gz",
+      "trufflehog_{version}_linux_arm64.tar.gz",
+      "trufflehog_{version}_windows_amd64.tar.gz",
+      "trufflehog_{version}_windows_arm64.tar.gz"
+    ],
+    "captured_at": "3.99.7",
+    "repo": "trufflesecurity/trufflehog"
+  },
+  "zap": {
+    "assets": [
+      "ZAP_2_17_0_unix.sh",
+      "ZAP_2_17_0_windows-x32.exe",
+      "ZAP_2_17_0_windows.exe",
+      "ZAP_{version}.dmg",
+      "ZAP_{version}_Core.zip",
+      "ZAP_{version}_Crossplatform.zip",
+      "ZAP_{version}_Linux.tar.gz",
+      "ZAP_{version}_aarch64.dmg",
+      "bom.json"
+    ],
+    "captured_at": "2.17.0",
+    "repo": "zaproxy/zaproxy"
+  },
+  "zizmor": {
+    "assets": [
+      "zizmor-aarch64-apple-darwin.tar.gz",
+      "zizmor-aarch64-unknown-linux-gnu.tar.gz",
+      "zizmor-x86_64-apple-darwin.tar.gz",
+      "zizmor-x86_64-pc-windows-msvc.zip",
+      "zizmor-x86_64-unknown-linux-gnu.tar.gz"
+    ],
+    "captured_at": "1.31.1",
+    "repo": "zizmorcore/zizmor"
+  }
+}
