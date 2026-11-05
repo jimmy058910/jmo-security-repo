@@ -164,6 +164,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-venv \
     git \
     ca-certificates \
     jq \
@@ -196,9 +197,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python security tools one by one for better error visibility
-# Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.30 && \
+# checkov in a virtual environment of its own (#1436), the shape `jmo tools
+# install` gives it. Installed over the system's packages, it needs pip to
+# replace a Debian-packaged dependency, which pip cannot uninstall: an Ubuntu
+# 26.04 base failed here on `packaging` ("no RECORD file"). A venv never has to.
+RUN python3 -m venv /opt/checkov && \
+    /opt/checkov/bin/pip install --no-cache-dir checkov==3.3.30 && \
+    ln -s /opt/checkov/bin/checkov /usr/local/bin/checkov && \
     checkov --version && \
     echo "✓ checkov installed"
 
@@ -208,8 +213,8 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.17.2 &
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+    && find /usr/local/lib/python3* /opt/checkov -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/local/lib/python3* /opt/checkov -type f -name '*.pyc' -delete 2>/dev/null || true
 
 # Copy compiled binaries from builder stage
 COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
