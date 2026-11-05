@@ -16,6 +16,7 @@ import yaml
 from scripts.core.rule_bundle import BUNDLE_DIR
 from scripts.core.secret_value_rules import (
     CREDENTIAL_CWES,
+    MESSAGE_SECRET_METAVARS,
     SECRET_LIKE_RULE_ID,
     SECRET_VALUE_RULES,
     is_secret_value_finding,
@@ -90,3 +91,33 @@ def test_a_finding_is_secret_class_by_its_rule_or_its_cwe(
     rule_id: str, cwes: object, expected: bool
 ) -> None:
     assert is_secret_value_finding(rule_id, cwes) is expected
+
+
+def _message_metavars(rule: dict) -> set[str]:
+    return set(re.findall(r"\$[A-Z_][A-Z0-9_]*", str(rule.get("message", ""))))
+
+
+@pytest.mark.parametrize(
+    "rule_id", sorted(i for i, v in SECRET_VALUE_RULES.items() if v)
+)
+def test_a_listed_rule_whose_message_interpolates_says_which_metavariables_hold_it(
+    rule_id: str,
+) -> None:
+    """opengrep fills `$NAME` in a rule's message with what it matched, so a
+    message can carry the secret itself (measured: secrets-in-config-file's
+    `$VALUE`, python-logger-credential-disclosure's `$FORMAT_STRING`). Each
+    listed rule whose message interpolates says which of those hold the secret,
+    () for none, so the adapter redacts exactly those."""
+    interpolated = _message_metavars(BUNDLE[rule_id])
+    if not interpolated:
+        assert rule_id not in MESSAGE_SECRET_METAVARS
+        return
+    assert rule_id in MESSAGE_SECRET_METAVARS, (rule_id, sorted(interpolated))
+    assert set(MESSAGE_SECRET_METAVARS[rule_id]) <= interpolated
+
+
+def test_the_measured_interpolations_are_listed() -> None:
+    """Meta-guard on the parse above."""
+    assert MESSAGE_SECRET_METAVARS[
+        "yaml.kubernetes.security.secrets-in-config-file.secrets-in-config-file"
+    ] == ("$VALUE",)
