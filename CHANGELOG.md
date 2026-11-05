@@ -981,9 +981,19 @@ All notable changes to JMo Security will be documented in this file.
 - **The workflow `jmo wizard` generates uploads `results/summaries/`, not all of
   `results/` (#1329).** The raw trufflehog and gitleaks outputs under `results/individual-*/`
   hold every secret found in plaintext, and a CI artifact is readable by anyone who can read
-  the run. Both GitHub Actions templates, and the 22 CI examples in the docs (GitHub Actions,
-  GitLab and Jenkins), now upload the summaries, which never hold a secret. The raw outputs
-  are still written in plaintext; #1329 stays open for that.
+  the run. Both GitHub Actions templates, and the CI examples in the docs (GitHub Actions,
+  GitLab and Jenkins), now upload the summaries, which hold no secret scanner's raw output.
+  They still quote source text: a finding's `context.snippet`, and an opengrep finding's
+  `raw`, quote the code it matched, a hard-coded secret included.
+- **A report takes the secrets out of the secret scanners' raw outputs once it has read
+  them (#1329).** `trufflehog.json`, `gitleaks.json` and their `.git.json` history files
+  held every secret found, deleted ones included. `jmo report` and `jmo ci` now replace
+  each with a stand-in of its own (`jmo-redacted:` and a digest keyed for that report
+  alone), in every such file under `results/individual-*/`, an earlier scan's included.
+  Equal secrets get equal stand-ins, so a second report on the same directory reads the
+  same findings, tree and history still paired. A file that cannot be rewritten is named
+  at WARNING and the report goes on. A `jmo scan` with no report after it leaves the
+  outputs as the tools wrote them.
 - **The release's image scan runs a pinned `aquasecurity/trivy-action` (#1294).** It was
   `@master`, a branch that moves on every upstream push, of an action whose tags were
   hijacked on 2026-03-19; it is now v0.36.0 by commit SHA, which installs trivy v0.70.0. The

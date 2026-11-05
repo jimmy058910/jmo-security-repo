@@ -69,11 +69,12 @@ def scan(tmp_path: Path, monkeypatch):
         lambda name, *a, **k: real.get(name),
     )
 
-    def run(repo: Path) -> tuple[list[dict], list[dict]]:
+    def run(repo: Path, command: str = "scan") -> tuple[list[dict], list[dict]]:
+        """`jmo scan` then `jmo report`, or (`command="ci"`) `jmo ci`."""
         results = tmp_path / f"results-{repo.name}"
         argv = [
             "jmo",
-            "scan",
+            command,
             "--repo",
             str(repo),
             "--tools",
@@ -85,12 +86,16 @@ def scan(tmp_path: Path, monkeypatch):
             "--history-db",
             str(tmp_path / "history.db"),
         ]
-        with patch.object(sys, "argv", argv):
-            assert jmo.cmd_scan(jmo.parse_args()) == 0
-        with patch.object(
-            sys, "argv", ["jmo", "report", str(results), "--config", str(cfg)]
-        ):
-            assert jmo.cmd_report(jmo.parse_args()) == 0
+        if command == "ci":
+            with patch.object(sys, "argv", argv):
+                assert jmo.cmd_ci(jmo.parse_args()) == 0
+        else:
+            with patch.object(sys, "argv", argv):
+                assert jmo.cmd_scan(jmo.parse_args()) == 0
+            with patch.object(
+                sys, "argv", ["jmo", "report", str(results), "--config", str(cfg)]
+            ):
+                assert jmo.cmd_report(jmo.parse_args()) == 0
         findings = json.loads((results / "summaries" / "findings.json").read_bytes())
         meta = json.loads((results / ".scan_metadata.json").read_bytes())
         return findings["findings"], meta["tool_runs"]
@@ -149,6 +154,49 @@ def test_a_key_only_in_history_is_reported_with_its_commit(tmp_path, scan) -> No
     assert {(r["tool"], r["state"], r["invocations"]) for r in rows} == {
         (tool, "ran", 2) for tool in TOOLS
     }
+
+
+def test_no_key_text_is_left_in_results_after_jmo_ci(tmp_path, scan) -> None:
+    """The raw outputs under `individual-repos/` held every key the scanners
+    found, the deleted one included, and a results directory gets uploaded as
+    a CI artifact (#1329). Once the report has read them, none is left; a
+    second report reads the same findings from what is."""
+    repo = tmp_path / "leaky"
+    (repo / "keys").mkdir(parents=True)
+    (repo / "old").mkdir()
+    live, gone = generated_rsa_pem(), generated_rsa_pem()
+    (repo / "keys" / "live.pem").write_bytes(live)
+    git_commit_all(repo, "add live key", DAY1)
+    (repo / "old" / "gone.pem").write_bytes(gone)
+    git_commit_all(repo, "add gone key", DAY2)
+    (repo / "old" / "gone.pem").unlink()
+    git_commit_all(repo, "delete gone key", DAY3)
+
+    findings, rows = scan(repo, command="ci")
+
+    assert {(r["tool"], r["state"], r["invocations"]) for r in rows} == {
+        (tool, "ran", 2) for tool in TOOLS
+    }
+    results = tmp_path / f"results-{repo.name}"
+    outputs = sorted(p.name for p in (results / "individual-repos" / "leaky").iterdir())
+    for tool in TOOLS:
+        assert {f"{tool}.json", f"{tool}.git.json"} <= set(outputs), outputs
+    left = {
+        p.relative_to(results).as_posix()
+        for p in results.rglob("*")
+        if p.is_file()
+        and any(_key_text(key).encode() in p.read_bytes() for key in (live, gone))
+    }
+    assert left == set()
+
+    with patch.object(sys, "argv", ["jmo", "report", str(results)]):
+        assert jmo.cmd_report(jmo.parse_args()) == 0
+    again = json.loads((results / "summaries" / "findings.json").read_bytes())
+    assert sorted(f["id"] for f in again["findings"]) == sorted(
+        f["id"] for f in findings
+    )
+    assert _by_tool(again["findings"]) == _by_tool(findings)
+    assert len(findings) == 2 * len(TOOLS)
 
 
 def test_a_line_inserted_above_a_committed_key_still_leaves_one(tmp_path, scan) -> None:

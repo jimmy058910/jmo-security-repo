@@ -147,6 +147,17 @@ in your home. A version check (`opengrep --version`, JMo's version probe) still
 creates an empty `~/.opengrep/semgrep.log`. Before you upload a results
 directory as a CI artifact, treat it as you would the code itself.
 
+**The secret scanners' raw outputs hold every secret they found until a report
+reads them.** That is `trufflehog.json`, `gitleaks.json` and, from git history,
+`trufflehog.git.json` and `gitleaks.git.json`, deleted secrets included. `jmo report`
+(and `jmo ci`, which runs it) then replaces each secret in them with a stand-in,
+`jmo-redacted:` and a digest keyed for that report alone. Equal secrets get equal
+stand-ins, so a later report still pairs each secret's tree and history findings. A `jmo scan`
+with no report after it leaves them as the tools wrote them. Upload `summaries/`,
+never the whole results directory. `summaries/` is not free of source text either:
+a finding's `context.snippet`, and an opengrep finding's `raw`, quote the code it
+matched, so a rule that matches a hard-coded secret quotes that secret.
+
 Each target's folder is unique within its type. When two targets would share a
 folder name, they are told apart: repositories each by their parent folder
 (`alice__app`, `bob__app`), IaC files each by their type (`cloudformation__main`,
