@@ -83,6 +83,20 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.osv_scanner_adapter",
         "class": "OsvScannerAdapter",
     },
+    "syft": {"module": "scripts.core.adapters.syft_adapter", "class": "SyftAdapter"},
+    "jmo_native": {
+        "module": "scripts.core.adapters.jmo_native_adapter",
+        "class": "JmoNativeAdapter",
+    },
+    "yara_x": {
+        "module": "scripts.core.adapters.yara_x_adapter",
+        "class": "YaraXAdapter",
+    },
+    "zap": {"module": "scripts.core.adapters.zap_adapter", "class": "ZapAdapter"},
+    "nuclei": {
+        "module": "scripts.core.adapters.nuclei_adapter",
+        "class": "NucleiAdapter",
+    },
 }
 
 

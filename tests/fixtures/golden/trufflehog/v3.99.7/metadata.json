@@ -1,0 +1,29 @@
+{
+  "tool": "trufflehog",
+  "version": "3.99.7",
+  "generated_at": "2026-11-05T14:34:05.566056+00:00",
+  "finding_count": 1,
+  "raw_output_hash": "db6e20112503",
+  "binary": "trufflehog",
+  "binary_sha256": "6d0bac530e0cd46a6c0afca6eb2102b34706aa84faec14b987f2941314ceb02a",
+  "recipe": {
+    "samples": [
+      "credential-patterns"
+    ],
+    "url": null,
+    "prepared": "_trufflehog_key"
+  },
+  "target": {
+    "samples": [
+      "credential-patterns"
+    ],
+    "files": {
+      "config.py": "0fed1d3f32f25725d4f24df1e9125723cea319c65c44ae2605eed12fc7f94179",
+      "deploy.pem": "bb6281e3da7a3a64503ec48b6178a75087a744ba6c8bf3376cf68f5e81410c92"
+    }
+  },
+  "config": {},
+  "command": "jmo scan --repo /golden/target --tools trufflehog --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it",
+  "stripped": "Every credential-bearing field (the trufflehog adapter's SECRET_BEARING_FIELDS) reads '<removed by generate_golden.py>': the key was generated for this capture, and no key enters the tree. The adapter's findings are the same with and without them."
+}

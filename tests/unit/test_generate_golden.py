@@ -171,6 +171,57 @@ def test_the_json_escaped_spelling_of_the_work_directory_is_rewritten_too(
     assert json.dumps(str(work))[1:-1] not in captured.raw.decode()
 
 
+def test_the_raw_output_is_what_the_whitespace_hooks_would_commit(
+    tmp_path, monkeypatch
+) -> None:
+    # trailing-whitespace and end-of-file-fixer rewrote zap's report and three
+    # outputs with no final newline (measured): a fixture the hooks change no
+    # longer matches its recorded hash. Whitespace at a line's end is never
+    # inside a JSON string, so removing it changes no value.
+    def raw(work: Path) -> bytes:
+        return (
+            json.dumps(_hadolint_raw(work), indent=2).replace(",\n", ",   \n").encode()
+        )
+
+    captured, _ = _capture(tmp_path, monkeypatch, FakeJmo(raw))
+
+    assert captured.raw.endswith(b"\n")
+    assert not any(line != line.rstrip() for line in captured.raw.decode().splitlines())
+    assert len(captured.findings) == 2
+
+
+def test_the_capture_home_reads_as_the_placeholder_home(tmp_path, monkeypatch) -> None:
+    # syft records its Go and Maven caches under HOME (measured, 1.55.0), and a
+    # HOME given with --home is not under the work directory.
+    home = tmp_path / "prepared-home"
+
+    def raw(work: Path) -> list[dict]:
+        found = _hadolint_raw(work)
+        found[0]["message"] = f"cache {home / 'go' / 'pkg' / 'mod'}"
+        return found
+
+    monkeypatch.setattr(gg, "run_jmo", FakeJmo(raw))
+    captured = gg.capture("hadolint", home=home, work=(tmp_path / "work").resolve())
+
+    assert str(home) not in captured.raw.decode()
+    assert f"{gg.PLACEHOLDER}/home" in captured.raw.decode()
+
+
+def test_a_capture_naming_the_developers_own_home_is_refused(
+    tmp_path, monkeypatch
+) -> None:
+    developer = tmp_path / "developer"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: developer))
+
+    def raw(work: Path) -> list[dict]:
+        found = _hadolint_raw(work)
+        found[0]["message"] = f"cache {developer / '.cache' / 'trivy'}"
+        return found
+
+    with pytest.raises(gg.CaptureError, match="home"):
+        _capture(tmp_path, monkeypatch, FakeJmo(raw))
+
+
 def test_a_row_that_did_not_run_is_refused_naming_its_state(
     tmp_path, monkeypatch
 ) -> None:

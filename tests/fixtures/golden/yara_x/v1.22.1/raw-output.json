@@ -1,0 +1,28 @@
+[
+  {
+    "rule": "JMO_Canary_Test",
+    "namespace": "canary",
+    "tags": [],
+    "meta": {
+      "author": "JMo Security test suite",
+      "description": "A string only JMo's tests write"
+    },
+    "strings": [
+      "$canary"
+    ],
+    "file": "/golden/target/node_modules/left-pad/index.js"
+  },
+  {
+    "rule": "JMO_Canary_Test",
+    "namespace": "canary",
+    "tags": [],
+    "meta": {
+      "author": "JMo Security test suite",
+      "description": "A string only JMo's tests write"
+    },
+    "strings": [
+      "$canary"
+    ],
+    "file": "/golden/target/src/index.js"
+  }
+]

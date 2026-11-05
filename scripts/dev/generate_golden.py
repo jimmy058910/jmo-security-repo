@@ -304,14 +304,26 @@ def run_adapter(tool: str, raw_output_path: Path) -> list[dict[str, Any]]:
     return found
 
 
-def _rewrite(raw: bytes, work: Path) -> bytes:
-    """The work directory as PLACEHOLDER, in its plain and its JSON spelling."""
+def _rewrite(raw: bytes, work: Path, home: Path | None = None) -> bytes:
+    """The capture HOME as `PLACEHOLDER/home`, then the work directory as
+    PLACEHOLDER, each in its plain and its JSON spelling. The HOME goes first:
+    one given with --home is outside the work directory (syft records its Go
+    and Maven caches under it), and the default one is inside it."""
     text = raw.decode("utf-8")
-    plain = str(work)
-    escaped = json.dumps(plain)[1:-1]
-    for spelling in (escaped, plain):
-        text = text.replace(spelling, PLACEHOLDER)
+    pairs = [(home.resolve(), f"{PLACEHOLDER}/home")] if home else []
+    for path, placeholder in [*pairs, (work, PLACEHOLDER)]:
+        plain = str(path)
+        for spelling in (json.dumps(plain)[1:-1], plain):
+            text = text.replace(spelling, placeholder)
     return text.encode("utf-8")
+
+
+def _as_committed(raw: bytes) -> bytes:
+    """The bytes pre-commit would commit: no whitespace at a line's end, and a
+    final newline (trailing-whitespace, end-of-file-fixer). A JSON string never
+    holds a raw line break, so this changes no value."""
+    lines = raw.decode("utf-8").splitlines()
+    return ("\n".join(line.rstrip(" \t") for line in lines) + "\n").encode("utf-8")
 
 
 def _scrub(tool: str, raw: bytes) -> bytes:
@@ -465,7 +477,13 @@ def capture(tool: str, *, home: Path, work: Path) -> Captured:
     if not output.is_file():
         raise CaptureError(f"{tool}: ran and wrote no {output.name}")
 
-    raw = _rewrite(output.read_bytes(), work)
+    raw = _as_committed(_rewrite(output.read_bytes(), work, home))
+    developer = str(Path.home())
+    named = {developer, json.dumps(developer)[1:-1]}
+    if len(developer) > 1 and any(n in raw.decode("utf-8") for n in named):
+        raise CaptureError(
+            f"{tool}: its output names your home directory, which a fixture must not"
+        )
     rewritten = work / "raw-output.json"
     rewritten.write_bytes(raw)
     findings = run_adapter(tool, rewritten)
@@ -494,7 +512,7 @@ def capture(tool: str, *, home: Path, work: Path) -> Captured:
     if binary is not None and binary.is_file() and binary.suffix != ".py":
         binary_name, binary_sha = binary.name, _sha256(binary)
     command = (
-        " ".join(["jmo", *(_rewrite(a.encode(), work).decode() for a in args)])
+        " ".join(["jmo", *(_rewrite(a.encode(), work, home).decode() for a in args)])
         + f"  (cwd: {PLACEHOLDER}; HOME: a capture home)"
     )
     return Captured(
@@ -506,7 +524,7 @@ def capture(tool: str, *, home: Path, work: Path) -> Captured:
         binary_sha256=binary_sha,
         target=target_record,
         command=command,
-        config=json.loads(_rewrite(json.dumps(per_tool).encode(), work)),
+        config=json.loads(_rewrite(json.dumps(per_tool).encode(), work, home)),
         metadata_extra=extra,
     )
 
@@ -536,7 +554,11 @@ def write_fixture(
         "target": captured.target,
         "config": captured.config,
         "command": captured.command,
-        "rewritten": f"the capture's working directory reads as {PLACEHOLDER}",
+        "rewritten": (
+            f"the capture's working directory reads as {PLACEHOLDER} and its HOME as "
+            f"{PLACEHOLDER}/home; no line ends in whitespace and the file ends in a "
+            "newline, as the pre-commit hooks commit it"
+        ),
         **captured.metadata_extra,
     }
     (out / "raw-output.json").write_bytes(captured.raw)

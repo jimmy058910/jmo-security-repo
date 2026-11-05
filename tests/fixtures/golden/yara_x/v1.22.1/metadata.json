@@ -1,0 +1,26 @@
+{
+  "tool": "yara-x",
+  "version": "1.22.1",
+  "generated_at": "2026-11-05T14:34:22.004782+00:00",
+  "finding_count": 2,
+  "raw_output_hash": "5c156f4b849e",
+  "binary": null,
+  "binary_sha256": null,
+  "recipe": {
+    "samples": [],
+    "url": null,
+    "prepared": "_yara_x_canary"
+  },
+  "target": {
+    "samples": [],
+    "files": {
+      "node_modules/left-pad/index.js": "3ee85a8001142c56fdf023196c62283f75e9c5b93e612a0365035bb3b0c705bf",
+      "src/index.js": "3ee85a8001142c56fdf023196c62283f75e9c5b93e612a0365035bb3b0c705bf"
+    }
+  },
+  "config": {
+    "rules_path": "/golden/canary.yar"
+  },
+  "command": "jmo scan --repo /golden/target --tools yara-x --config /golden/jmo.yml --results-dir /golden/results --history-db /golden/history.db --no-store-history  (cwd: /golden; HOME: a capture home)",
+  "rewritten": "the capture's working directory reads as /golden and its HOME as /golden/home; no line ends in whitespace and the file ends in a newline, as the pre-commit hooks commit it"
+}

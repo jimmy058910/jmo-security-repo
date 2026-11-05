@@ -1,0 +1,936 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "806e2d3094e897d6",
+    "ruleId": "SC2086",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 9,
+      "endLine": 9,
+      "startColumn": 5,
+      "endColumn": 14
+    },
+    "message": "Double quote to prevent globbing and word splitting.",
+    "title": "SC2086",
+    "description": "Double quote to prevent globbing and word splitting.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2086 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2086"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2086
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 9,
+      "endLine": 9,
+      "column": 5,
+      "endColumn": 14,
+      "level": "info",
+      "code": 2086,
+      "message": "Double quote to prevent globbing and word splitting.",
+      "fix": {
+        "replacements": [
+          {
+            "column": 5,
+            "endColumn": 5,
+            "endLine": 9,
+            "insertionPoint": "afterEnd",
+            "line": 9,
+            "precedence": 7,
+            "replacement": "\""
+          },
+          {
+            "column": 14,
+            "endColumn": 14,
+            "endLine": 9,
+            "insertionPoint": "beforeStart",
+            "line": 9,
+            "precedence": 7,
+            "replacement": "\""
+          }
+        ]
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "3a389de5044746de",
+    "ruleId": "SC2086",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 17,
+      "endLine": 17,
+      "startColumn": 4,
+      "endColumn": 10
+    },
+    "message": "Double quote to prevent globbing and word splitting.",
+    "title": "SC2086",
+    "description": "Double quote to prevent globbing and word splitting.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2086 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2086"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2086
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 17,
+      "endLine": 17,
+      "column": 4,
+      "endColumn": 10,
+      "level": "info",
+      "code": 2086,
+      "message": "Double quote to prevent globbing and word splitting.",
+      "fix": {
+        "replacements": [
+          {
+            "column": 4,
+            "endColumn": 4,
+            "endLine": 17,
+            "insertionPoint": "afterEnd",
+            "line": 17,
+            "precedence": 7,
+            "replacement": "\""
+          },
+          {
+            "column": 10,
+            "endColumn": 10,
+            "endLine": 17,
+            "insertionPoint": "beforeStart",
+            "line": 17,
+            "precedence": 7,
+            "replacement": "\""
+          }
+        ]
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "167031c97479c6cc",
+    "ruleId": "SC2034",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 20,
+      "endLine": 20,
+      "startColumn": 1,
+      "endColumn": 8
+    },
+    "message": "cleaned appears unused. Verify use (or export if used externally).",
+    "title": "SC2034",
+    "description": "cleaned appears unused. Verify use (or export if used externally).",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2034 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2034"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "warning",
+      "code": 2034
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 20,
+      "endLine": 20,
+      "column": 1,
+      "endColumn": 8,
+      "level": "warning",
+      "code": 2034,
+      "message": "cleaned appears unused. Verify use (or export if used externally).",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "c595f382dabfcdef",
+    "ruleId": "SC2001",
+    "severity": "INFO",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 20,
+      "endLine": 20,
+      "startColumn": 11,
+      "endColumn": 47
+    },
+    "message": "See if you can use ${variable//search/replace} instead.",
+    "title": "SC2001",
+    "description": "See if you can use ${variable//search/replace} instead.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2001 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2001"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "style",
+      "code": 2001
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 20,
+      "endLine": 20,
+      "column": 11,
+      "endColumn": 47,
+      "level": "style",
+      "code": 2001,
+      "message": "See if you can use ${variable//search/replace} instead.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "dcfa6ebd818ecc2a",
+    "ruleId": "SC2045",
+    "severity": "HIGH",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 23,
+      "endLine": 23,
+      "startColumn": 13,
+      "endColumn": 24
+    },
+    "message": "Iterating over ls output is fragile. Use globs.",
+    "title": "SC2045",
+    "description": "Iterating over ls output is fragile. Use globs.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2045 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2045"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "error",
+      "code": 2045
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 23,
+      "endLine": 23,
+      "column": 13,
+      "endColumn": 24,
+      "level": "error",
+      "code": 2045,
+      "message": "Iterating over ls output is fragile. Use globs.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "d68d56fc0185f836",
+    "ruleId": "SC2035",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 23,
+      "endLine": 23,
+      "startColumn": 18,
+      "endColumn": 19
+    },
+    "message": "Use ./*glob* or -- *glob* so names with dashes won't become options.",
+    "title": "SC2035",
+    "description": "Use ./*glob* or -- *glob* so names with dashes won't become options.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2035 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2035"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2035
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 23,
+      "endLine": 23,
+      "column": 18,
+      "endColumn": 19,
+      "level": "info",
+      "code": 2035,
+      "message": "Use ./*glob* or -- *glob* so names with dashes won't become options.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "185071e3062e79d8",
+    "ruleId": "SC2068",
+    "severity": "HIGH",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 29,
+      "endLine": 29,
+      "startColumn": 9,
+      "endColumn": 19
+    },
+    "message": "Double quote array expansions to avoid re-splitting elements.",
+    "title": "SC2068",
+    "description": "Double quote array expansions to avoid re-splitting elements.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2068 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2068"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "error",
+      "code": 2068
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 29,
+      "endLine": 29,
+      "column": 9,
+      "endColumn": 19,
+      "level": "error",
+      "code": 2068,
+      "message": "Double quote array expansions to avoid re-splitting elements.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "3f52fcfcf3db87a3",
+    "ruleId": "SC2034",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 32,
+      "endLine": 32,
+      "startColumn": 1,
+      "endColumn": 11
+    },
+    "message": "unused_var appears unused. Verify use (or export if used externally).",
+    "title": "SC2034",
+    "description": "unused_var appears unused. Verify use (or export if used externally).",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2034 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2034"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "warning",
+      "code": 2034
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 32,
+      "endLine": 32,
+      "column": 1,
+      "endColumn": 11,
+      "level": "warning",
+      "code": 2034,
+      "message": "unused_var appears unused. Verify use (or export if used externally).",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "9101ed7f66dc0ae3",
+    "ruleId": "SC2034",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 36,
+      "endLine": 36,
+      "startColumn": 1,
+      "endColumn": 7
+    },
+    "message": "result appears unused. Verify use (or export if used externally).",
+    "title": "SC2034",
+    "description": "result appears unused. Verify use (or export if used externally).",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2034 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2034"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "warning",
+      "code": 2034
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 36,
+      "endLine": 36,
+      "column": 1,
+      "endColumn": 7,
+      "level": "warning",
+      "code": 2034,
+      "message": "result appears unused. Verify use (or export if used externally).",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "9d2a83242c35f192",
+    "ruleId": "SC2162",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 39,
+      "endLine": 39,
+      "startColumn": 1,
+      "endColumn": 5
+    },
+    "message": "read without -r will mangle backslashes.",
+    "title": "SC2162",
+    "description": "read without -r will mangle backslashes.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2162 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2162"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2162
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 39,
+      "endLine": 39,
+      "column": 1,
+      "endColumn": 5,
+      "level": "info",
+      "code": 2162,
+      "message": "read without -r will mangle backslashes.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f7c689fa1c7bff0f",
+    "ruleId": "SC2115",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 44,
+      "endLine": 44,
+      "startColumn": 8,
+      "endColumn": 14
+    },
+    "message": "Use \"${var:?}\" to ensure this never expands to /* .",
+    "title": "SC2115",
+    "description": "Use \"${var:?}\" to ensure this never expands to /* .",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2115 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2115"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "warning",
+      "code": 2115
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 44,
+      "endLine": 44,
+      "column": 8,
+      "endColumn": 14,
+      "level": "warning",
+      "code": 2115,
+      "message": "Use \"${var:?}\" to ensure this never expands to /* .",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "70b67062d0d79db1",
+    "ruleId": "SC2086",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 44,
+      "endLine": 44,
+      "startColumn": 8,
+      "endColumn": 12
+    },
+    "message": "Double quote to prevent globbing and word splitting.",
+    "title": "SC2086",
+    "description": "Double quote to prevent globbing and word splitting.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2086 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2086"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2086
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 44,
+      "endLine": 44,
+      "column": 8,
+      "endColumn": 12,
+      "level": "info",
+      "code": 2086,
+      "message": "Double quote to prevent globbing and word splitting.",
+      "fix": {
+        "replacements": [
+          {
+            "column": 8,
+            "endColumn": 8,
+            "endLine": 44,
+            "insertionPoint": "afterEnd",
+            "line": 44,
+            "precedence": 7,
+            "replacement": "\""
+          },
+          {
+            "column": 12,
+            "endColumn": 12,
+            "endLine": 44,
+            "insertionPoint": "beforeStart",
+            "line": 44,
+            "precedence": 7,
+            "replacement": "\""
+          }
+        ]
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "3f7304c8b2d72f94",
+    "ruleId": "SC2155",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 47,
+      "endLine": 47,
+      "startColumn": 8,
+      "endColumn": 12
+    },
+    "message": "Declare and assign separately to avoid masking return values.",
+    "title": "SC2155",
+    "description": "Declare and assign separately to avoid masking return values.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2155 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2155"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "warning",
+      "code": 2155
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 47,
+      "endLine": 47,
+      "column": 8,
+      "endColumn": 12,
+      "level": "warning",
+      "code": 2155,
+      "message": "Declare and assign separately to avoid masking return values.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "12e813f9bc364a1c",
+    "ruleId": "SC2009",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 50,
+      "endLine": 50,
+      "startColumn": 21,
+      "endColumn": 27
+    },
+    "message": "Consider using pgrep instead of grepping ps output.",
+    "title": "SC2009",
+    "description": "Consider using pgrep instead of grepping ps output.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2009 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2009"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2009
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 50,
+      "endLine": 50,
+      "column": 21,
+      "endColumn": 27,
+      "level": "info",
+      "code": 2009,
+      "message": "Consider using pgrep instead of grepping ps output.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "b5a2011da3c35124",
+    "ruleId": "SC2027",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 54,
+      "endLine": 54,
+      "startColumn": 21,
+      "endColumn": 26
+    },
+    "message": "The surrounding quotes actually unquote this. Remove or escape them.",
+    "title": "SC2027",
+    "description": "The surrounding quotes actually unquote this. Remove or escape them.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2027 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2027"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "warning",
+      "code": 2027
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 54,
+      "endLine": 54,
+      "column": 21,
+      "endColumn": 26,
+      "level": "warning",
+      "code": 2027,
+      "message": "The surrounding quotes actually unquote this. Remove or escape them.",
+      "fix": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "7fa38175e6806600",
+    "ruleId": "SC2086",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 54,
+      "endLine": 54,
+      "startColumn": 21,
+      "endColumn": 26
+    },
+    "message": "Double quote to prevent globbing and word splitting.",
+    "title": "SC2086",
+    "description": "Double quote to prevent globbing and word splitting.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2086 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2086"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2086
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 54,
+      "endLine": 54,
+      "column": 21,
+      "endColumn": 26,
+      "level": "info",
+      "code": 2086,
+      "message": "Double quote to prevent globbing and word splitting.",
+      "fix": {
+        "replacements": [
+          {
+            "column": 21,
+            "endColumn": 21,
+            "endLine": 54,
+            "insertionPoint": "afterEnd",
+            "line": 54,
+            "precedence": 7,
+            "replacement": "\""
+          },
+          {
+            "column": 26,
+            "endColumn": 26,
+            "endLine": 54,
+            "insertionPoint": "beforeStart",
+            "line": 54,
+            "precedence": 7,
+            "replacement": "\""
+          }
+        ]
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "87b0acfa29afef32",
+    "ruleId": "SC2028",
+    "severity": "LOW",
+    "tool": {
+      "name": "shellcheck",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "/golden/target/vulnerable_script.sh",
+      "startLine": 57,
+      "endLine": 57,
+      "startColumn": 6,
+      "endColumn": 20
+    },
+    "message": "echo may not expand escape sequences. Use printf.",
+    "title": "SC2028",
+    "description": "echo may not expand escape sequences. Use printf.",
+    "remediation": "See https://www.shellcheck.net/wiki/SC2028 for explanation and fix",
+    "references": [
+      "https://www.shellcheck.net/wiki/SC2028"
+    ],
+    "tags": [
+      "shell",
+      "lint",
+      "shellcheck",
+      "warning"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": {
+      "level": "info",
+      "code": 2028
+    },
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "file": "/golden/target/vulnerable_script.sh",
+      "line": 57,
+      "endLine": 57,
+      "column": 6,
+      "endColumn": 20,
+      "level": "info",
+      "code": 2028,
+      "message": "echo may not expand escape sequences. Use printf.",
+      "fix": null
+    }
+  }
+]

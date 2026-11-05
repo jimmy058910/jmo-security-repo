@@ -1,0 +1,447 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "26c6ec96215a92d6",
+    "ruleId": "jmo.nextjs.public-env-holds-server-secret",
+    "severity": "HIGH",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": ".env.example",
+      "startLine": 4,
+      "startColumn": 1
+    },
+    "message": "NEXT_PUBLIC_STRIPE_SECRET_KEY is a public-prefixed name inlined into the client bundle",
+    "title": "Public env var name suggests a server secret",
+    "description": "A NEXT_PUBLIC_ / VITE_ prefixed variable is inlined into the browser bundle; a name like $NAME suggests a server-side secret.",
+    "remediation": "Rename the variable without the public prefix and read the real value only on the server.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH",
+      "cwe": [
+        "CWE-540"
+      ]
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.nextjs.public-env-holds-server-secret",
+      "message": {
+        "text": "NEXT_PUBLIC_STRIPE_SECRET_KEY is a public-prefixed name inlined into the client bundle"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": ".env.example"
+            },
+            "region": {
+              "startLine": 4,
+              "startColumn": 1
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "6cc5baef83210d75",
+    "ruleId": "jmo.nextjs.public-env-holds-server-secret",
+    "severity": "HIGH",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": "app/dashboard/chat.tsx",
+      "startLine": 6,
+      "startColumn": 23
+    },
+    "message": "NEXT_PUBLIC_OPENAI_API_KEY is a public-prefixed name inlined into the client bundle",
+    "title": "Public env var name suggests a server secret",
+    "description": "A NEXT_PUBLIC_ / VITE_ prefixed variable is inlined into the browser bundle; a name like $NAME suggests a server-side secret.",
+    "remediation": "Rename the variable without the public prefix and read the real value only on the server.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH",
+      "cwe": [
+        "CWE-540"
+      ]
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.nextjs.public-env-holds-server-secret",
+      "message": {
+        "text": "NEXT_PUBLIC_OPENAI_API_KEY is a public-prefixed name inlined into the client bundle"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "app/dashboard/chat.tsx"
+            },
+            "region": {
+              "startLine": 6,
+              "startColumn": 23
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "cc5609bd700e569c",
+    "ruleId": "jmo.ai.llm-api-key-in-browser-code",
+    "severity": "HIGH",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": "app/dashboard/chat.tsx",
+      "startLine": 7,
+      "startColumn": 3
+    },
+    "message": "an LLM client is constructed with dangerouslyAllowBrowser: true",
+    "title": "LLM client exposes its API key to the browser",
+    "description": "An LLM provider client is constructed with dangerouslyAllowBrowser, which ships the API key to every visitor.",
+    "remediation": "Remove dangerouslyAllowBrowser and call the LLM provider from a server route instead.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH",
+      "cwe": [
+        "CWE-798"
+      ]
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.ai.llm-api-key-in-browser-code",
+      "message": {
+        "text": "an LLM client is constructed with dangerouslyAllowBrowser: true"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "app/dashboard/chat.tsx"
+            },
+            "region": {
+              "startLine": 7,
+              "startColumn": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fc9e0298d9800493",
+    "ruleId": "jmo.firebase.rules-open",
+    "severity": "HIGH",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": "firestore.rules",
+      "startLine": 6,
+      "startColumn": 7
+    },
+    "message": "firestore.rules allows unconditional read/write access (`if true`)",
+    "title": "Firebase rule allows unconditional access",
+    "description": "A Firebase security rule grants read and/or write access unconditionally (`if true`, or no condition at all), exposing the resource to any client.",
+    "remediation": "Replace the open rule with an authorization check such as `if request.auth != null`.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH",
+      "cwe": [
+        "CWE-862"
+      ]
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.firebase.rules-open",
+      "message": {
+        "text": "firestore.rules allows unconditional read/write access (`if true`)"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "firestore.rules"
+            },
+            "region": {
+              "startLine": 6,
+              "startColumn": 7
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "5932ca4a52f02fd7",
+    "ruleId": "jmo.supabase.service-role-key-in-client-code",
+    "severity": "HIGH",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": "src/lib/supabase.ts",
+      "startLine": 6,
+      "startColumn": 3
+    },
+    "message": "the Supabase service_role key is referenced from client-side code",
+    "title": "service_role key referenced from client-side code",
+    "description": "The Supabase service_role key bypasses Row Level Security and must never be referenced from code that ships to the browser.",
+    "remediation": "Move this reference into server-only code: an API route, a server action, or a Supabase Edge Function.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH",
+      "cwe": [
+        "CWE-284"
+      ]
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.supabase.service-role-key-in-client-code",
+      "message": {
+        "text": "the Supabase service_role key is referenced from client-side code"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "src/lib/supabase.ts"
+            },
+            "region": {
+              "startLine": 6,
+              "startColumn": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "07321444e54c7936",
+    "ruleId": "jmo.supabase.table-without-rls",
+    "severity": "HIGH",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": "supabase/migrations/20260101000000_init.sql",
+      "startLine": 6,
+      "startColumn": 1
+    },
+    "message": "table \"orders\" has no Row Level Security enabled",
+    "title": "Public table has no Row Level Security",
+    "description": "A public-schema table has no Row Level Security policy enabled, so Supabase's PostgREST API exposes every row to any caller holding the anon key.",
+    "remediation": "Run `alter table <name> enable row level security;` and add at least one policy.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH",
+      "cwe": [
+        "CWE-862"
+      ]
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.supabase.table-without-rls",
+      "message": {
+        "text": "table \"orders\" has no Row Level Security enabled"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "supabase/migrations/20260101000000_init.sql"
+            },
+            "region": {
+              "startLine": 6,
+              "startColumn": 1
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2097fd2a23bfb87b",
+    "ruleId": "jmo.supabase.rls-without-policy",
+    "severity": "LOW",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": "supabase/migrations/20260101000000_init.sql",
+      "startLine": 8,
+      "startColumn": 1
+    },
+    "message": "table \"messages\" has Row Level Security enabled but no policy",
+    "title": "Row Level Security enabled with no policy",
+    "description": "Row Level Security is enabled with no policy defined, which locks the table to every caller, including the application itself; this is often a mistake rather than an intentional lockdown.",
+    "remediation": "Add a policy with `create policy ... on <table> ...`, or confirm the lockdown is intentional.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "LOW",
+      "impact": "LOW"
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.supabase.rls-without-policy",
+      "message": {
+        "text": "table \"messages\" has Row Level Security enabled but no policy"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "supabase/migrations/20260101000000_init.sql"
+            },
+            "region": {
+              "startLine": 8,
+              "startColumn": 1
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "7abc5c3fb3ce3447",
+    "ruleId": "jmo.supabase.table-without-rls",
+    "severity": "HIGH",
+    "tool": {
+      "name": "jmo-native",
+      "version": "1.1.1"
+    },
+    "location": {
+      "path": "supabase/migrations/20260101000000_init.sql",
+      "startLine": 12,
+      "startColumn": 1
+    },
+    "message": "table \"notes\" has no Row Level Security enabled",
+    "title": "Public table has no Row Level Security",
+    "description": "A public-schema table has no Row Level Security policy enabled, so Supabase's PostgREST API exposes every row to any caller holding the anon key.",
+    "remediation": "Run `alter table <name> enable row level security;` and add at least one policy.",
+    "references": [],
+    "tags": [
+      "sast",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": {
+      "confidence": "MEDIUM",
+      "likelihood": "HIGH",
+      "impact": "HIGH",
+      "cwe": [
+        "CWE-862"
+      ]
+    },
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "ruleId": "jmo.supabase.table-without-rls",
+      "message": {
+        "text": "table \"notes\" has no Row Level Security enabled"
+      },
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "supabase/migrations/20260101000000_init.sql"
+            },
+            "region": {
+              "startLine": 12,
+              "startColumn": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,473 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f6258ffa9e362813",
+    "ruleId": "SBOM.PACKAGE",
+    "severity": "INFO",
+    "tool": {
+      "name": "syft",
+      "version": "1.55.0"
+    },
+    "location": {
+      "path": "/requirements.txt",
+      "startLine": 0
+    },
+    "message": "Package discovered: fastapi 0.60.0",
+    "title": "fastapi 0.60.0",
+    "description": "Package discovered: fastapi 0.60.0",
+    "remediation": "Track and scan dependencies.",
+    "references": [],
+    "tags": [
+      "sbom",
+      "package"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "id": "6b73748eaff0871c",
+      "name": "fastapi",
+      "version": "0.60.0",
+      "type": "python",
+      "foundBy": "python-package-cataloger",
+      "locations": [
+        {
+          "path": "/requirements.txt",
+          "accessPath": "/requirements.txt",
+          "annotations": {
+            "evidence": "primary"
+          }
+        }
+      ],
+      "licenses": [],
+      "language": "python",
+      "cpes": [
+        {
+          "cpe": "cpe:2.3:a:python-fastapi:python-fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-fastapi:python_fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_fastapi:python-fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_fastapi:python_fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:fastapi:python-fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:fastapi:python_fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-fastapi:fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_fastapi:fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python-fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python_fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:fastapi:fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:fastapi:0.60.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        }
+      ],
+      "purl": "pkg:pypi/fastapi@0.60.0",
+      "metadataType": "python-pip-requirements-entry",
+      "metadata": {
+        "name": "fastapi",
+        "versionConstraint": "==0.60.0"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "c45b4829f4b29ee9",
+    "ruleId": "SBOM.PACKAGE",
+    "severity": "INFO",
+    "tool": {
+      "name": "syft",
+      "version": "1.55.0"
+    },
+    "location": {
+      "path": "/requirements.txt",
+      "startLine": 0
+    },
+    "message": "Package discovered: flask 2.0.0",
+    "title": "flask 2.0.0",
+    "description": "Package discovered: flask 2.0.0",
+    "remediation": "Track and scan dependencies.",
+    "references": [],
+    "tags": [
+      "sbom",
+      "package"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "id": "0e387cd502008bd0",
+      "name": "flask",
+      "version": "2.0.0",
+      "type": "python",
+      "foundBy": "python-package-cataloger",
+      "locations": [
+        {
+          "path": "/requirements.txt",
+          "accessPath": "/requirements.txt",
+          "annotations": {
+            "evidence": "primary"
+          }
+        }
+      ],
+      "licenses": [],
+      "language": "python",
+      "cpes": [
+        {
+          "cpe": "cpe:2.3:a:python-flask:python-flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-flask:python_flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_flask:python-flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_flask:python_flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python-flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python_flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:flask:python-flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:flask:python_flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-flask:flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_flask:flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:flask:flask:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        }
+      ],
+      "purl": "pkg:pypi/flask@2.0.0",
+      "metadataType": "python-pip-requirements-entry",
+      "metadata": {
+        "name": "flask",
+        "versionConstraint": "==2.0.0"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "23a510b3979e2ede",
+    "ruleId": "SBOM.PACKAGE",
+    "severity": "INFO",
+    "tool": {
+      "name": "syft",
+      "version": "1.55.0"
+    },
+    "location": {
+      "path": "/requirements.txt",
+      "startLine": 0
+    },
+    "message": "Package discovered: ipython 7.16.0",
+    "title": "ipython 7.16.0",
+    "description": "Package discovered: ipython 7.16.0",
+    "remediation": "Track and scan dependencies.",
+    "references": [],
+    "tags": [
+      "sbom",
+      "package"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "id": "76d4f77b0639a3d7",
+      "name": "ipython",
+      "version": "7.16.0",
+      "type": "python",
+      "foundBy": "python-package-cataloger",
+      "locations": [
+        {
+          "path": "/requirements.txt",
+          "accessPath": "/requirements.txt",
+          "annotations": {
+            "evidence": "primary"
+          }
+        }
+      ],
+      "licenses": [],
+      "language": "python",
+      "cpes": [
+        {
+          "cpe": "cpe:2.3:a:python-ipython:python-ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-ipython:python_ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_ipython:python-ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_ipython:python_ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:ipython:python-ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:ipython:python_ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-ipython:ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_ipython:ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python-ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python_ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:ipython:ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:ipython:7.16.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        }
+      ],
+      "purl": "pkg:pypi/ipython@7.16.0",
+      "metadataType": "python-pip-requirements-entry",
+      "metadata": {
+        "name": "ipython",
+        "versionConstraint": "==7.16.0"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2ee4b836c49bebb6",
+    "ruleId": "SBOM.PACKAGE",
+    "severity": "INFO",
+    "tool": {
+      "name": "syft",
+      "version": "1.55.0"
+    },
+    "location": {
+      "path": "/requirements.txt",
+      "startLine": 0
+    },
+    "message": "Package discovered: urllib3 1.25.0",
+    "title": "urllib3 1.25.0",
+    "description": "Package discovered: urllib3 1.25.0",
+    "remediation": "Track and scan dependencies.",
+    "references": [],
+    "tags": [
+      "sbom",
+      "package"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "id": "a045eadedd34d594",
+      "name": "urllib3",
+      "version": "1.25.0",
+      "type": "python",
+      "foundBy": "python-package-cataloger",
+      "locations": [
+        {
+          "path": "/requirements.txt",
+          "accessPath": "/requirements.txt",
+          "annotations": {
+            "evidence": "primary"
+          }
+        }
+      ],
+      "licenses": [],
+      "language": "python",
+      "cpes": [
+        {
+          "cpe": "cpe:2.3:a:python:urllib3:1.25.0:*:*:*:*:*:*:*",
+          "source": "nvd-cpe-dictionary"
+        }
+      ],
+      "purl": "pkg:pypi/urllib3@1.25.0",
+      "metadataType": "python-pip-requirements-entry",
+      "metadata": {
+        "name": "urllib3",
+        "versionConstraint": "==1.25.0"
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "a85d298b47911f87",
+    "ruleId": "SBOM.PACKAGE",
+    "severity": "INFO",
+    "tool": {
+      "name": "syft",
+      "version": "1.55.0"
+    },
+    "location": {
+      "path": "/requirements.txt",
+      "startLine": 0
+    },
+    "message": "Package discovered: werkzeug 2.0.0",
+    "title": "werkzeug 2.0.0",
+    "description": "Package discovered: werkzeug 2.0.0",
+    "remediation": "Track and scan dependencies.",
+    "references": [],
+    "tags": [
+      "sbom",
+      "package"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "id": "aecc6f9e4ba97798",
+      "name": "werkzeug",
+      "version": "2.0.0",
+      "type": "python",
+      "foundBy": "python-package-cataloger",
+      "locations": [
+        {
+          "path": "/requirements.txt",
+          "accessPath": "/requirements.txt",
+          "annotations": {
+            "evidence": "primary"
+          }
+        }
+      ],
+      "licenses": [],
+      "language": "python",
+      "cpes": [
+        {
+          "cpe": "cpe:2.3:a:python-werkzeug:python-werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-werkzeug:python_werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_werkzeug:python-werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_werkzeug:python_werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python-werkzeug:werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python_werkzeug:werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:werkzeug:python-werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:werkzeug:python_werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python-werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:python_werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:werkzeug:werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        },
+        {
+          "cpe": "cpe:2.3:a:python:werkzeug:2.0.0:*:*:*:*:*:*:*",
+          "source": "syft-generated"
+        }
+      ],
+      "purl": "pkg:pypi/werkzeug@2.0.0",
+      "metadataType": "python-pip-requirements-entry",
+      "metadata": {
+        "name": "werkzeug",
+        "versionConstraint": "==2.0.0"
+      }
+    }
+  }
+]

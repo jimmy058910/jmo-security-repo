@@ -1,0 +1,62 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f43e6b81552b4477",
+    "ruleId": "jmo-golden-reflected-query",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "nuclei",
+      "version": "unknown"
+    },
+    "location": {
+      "path": "http://127.0.0.1:41023/search?q=jmo-golden-7c1e%3Cb%3E",
+      "startLine": 0
+    },
+    "message": "JMo golden fixture - a query parameter reflected unescaped",
+    "title": "JMo golden fixture - a query parameter reflected unescaped",
+    "description": "JMo golden fixture - a query parameter reflected unescaped",
+    "remediation": "Review finding and apply vendor-recommended fixes.",
+    "references": [],
+    "tags": [
+      "dast",
+      "web-security",
+      "api-security",
+      "jmo",
+      "golden"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "secretContext": null,
+    "dependency": null,
+    "raw": {
+      "template-id": "jmo-golden-reflected-query",
+      "template-path": "/golden/golden.yaml",
+      "template-encoded": "aWQ6IGptby1nb2xkZW4tcmVmbGVjdGVkLXF1ZXJ5CmluZm86CiAgbmFtZTogSk1vIGdvbGRlbiBmaXh0dXJlIC0gYSBxdWVyeSBwYXJhbWV0ZXIgcmVmbGVjdGVkIHVuZXNjYXBlZAogIGF1dGhvcjogam1vLXNlY3VyaXR5CiAgc2V2ZXJpdHk6IG1lZGl1bQogIHRhZ3M6IGptbyxnb2xkZW4KaHR0cDoKICAtIG1ldGhvZDogR0VUCiAgICBwYXRoOgogICAgICAtICJ7e0Jhc2VVUkx9fS9zZWFyY2g/cT1qbW8tZ29sZGVuLTdjMWUlM0NiJTNFIgogICAgbWF0Y2hlcnM6CiAgICAgIC0gdHlwZTogd29yZAogICAgICAgIHBhcnQ6IGJvZHkKICAgICAgICB3b3JkczoKICAgICAgICAgIC0gImptby1nb2xkZW4tN2MxZTxiPiIK",
+      "info": {
+        "name": "JMo golden fixture - a query parameter reflected unescaped",
+        "author": [
+          "jmo-security"
+        ],
+        "tags": [
+          "jmo",
+          "golden"
+        ],
+        "severity": "medium"
+      },
+      "type": "http",
+      "host": "127.0.0.1",
+      "port": "41023",
+      "scheme": "http",
+      "url": "http://127.0.0.1:41023",
+      "matched-at": "http://127.0.0.1:41023/search?q=jmo-golden-7c1e%3Cb%3E",
+      "request": "GET /search?q=jmo-golden-7c1e%3Cb%3E HTTP/1.1\r\nHost: 127.0.0.1:41023\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15\r\nAccept: */*\r\nAccept-Language: en\r\nAccept-Encoding: gzip\r\n\r\n",
+      "response": "HTTP/1.0 200 OK\r\nConnection: close\r\nContent-Length: 64\r\nContent-Type: text/html\r\nDate: Thu, 05 Nov 2026 14:34:22 GMT\r\nServer: fixture/1\r\n\r\n<html><body><p>Results for: jmo-golden-7c1e<b></p></body></html>",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-05T09:34:22.954207719-05:00",
+      "curl-command": "curl -X 'GET' -d '' -H 'Accept: */*' -H 'Accept-Language: en' -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15' 'http://127.0.0.1:41023/search?q=jmo-golden-7c1e%3Cb%3E'",
+      "matcher-status": true
+    }
+  }
+]
