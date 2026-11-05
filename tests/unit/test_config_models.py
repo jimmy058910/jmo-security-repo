@@ -172,11 +172,16 @@ class TestWizardConfig:
     def test_get_db_path_default(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """Default db path should be under home directory."""
+        """The default is the scan's: `.jmo/history.db` in the working directory.
+
+        It was under the home directory, where the wizard's own scans never
+        wrote (#1484)."""
+        from scripts.core.history_db import DEFAULT_DB_PATH
+
         WizardConfig.set_db_path(None)
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         path = WizardConfig.get_db_path()
-        assert path == tmp_path / ".jmo" / "history.db"
+        assert path == DEFAULT_DB_PATH == Path(".jmo/history.db")
 
     def test_set_db_path_none_resets(self) -> None:
         WizardConfig.set_db_path("/some/path.db")

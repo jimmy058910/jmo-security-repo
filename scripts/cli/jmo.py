@@ -646,7 +646,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
         dest="db",
         type=_expand_home,
         default=None,
-        help="Path to SQLite history database (default: ~/.jmo/history.db)",
+        help="Path to the history database (default: .jmo/history.db)",
     )
     return wizard_parser
 

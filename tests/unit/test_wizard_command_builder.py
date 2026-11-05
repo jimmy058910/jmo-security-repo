@@ -445,6 +445,9 @@ def test_build_command_parts_native_image():
         "nginx:latest",
         "--results-dir",
         "./results",
+        # Where the wizard reads its history back (#1484).
+        "--history-db",
+        ".jmo/history.db",
     ]
 
 

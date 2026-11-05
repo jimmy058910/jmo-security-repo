@@ -225,7 +225,7 @@ Interactive setup wizard for guided security scanning.
 | `--emit-gha [FILE]` | Generate GitHub Actions workflow (default: `.github/workflows/jmo-security.yml`) |
 | `--policy NAME` | Policy to evaluate after scan (repeatable) |
 | `--skip-policies` | Skip policy evaluation entirely (overrides config defaults) |
-| `--history-db PATH` | Path to SQLite history database (default: `~/.jmo/history.db`) |
+| `--history-db PATH` | Path to the history database (default: `.jmo/history.db`, as for `jmo scan`) |
 
 **Tool Pre-flight Check:**
 

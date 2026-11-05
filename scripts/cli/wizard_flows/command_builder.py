@@ -5,10 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from scripts.cli.wizard_flows.config_models import WizardConfig
 from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
 
+# Where a Docker-mode scan sees the wizard's history database directory.
+DOCKER_HISTORY_DIR = "/history"
+
 if TYPE_CHECKING:
-    from scripts.cli.wizard import TargetConfig, WizardConfig
+    from scripts.cli.wizard import TargetConfig
 
 
 def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
@@ -178,6 +182,7 @@ def docker_output_dirs(config: WizardConfig) -> list[str]:
     dirs = [str(Path(config.results_dir).resolve())]
     if config.target.type == "repo" and config.target.repo_mode == "tsv":
         dirs.append(str(Path(config.target.tsv_dest).resolve()))
+    dirs.append(str(WizardConfig.get_db_path().resolve().parent))
     return dirs
 
 
@@ -214,6 +219,11 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         results_abs = str(Path(config.results_dir).resolve())
         cmd_parts.extend(["-v", f"{results_abs}:/results"])
 
+        # The history persists through a mount of the wizard's own database
+        # directory: inside a `--rm` container it was lost (#1484).
+        history = WizardConfig.get_db_path().resolve()
+        cmd_parts.extend(["-v", f"{history.parent}:{DOCKER_HISTORY_DIR}"])
+
         # A bare `-e NAME` forwards the variable's value from the environment,
         # so the token never appears in the command.
         if config.target.type == "gitlab" and config.target.gitlab_token:
@@ -230,6 +240,7 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         cmd_parts.extend(target_flags)
 
         cmd_parts.extend(["--results-dir", "/results"])
+        cmd_parts.extend(["--history-db", f"{DOCKER_HISTORY_DIR}/{history.name}"])
 
     else:
         # Native command
@@ -241,6 +252,12 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         # Results directory (normalize backslashes for script compatibility)
         if config.results_dir:
             cmd_parts.extend(["--results-dir", config.results_dir.replace("\\", "/")])
+
+        # Where the wizard reads the history back (#1484). The default is the
+        # scan's own, said outright so the two cannot drift apart again.
+        cmd_parts.extend(
+            ["--history-db", str(WizardConfig.get_db_path()).replace("\\", "/")]
+        )
 
     # Advanced options, for both branches. They lived in the native branch
     # only, so Docker mode dropped the threshold, threads, timeout,

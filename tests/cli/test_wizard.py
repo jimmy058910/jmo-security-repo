@@ -1005,9 +1005,15 @@ def test_execute_scan_decline(mock_yes_no):
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
 @patch("scripts.cli.wizard.subprocess.run")
 @patch("scripts.cli.tool_manager.ToolManager")
-def test_execute_scan_docker_mode(mock_tool_manager_class, mock_run, mock_yes_no):
+def test_execute_scan_docker_mode(
+    mock_tool_manager_class, mock_run, mock_yes_no, tmp_path, monkeypatch
+):
     """Test execute_scan in Docker mode."""
     from scripts.cli.wizard import execute_scan
+
+    # It creates the directories it mounts, the history database's among
+    # them, which resolves against the working directory (#1484).
+    monkeypatch.chdir(tmp_path)
 
     mock_run.return_value = MagicMock(returncode=0)
 
@@ -1389,11 +1395,13 @@ def _docker_tsv_config(tmp_path: Path) -> WizardConfig:
 @patch("scripts.cli.tool_manager.ToolManager")
 @patch("scripts.cli.wizard.subprocess.run")
 def test_docker_mounts_exist_before_the_container_starts(
-    mock_run, mock_tool_manager_class, tmp_path
+    mock_run, mock_tool_manager_class, tmp_path, monkeypatch
 ):
     """Docker creates a missing bind-mount source as root, and the image's
     user (uid 1000) cannot write it: measured, `mkdir: Permission denied`.
-    The clone destination and the results directory are both written."""
+    The clone destination, the results directory and the history database's
+    directory (#1484) are all written."""
+    monkeypatch.chdir(tmp_path)
     mock_tool_manager_class.return_value = _fake_tool_manager()
     config = _docker_tsv_config(tmp_path)
     seen: dict[str, bool] = {}
@@ -1401,6 +1409,7 @@ def test_docker_mounts_exist_before_the_container_starts(
     def record(*_a, **_k):
         seen["clones"] = (tmp_path / "clones").is_dir()
         seen["results"] = (tmp_path / "results").is_dir()
+        seen["history"] = (tmp_path / ".jmo").is_dir()
         return MagicMock(returncode=0)
 
     mock_run.side_effect = record
@@ -1409,7 +1418,7 @@ def test_docker_mounts_exist_before_the_container_starts(
 
     execute_scan(config, yes=True)
 
-    assert seen == {"clones": True, "results": True}
+    assert seen == {"clones": True, "results": True, "history": True}
 
 
 @pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])

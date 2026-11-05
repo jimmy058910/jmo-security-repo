@@ -776,7 +776,7 @@ def run_wizard(
         export_trends_json: Export trend report as JSON after scan
         policies: List of policies to evaluate after scan (e.g., ['owasp-top-10', 'zero-secrets'])
         skip_policies: Skip policy evaluation entirely
-        db_path: Path to SQLite history database (default: ~/.jmo/history.db)
+        db_path: Path to the history database (default: .jmo/history.db)
         target_type: Preset target type (repo/image/iac/url)
         target: Preset target value (path, image name, or URL)
         use_docker: Preset execution mode (True=Docker, False=native, None=prompt)

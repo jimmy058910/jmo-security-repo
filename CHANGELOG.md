@@ -569,6 +569,12 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **The wizard reads its history where its scans write it (#1484).** It read
+  `~/.jmo/history.db` while the scan it launched stored to the working directory's
+  `.jmo/history.db`, so its trend step found no history unless it ran from the home
+  directory; in Docker mode the history was lost with the container. Its default is now
+  the scan's, it passes `--history-db` to the scan it runs, and in Docker mode it mounts
+  the database's directory (created first) so the history persists.
 - **A scan redirected to a log no longer fills it with progress frames (#1082).** The
   progress line's `\r` frames overwrite each other on a terminal but pile up in a file: a
   20-minute scan left a 46 KB log around 6 real lines. They are now written only to a
