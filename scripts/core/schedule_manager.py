@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
@@ -112,6 +113,58 @@ def reject_api_spec_without_url(web: dict[str, Any]) -> None:
 
 class InvalidGitLabUrlError(ValueError):
     """A schedule names a GitLab URL that `jmo scan --gitlab-url` would refuse."""
+
+
+class WorkflowExpressionError(ValueError):
+    """A schedule value holds `${{`, which GitHub Actions evaluates."""
+
+
+GITHUB_EXPRESSION = "${{"
+
+
+def reject_github_expression(value: str, where: str) -> None:
+    """Raise if `value`, a value a user wrote, holds GitHub's `${{`.
+
+    GitHub evaluates `${{ ... }}` anywhere in a workflow before the shell sees
+    the line, quotes included, so `--image 'alpine:3.19${{ secrets.X }}'` put
+    the secret in the command (#1552). Passing the value through `env:` would
+    not help: GitHub evaluates expressions in `env:` values too. No target, path
+    or option needs the sequence. The message names the field, not the value,
+    which may hold credentials.
+    """
+    if GITHUB_EXPRESSION in value:
+        raise WorkflowExpressionError(
+            f"{where} holds `" + GITHUB_EXPRESSION + "`, which GitHub Actions "
+            "evaluates as an expression before the shell runs: a workflow made "
+            "from it would substitute whatever it names, a secret included. No "
+            "scan value needs it; remove it."
+        )
+
+
+def _strings(value: Any, where: str) -> Iterator[tuple[str, str]]:
+    if isinstance(value, str):
+        yield where, value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            # A key is written by the user too (a label's name, say).
+            yield f"{where} (one of its keys)", str(key)
+            yield from _strings(item, f"{where}.{key}")
+    elif isinstance(value, list | tuple):
+        for index, item in enumerate(value):
+            yield from _strings(item, f"{where}[{index}]")
+
+
+def reject_workflow_expressions(schedule: ScanSchedule) -> None:
+    """Raise if any value of `schedule` holds `${{`; see `reject_github_expression`.
+
+    Every string of its metadata and spec, not only the ones an exporter reads
+    today: the name reaches the workflow's `name:` and artifact name, and a
+    hand-edited `schedules.json` skips the CLI's name check.
+    """
+    data = schedule.to_dict()
+    for part in ("metadata", "spec"):
+        for where, text in _strings(data[part], part):
+            reject_github_expression(text, where)
 
 
 # The only keys of `targets["gitlab"]` that any consumer reads.
@@ -490,6 +543,7 @@ class ScheduleManager:
             raise ValueError(f"Invalid cron syntax: {e}")
 
         reject_unusable_gitlab_target(schedule)
+        reject_workflow_expressions(schedule)
 
         # Compute next run time
         now = datetime.now(UTC)
@@ -555,6 +609,7 @@ class ScheduleManager:
         half hours out, on the wrong weekday, at rc 0 with a success message.
         """
         reject_unusable_gitlab_target(schedule)
+        reject_workflow_expressions(schedule)
 
         manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
 

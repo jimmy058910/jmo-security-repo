@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from scripts.cli.jmo import __version__
+from scripts.core.schedule_manager import reject_github_expression
 from scripts.core.tool_registry import TOOL_MATRIX
 from scripts.core.validation import GITLAB_DEFAULT_URL, gitlab_clone_base
 
@@ -267,9 +268,15 @@ def _workflow_target_flags(target: Any) -> list[str]:
     ones. Docker mode had its own list, which named only repo, image and url
     targets, so a GitLab, IaC or K8s workflow scanned nothing (#1554). Every
     value is `shlex.quote`d: it lands in a `run:` block, where an unquoted `&`
-    in a URL put the scan in the background and `$(...)` ran a command.
+    in a URL put the scan in the background and `$(...)` ran a command. And no
+    value may hold `${{`, which GitHub evaluates before the shell sees the line,
+    quoted or not (#1552).
     """
-    q = shlex.quote
+
+    def q(value: str, name: str) -> str:
+        reject_github_expression(value, f"target.{name}")
+        return shlex.quote(value)
+
     if target.type == "repo":
         # The checkout, whatever the local repo_mode was: that describes the
         # wizard user's disk, not the one repository this workflow runs on.
@@ -277,30 +284,34 @@ def _workflow_target_flags(target: Any) -> list[str]:
         # and never the root's files; targets and tsv emitted no target.
         return ["--repo ."]
     if target.type == "image":
-        return [f"--image {q(target.image_name)}"] if target.image_name else []
+        return (
+            [f"--image {q(target.image_name, 'image_name')}"]
+            if target.image_name
+            else []
+        )
     if target.type == "url":
-        return [f"--url {q(target.url)}"] if target.url else []
+        return [f"--url {q(target.url, 'url')}"] if target.url else []
     if target.type == "iac":
         flag = {
             "terraform": "--terraform-state",
             "cloudformation": "--cloudformation",
             "k8s-manifest": "--k8s-manifest",
         }[target.iac_type]
-        return [f"{flag} {q(_checkout_path(target.iac_path))}"]
+        return [f"{flag} {q(_checkout_path(target.iac_path), 'iac_path')}"]
     flags: list[str] = []
     if target.type == "gitlab":
         gitlab_url = _gitlab_url_to_pass(target.gitlab_url)
         if gitlab_url:
-            flags.append(f"--gitlab-url {q(gitlab_url)}")
+            flags.append(f"--gitlab-url {q(gitlab_url, 'gitlab_url')}")
         if target.gitlab_repo:
-            flags.append(f"--gitlab-repo {q(target.gitlab_repo)}")
+            flags.append(f"--gitlab-repo {q(target.gitlab_repo, 'gitlab_repo')}")
     elif target.type == "k8s":
         if target.k8s_context:
-            flags.append(f"--k8s-context {q(target.k8s_context)}")
+            flags.append(f"--k8s-context {q(target.k8s_context, 'k8s_context')}")
         if target.k8s_all_namespaces:
             flags.append("--k8s-all-namespaces")
         elif target.k8s_namespace:
-            flags.append(f"--k8s-namespace {q(target.k8s_namespace)}")
+            flags.append(f"--k8s-namespace {q(target.k8s_namespace, 'k8s_namespace')}")
     return flags
 
 

@@ -126,7 +126,9 @@ def test_multi_target_support():
     assert "--terraform-state terraform.tfstate" in scan_cmd
     assert "--url https://example.com" in scan_cmd
     assert "--gitlab-repo mygroup/myrepo" in scan_cmd
-    assert "--gitlab-token" in scan_cmd
+    # The token goes by environment, never on the command line.
+    assert "--gitlab-token" not in scan_cmd
+    assert scan_step["env"] == {"GITLAB_TOKEN": "${{ secrets.GITLAB_TOKEN }}"}
     assert "--k8s-context prod" in scan_cmd
     assert "--k8s-namespace default" in scan_cmd
     # v2.0.0 has no scan profiles; `jmo scan` rejects --profile-name (exit 2).

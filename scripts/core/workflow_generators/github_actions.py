@@ -15,6 +15,7 @@ from scripts.core.schedule_manager import (
     ScanSchedule,
     gitlab_target_url,
     reject_api_spec_without_url,
+    reject_workflow_expressions,
 )
 
 
@@ -39,6 +40,8 @@ class GitHubActionsGenerator:
             >>> with open('.github/workflows/jmo-nightly.yml', 'w') as f:
             ...     f.write(yaml_content)
         """
+        # Also checked when a schedule is stored; this is for one edited by hand.
+        reject_workflow_expressions(schedule)
         workflow = {
             "name": self._workflow_name(schedule),
             "on": self._generate_triggers(schedule),
@@ -118,10 +121,20 @@ class GitHubActionsGenerator:
             dict: Scan step configuration with all target types
         """
         args = self._build_scan_args(schedule)
-
+        gitlab = schedule.spec.jobTemplate.targets.get("gitlab") or {}
+        if not gitlab.get("token"):
+            return {
+                "name": "Run JMo Security Scan",
+                "run": f"docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest {args}",
+            }
+        # The token reaches the container by environment, never argv, where the
+        # process list shows it: GitHub sets it on the step and `-e` forwards it
+        # by name, as the wizard's own Docker command does. `jmo scan` reads
+        # GITLAB_TOKEN when no --gitlab-token is given.
         return {
             "name": "Run JMo Security Scan",
-            "run": f"docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest {args}",
+            "env": {"GITLAB_TOKEN": "${{ secrets.GITLAB_TOKEN }}"},  # nosec B105 - a secret reference, not a password
+            "run": f"docker run --rm -v $(pwd):/workspace -e GITLAB_TOKEN ghcr.io/jimmy058910/jmo-security:latest {args}",
         }
 
     def _build_scan_args(self, schedule: ScanSchedule) -> str:
@@ -194,8 +207,7 @@ class GitHubActionsGenerator:
                 args.extend(["--gitlab-url", gitlab_url])
             if "repo" in gitlab:
                 args.extend(["--gitlab-repo", gitlab["repo"]])
-            if "token" in gitlab:
-                args.extend(["--gitlab-token", "${{ secrets.GITLAB_TOKEN }}"])
+            # A token is passed by environment: see _scan_step.
 
         # 6. Kubernetes Clusters
         if "kubernetes" in targets:
@@ -239,9 +251,8 @@ class GitHubActionsGenerator:
         # uses for these identical fields -- the cron path validated and quoted
         # them while this one did neither. Runners are Linux, so POSIX quoting
         # is the correct dialect. Flags and ordinary paths are returned
-        # unchanged, and a `${{ secrets.* }}` expression is substituted by
-        # GitHub before the shell sees the line, so quoting it protects the
-        # substituted value rather than breaking it.
+        # unchanged. No value here may hold `${{`, which GitHub expands before
+        # the shell sees the line, quoted or not: `generate` refuses one.
         return " ".join(shlex.quote(arg) for arg in args)
 
     def _upload_results_step(self, schedule: ScanSchedule) -> dict[str, Any]:

@@ -1062,6 +1062,18 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Security
 
+- **No value you write reaches a GitHub Actions workflow holding `${{` (#1552).** GitHub
+  evaluates `${{ ... }}` anywhere in a workflow before the shell runs, quoted or not, so
+  `jmo schedule create --image 'alpine${{ secrets.GITHUB_TOKEN }}'` followed by `jmo
+  schedule export` wrote a workflow that put the token in its scan command, and a value
+  could send any secret the workflow reads to a host it named. A schedule holding the
+  sequence anywhere, in a value or a key, is refused when it is created or updated,
+  whatever its backend (any schedule can be exported to GitHub Actions), and one already
+  stored or edited by hand is refused by `validate` and `export`; the message names the
+  field, not the value. The wizard's own workflow refuses it in a target too. The exported
+  workflow also stops putting `--gitlab-token '${{ secrets.GITLAB_TOKEN }}'` on `docker
+  run`'s command line, where the process list showed the token: the step sets
+  `GITLAB_TOKEN` in its environment and `-e GITLAB_TOKEN` forwards it by name.
 - **The workflow `jmo wizard` generates uploads `results/summaries/`, not all of
   `results/` (#1329).** The raw trufflehog and gitleaks outputs under `results/individual-*/`
   held every secret found in plaintext, and a CI artifact is readable by anyone who can read

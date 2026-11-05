@@ -39,7 +39,9 @@ from scripts.core.schedule_manager import (
     ScheduleMetadata,
     ScheduleSpec,
     ScheduleStatus,
+    WorkflowExpressionError,
     reject_unusable_gitlab_target,
+    reject_workflow_expressions,
 )
 from scripts.core.unicode_utils import safe_print
 from scripts.core.validation import SCHEDULE_NAME_PATTERN
@@ -500,7 +502,8 @@ def _cmd_schedule_validate(args, manager: ScheduleManager) -> int:
     # target "valid" that both of them refuse.
     try:
         reject_unusable_gitlab_target(schedule)
-    except InvalidGitLabUrlError as e:
+        reject_workflow_expressions(schedule)
+    except (InvalidGitLabUrlError, WorkflowExpressionError) as e:
         _error(str(e))
         return 1
     _success(f"Targets configured: {list(schedule.spec.jobTemplate.targets.keys())}")
