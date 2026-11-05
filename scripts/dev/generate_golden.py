@@ -47,6 +47,7 @@ import hashlib
 import json
 import os
 import shutil
+import site
 import subprocess
 import sys
 import tempfile
@@ -276,6 +277,11 @@ def _env(home: Path) -> dict[str, str]:
         "TRIVY_CACHE_DIR": os.environ.get(
             "TRIVY_CACHE_DIR", str(Path.home() / ".cache" / "trivy")
         ),
+        # A tool installed with `pip install --user` imports itself from the
+        # user site, found through HOME: under the capture's HOME, CI's checkov
+        # was ModuleNotFoundError and its row failed with no output. JMo's own
+        # interpreter is a venv, which reads no user site.
+        "PYTHONUSERBASE": os.environ.get("PYTHONUSERBASE") or site.getuserbase(),
     }
 
 

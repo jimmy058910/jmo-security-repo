@@ -515,3 +515,19 @@ def test_a_capture_with_no_version_is_never_written(
     with pytest.raises(gg.CaptureError, match="no version"):
         gg.write_fixture("hadolint", captured, golden_dir=golden)
     assert not (golden / "hadolint").exists()
+
+
+def test_the_capture_keeps_the_callers_python_user_site(tmp_path, monkeypatch) -> None:
+    # A tool installed with `pip install --user` (checkov on CI's contract job)
+    # imports itself from the user site under HOME: the capture's HOME of its
+    # own hid it, and checkov's row failed with no output (PR F's e2e gate,
+    # run 42078456931). The capture keeps the caller's user site.
+    import site
+
+    monkeypatch.delenv("PYTHONUSERBASE", raising=False)
+    env = gg._env(tmp_path / "home")
+    assert env["HOME"] == str(tmp_path / "home")
+    assert env["PYTHONUSERBASE"] == site.getuserbase()
+
+    monkeypatch.setenv("PYTHONUSERBASE", str(tmp_path / "chosen"))
+    assert gg._env(tmp_path / "home")["PYTHONUSERBASE"] == str(tmp_path / "chosen")

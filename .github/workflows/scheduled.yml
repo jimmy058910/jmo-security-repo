@@ -1192,15 +1192,14 @@ jobs:
           shellcheck --version || echo "shellcheck not available"
           syft version || echo "syft not available"
 
-      - name: Install zap, nuclei, checkov and yara-x where jmo finds them
+      - name: Install zap, nuclei and yara-x where jmo finds them
         # zap and nuclei: the golden re-capture scans fixture_server.py's site
         # with them; zap runs on the runner's JDK 17, as in e2e-ubuntu.
-        # checkov: an isolated venv under ~/.jmo/tools, which jmo prefers to
-        # PATH (#1101). The `pip install` above lands under ~/.local (a user
-        # install), and the re-capture runs in a HOME of its own, where that
-        # checkov cannot import itself.
         # yara-x: fetches the pinned signature-base rules into ~/.jmo/yara-rules,
         # which juice-shop's baseline needs (yara-x reports 2 there).
+        # Not checkov: the `pip install` above is a user install under
+        # ~/.local, which `jmo tools install checkov` reports as already
+        # installed, and the re-capture keeps the user site (PYTHONUSERBASE).
         # zap's download is 232 MiB from github.com and the installer does not
         # retry, so no install fails on its first try.
         run: |
@@ -1208,7 +1207,7 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
           export PATH="$JAVA_HOME_17_X64/bin:$PATH"
-          for tool in zap nuclei checkov yara-x; do
+          for tool in zap nuclei yara-x; do
             installed=false
             for attempt in 1 2 3; do
               if jmo tools install "$tool" --yes; then
