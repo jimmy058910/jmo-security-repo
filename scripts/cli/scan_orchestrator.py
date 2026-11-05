@@ -955,9 +955,9 @@ class ScanOrchestrator:
         """
         Discover GitLab repositories from CLI arguments.
 
-        Supports:
-        - --gitlab-repo: Single repository (format: group/project)
-        - --gitlab-group: All repos in a group
+        Supports `--gitlab-repo`, one repository (format: group/project).
+        `--gitlab-group` is gone until JMo can list a group's projects (#1407):
+        its placeholder cloned `group:<name>.git`, which is not a project.
 
         Returns:
             List of dicts with keys: full_path, url, token, repo, group, name
@@ -983,24 +983,6 @@ class ScanOrchestrator:
                     "repo": repo,
                     "group": group,
                     "name": full_path.replace("/", "_"),
-                }
-            )
-
-        # GitLab group (would need API call to enumerate)
-        if getattr(args, "gitlab_group", None):
-            # Note: Actual implementation would query GitLab API
-            # For now, create a placeholder entry
-            # TODO(issue-#1407): clones `group:<name>.git`, and the colon in the
-            # results folder is an NTFS alternate data stream.
-            group = args.gitlab_group
-            gitlab_repos.append(
-                {
-                    "full_path": f"group:{group}",
-                    "url": url,
-                    "token": getattr(args, "gitlab_token", ""),
-                    "repo": "",
-                    "group": group,
-                    "name": f"group_{group}",
                 }
             )
 

@@ -1433,3 +1433,22 @@ class TestUniqueResultNames:
             "work__app",
         ]
         assert sorted(name for _, name, _ in results) == ["oss__app", "work__app"]
+
+
+def test_no_gitlab_group_placeholder_is_ever_a_target(tmp_path):
+    """`--gitlab-group` is gone (issue #1407, Phase 8 PR A), and with it the
+    placeholder discovery built from it: one target named `group:<name>`, which
+    cloned `<url>/group:<name>.git` and wrote its results under a folder whose
+    colon is an NTFS alternate data stream. A caller that still sets the
+    attribute gets nothing from it."""
+    from types import SimpleNamespace
+
+    orch = ScanOrchestrator(ScanConfig(tools=["trufflehog"], results_dir=tmp_path))
+    args = SimpleNamespace(
+        gitlab_url="https://gitlab.example.com",
+        gitlab_token="t",
+        gitlab_repo=None,
+        gitlab_group="platform",
+    )
+
+    assert orch._discover_gitlab_repos(args) == []
