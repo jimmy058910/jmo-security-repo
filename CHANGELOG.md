@@ -227,6 +227,10 @@ All notable changes to JMo Security will be documented in this file.
   jmo never looked for, so a machine set up with `make tools` reported zap missing. It
   now installs only the developer prerequisites (python3, pip, jq, curl, git, shfmt) and
   runs `jmo tools install --yes`, or `jmo tools update --yes` for `make tools-upgrade`.
+- **The image installs checkov in a virtual environment of its own, `/opt/checkov`
+  (#1436).** Installed over the system's Python packages, checkov needed pip to replace a
+  Debian-packaged dependency, which pip cannot uninstall, so an Ubuntu 26.04 base failed
+  the build on `packaging`. `checkov` on the image's `PATH` is a link to the venv's.
 - **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
   publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
   dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
