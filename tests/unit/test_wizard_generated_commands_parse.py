@@ -553,7 +553,7 @@ def _docker_config(tmp_path, repo_mode: str):
     return config
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="runs the artifact under sh")
+@pytest.mark.skipif(sys.platform == "win32", reason="runs the artifact under bash")
 @pytest.mark.parametrize("repo_mode", ["repo", "tsv"])
 @pytest.mark.parametrize("artifact", ["script", "make"])
 def test_docker_artifacts_create_the_directories_they_mount(
@@ -584,7 +584,9 @@ def test_docker_artifacts_create_the_directories_they_mount(
     if artifact == "script":
         path = tmp_path / "scan.sh"
         path.write_bytes(generate_shell_script(config, command).encode("utf-8"))
-        argv = ["sh", str(path)]
+        # As its shebang says: `set -o pipefail` is bash's, and Ubuntu's dash
+        # rejects it (Debian's accepts it, which hid this locally).
+        argv = ["bash", str(path)]
     else:
         if shutil.which("make") is None:
             pytest.skip("make is not installed")
