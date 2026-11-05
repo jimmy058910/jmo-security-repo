@@ -540,6 +540,41 @@ class TestReadOnlyFilesAreRemoved:
         assert secure_temp.remove_tree(target) is True
         assert not target.exists()
 
+    @pytest.mark.skipif(IS_WINDOWS, reason="POSIX modes, and a symlink needs privilege")
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason="root removes it anyway, so the retry handler never runs",
+    )
+    def test_a_failed_removal_leaves_modes_outside_the_tree_and_read_bits_alone(
+        self, tmp_path: Path
+    ) -> None:
+        """#1429: the retry handler ran `os.chmod(name, stat.S_IWRITE)`. On
+        POSIX that set the whole mode to 0o200, stripping read and execute
+        from what it touched, and it follows a symlink, so a link it could not
+        unlink had its target, outside the tree, set to 0o200 (measured)."""
+        from scripts.core import secure_temp
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        target_file = outside / "target.txt"
+        target_file.write_bytes(b"x")
+        target_file.chmod(0o644)
+        tree = tmp_path / "tree"
+        locked = tree / "locked"
+        locked.mkdir(parents=True)
+        (locked / "link").symlink_to(target_file)
+        # The link cannot be unlinked: its directory is read-only.
+        locked.chmod(0o555)
+        try:
+            assert secure_temp.remove_tree(tree) is False
+
+            assert stat.S_IMODE(target_file.stat().st_mode) == 0o644
+            assert stat.S_IMODE(tree.lstat().st_mode) & 0o500 == 0o500
+            assert stat.S_IMODE(locked.lstat().st_mode) & 0o555 == 0o555
+        finally:
+            tree.chmod(0o755)
+            locked.chmod(0o755)
+
     def test_cleanup_that_leaves_a_file_warns_and_does_not_claim_success(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:

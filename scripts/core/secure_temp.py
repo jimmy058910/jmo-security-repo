@@ -64,8 +64,12 @@ def remove_tree(path: Path | str) -> bool:
 
     def _clear_and_retry(func: Callable[[str], object], name: str, exc: object) -> None:
         try:
-            # TODO(issue-#1429): sets mode 0o200 on POSIX and follows symlinks
-            os.chmod(name, stat.S_IWRITE)
+            # Add the write bit to the mode it has, never replace it (on POSIX
+            # `S_IWRITE` alone is 0o200, which took read and execute away),
+            # and never through a symlink: chmod follows one, so its target,
+            # possibly outside the tree, would change instead (#1429).
+            if not os.path.islink(name):
+                os.chmod(name, os.lstat(name).st_mode | stat.S_IWRITE)
             func(name)
         except OSError as retry_error:
             logger.warning(
