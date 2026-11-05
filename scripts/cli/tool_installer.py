@@ -10,7 +10,6 @@ version string and tool name validation to prevent URL/path injection.
 
 from __future__ import annotations
 
-import hashlib
 import importlib.metadata
 import importlib.util
 import json
@@ -49,11 +48,15 @@ from scripts.core.archive_security import (
     safe_tar_extract,
     safe_zip_extract,
 )
+from scripts.core.git_archive import object_ids
 from scripts.core.install_config import (
     BINARY_URLS,
     DEPENDENCY_INSTALL_COMMANDS,
     DEPENDENCY_MANUAL_COMMANDS,
     DEPENDENCY_VERIFY_COMMANDS,
+    DOWNLOAD_ATTEMPTS,
+    DOWNLOAD_RETRY_DELAY_SECONDS,
+    DOWNLOAD_TIMEOUT_SECONDS,
     EXTRACT_APP_URLS,
     INSTALL_PRIORITIES,
     INSTALL_SCRIPTS,
@@ -1882,31 +1885,27 @@ class ToolInstaller:
         try:
             with self._windows_safe_tempdir() as tmppath:
                 archive = tmppath / "yara-rules.tar.gz"
-                download_cmd = self._get_download_command(url, archive)
-                if not download_cmd:
+                proc = self._download(url, archive)
+                if proc is None:
                     return failed("no download tool available (curl/wget)")
-
-                proc = subprocess.run(
-                    download_cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=300,
-                )
                 if proc.returncode != 0:
                     return failed(
                         f"download failed: "
                         f"{sanitize_subprocess_output(proc.stderr, max_length=200)}"
                     )
 
-                # Checked before extraction: the pin is the commit and its bytes.
-                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-                if digest != YARA_RULES_BUNDLE["sha256"]:
-                    return failed(
-                        f"the download's sha256 {digest} is not the pinned "
-                        f"{YARA_RULES_BUNDLE['sha256']}"
-                    )
+                # Checked before extraction: the pin is the commit and what it
+                # holds, read from the archive's members, not its bytes (#1573).
+                subdir = YARA_RULES_BUNDLE["subdir"]
+                found = object_ids(archive, [subdir, "LICENSE"])
+                for path, key in ((subdir, "tree"), ("LICENSE", "license_blob")):
+                    if found.get(path) != YARA_RULES_BUNDLE[key]:
+                        return failed(
+                            f"the archive's {path} is "
+                            f"{found.get(path, 'missing')}, not the pinned "
+                            f"{YARA_RULES_BUNDLE[key]} of commit "
+                            f"{YARA_RULES_BUNDLE['ref']}"
+                        )
 
                 extract_dir = tmppath / "extracted"
                 extract_dir.mkdir()
@@ -1935,7 +1934,7 @@ class ToolInstaller:
                     return failed("bundle contained no rule JMo may ship")
                 manifest: dict[str, object] = {
                     key: YARA_RULES_BUNDLE[key]
-                    for key in ("repo", "ref", "sha256", "license")
+                    for key in ("repo", "ref", "tree", "license")
                 }
                 manifest |= {
                     "kept_files": kept.kept_files,
@@ -2169,6 +2168,40 @@ class ToolInstaller:
         elif machine.startswith("arm"):
             return "arm"
         return machine
+
+    def _download(
+        self, url: str, output_path: Path
+    ) -> subprocess.CompletedProcess[str] | None:
+        """Download `url` to `output_path`, retrying a failure; None when there
+        is no download tool.
+
+        Every Dockerfile download retries (`curl --retry 3 --retry-delay 5
+        --retry-all-errors`), because GitHub's transient errors failed image
+        builds, and the image installs yara-x's rules through this (#1573).
+        The retry is here rather than in curl's flags: curl older than 7.71
+        rejects `--retry-all-errors`, and wget does not retry an HTTP error.
+        """
+        command = self._get_download_command(url, output_path)
+        if not command:
+            return None
+
+        def attempt() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=DOWNLOAD_TIMEOUT_SECONDS,
+            )
+
+        proc = attempt()
+        for _ in range(DOWNLOAD_ATTEMPTS - 1):
+            if proc.returncode == 0:
+                break
+            time.sleep(DOWNLOAD_RETRY_DELAY_SECONDS)
+            proc = attempt()
+        return proc
 
     def _get_download_command(self, url: str, output_path: Path) -> list[str] | None:
         """Get download command (curl or wget).

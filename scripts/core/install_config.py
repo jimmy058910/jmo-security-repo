@@ -17,6 +17,11 @@ from scripts.core.yara_rules import Review
 # Replace magic numbers with named constants for clarity and easy adjustment
 
 DOWNLOAD_TIMEOUT_SECONDS = 300
+# A download is tried this many times, this far apart, as every Dockerfile
+# download is (`curl --retry 3 --retry-delay 5`): GitHub's transient errors
+# failed image builds until then (#1573).
+DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_RETRY_DELAY_SECONDS = 5
 PIP_INSTALL_TIMEOUT_SECONDS = 600
 SUBPROCESS_DEFAULT_TIMEOUT = 120
 DOWNLOAD_CHUNK_SIZE = 8192
@@ -95,9 +100,15 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 # scripts/core/yara_rules.py drops the others during the fetch (decision 6),
 # and YARA_RULES_REVIEWED lists the files it cannot decide alone.
 #
-# Pinned by commit and by the tarball's sha256, checked before extraction: the
-# repository publishes no releases, and a rule set that changes under you
-# changes your findings. A bump re-reads every file the fetch then refuses.
+# Pinned by commit, and by git's ids for what it holds, checked before
+# extraction: the repository publishes no releases, and a rule set that changes
+# under you changes your findings. Not by the archive's sha256: GitHub builds
+# `/archive/` tarballs on request and does not promise their bytes stay the same
+# (#1573). The ids are what the commit holds, recomputed from the archive by
+# scripts/core/git_archive.py; read them for a new pin with
+#   gh api repos/Neo23x0/signature-base/git/trees/<ref> \
+#     --jq '.tree[] | select(.path=="yara" or .path=="LICENSE") | "\(.path) \(.sha)"'
+# A bump re-reads every file the fetch then refuses.
 YARA_RULES_BUNDLE: dict[str, str] = {
     "repo": "Neo23x0/signature-base",
     "ref": "36ab70428fc5b52701b7ee6107c853ff019ed759",  # 2026-10-29
@@ -105,7 +116,8 @@ YARA_RULES_BUNDLE: dict[str, str] = {
         "https://github.com/Neo23x0/signature-base/"
         "archive/36ab70428fc5b52701b7ee6107c853ff019ed759.tar.gz"
     ),
-    "sha256": "f63f2184ba3608876d695b4003b6e198ba129438dbd5aa9cb4b51ff0a86ebbe4",
+    "tree": "9266045ebadb60de83fc00d6421413043aa4e6a8",  # git id of yara/ at ref
+    "license_blob": "a2486e663132108cffe118790d6195a662a39ab2",  # of LICENSE
     # Directory inside the archive holding the rules; everything else (IOCs,
     # scripts) is dropped, and the LICENSE is copied beside them.
     "subdir": "yara",

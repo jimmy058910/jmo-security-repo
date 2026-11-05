@@ -1,10 +1,12 @@
 """The rule-bundle fetch behind `jmo tools install` (v2.0.0 Phase 6, PR Y,
 Task Y1).
 
-The bundle is pinned by commit *and* by the tarball's sha256, checked before
-anything is extracted; what lands is only what `scripts.core.yara_rules`
-lets through, with a manifest of what it dropped and why; and a bundle the
-filter refuses leaves the rules already installed where they were.
+The bundle is pinned by commit *and* by git's ids for its `yara/` tree and its
+LICENSE, checked before anything is extracted (#1573: GitHub does not promise
+an archive's bytes, only the commit's content); what lands is only what
+`scripts.core.yara_rules` lets through, with a manifest of what it dropped and
+why; and a bundle the filter refuses leaves the rules already installed where
+they were.
 
 The download is a real subprocess that copies a local tarball, so nothing
 here touches the network.
@@ -12,11 +14,11 @@ here touches the network.
 
 from __future__ import annotations
 
-import hashlib
 import importlib.metadata
 import json
 import sys
 import tarfile
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +27,7 @@ import pytest
 from scripts.cli.installers.models import InstallResult
 from scripts.cli.tool_installer import ToolInstaller
 from scripts.cli.tool_manager import ToolStatus
+from scripts.core.git_archive import object_ids
 from scripts.core.install_config import YARA_RULES_BUNDLE
 
 DRL = "Detection Rule License 1.1 https://github.com/Neo23x0/signature-base/blob/master/LICENSE"
@@ -39,7 +42,12 @@ def _rule(name: str, license: str | None = None) -> str:
     return f'rule {name} {{\n    meta:\n{meta}        author = "a"\n    condition:\n        true\n}}\n'
 
 
-def _bundle(tmp_path: Path, files: dict[str, str]) -> tuple[Path, str]:
+Pins = dict[str, str]
+
+
+def _bundle(tmp_path: Path, files: dict[str, str]) -> tuple[Path, Pins]:
+    """A GitHub-shaped archive and its pins, read by `object_ids`, which
+    tests/unit/test_git_archive.py checks against git itself."""
     root = tmp_path / "src" / "signature-base-abc"
     (root / "yara").mkdir(parents=True)
     (root / "LICENSE").write_bytes(b"# Detection Rule License (DRL) 1.1\n")
@@ -48,11 +56,43 @@ def _bundle(tmp_path: Path, files: dict[str, str]) -> tuple[Path, str]:
     tarball = tmp_path / "bundle.tar.gz"
     with tarfile.open(tarball, "w:gz") as tar:
         tar.add(root, arcname=root.name)
-    return tarball, hashlib.sha256(tarball.read_bytes()).hexdigest()
+    ids = object_ids(tarball, ["yara", "LICENSE"])
+    return tarball, {"tree": ids["yara"], "license_blob": ids["LICENSE"]}
+
+
+def _copy(tarball: Path, fail_first: int = 0) -> Callable[[str, Path], list[str]]:
+    """A download command that copies `tarball`, failing its first calls."""
+    calls = tarball.with_suffix(".calls")
+
+    def command(url: str, out: Path) -> list[str]:
+        script = (
+            "import pathlib, shutil, sys\n"
+            "calls = pathlib.Path(sys.argv[3])\n"
+            "n = int(calls.read_text()) if calls.exists() else 0\n"
+            "calls.write_text(str(n + 1))\n"
+            "if n < int(sys.argv[4]):\n"
+            "    sys.exit('curl: (56) Recv failure: Connection reset by peer')\n"
+            "shutil.copyfile(sys.argv[1], sys.argv[2])\n"
+        )
+        return [
+            sys.executable,
+            "-c",
+            script,
+            str(tarball),
+            str(out),
+            str(calls),
+            str(fail_first),
+        ]
+
+    return command
 
 
 def _install(
-    tmp_path: Path, tarball: Path, sha256: str, reviewed: dict | None = None
+    tmp_path: Path,
+    tarball: Path,
+    pins: Pins,
+    reviewed: dict | None = None,
+    fail_first: int = 0,
 ) -> tuple[InstallResult, Path]:
     # The home, not the destination function, is redirected: where the fetch
     # writes is part of what these tests check (Task Y4).
@@ -63,40 +103,73 @@ def _install(
         "repo": "Neo23x0/signature-base",
         "ref": "abc",
         "url": "https://example.invalid/bundle.tar.gz",
-        "sha256": sha256,
+        **pins,
         "subdir": "yara",
         "license": "DRL 1.1",
     }
-
-    def copy(url: str, out: Path) -> list[str]:
-        script = "import shutil, sys; shutil.copyfile(sys.argv[1], sys.argv[2])"
-        return [sys.executable, "-c", script, str(tarball), str(out)]
 
     with (
         patch.dict("scripts.cli.tool_installer.YARA_RULES_BUNDLE", bundle, clear=True),
         patch("scripts.cli.tool_installer.YARA_RULES_REVIEWED", reviewed or {}),
         patch.object(Path, "home", staticmethod(lambda: home)),
-        patch.object(installer, "_get_download_command", side_effect=copy),
+        patch.object(
+            installer, "_get_download_command", side_effect=_copy(tarball, fail_first)
+        ),
+        patch("scripts.cli.tool_installer.time.sleep"),
     ):
         return installer._install_yara_rules(ENGINE), rules_dir
 
 
-def test_a_bundle_whose_sha256_differs_is_refused(tmp_path: Path) -> None:
-    tarball, _ = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
+def test_rules_that_are_not_the_pinned_tree_are_refused(tmp_path: Path) -> None:
+    tarball, pins = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
 
-    result, rules_dir = _install(tmp_path, tarball, "0" * 64)
+    result, rules_dir = _install(tmp_path, tarball, {**pins, "tree": "0" * 40})
 
     assert not result.success
-    assert "sha256" in result.message
+    assert "pinned" in result.message and "0" * 40 in result.message
+    assert not rules_dir.exists()
+
+
+def test_a_licence_that_is_not_the_pinned_one_is_refused(tmp_path: Path) -> None:
+    # DRL binds whoever shares the rules to keep it: it is part of the pin.
+    tarball, pins = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
+
+    result, rules_dir = _install(tmp_path, tarball, {**pins, "license_blob": "1" * 40})
+
+    assert not result.success
+    assert "LICENSE" in result.message
+    assert not rules_dir.exists()
+
+
+def test_a_download_that_fails_twice_is_retried(tmp_path: Path) -> None:
+    # GitHub's transient errors failed image builds until every Dockerfile
+    # download retried (#1573); the image installs the rules through this.
+    tarball, pins = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
+
+    result, rules_dir = _install(tmp_path, tarball, pins, fail_first=2)
+
+    assert result.success, result.message
+    assert (rules_dir / "a.yar").is_file()
+    assert tarball.with_suffix(".calls").read_text() == "3"
+
+
+def test_a_download_is_given_up_after_four_attempts(tmp_path: Path) -> None:
+    tarball, pins = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
+
+    result, rules_dir = _install(tmp_path, tarball, pins, fail_first=99)
+
+    assert not result.success
+    assert "Connection reset" in result.message
+    assert tarball.with_suffix(".calls").read_text() == "4"
     assert not rules_dir.exists()
 
 
 def test_only_redistributable_rules_land_with_a_manifest(tmp_path: Path) -> None:
-    tarball, sha256 = _bundle(
+    tarball, pins = _bundle(
         tmp_path, {"a.yar": _rule("Mine", DRL) + _rule("NonCommercial", CC_BY_NC)}
     )
 
-    result, rules_dir = _install(tmp_path, tarball, sha256)
+    result, rules_dir = _install(tmp_path, tarball, pins)
 
     assert result.success, result.message
     text = (rules_dir / "a.yar").read_bytes().decode("utf-8")
@@ -105,7 +178,8 @@ def test_only_redistributable_rules_land_with_a_manifest(tmp_path: Path) -> None
     assert (rules_dir / "LICENSE").is_file()
     manifest = json.loads((rules_dir / "manifest.json").read_bytes())
     assert manifest["ref"] == "abc"
-    assert manifest["sha256"] == sha256
+    assert manifest["tree"] == pins["tree"]
+    assert "sha256" not in manifest
     assert manifest["kept_rules"] == 1
     assert manifest["dropped"] == [
         {"file": "a.yar", "rule": "NonCommercial", "reason": CC_BY_NC}
@@ -115,14 +189,14 @@ def test_only_redistributable_rules_land_with_a_manifest(tmp_path: Path) -> None
 def test_an_unreviewed_rule_file_fails_and_keeps_the_installed_rules(
     tmp_path: Path,
 ) -> None:
-    tarball, sha256 = _bundle(
+    tarball, pins = _bundle(
         tmp_path, {"gpl.yar": "/*\n License: GPL\n*/\n" + _rule("Mine", DRL)}
     )
     installed = tmp_path / "home" / ".jmo" / "yara-rules"
     installed.mkdir(parents=True)
     (installed / "old.yar").write_bytes(_rule("Old").encode("utf-8"))
 
-    result, rules_dir = _install(tmp_path, tarball, sha256)
+    result, rules_dir = _install(tmp_path, tarball, pins)
 
     assert not result.success
     assert "gpl.yar" in result.message
@@ -238,9 +312,9 @@ def test_a_forced_install_writes_under_home_and_leaves_the_images_rules_alone(
     image = _pinned(tmp_path / "opt" / "yara-rules", "the-images-pin")
     monkeypatch.setattr("scripts.core.paths.IMAGE_YARA_RULES_DIR", image)
     before = _tree(image)
-    tarball, sha256 = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
+    tarball, pins = _bundle(tmp_path, {"a.yar": _rule("Mine", DRL)})
 
-    result, rules_dir = _install(tmp_path, tarball, sha256)
+    result, rules_dir = _install(tmp_path, tarball, pins)
 
     assert result.success, result.message
     assert json.loads((rules_dir / "manifest.json").read_bytes())["ref"] == "abc"

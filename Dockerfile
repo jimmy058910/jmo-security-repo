@@ -264,8 +264,9 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -e "/opt/jmo-s
 
 # yara-x's rules (#1282): the engine ships no detection content, and with no
 # rules it reports every scan clean. Fetched by the command a user runs, `jmo
-# tools install yara-x` (pinned commit, sha256 checked before extraction,
-# non-DRL rules dropped, manifest written), under a scratch HOME, then moved
+# tools install yara-x` (pinned commit, its content checked before extraction,
+# retried like every download here, non-DRL rules dropped, manifest written),
+# under a scratch HOME, then moved
 # out of ~/.jmo: that is the documented persistence mount, and a volume there
 # hides whatever the image put beneath it. scripts/core/paths.py reads
 # /opt/jmo/yara-rules whenever ~/.jmo/yara-rules is absent. Root's and

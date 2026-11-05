@@ -500,6 +500,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`jmo tools install yara-x` retries its download, and pins what the commit holds
+  (#1573).** The rules download ran once, so one transient GitHub error failed an image
+  build or an install; it now tries four times, 5 s apart, as every Dockerfile download
+  does. The pin was the sha256 of the archive GitHub generates on request, bytes GitHub
+  does not promise to keep; it is now git's ids for the commit's `yara/` tree and its
+  `LICENSE`, recomputed from the archive's members before anything is extracted
+  (`scripts/core/git_archive.py`, checked against git itself), and readable for any
+  commit from GitHub's API. `manifest.json` records `tree` in place of `sha256`. A real
+  install at the pin lands the same 719 files and 5,696 rules as before.
 - **A PHP, JSP, VBS or batch script renamed to `.jpg` is reported as disguised
   (#1578).** yara-x's `filetype` variable, which signature-base's rules read as LOKI
   sets it, was set for EXE, ELF, RTF and minidumps only, from 4 bytes. It is now set
