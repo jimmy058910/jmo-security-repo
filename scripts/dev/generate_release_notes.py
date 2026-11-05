@@ -242,7 +242,7 @@ def format_release_notes(version: str, tag: str) -> str:
     notes += "## Installation\n\n"
     notes += "**PyPI (Python package):**\n\n"
     notes += "```bash\n"
-    notes += f"pip install jmo-security=={version}\n"
+    notes += f'pip install "jmo-security[yara]=={version}"\n'
     notes += "```\n\n"
     notes += "**Docker:**\n\n"
     notes += "```bash\n"
