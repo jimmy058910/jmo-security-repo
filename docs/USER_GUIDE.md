@@ -1198,6 +1198,11 @@ This reverts to Phase 1 deduplication only (same tool, same location).
     other needs (TruffleHog's `--since-commit` and `--branch` are history's). `history: false`
     keeps the tree's scan and skips history, and the tool's row says so
 - policy: policy-as-code settings (see [POLICY_AS_CODE.md](POLICY_AS_CODE.md))
+- memory_budget_mb: the most memory, in MB, the scan's tool runs hold at once. Each run is
+  counted at its tool's measured cost (opengrep 550 MB, osv-scanner 650, nuclei 1,450), and
+  one waits while the runs already going plus it would pass the budget; a run larger than the
+  budget runs alone. Default: half the memory free when the scan starts, never below 700.
+  `--memory-budget` overrides it. `threads` also bounds how many tool runs go at once
 
 Example:
 
@@ -1235,7 +1240,7 @@ A `jmo.yml` written for v1.x may still carry `profiles:` or `default_profile:`. 
 Notes and precedence:
 
 - Severity order is CRITICAL > HIGH > MEDIUM > LOW > INFO. Thresholds gate at and above the chosen level.
-- CLI flags override `jmo.yml` where provided: `--tools` over `tools`, `--threads` over `threads`, `--timeout` over `timeout`.
+- CLI flags override `jmo.yml` where provided: `--tools` over `tools`, `--threads` over `threads`, `--timeout` over `timeout`, `--memory-budget` over `memory_budget_mb`.
 
 ## Plugin System
 

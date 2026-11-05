@@ -321,6 +321,9 @@ class ScanConfig:
     # default: only a tool someone named is worth a warning when no target in
     # the scan is one it reads (#1279).
     explicit_tools: bool = False
+    # The most memory, in MB, the scan's tool runs hold at once; None: the
+    # default (`default_memory_budget_mb`), read when the scan starts.
+    memory_budget_mb: int | None = None
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -332,6 +335,10 @@ class ScanConfig:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
         if self.max_workers is not None and self.max_workers < 1:
             raise ValueError(f"max_workers must be >= 1, got {self.max_workers}")
+        if self.memory_budget_mb is not None and self.memory_budget_mb < 1:
+            raise ValueError(
+                f"memory_budget_mb must be >= 1, got {self.memory_budget_mb}"
+            )
 
 
 # How one target's scan ended, derived from its accounting rows. Named
@@ -1126,6 +1133,15 @@ class ScanOrchestrator:
         """
         return not targets.is_empty()
 
+    def get_effective_memory_budget(self) -> int:
+        """The scan's memory budget in MB: the configured one, else half the
+        memory free now, never below 700 (`default_memory_budget_mb`)."""
+        if self.config.memory_budget_mb is not None:
+            return self.config.memory_budget_mb
+        from scripts.cli.scan_utils import default_memory_budget_mb
+
+        return default_memory_budget_mb()
+
     def get_effective_max_workers(self) -> int:
         """
         Calculate effective max_workers value.
@@ -1227,7 +1243,7 @@ class ScanOrchestrator:
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
         from scripts.cli.scan_jobs.url_scanner import url_folder_name
         from scripts.cli.scan_session import found_image_id
-        from scripts.core.tool_runner import stop_requested
+        from scripts.core.tool_runner import scan_limits, stop_requested
 
         all_results: list[tuple[str, str, dict[str, ToolRun]]] = []
         futures = []
@@ -1355,7 +1371,13 @@ class ScanOrchestrator:
         )
         url_folders = unique_names([url_folder_name(url) for url in targets.urls])
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # One memory budget and `max_workers` CPU slots for every tool run in
+        # the scan, whatever its target (Phase 7, B2). Entered first, so it
+        # outlasts every target's thread.
+        with (
+            scan_limits(self.get_effective_memory_budget(), max_workers),
+            ThreadPoolExecutor(max_workers=max_workers) as executor,
+        ):
             for repo, result_name in zip(targets.repos, repo_names, strict=True):
                 if _is_completed("repo", result_name):
                     skipped_count += 1

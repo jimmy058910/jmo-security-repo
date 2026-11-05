@@ -1400,3 +1400,79 @@ class TestAnExplicitTimeoutWinsOverAFloor:
         config = {"per_tool": {"opengrep": {"timeout": 120}}}
         seen = self._timeouts(env, monkeypatch, "--timeout", "60", config=config)
         assert seen == {"opengrep": 120, "trivy": 60}
+
+
+class TestTheScanHoldsItsToolsToOneBudget:
+    """`jmo scan` holds every tool run to one memory budget and `threads` CPU
+    slots for the whole scan (v2.0.0 Phase 7, B2). Decided 2026-11-05: the
+    budget is `--memory-budget`, else `jmo.yml`'s `memory_budget_mb`, else half
+    the memory free at scan start, never below 700 MB."""
+
+    def _held(self, env, monkeypatch, *argv: str, config=None, free_mb=None):
+        from scripts.core import tool_runner
+
+        seen: set = set()
+        costs: dict[str, int] = {}
+
+        class Recording(_WritingRunner):
+            def run_all_parallel(self):
+                limits = tool_runner.current_scan_limits()
+                seen.add((limits.budget_mb, limits.slots) if limits else None)
+                costs.update({d.name: d.memory_mb for d in self._definitions})
+                return super().run_all_parallel()
+
+        for module in JOB_MODULES:
+            monkeypatch.setattr(f"scripts.cli.scan_jobs.{module}.ToolRunner", Recording)
+        if config is not None:
+            (env.results.parent / "jmo.yml").write_bytes(
+                yaml.safe_dump({"outputs": ["json"], **config}).encode()
+            )
+        if free_mb is not None:
+            monkeypatch.setattr(
+                "psutil.virtual_memory",
+                lambda: types.SimpleNamespace(available=free_mb * 1024 * 1024),
+            )
+        env.run(
+            "--repo", str(env.project), "--tools", "trivy", "syft",
+            "--threads", "3", *argv,
+        )  # fmt: skip
+        assert tool_runner.current_scan_limits() is None, "the limits outlived the scan"
+        return seen, costs
+
+    def test_the_command_lines_budget(self, env, monkeypatch):
+        seen, _ = self._held(env, monkeypatch, "--memory-budget", "900")
+        assert seen == {(900, 3)}
+
+    def test_the_configs_budget(self, env, monkeypatch):
+        seen, _ = self._held(env, monkeypatch, config={"memory_budget_mb": 1200})
+        assert seen == {(1200, 3)}
+
+    def test_the_command_line_wins_over_the_config(self, env, monkeypatch):
+        seen, _ = self._held(
+            env,
+            monkeypatch,
+            "--memory-budget",
+            "900",
+            config={"memory_budget_mb": 1200},
+        )
+        assert seen == {(900, 3)}
+
+    def test_half_the_free_memory_by_default(self, env, monkeypatch):
+        seen, _ = self._held(env, monkeypatch, free_mb=4000)
+        assert seen == {(2000, 3)}
+
+    def test_never_below_700_mb(self, env, monkeypatch):
+        seen, _ = self._held(env, monkeypatch, free_mb=1000)
+        assert seen == {(700, 3)}
+
+    def test_each_run_costs_its_descriptors_memory(self, env, monkeypatch):
+        from scripts.core.tool_descriptors import DESCRIPTORS
+
+        _, costs = self._held(env, monkeypatch, "--memory-budget", "900")
+        assert costs == {t: DESCRIPTORS[t].memory_mb for t in ("trivy", "syft")}
+        assert all(costs.values())
+
+    def test_a_budget_below_one_is_a_usage_error(self, env, monkeypatch):
+        with pytest.raises(SystemExit) as exit_:
+            self._held(env, monkeypatch, "--memory-budget", "0")
+        assert exit_.value.code == 2

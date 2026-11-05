@@ -320,6 +320,21 @@ TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
 }
 
 
+# The least memory budget a scan runs with, in MB: the 700 MB target of the
+# v2.0.0 Phase 7 plan, which its largest runs fit one at a time.
+MIN_MEMORY_BUDGET_MB = 700
+
+
+def default_memory_budget_mb() -> int:
+    """Half the memory free now, never below `MIN_MEMORY_BUDGET_MB`. Decided
+    2026-11-05: what a scan's tool runs may hold at once unless `--memory-budget`
+    or `jmo.yml`'s `memory_budget_mb` says otherwise."""
+    import psutil
+
+    free_mb = int(psutil.virtual_memory().available) // (1024 * 1024)
+    return max(MIN_MEMORY_BUDGET_MB, free_mb // 2)
+
+
 def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) -> int:
     """Resolve one tool's timeout.
 

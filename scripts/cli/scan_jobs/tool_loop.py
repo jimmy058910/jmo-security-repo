@@ -771,6 +771,8 @@ def run_tools(
             cwd=inv.cwd,
             env=inv.env,
             exclusive=_descriptor(tool).exclusive,
+            memory_mb=_descriptor(tool).memory_mb,
+            temp_dir=inv.temp_dir,
         )
 
     rows: TargetRows = {}

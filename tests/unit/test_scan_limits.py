@@ -1,0 +1,178 @@
+"""The scan's memory gate and CPU slots (v2.0.0 Phase 7, B2).
+
+Measured on app B before the gate: 1,314 MB peak tree memory on the default
+matrix, because each target's `ToolRunner` ran 4 tools at once and `threads`
+targets ran together, whatever each tool costs. Now one gate per scan admits a
+run while the running total plus its cost (`ToolDefinition.memory_mb`, from the
+descriptor) fits the budget, or when nothing else runs; first come, first
+served. A second limit, `threads` CPU slots, bounds how many run at once.
+
+The runs here are stand-ins that only sleep. One that must not overlap another
+holds a lock directory and exits 7 if it is already held; one that must overlap
+waits for its partner's marker and exits 3 if it never appears.
+"""
+
+from __future__ import annotations
+
+import sys
+import threading
+import time
+from pathlib import Path
+
+import pytest
+
+from scripts.core import tool_runner
+from scripts.core.tool_runner import ToolDefinition, ToolResult, ToolRunner, scan_limits
+
+ALONE = (
+    "import os, sys, time\n"
+    "try:\n"
+    "    os.mkdir(sys.argv[1])\n"
+    "except FileExistsError:\n"
+    "    sys.exit(7)\n"
+    "time.sleep(0.5)\n"
+    "os.rmdir(sys.argv[1])\n"
+)
+TOGETHER = (
+    "import os, sys, time\n"
+    "open(sys.argv[1], 'w').close()\n"
+    "deadline = time.monotonic() + 5\n"
+    "while not os.path.exists(sys.argv[2]):\n"
+    "    if time.monotonic() > deadline:\n"
+    "        sys.exit(3)\n"
+    "    time.sleep(0.05)\n"
+)
+
+
+def _tool(name: str, memory_mb: int, *argv: str) -> ToolDefinition:
+    return ToolDefinition(
+        name=name,
+        command=[sys.executable, "-c", *argv],
+        output_file=None,
+        timeout=30,
+        ok_return_codes=(0,),
+        capture_stdout=True,
+        memory_mb=memory_mb,
+    )
+
+
+def _alone(tmp_path: Path, *costs: int) -> list[ToolDefinition]:
+    lock = str(tmp_path / "in-use")
+    return [_tool(f"t{i}", mb, ALONE, lock) for i, mb in enumerate(costs)]
+
+
+def _together(tmp_path: Path, a: int, b: int) -> list[ToolDefinition]:
+    one, two = str(tmp_path / "one"), str(tmp_path / "two")
+    return [_tool("a", a, TOGETHER, one, two), _tool("b", b, TOGETHER, two, one)]
+
+
+def _run_at_once(tools: list[ToolDefinition]) -> list[ToolResult]:
+    """Each tool on a runner of its own, as each target has one."""
+    results: list[ToolResult] = []
+    threads = [
+        threading.Thread(target=lambda t=t: results.append(ToolRunner([t]).run_tool(t)))
+        for t in tools
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+    return results
+
+
+def _codes(results: list[ToolResult]) -> list[int]:
+    return sorted(r.returncode for r in results)
+
+
+def test_two_runs_that_do_not_fit_together_never_overlap(tmp_path) -> None:
+    with scan_limits(budget_mb=600, slots=4):
+        results = _run_at_once(_alone(tmp_path, 550, 550))
+    assert _codes(results) == [0, 0], results
+
+
+def test_two_runs_that_fit_together_do_overlap(tmp_path) -> None:
+    with scan_limits(budget_mb=600, slots=4):
+        results = _run_at_once(_together(tmp_path, 100, 100))
+    assert _codes(results) == [0, 0], results
+
+
+def test_the_stand_ins_tell_overlap_from_none(tmp_path) -> None:
+    """The control: with no limits two `ALONE` runs collide."""
+    assert _codes(_run_at_once(_alone(tmp_path, 550, 550))) == [0, 7]
+
+
+def test_a_run_larger_than_the_budget_runs_alone_and_finishes(tmp_path) -> None:
+    with scan_limits(budget_mb=600, slots=4):
+        results = _run_at_once(_alone(tmp_path, 900, 100))
+    assert _codes(results) == [0, 0], results
+
+
+def test_cpu_slots_bound_the_count_whatever_the_budget(tmp_path) -> None:
+    with scan_limits(budget_mb=100_000, slots=1):
+        results = _run_at_once(_alone(tmp_path, 10, 10))
+    assert _codes(results) == [0, 0], results
+
+
+def test_first_come_first_served(tmp_path) -> None:
+    """A large run waiting is not passed by a small one that would fit."""
+    order: list[str] = []
+    with scan_limits(budget_mb=600, slots=4) as limits:
+        assert limits.admit(400)
+
+        def wait(name: str, mb: int) -> None:
+            assert limits.admit(mb)
+            order.append(name)
+
+        large = threading.Thread(target=wait, args=("large", 550))
+        large.start()
+        time.sleep(0.3)
+        small = threading.Thread(target=wait, args=("small", 100))
+        small.start()
+        time.sleep(0.3)
+        assert order == [], "the small run went past the large one"
+        limits.release(400)
+        large.join(timeout=5)
+        time.sleep(0.3)
+        assert order == ["large"], "the small run fits beside neither"
+        limits.release(550)
+        small.join(timeout=5)
+        assert order == ["large", "small"]
+        limits.release(100)
+
+
+def test_ctrl_c_wakes_a_waiting_run_and_it_never_starts(tmp_path) -> None:
+    marker = tmp_path / "started"
+    tool = _tool("waits", 550, f"open({str(marker)!r}, 'w')")
+    results: list[ToolResult] = []
+    with scan_limits(budget_mb=600, slots=4) as limits:
+        assert limits.admit(550)
+        waiter = threading.Thread(
+            target=lambda: results.append(ToolRunner([tool]).run_tool(tool))
+        )
+        try:
+            waiter.start()
+            time.sleep(0.5)
+            assert waiter.is_alive(), "the run did not wait for the gate"
+            tool_runner.request_stop()
+            waiter.join(timeout=5)
+            assert not waiter.is_alive(), "Ctrl-C did not wake it"
+        finally:
+            tool_runner.clear_stop()
+            limits.release(550)
+            waiter.join(timeout=5)
+    assert results[0].failure == "interrupted"
+    assert not marker.exists()
+
+
+def test_limits_last_only_for_their_scan() -> None:
+    with scan_limits(budget_mb=700, slots=2) as limits:
+        assert tool_runner.current_scan_limits() is limits
+        assert (limits.budget_mb, limits.slots) == (700, 2)
+    assert tool_runner.current_scan_limits() is None
+
+
+@pytest.mark.parametrize(("budget", "slots"), [(0, 1), (700, 0)])
+def test_a_limit_below_one_is_refused(budget: int, slots: int) -> None:
+    with pytest.raises(ValueError):
+        with scan_limits(budget_mb=budget, slots=slots):
+            pass

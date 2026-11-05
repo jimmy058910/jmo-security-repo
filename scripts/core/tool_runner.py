@@ -11,13 +11,17 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import signal
+import stat
 import subprocess
 import sys
 import threading
 import time
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -93,6 +97,12 @@ class ToolDefinition:
     # One run of this tool at a time in the process, whatever runner holds it
     # (`ToolDescriptor.exclusive`: zap, #1422).
     exclusive: bool = False
+    # What the run costs the scan's memory budget, in MB
+    # (`ToolDescriptor.memory_mb`; `scan_limits`).
+    memory_mb: int = 0
+    # The child's temporary directory (`TMPDIR`, `TMP`, `TEMP`), made before
+    # the run and removed after it: trufflehog's history clone, on disk.
+    temp_dir: Path | None = None
 
     @property
     def retry_config(self) -> RetryConfig:
@@ -199,6 +209,102 @@ _EXCLUSIVE_LOCK = threading.Lock()
 def _exclusive(name: str) -> threading.Lock:
     with _EXCLUSIVE_LOCK:
         return _EXCLUSIVE.setdefault(name, threading.Lock())
+
+
+class ScanLimits:
+    """One scan's limits on the tool runs it holds at once (v2.0.0 Phase 7).
+
+    Memory: a run is admitted while the running total plus its cost
+    (`ToolDefinition.memory_mb`) fits `budget_mb`, or when nothing else is
+    running, so a run larger than the budget runs alone and never waits for
+    ever. First come, first served: a large run waiting is not passed by a
+    smaller one that would fit. CPU: at most `slots` runs at once, whatever the
+    budget. Measured before (app B, default matrix): 1,314 MB, since each
+    target ran 4 tools and `threads` targets ran together, whatever each cost.
+    """
+
+    def __init__(self, budget_mb: int, slots: int) -> None:
+        if budget_mb < 1 or slots < 1:
+            raise ValueError(
+                "a memory budget and a slot count are at least 1, "
+                f"got {budget_mb} MB and {slots} slot(s)"
+            )
+        self.budget_mb = budget_mb
+        self.slots = slots
+        self._slots = threading.BoundedSemaphore(slots)
+        self._turn = threading.Condition()
+        self._queue: deque[object] = deque()
+        self._used_mb = 0
+        self._running = 0
+
+    def admit(self, memory_mb: int) -> bool:
+        """Wait for a slot, then for the budget; False when Ctrl-C ends the
+        wait, holding neither."""
+        while not self._slots.acquire(timeout=0.25):
+            if _STOP.is_set():
+                return False
+        ticket = object()
+        with self._turn:
+            self._queue.append(ticket)
+            while not (
+                self._queue[0] is ticket
+                and (self._running == 0 or self._used_mb + memory_mb <= self.budget_mb)
+            ):
+                if _STOP.is_set():
+                    self._queue.remove(ticket)
+                    self._turn.notify_all()
+                    self._slots.release()
+                    return False
+                self._turn.wait(timeout=0.25)
+            self._queue.popleft()
+            self._used_mb += memory_mb
+            self._running += 1
+            # The next in line may fit beside this one.
+            self._turn.notify_all()
+        return True
+
+    def release(self, memory_mb: int) -> None:
+        with self._turn:
+            self._used_mb -= memory_mb
+            self._running -= 1
+            self._turn.notify_all()
+        self._slots.release()
+
+
+_LIMITS: ScanLimits | None = None
+
+
+@contextmanager
+def scan_limits(budget_mb: int, slots: int) -> Iterator[ScanLimits]:
+    """Hold every `ToolRunner` run in this process to these limits until the
+    block ends (`scan_all` holds one for its scan). Outside one a run is
+    unlimited, as a direct `ToolRunner` use always was."""
+    global _LIMITS
+    limits = ScanLimits(budget_mb, slots)
+    _LIMITS = limits
+    try:
+        yield limits
+    finally:
+        _LIMITS = None
+
+
+def current_scan_limits() -> ScanLimits | None:
+    return _LIMITS
+
+
+def _remove_tree(path: Path) -> None:
+    """Remove a run's temporary directory, read-only files included: git
+    makes its objects read-only, and Windows will not delete those as they
+    are."""
+
+    def writable_then_retry(func, failed, _exc) -> None:
+        try:
+            os.chmod(failed, stat.S_IWRITE)
+            func(failed)
+        except OSError:
+            pass
+
+    shutil.rmtree(path, onexc=writable_then_retry)
 
 
 def clear_stop() -> None:
@@ -580,19 +686,33 @@ class ToolRunner:
         return "crash"
 
     def run_tool(self, tool: ToolDefinition) -> ToolResult:
-        """Run one tool (`_run_tool`); an `exclusive` one waits until no other
-        run of it is running, and its duration and timeout count from when it
-        starts. Ctrl-C ends the wait: the run never starts."""
-        if not tool.exclusive:
-            return self._run_tool(tool)
-        lock = _exclusive(tool.name)
-        while not lock.acquire(timeout=0.25):
-            if _STOP.is_set():
-                return self._interrupted(tool, 0, None)
+        """Run one tool (`_run_tool`). An `exclusive` one first waits until no
+        other run of it is running; then, inside a scan, every run waits for
+        the scan's limits (`scan_limits`). Its duration and timeout count from
+        when it starts, and Ctrl-C ends a wait: the run never starts."""
+        lock = _exclusive(tool.name) if tool.exclusive else None
+        if lock is not None:
+            while not lock.acquire(timeout=0.25):
+                if _STOP.is_set():
+                    return self._interrupted(tool, 0, None)
         try:
-            return self._run_tool(tool)
+            limits = _LIMITS
+            if limits is not None and not limits.admit(tool.memory_mb):
+                return self._interrupted(tool, 0, None)
+            try:
+                if tool.temp_dir is not None:
+                    tool.temp_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    return self._run_tool(tool)
+                finally:
+                    if tool.temp_dir is not None:
+                        _remove_tree(tool.temp_dir)
+            finally:
+                if limits is not None:
+                    limits.release(tool.memory_mb)
         finally:
-            lock.release()
+            if lock is not None:
+                lock.release()
 
     def _run_tool(self, tool: ToolDefinition) -> ToolResult:
         """
@@ -696,6 +816,10 @@ class ToolRunner:
             child_env.pop("PYTHONPATH", None)
             child_env.pop("PYTHONHOME", None)
 
+        if tool.temp_dir is not None:
+            # TMPDIR on Linux and macOS, TMP and TEMP on Windows.
+            for name in ("TMPDIR", "TMP", "TEMP"):
+                child_env[name] = str(tool.temp_dir)
         if tool.env:
             child_env.update(tool.env)
 

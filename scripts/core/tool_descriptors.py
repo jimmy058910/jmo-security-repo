@@ -378,6 +378,9 @@ class Invocation:
     label: str = ""
     # Merged over the environment the runner builds for the child.
     env: Mapping[str, str] | None = None
+    # The child's temporary directory, made for the run and removed after it
+    # (`ToolDefinition.temp_dir`).
+    temp_dir: Path | None = None
     # What to run instead when this invocation fails in one known way.
     fallback: Fallback | None = None
     # The files it was handed, `/`-separated and relative to `cwd`, for a row
@@ -836,6 +839,11 @@ def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
                 capture_stdout=True,
                 ok_return_codes=(0, 1),
                 label="git",
+                # It clones the repository into its temporary directory: 329 MB
+                # for app B (Phase 7, B1), RAM on a tmpfs `/tmp`, where no
+                # process's memory shows it to the scan's gate. On disk, under
+                # the target's results; dot-prefixed, so the report reads none.
+                temp_dir=ctx.out_dir / ".tmp-trufflehog-git",
             )
         )
     return invocations

@@ -92,6 +92,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     tools = parse_tool_names(cli_tools or cfg.tools)
     explicit_tools = bool(cli_tools) or cfg.tools_from_file
     threads = getattr(args, "threads", None) or cfg.threads
+    memory_budget_mb = getattr(args, "memory_budget", None) or cfg.memory_budget_mb
     timeout = getattr(args, "timeout", None) or cfg.timeout or 600
     include = cfg.include
     exclude = cfg.exclude
@@ -142,6 +143,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
         "tools": tools,
         "explicit_tools": explicit_tools,
         "threads": threads,
+        "memory_budget_mb": memory_budget_mb,
         "timeout": timeout,
         "include": include,
         "exclude": exclude,
@@ -293,7 +295,17 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
         "--threads",
         type=int,
         default=None,
-        help="Concurrent repos to scan (default: auto)",
+        help="Concurrent targets to scan, and the most tool runs at once across "
+        "the scan (default: auto)",
+    )
+    parser.add_argument(
+        "--memory-budget",
+        type=_positive_int,
+        default=None,
+        metavar="MB",
+        help="Most memory, in MB, the scan's tool runs hold at once (default: "
+        "jmo.yml's memory_budget_mb, else half the memory free at scan start, "
+        "never below 700). A run larger than it runs alone",
     )
     parser.add_argument(
         "--allow-missing-tools",
@@ -3210,6 +3222,7 @@ def cmd_scan(args) -> int:
             else int(eff["retries"] or 0)
         ),
         max_workers=_get_max_workers(args, eff, cfg),
+        memory_budget_mb=eff.get("memory_budget_mb"),
         include_patterns=eff.get("include", []) or [],
         exclude_patterns=eff.get("exclude", []) or [],
         allow_missing_tools=getattr(args, "allow_missing_tools", False),
@@ -3468,6 +3481,14 @@ def cmd_scan(args) -> int:
         "INFO",
         f"Starting scan with {total_tools} requested tool(s) for "
         f"{total_targets} target(s){missing_note}",
+    )
+    # Read once, here, so the scan holds the budget this line names.
+    scan_config.memory_budget_mb = orchestrator.get_effective_memory_budget()
+    _log(
+        args,
+        "INFO",
+        f"Tool runs held to {scan_config.memory_budget_mb} MB of memory and "
+        f"{orchestrator.get_effective_max_workers()} at a time",
     )
 
     # Per-target outcomes, so the exit code can reflect them. `scan_all`'s
