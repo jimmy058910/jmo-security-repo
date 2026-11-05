@@ -797,6 +797,13 @@ def _verification(ctx: ScanContext, flags: Sequence[str]) -> tuple[str, ...]:
     return () if verify else ("--no-verification",)
 
 
+def _run_temp_dir(label: str, out_dir: Path) -> Path:
+    # tool_runner -> paths; imported here, as `tool_utils` is elsewhere.
+    from scripts.core.tool_runner import run_temp_dir
+
+    return run_temp_dir(label, out_dir)
+
+
 def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
     root = scan_root(ctx.target)
     invocations = [
@@ -841,9 +848,10 @@ def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
                 label="git",
                 # It clones the repository into its temporary directory: 329 MB
                 # for app B (Phase 7, B1), RAM on a tmpfs `/tmp`, where no
-                # process's memory shows it to the scan's gate. On disk, under
-                # the target's results; dot-prefixed, so the report reads none.
-                temp_dir=ctx.out_dir / ".tmp-trufflehog-git",
+                # process's memory shows it to the scan's gate. On disk, in
+                # JMo's own `~/.jmo/tmp`: not the results, which CI uploads
+                # whole, since a clone a killed jmo leaves holds the history.
+                temp_dir=_run_temp_dir("trufflehog-git", ctx.out_dir),
             )
         )
     return invocations

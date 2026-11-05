@@ -3435,9 +3435,13 @@ def cmd_scan(args) -> int:
         contain_process_tree,
         request_stop,
         stop_requested,
+        sweep_stale_temp_dirs,
     )
 
     clear_stop()
+    # What a killed jmo's runs left in ~/.jmo/tmp: a trufflehog clone holds
+    # the scanned repository's history.
+    sweep_stale_temp_dirs()
     # Windows: every process jmo starts dies with it, however jmo exits (B3).
     contain_process_tree()
     signals_seen = [0]

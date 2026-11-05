@@ -9,8 +9,10 @@ Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import re
 import shutil
 import signal
 import stat
@@ -294,19 +296,62 @@ def current_scan_limits() -> ScanLimits | None:
     return _LIMITS
 
 
+def jmo_temp_root() -> Path:
+    """Where JMo's runs keep temporary files: on disk, outside any results
+    folder (CI uploads those whole)."""
+    return Path.home() / ".jmo" / "tmp"
+
+
+def run_temp_dir(label: str, out_dir: Path) -> Path:
+    """A run's own temporary directory: this jmo's pid (what
+    `sweep_stale_temp_dirs` reads), the target's output folder hashed (two
+    targets never share one), and `label`."""
+    digest = hashlib.sha256(str(Path(out_dir).resolve()).encode()).hexdigest()[:12]
+    return jmo_temp_root() / f"{os.getpid()}-{digest}-{label}"
+
+
+def sweep_stale_temp_dirs() -> None:
+    """Remove what a jmo that is no longer running left in `jmo_temp_root`:
+    a second Ctrl-C exits at once and an OOM kill runs nothing, and a
+    trufflehog clone holds the history's secrets."""
+    import psutil
+
+    root = jmo_temp_root()
+    if not root.is_dir():
+        return
+    for folder in root.iterdir():
+        owner = re.match(r"(\d+)-", folder.name)
+        if owner is None or int(owner.group(1)) == os.getpid():
+            continue
+        if not psutil.pid_exists(int(owner.group(1))):
+            _remove_tree(folder)
+
+
 def _remove_tree(path: Path) -> None:
-    """Remove a run's temporary directory, read-only files included: git
-    makes its objects read-only, and Windows will not delete those as they
-    are."""
+    """Remove a run's temporary directory, read-only files included (git makes
+    its objects read-only, and Windows will not delete those as they are).
+    Never raises: it runs after the run, whose result an error here would
+    replace. What it cannot remove is named in a WARNING."""
 
     def writable_then_retry(func, failed, _exc) -> None:
+        if func not in (os.unlink, os.remove, os.rmdir):
+            return
         try:
-            os.chmod(failed, stat.S_IWRITE)
+            os.chmod(failed, os.stat(failed).st_mode | stat.S_IWRITE)
             func(failed)
         except OSError:
             pass
 
-    shutil.rmtree(path, onexc=writable_then_retry)
+    try:
+        shutil.rmtree(path, onexc=writable_then_retry)
+    except Exception:  # Acceptable: cleanup must not replace the run's result
+        pass
+    if path.exists():
+        logger.warning(
+            "%s could not be removed; it may hold a copy of the scanned "
+            "repository, delete it",
+            path,
+        )
 
 
 def clear_stop() -> None:
