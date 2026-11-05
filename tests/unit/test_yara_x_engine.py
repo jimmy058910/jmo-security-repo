@@ -155,6 +155,35 @@ def test_a_scan_without_the_engine_says_which_extra_adds_it(
     assert 'install "jmo-security[yara]"' in caplog.text
 
 
+def test_a_skipped_row_without_the_engine_says_which_extra_adds_it(
+    tmp_path: Path,
+) -> None:
+    # --allow-missing-tools records an empty result instead of failing; the
+    # row still says why the tool did not run.
+    from scripts.cli.scan_jobs.repository_scanner import scan_repository
+    from scripts.core.scan_timings import Reason, State
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_bytes(b"import os\n")
+
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner"):
+        _, rows = scan_repository(
+            repo=repo,
+            results_dir=tmp_path / "out",
+            tools=["yara-x"],
+            timeout=60,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=lambda _tool: None,
+        )
+
+    row = rows["yara-x"]
+    assert row.state is State.SKIPPED and row.reason is Reason.NOT_INSTALLED
+    assert 'install "jmo-security[yara]"' in (row.detail or "")
+
+
 def test_a_default_install_leaves_out_an_engine_it_cannot_add(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
