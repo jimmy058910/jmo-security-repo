@@ -2476,8 +2476,11 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             short_switches=frozenset({"-h", "-o", "-p", "-q", "-v", "-V"}),
             # The workflows GitHub runs (the root's, flat), every composite
-            # action, and Dependabot's config, which has audits of its own
-            # (6 `dependabot-cooldown` findings at 3098c766 without it).
+            # action, Dependabot's config, which has audits of its own
+            # (6 `dependabot-cooldown` findings at 3098c766 without it), and
+            # every pre-commit config, whose hook repositories zizmor audits
+            # (`archived-uses`, `typosquat-uses`, `insecure-url-scheme`: 7
+            # findings on its own 3 test inputs, #1592).
             file_patterns=(
                 ".github/workflows/*.yml",
                 ".github/workflows/*.yaml",
@@ -2485,6 +2488,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 "**/action.yaml",
                 ".github/dependabot.yml",
                 ".github/dependabot.yaml",
+                "**/.pre-commit-config.yaml",
+                "**/.pre-commit-config.yml",
             ),
             no_files_reason=Reason.NO_WORKFLOWS,
             # rc 3 with "no inputs collected": every file handed over was
