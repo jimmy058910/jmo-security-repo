@@ -25,13 +25,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from scripts.core.tool_utils import find_tool
 
 logger = logging.getLogger(__name__)
 
@@ -303,13 +304,27 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
 
 
 def tool_available(tool_name: str) -> bool:
-    """Check if a tool is available in PATH."""
-    # Get the base command (first word)
+    """Whether JMo would find the tool's executable: `find_tool`, which also
+    reads ~/.jmo/bin and the isolated venvs `jmo tools install` fills (#1083)."""
     contract = TOOL_CONTRACTS.get(tool_name, {})
     command = contract.get("command", [tool_name])
     base_cmd = command[0] if command else tool_name
 
-    return shutil.which(base_cmd) is not None
+    return find_tool(base_cmd) is not None
+
+
+def resolved_command(contract: dict[str, Any], sample_target: Path) -> list[str]:
+    """The contract's command for `sample_target`, its executable resolved as
+    JMo resolves it, so the binary tested is the one a scan runs (#1083).
+
+    Raises:
+        FileNotFoundError: If JMo would not find the executable
+    """
+    executable, *args = contract["command"]
+    found = find_tool(executable)
+    if found is None:
+        raise FileNotFoundError(f"{executable} is not installed where JMo looks")
+    return [found, *(part.replace("{target}", str(sample_target)) for part in args)]
 
 
 def run_tool_on_sample(
@@ -334,10 +349,7 @@ def run_tool_on_sample(
     if not sample_target.exists():
         raise FileNotFoundError(f"Sample target not found: {sample_target}")
 
-    # Build command with target substitution
-    command = []
-    for part in contract["command"]:
-        command.append(part.replace("{target}", str(sample_target)))
+    command = resolved_command(contract, sample_target)
 
     logger.info("Running contract test: %s", " ".join(command))
 
@@ -686,6 +698,32 @@ class TestContractInfrastructure:
         assert Path(contract["cwd"].replace("{target}", str(sample))).resolve() == (
             invocation.cwd
         )
+
+    def test_a_tool_jmo_installed_is_found_and_run_where_jmo_finds_it(
+        self, tmp_path, monkeypatch
+    ):
+        """`jmo tools install` puts a binary in ~/.jmo/bin, which is not on
+        PATH. Looking only on PATH (`shutil.which`), these tests skipped 9 of 10
+        tools on a machine set up the documented way (#1083): the contract is
+        "the binary JMo runs prints what its adapter reads", so it is resolved
+        as JMo resolves it, by `find_tool`, and run by that path."""
+        home = tmp_path / "home"
+        installed = home / ".jmo" / "bin" / "hadolint"
+        if sys.platform == "win32":
+            installed = installed.with_suffix(".exe")
+        installed.parent.mkdir(parents=True)
+        installed.write_bytes(b"")
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+        monkeypatch.setenv("PATH", str(tmp_path / "nothing-on-path"))
+        contract = TOOL_CONTRACTS["hadolint"]
+        sample = SAMPLES_DIR / contract["sample_target"]
+
+        assert tool_available("hadolint")
+        command = resolved_command(contract, sample)
+        assert command[0] == str(installed)
+        assert command[1:] == [
+            part.replace("{target}", str(sample)) for part in contract["command"][1:]
+        ]
 
     def test_contracts_cover_key_adapters(self):
         """Verify contracts exist for critical adapters."""
