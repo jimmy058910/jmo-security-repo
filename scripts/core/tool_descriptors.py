@@ -498,6 +498,11 @@ class ToolDescriptor:
     # UNC path; both Windows), fails the row before it runs (a trigger can
     # only skip).
     precheck: Precheck | None = None
+    # What starts in place of the batch launcher (`.bat`/`.cmd`) the tool
+    # resolved to, from that launcher; None when nothing can. zap's `zap.bat`
+    # is replaced by its java line (`zap_java`), so cmd.exe never reads zap's
+    # arguments and `tool_flags` need not drop them (#1427).
+    replaces_launcher: Callable[[Path], str | None] | None = None
     # The tool was handed files and read none of them: a skip, not a failure.
     nothing_read: NothingRead | None = None
     # Which of the files it was handed it did not read, from its stderr.
@@ -2015,6 +2020,12 @@ def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
     return (java, ZAP_HEAP, "-jar", str(jars[0])), ""
 
 
+def _zap_java_executable(launcher: Path) -> str | None:
+    """The java that runs in place of `zap.bat` (`zap_java`), or None."""
+    launch, _problem = zap_java(launcher)
+    return launch[0] if launch else None
+
+
 def _zap_launch(ctx: ScanContext) -> Shortfall | None:
     """A `zap.bat` that cannot be replaced by java fails the row: run, it
     would put JMo's arguments through cmd.exe (`zap_java`)."""
@@ -2492,6 +2503,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
             precheck=_zap_launch,
+            replaces_launcher=_zap_java_executable,
             partly_read=_zap_partly_read,
             automation_plan=True,
             # The plan's whole budget (`zap_minutes`).

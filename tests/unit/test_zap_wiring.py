@@ -650,6 +650,52 @@ def _run(tmp_path, monkeypatch, tools, **kw):
     return rows, out, {d.name: d for d in _Recording.definitions}
 
 
+class TestZapsFlagsReachJava:
+    """On Windows zap resolves to `zap.bat`, which JMo never starts: it runs the
+    java line `zap.bat` holds (`zap_java`), so cmd.exe never reads zap's
+    arguments. `tool_flags` was handed `zap.bat` and dropped a `-config` value
+    holding `&` with a WARNING saying zap runs through zap.bat (#1427)."""
+
+    def test_a_metacharacter_flag_reaches_java_whole(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        zap_dir = tmp_path / "zap"
+        zap_dir.mkdir()
+        (zap_dir / "zap.bat").write_bytes(b"")
+        (zap_dir / "zap-2.17.0.jar").write_bytes(b"")
+        java = str(tmp_path / "jre" / "bin" / "java.exe")
+        real = tool_utils.find_tool
+        monkeypatch.setattr(
+            tool_utils, "find_tool", lambda name: java if name == "java" else real(name)
+        )
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "home"))
+        out = tmp_path / "out"
+        out.mkdir()
+        flags = ["-config", "spider.userAgent=a&b%c"]
+
+        with caplog.at_level(logging.WARNING):
+            rows = tool_loop.run_tools(
+                tools=["zap"],
+                target_type="url",
+                target=TARGET,
+                target_label=TARGET,
+                out_dir=out,
+                timeout=600,
+                retries=0,
+                per_tool_config={"zap": {"flags": flags}},
+                allow_missing_tools=False,
+                runner_cls=_Recording,
+                find_tool_func=lambda name: str(zap_dir / "zap.bat"),
+                write_stub_func=lambda tool, path: None,
+            )
+
+        assert rows["zap"].state is State.RAN, rows["zap"]
+        (definition,) = _Recording.definitions
+        assert definition.command[0] == java
+        assert definition.command[-2:] == flags
+        assert not [r for r in caplog.records if "zap.bat" in r.getMessage()]
+
+
 class TestTheLoopWritesTheRowsPlan:
     def test_zap_runs_the_plan_written_for_this_target(self, tmp_path, monkeypatch):
         _, out, defs = _run(

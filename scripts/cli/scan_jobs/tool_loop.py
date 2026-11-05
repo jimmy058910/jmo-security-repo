@@ -62,6 +62,7 @@ from ...core.tool_descriptors import (
     Shortfall,
     SkipIfEmpty,
     ToolDescriptor,
+    is_batch_launcher,
     read_history,
     scan_root,
 )
@@ -804,6 +805,13 @@ def run_tools(
                 )
             continue
 
+        # What Windows will start: the batch launcher the tool resolved to, or
+        # what runs in its place (zap's java), whose arguments cmd.exe never reads.
+        launched = (
+            d.replaces_launcher(Path(binary))
+            if d.replaces_launcher and is_batch_launcher(binary)
+            else None
+        ) or binary
         tool_config = per_tool_config.get(tool)
         files: tuple[str, ...] = ()
         if d.file_patterns and repo_root is not None:
@@ -847,10 +855,11 @@ def run_tools(
             target=target,
             out_dir=out_dir,
             binary=binary,
-            # The resolved executable: a `.cmd` launcher's argv is re-parsed.
-            flags=tuple(tool_flags(per_tool_config, tool, executable=binary)),
+            # What will start: a `.cmd` launcher's argv is re-parsed, unless
+            # something runs in its place (zap's java, #1427).
+            flags=tuple(tool_flags(per_tool_config, tool, executable=launched)),
             history_flags=tuple(
-                tool_flags(per_tool_config, tool, "history_flags", executable=binary)
+                tool_flags(per_tool_config, tool, "history_flags", executable=launched)
             ),
             tool_config=tool_config if isinstance(tool_config, dict) else {},
             exclusion_args=tree_excl,
