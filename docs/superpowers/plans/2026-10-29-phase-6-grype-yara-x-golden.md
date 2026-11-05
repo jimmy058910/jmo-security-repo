@@ -317,7 +317,7 @@ reports are in `~/.cache/jmo-p6/premise/`.
   audit). The roster line stays as it is (`derive` hashes it; Phase 4's keeps its closed
   issues too); the prose says 22 were open on 2026-10-29.
 - Program plan § Phase 6, the answer keys (decision 9 put all of them here): Phase 6
-  carries vibeproof, zizmor's and osv-scanner's own fixtures, juice-shop's markers,
+  carries vibeproof, zizmor's own fixtures (osv-scanner's dropped 2026-11-05, F6), juice-shop's markers,
   sca-kitchen-sink, BenchProctor TypeScript and JavaScript, and KICS Dockerfile and
   Kubernetes; CredData and KICS Terraform and CloudFormation go after the tag (J7). The
   Phase 4 plan's Ground truth table puts SAST and the juice-shop markers in Phase 5, whose
@@ -1314,8 +1314,14 @@ The job is deleted, not rebuilt (J6).
 - [ ] **Step 1:** zizmor: at the pinned version, fetch `crates/zizmor/tests/integration`
   (MIT) by tag; run JMo's zizmor on each input and assert the (audit, line, col) set equals
   the insta snapshot's, the online-only audits excluded by name.
-- [ ] **Step 2:** osv-scanner: its own fixtures (Apache-2.0) against the frozen
-  `tests/fixtures/osv-db`, the wiring oracle.
+- [x] **Step 2: dropped (Decided 2026-11-05, Jimmy).** osv-scanner's own fixtures against
+  the frozen `tests/fixtures/osv-db` grade nothing: its three synthetic `JMO-TEST`
+  advisories (PyPI, npm, Go) match no package in osv-scanner's fixtures, so every fixture
+  reads 0; and osv-scanner's own expected outputs (`cmd/osv-scanner/scan/source/__snapshots__`
+  at v2.7.0) come from `--download-offline-databases` runs replayed through go-vcr
+  cassettes, not a static key (measured 2026-11-05). T4's sca-kitchen-sink oracle, every
+  lockfile format with advisories built to match, stands as osv-scanner's grader. No
+  after-the-tag issue for a cassette-replay key.
 - [ ] **Step 3:** Commit `test: zizmor and osv-scanner graded against their own answer keys`.
 
 ## Task F6b: KICS's Kubernetes samples (moved from E6, J10) (P5)
@@ -1387,13 +1393,14 @@ cache), `tests/integration/test_benchproctor.py`
   works; the image's yara-x `execution_ready`, with and without an empty `~/.jmo` bind mount,
   `KNOWN_NOT_READY` empty; every finding names its rule's author.
 - Golden = 14 / 14, every `finding_count` > 0, each meta-guard mutation-tested.
-- Seven answer keys run (J7): vibeproof (N2); zizmor's and osv-scanner's own fixtures (F6);
-  juice-shop's 40 marked lines with a recorded detection table (T3); the 15 sca-kitchen-sink
+- Six answer keys run (J7): vibeproof (N2); zizmor's own snapshots (F6); juice-shop's 40
+  marked lines with a recorded detection table (T3); the 15 sca-kitchen-sink
   lockfiles giving exactly their 15 synthetic advisories offline (T4); KICS's Dockerfile line
   floor recorded through `jmo scan` (E6), and its Kubernetes samples graded the same way or
   the key dropped with its reason (F6b, J10); BenchProctor's TypeScript and
   JavaScript Youden's J recorded per framework (F7). Each fails on a regression from its
-  recorded table.
+  recorded table. osv-scanner's own fixtures were dropped (Decided 2026-11-05, F6 Step 2):
+  T4 is osv-scanner's grader.
 - No CI job reads green on all skips.
 - The 27 open issues closed by commit keywords, `phase_audit closers` MISSING 0.
 
@@ -1429,7 +1436,7 @@ WebGoat unpinned (T2).
 | J4 | Where the rules live | **Fetched at install time into `~/.jmo/yara-rules`, and baked into the image at an image-owned path outside `~/.jmo`** (Y4), since `~/.jmo` is the persistence mount and a bind mount would hide them. Never committed: the webshell rules are webshell text, which Defender may quarantine on a contributor's clone, and JMo's own scanners would read them |
 | J5 | #1007's `raw` field | **Redact the scan root in the dashboard; keep `raw` verbatim in `findings.json` and `findings.yaml`, and document it** (A4). The dashboard is the artifact people share; `raw` stays useful for debugging. #1007 closes with A4 |
 | J6 | #1349's juice-shop smoke job: rebuild or delete | **Delete** (F4); F1's re-capture `--check` in the nightly does its job on tracked samples, so nothing needs a key-bearing fixture |
-| J7 | Which of decision 9's other answer keys join Phase 6 | **Four join:** juice-shop's markers (T3), sca-kitchen-sink as a per-format wiring oracle (T4), KICS Dockerfile and Kubernetes as a line-level floor (E6), BenchProctor TypeScript and JavaScript quicktest (F7). **After the tag:** CredData, and KICS Terraform and CloudFormation. With vibeproof (N2) and zizmor's and osv-scanner's own fixtures (F6), Phase 6 carries seven keys |
+| J7 | Which of decision 9's other answer keys join Phase 6 | **Four join:** juice-shop's markers (T3), sca-kitchen-sink as a per-format wiring oracle (T4), KICS Dockerfile and Kubernetes as a line-level floor (E6), BenchProctor TypeScript and JavaScript quicktest (F7). **After the tag:** CredData, and KICS Terraform and CloudFormation. With vibeproof (N2) and zizmor's own snapshots (F6), Phase 6 carries six keys: osv-scanner's own fixtures were dropped (Decided 2026-11-05, F6 Step 2) |
 
 ## Decisions taken 2026-11-04 (Jimmy), from PR E's premise pass
 
