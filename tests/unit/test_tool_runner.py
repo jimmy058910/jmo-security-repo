@@ -2245,3 +2245,61 @@ class TestCtrlCReachesEveryRun:
             tool_runner.clear_stop()
         assert time.perf_counter() - start < 10, "it slept out a 30 s backoff"
         assert result.failure == "interrupted"
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="reads /proc for the pid's state")
+def test_an_interrupted_wait_kills_the_whole_tree(tmp_path):
+    """A Ctrl-C on the main thread raises KeyboardInterrupt inside the wait.
+    `--tsv` clones run there, before the scan's own handler is installed, and
+    each runs in a session of its own, where the terminal's Ctrl-C never
+    reaches it: git kept downloading after jmo exited (review of PR 7b).
+    `subprocess.run`, which they used before, killed its child on any
+    exception."""
+    import os
+
+    from scripts.core import tool_runner
+
+    pid_file = tmp_path / "pid"
+    proc = subprocess.Popen(
+        ["bash", "-c", f"sleep 30 & echo $! > {pid_file}; wait"],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 5
+    while not (pid_file.exists() and pid_file.read_bytes().strip()):
+        assert time.monotonic() < deadline, "the stand-in never started"
+        time.sleep(0.05)
+    grandchild = int(pid_file.read_bytes())
+
+    real = proc.communicate
+    calls: list[int] = []
+
+    def interrupted(*args, **kwargs):
+        if not calls:
+            calls.append(1)
+            raise KeyboardInterrupt
+        return real(*args, **kwargs)
+
+    proc.communicate = interrupted  # type: ignore[method-assign]
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            tool_runner._finish(proc, ["bash"], 60)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                state = Path(f"/proc/{grandchild}/stat").read_bytes().split(b")")[-1]
+            except OSError:
+                break  # gone
+            if state.split()[0] == b"Z":
+                break  # dead, waiting to be reaped
+            time.sleep(0.05)
+        else:
+            raise AssertionError(f"the grandchild {grandchild} outlived the Ctrl-C")
+    finally:
+        for pid in (grandchild, proc.pid):
+            try:
+                os.kill(pid, 9)
+            except OSError:
+                pass
+        proc.wait(timeout=10)

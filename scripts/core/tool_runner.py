@@ -466,6 +466,13 @@ def _finish(
         except subprocess.TimeoutExpired:
             out, err = "", ""
         raise subprocess.TimeoutExpired(command, timeout or 0, output=out, stderr=err)
+    except BaseException:
+        # Ctrl-C on the main thread (`--tsv` clones run there, before the
+        # scan's handler is installed), or any other error in the wait: the
+        # child runs in a session of its own, which the terminal's Ctrl-C never
+        # reaches, so nothing else would stop it.
+        _terminate_tree(proc)
+        raise
     return subprocess.CompletedProcess(command, proc.returncode, out, err)
 
 
