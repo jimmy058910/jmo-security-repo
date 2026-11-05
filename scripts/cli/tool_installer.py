@@ -48,9 +48,11 @@ from scripts.core.archive_security import (
     safe_tar_extract,
     safe_zip_extract,
 )
+from scripts.core.checksums import file_sha256, parse_sha256sums
 from scripts.core.git_archive import object_ids
 from scripts.core.install_config import (
     BINARY_URLS,
+    CHECKSUM_URLS,
     DEPENDENCY_INSTALL_COMMANDS,
     DEPENDENCY_MANUAL_COMMANDS,
     DEPENDENCY_VERIFY_COMMANDS,
@@ -59,9 +61,9 @@ from scripts.core.install_config import (
     DOWNLOAD_TIMEOUT_SECONDS,
     EXTRACT_APP_URLS,
     INSTALL_PRIORITIES,
-    INSTALL_SCRIPTS,
     ISOLATED_TOOLS,
     SPECIAL_INSTALL,
+    UNCHECKSUMMED,
     YARA_RULES_BUNDLE,
     YARA_RULES_REVIEWED,
 )
@@ -247,8 +249,8 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
 # Install methods that pin an exact version from versions.yaml. When one of
 # these "succeeds" and the binary JMo then resolves still reports another
 # version, the install did not change what the scanner runs, and saying [OK]
-# beside the old number is the lie #1093 was filed on. apt/install_script
-# install whatever they carry, so a mismatch there stays a warning.
+# beside the old number is the lie #1093 was filed on. Any other method (the
+# ZAP archive, an existing install) keeps a mismatch as a warning.
 PINNED_INSTALL_METHODS: frozenset[str] = frozenset({"pip", "isolated_venv", "binary"})
 
 
@@ -391,7 +393,7 @@ class ToolInstaller:
 
         Args:
             tool_name: Name of the tool to install
-            method: Force specific install method (pip, apt, install_script, binary)
+            method: Force specific install method (pip, binary)
             force: Reinstall even if already installed
 
         Returns:
@@ -1263,10 +1265,6 @@ class ToolInstaller:
         try:
             if method == "pip" and tool_info.pypi_package:
                 return self._install_pip(tool_name, tool_info, start_time)
-            elif method == "apt" and tool_info.apt_package:
-                return self._install_apt(tool_name, tool_info, start_time)
-            elif method == "install_script" and tool_name in INSTALL_SCRIPTS:
-                return self._install_via_script(tool_name, tool_info, start_time)
             elif method == "binary" and tool_name in BINARY_URLS:
                 return self._install_binary(tool_name, tool_info, start_time)
         except Exception as e:
@@ -1350,89 +1348,6 @@ class ToolInstaller:
                 tool_name=tool_name,
                 success=False,
                 method="pip",
-                message=str(e),
-                duration_seconds=time.time() - start_time,
-            )
-
-    def _install_apt(
-        self, tool_name: str, tool_info: ToolInfo, start_time: float
-    ) -> InstallResult:
-        """Install via apt (requires sudo)."""
-        import time
-
-        if not tool_exists("apt-get", warn=False):
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="apt",
-                message="apt-get not available",
-            )
-
-        package = tool_info.apt_package
-        if not package:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="apt",
-                message="No apt package defined",
-            )
-
-        try:
-            # Check if we can use sudo
-            sudo_check = subprocess.run(
-                ["sudo", "-n", "true"],
-                capture_output=True,
-                timeout=5,
-            )
-            if sudo_check.returncode != 0:
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=False,
-                    method="apt",
-                    message="sudo access required - run: sudo apt install " + package,
-                )
-
-            cmd = ["sudo", "apt-get", "install", "-y", package]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=300,
-            )
-
-            if result.returncode == 0:
-                status = self.manager.check_tool(tool_name)
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=True,
-                    method="apt",
-                    message=f"Installed via apt: {package}",
-                    version_installed=status.installed_version,
-                    duration_seconds=time.time() - start_time,
-                )
-            else:
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=False,
-                    method="apt",
-                    message=f"apt install failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
-                    duration_seconds=time.time() - start_time,
-                )
-        except subprocess.TimeoutExpired:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="apt",
-                message="Installation timed out",
-                duration_seconds=time.time() - start_time,
-            )
-        except Exception as e:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="apt",
                 message=str(e),
                 duration_seconds=time.time() - start_time,
             )
@@ -1544,24 +1459,14 @@ class ToolInstaller:
                 url_filename = url.split("/")[-1].split("?")[0]  # Remove query params
                 download_file = tmppath / url_filename
 
-                # Use curl or wget
-                download_cmd = self._get_download_command(url, download_file)
-                if not download_cmd:
+                result = self._download(url, download_file)
+                if result is None:
                     return InstallResult(
                         tool_name=tool_name,
                         success=False,
                         method="binary",
                         message="No download tool available (curl/wget). Install curl or wget.",
                     )
-
-                result = subprocess.run(
-                    download_cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=300,
-                )
 
                 if result.returncode != 0:
                     # Provide actionable error message
@@ -1591,6 +1496,20 @@ class ToolInstaller:
                         success=False,
                         method="binary",
                         message=error_msg,
+                        duration_seconds=time.time() - start_time,
+                    )
+
+                # Checked before anything is extracted or installed (#1374): a
+                # mismatch leaves the binary already installed alone.
+                failure, warning = self._verify_release_asset(
+                    tool_name, tool_info.version, download_file
+                )
+                if failure:
+                    return InstallResult(
+                        tool_name=tool_name,
+                        success=False,
+                        method="binary",
+                        message=f"{failure}. Nothing was installed.",
                         duration_seconds=time.time() - start_time,
                     )
 
@@ -1631,6 +1550,7 @@ class ToolInstaller:
                     message=f"Installed binary to {dest}",
                     version_installed=status.installed_version,
                     duration_seconds=time.time() - start_time,
+                    warning=warning,
                 )
 
         except subprocess.TimeoutExpired:
@@ -1646,138 +1566,6 @@ class ToolInstaller:
                 tool_name=tool_name,
                 success=False,
                 method="binary",
-                message=str(e),
-                duration_seconds=time.time() - start_time,
-            )
-
-    def _install_via_script(
-        self, tool_name: str, tool_info: ToolInfo, start_time: float
-    ) -> InstallResult:
-        """Install using official install script from tool maintainers.
-
-        These scripts are maintained by the tool authors and handle
-        platform detection, version selection, and installation correctly.
-        More reliable than manual binary URL construction.
-        """
-        import time
-
-        if tool_name not in INSTALL_SCRIPTS:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="install_script",
-                message="No install script available",
-            )
-
-        script_url = INSTALL_SCRIPTS[tool_name]
-        logger.debug(f"Running official install script for {tool_name}: {script_url}")
-
-        try:
-            # Create install directory (scripts typically install to ~/.local/bin)
-            self.install_dir.mkdir(parents=True, exist_ok=True)
-
-            # Download and run the install script
-            # Most official scripts support: curl ... | sh -s -- -b <install_dir>
-            # We pass the install directory to ensure it goes to our managed location
-            with self._windows_safe_tempdir() as tmppath:
-                script_path = tmppath / "install.sh"
-
-                # Download the script
-                download_cmd = self._get_download_command(script_url, script_path)
-                if not download_cmd:
-                    return InstallResult(
-                        tool_name=tool_name,
-                        success=False,
-                        method="install_script",
-                        message="No download tool available (curl/wget)",
-                    )
-
-                dl_result = subprocess.run(
-                    download_cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=60,
-                )
-
-                if dl_result.returncode != 0:
-                    return InstallResult(
-                        tool_name=tool_name,
-                        success=False,
-                        method="install_script",
-                        message=f"Failed to download install script: {sanitize_subprocess_output(dl_result.stderr, max_length=200)}",
-                        duration_seconds=time.time() - start_time,
-                    )
-
-                # Make script executable
-                script_path.chmod(0o755)
-
-                # Run the install script with version and install directory
-                # Common flags used by Anchore/Aqua scripts:
-                # -b <dir>: Install to directory
-                # -d: Debug mode (we don't use this)
-                # Version is typically passed as first argument
-                install_cmd = [
-                    "sh",
-                    str(script_path),
-                    "-b",
-                    str(self.install_dir),
-                    f"v{tool_info.version}",
-                ]
-
-                result = subprocess.run(
-                    install_cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=300,
-                    env={**os.environ, "INSTALL_DIR": str(self.install_dir)},
-                )
-
-                if result.returncode != 0:
-                    return InstallResult(
-                        tool_name=tool_name,
-                        success=False,
-                        method="install_script",
-                        message=f"Install script failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
-                        duration_seconds=time.time() - start_time,
-                    )
-
-                # Verify installation
-                status = self.manager.check_tool(tool_name)
-                if not status.installed:
-                    return InstallResult(
-                        tool_name=tool_name,
-                        success=False,
-                        method="install_script",
-                        message="Install script ran but binary not found in PATH",
-                        duration_seconds=time.time() - start_time,
-                    )
-
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=True,
-                    method="install_script",
-                    message=f"Installed via official script to {self.install_dir}",
-                    version_installed=status.installed_version,
-                    duration_seconds=time.time() - start_time,
-                )
-
-        except subprocess.TimeoutExpired:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="install_script",
-                message="Install script timed out",
-                duration_seconds=time.time() - start_time,
-            )
-        except Exception as e:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="install_script",
                 message=str(e),
                 duration_seconds=time.time() - start_time,
             )
@@ -2039,9 +1827,9 @@ class ToolInstaller:
                 url_filename = url.split("/")[-1]
                 download_file = tmppath / url_filename
 
-                # Download
-                download_cmd = self._get_download_command(url, download_file)
-                if not download_cmd:
+                # Download, with a larger timeout for a bigger app
+                result = self._download(url, download_file, timeout=600)
+                if result is None:
                     return InstallResult(
                         tool_name=tool_name,
                         success=False,
@@ -2050,21 +1838,24 @@ class ToolInstaller:
                         duration_seconds=time.time() - start_time,
                     )
 
-                result = subprocess.run(
-                    download_cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=600,  # Larger timeout for bigger apps
-                )
-
                 if result.returncode != 0:
                     return InstallResult(
                         tool_name=tool_name,
                         success=False,
                         method="extract_app",
                         message=f"Download failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
+                        duration_seconds=time.time() - start_time,
+                    )
+
+                failure, warning = self._verify_release_asset(
+                    tool_name, tool_info.version, download_file
+                )
+                if failure:
+                    return InstallResult(
+                        tool_name=tool_name,
+                        success=False,
+                        method="extract_app",
+                        message=f"{failure}. Nothing was installed.",
                         duration_seconds=time.time() - start_time,
                     )
 
@@ -2128,6 +1919,7 @@ class ToolInstaller:
                         message=f"Installed to {app_dir}",
                         version_installed=status.installed_version,
                         duration_seconds=time.time() - start_time,
+                        warning=warning,
                     )
                 else:
                     return InstallResult(
@@ -2169,8 +1961,40 @@ class ToolInstaller:
             return "arm"
         return machine
 
+    def _verify_release_asset(
+        self, tool_name: str, version: str, asset: Path
+    ) -> tuple[str | None, str | None]:
+        """Check a downloaded release asset against the sha256 its release
+        publishes (#1374). Returns (failure, warning): a failure when it does
+        not match, is not listed, or the checksum file cannot be fetched; a
+        warning when the project publishes no checksum, so the install says it
+        was not verified rather than implying it was."""
+        if tool_name not in CHECKSUM_URLS:
+            # TODO(issue-#1587): check these against the sha256 digest GitHub's
+            # API reports for each release asset.
+            reason = UNCHECKSUMMED.get(tool_name, f"{tool_name} has no checksum source")
+            return None, f"not verified: {reason}"
+
+        sums_url = CHECKSUM_URLS[tool_name].format(version=version, asset=asset.name)
+        sums_file = asset.with_name(asset.name + ".checksums")
+        fetched = self._download(sums_url, sums_file)
+        if fetched is None or fetched.returncode != 0:
+            return f"could not fetch the release's checksum file {sums_url}", None
+        expected = parse_sha256sums(
+            sums_file.read_bytes().decode("utf-8", errors="replace")
+        ).get(asset.name)
+        if expected is None:
+            return f"{sums_url} lists no sha256 for {asset.name}", None
+        actual = file_sha256(asset)
+        if actual != expected:
+            return (
+                f"sha256 mismatch for {asset.name}: the release publishes "
+                f"{expected}, the download is {actual}"
+            ), None
+        return None, None
+
     def _download(
-        self, url: str, output_path: Path
+        self, url: str, output_path: Path, timeout: int = DOWNLOAD_TIMEOUT_SECONDS
     ) -> subprocess.CompletedProcess[str] | None:
         """Download `url` to `output_path`, retrying a failure; None when there
         is no download tool.
@@ -2192,7 +2016,7 @@ class ToolInstaller:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=DOWNLOAD_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
 
         proc = attempt()

@@ -19,7 +19,6 @@ from scripts.core.install_config import (
     DOWNLOAD_TIMEOUT_SECONDS,
     EXTRACT_APP_URLS,
     INSTALL_PRIORITIES,
-    INSTALL_SCRIPTS,
     ISOLATED_TOOLS,
     MAX_CLEANUP_RETRIES,
     MAX_PARALLEL_WORKERS,
@@ -125,25 +124,6 @@ class TestExtractAppUrls:
             assert SPECIAL_INSTALL[tool] == "extract_app", (
                 f"{tool} should have 'extract_app' method"
             )
-
-
-class TestInstallScripts:
-    """Verify INSTALL_SCRIPTS entries."""
-
-    def test_covers_the_upstream_installer_script_tools(self) -> None:
-        """The tools with an upstream ``install.sh``, named.
-
-        ``release.rules.md`` records that piping these scripts is banned in CI
-        precisely because they resolve "latest" at runtime; the set is small and
-        deliberate, so pin it rather than asserting it is merely non-empty.
-        """
-        assert set(INSTALL_SCRIPTS) == {"syft", "trivy"}
-
-    @pytest.mark.parametrize("tool", list(INSTALL_SCRIPTS.keys()))
-    def test_scripts_are_https_urls(self, tool: str) -> None:
-        url = INSTALL_SCRIPTS[tool]
-        assert isinstance(url, str)
-        assert url.startswith("https://"), f"{tool} script URL not HTTPS"
 
 
 class TestInstallPriorities:
