@@ -162,10 +162,12 @@ listed in `scripts/core/secret_value_rules.py` as matching a credential's value 
 hard-coded JWT key, a password default, a Kubernetes Secret), or one carrying a
 hard-coded-credential CWE (798, 259 or 321), the finding has no snippet, its `raw`
 keeps no matched lines or metavariables, and a message that quoted the value says
-`[redacted]` instead. The report rewrites those results in `opengrep.json` the same
-way and replaces their secrets in `.opengrep/semgrep.log`. Every other finding still
-quotes the lines around it, so `summaries/` holds source text: treat it as you would
-the code.
+`[redacted]` instead. opengrep reports several rules for one region, so another rule's
+finding over the same lines keeps no code either, and one whose snippet would reach them
+has none. The report rewrites those results in `opengrep.json` the same way and replaces
+their secrets in `.opengrep/semgrep.log`. Every other finding still quotes the lines
+around it, and a secret no listed rule matched can sit in one of them, so `summaries/`
+holds source text: treat it as you would the code.
 
 Each target's folder is unique within its type. When two targets would share a
 folder name, they are told apart: repositories each by their parent folder

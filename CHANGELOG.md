@@ -1014,10 +1014,13 @@ All notable changes to JMo Security will be documented in this file.
   so the secret reached findings.json, findings.sarif, the dashboard, the PCI report and
   history (measured). A reviewed list, `scripts/core/secret_value_rules.py`, marks the 32
   bundled rules that match a value; any rule with CWE-798/259/321 counts too. Their
-  findings carry no snippet, their raw record keeps no matched code, and their message
-  says `[redacted]` where it quoted the value, which changes those findings' ids once.
-  The report rewrites their results in `opengrep.json` and replaces their secrets in
-  `.opengrep/semgrep.log`, and a later report reads the same findings.
+  findings carry no snippet, their raw record keeps no matched code, and a message that
+  quoted the value is the rule's own text with `[redacted]` in its place, which changes
+  those findings' ids once (two on one line keep apart by column). Another rule's finding
+  over the same lines keeps no code either, and one whose snippet would reach them has
+  none. The report rewrites `opengrep.json` the same way and replaces the secrets in
+  `.opengrep/semgrep.log`, and a later report reads the same findings. A secret no listed
+  rule matched can still appear in a nearby finding's snippet.
 - **A report takes the secrets out of the secret scanners' raw outputs once it has read
   them (#1329).** `trufflehog.json`, `gitleaks.json` and their `.git.json` history files
   held every secret found, deleted ones included. The report `jmo scan`, `jmo ci` and
