@@ -69,7 +69,7 @@ def remove_tree(path: Path | str) -> bool:
             # and never through a symlink: chmod follows one, so its target,
             # possibly outside the tree, would change instead (#1429).
             if not os.path.islink(name):
-                os.chmod(name, os.lstat(name).st_mode | stat.S_IWRITE)
+                os.chmod(name, stat.S_IMODE(os.lstat(name).st_mode) | stat.S_IWRITE)
             func(name)
         except OSError as retry_error:
             logger.warning(
