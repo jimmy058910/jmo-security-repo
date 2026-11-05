@@ -3456,8 +3456,15 @@ def cmd_scan(args) -> int:
 
     import signal
 
-    signal.signal(signal.SIGINT, _handle_stop)
-    signal.signal(signal.SIGTERM, _handle_stop)
+    # Given back when the scan ends: left installed, the next Ctrl-C (in `jmo
+    # ci`'s report, or a test session) only set the stop and was swallowed.
+    previous = {
+        sig: signal.signal(sig, _handle_stop) for sig in (signal.SIGINT, signal.SIGTERM)
+    }
+
+    def _restore_signals() -> None:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler if handler is not None else signal.SIG_DFL)
 
     # Initialize progress tracker with tool count
     # Use Rich progress display for wizard scans with human-readable output
@@ -3526,6 +3533,8 @@ def cmd_scan(args) -> int:
             if not scan_config.allow_missing_tools:
                 raise
             return 1
+        finally:
+            _restore_signals()
     else:
         # Use original carriage-return based progress tracker
         progress = ProgressTracker(total_targets, args, total_tools=total_tools)
@@ -3570,6 +3579,7 @@ def cmd_scan(args) -> int:
             # stopped here, every in-process scan left one behind, 114 alive
             # at the end of a `tests/cli` session (#1208).
             progress.stop()
+            _restore_signals()
 
     if stop_requested():
         if scan_session is not None:

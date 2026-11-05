@@ -181,7 +181,9 @@ def _terminate_tree(proc: subprocess.Popen) -> None:
 # it, and every running process tree is killed.
 _STOP = threading.Event()
 _LIVE: dict[int, subprocess.Popen] = {}
-_LIVE_LOCK = threading.Lock()
+# Re-entrant: `request_stop` takes it inside the signal handler, which runs on
+# the main thread between bytecodes, possibly while that thread holds it.
+_LIVE_LOCK = threading.RLock()
 
 
 def request_stop() -> int:
@@ -438,6 +440,9 @@ def _run_bounded(
     )
     with _LIVE_LOCK:
         _LIVE[proc.pid] = proc
+    # Started as Ctrl-C arrived: `request_stop` had already taken its list.
+    if _STOP.is_set():
+        _terminate_tree(proc)
     try:
         return _finish(proc, command, timeout)
     finally:
@@ -925,7 +930,7 @@ class ToolRunner:
                 if attempts_by_type["crash"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["crash"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break  # Budget exhausted
 
@@ -960,7 +965,7 @@ class ToolRunner:
                 if attempts_by_type["timeout"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["timeout"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break  # Budget exhausted
 
@@ -993,7 +998,7 @@ class ToolRunner:
                 if attempts_by_type["system_error"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["system_error"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break
 
@@ -1011,7 +1016,7 @@ class ToolRunner:
                 if attempts_by_type["unknown"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["unknown"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break
 

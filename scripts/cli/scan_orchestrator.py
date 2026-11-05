@@ -1593,9 +1593,12 @@ class ScanOrchestrator:
                     continue
 
                 all_results.append((target_type, name, rows))
-                if stop_requested():
+                if stop_requested() and any(
+                    r.reason is Reason.INTERRUPTED for r in rows.values()
+                ):
                     # Ctrl-C cut its runs short: not a completed target, so
                     # it is not checkpointed and `--resume` scans it again.
+                    # One that finished before it keeps its checkpoint.
                     continue
                 # What runs after a scan that worked is not the scan: a step
                 # that raises is logged, and the target stays recorded once,

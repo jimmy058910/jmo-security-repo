@@ -107,3 +107,14 @@ def test_no_target_means_no_question(scan, tmp_path) -> None:
     rc = scan.run("--repo", str(tmp_path / "typo"), "--tools", "trivy")
     assert rc == 1
     assert scan.asked == []
+
+
+def test_the_scan_gives_ctrl_c_back_when_it_ends(scan) -> None:
+    """`cmd_scan` handles SIGINT and SIGTERM while it scans. Left installed,
+    the next Ctrl-C (in `jmo ci`'s report, or a test session) was swallowed:
+    it only set the scan's stop, and a second one quit at once."""
+    import signal
+
+    before = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM)}
+    scan.run("--repo", str(scan.project), "--tools", "trivy", "--allow-missing-tools")
+    assert {s: signal.getsignal(s) for s in before} == before

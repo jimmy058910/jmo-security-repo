@@ -2193,3 +2193,55 @@ def test_the_only_popen_in_the_product_is_the_bounded_runners() -> None:
                     found.append((path.relative_to(scripts).as_posix(), func.name))
     # Nested functions would count a call twice; the set is what is asserted.
     assert sorted(set(found)) == [("core/tool_runner.py", "_run_bounded")], found
+
+
+class TestCtrlCReachesEveryRun:
+    """Review of PR 7b: a run that starts as Ctrl-C arrives, and one waiting
+    out a retry's backoff, end with the scan."""
+
+    def test_a_process_started_after_the_stop_is_killed_at_once(self):
+        """`request_stop` kills the runs it finds registered; one whose
+        `Popen` had not registered yet would run to its timeout."""
+        import os
+
+        from scripts.core import tool_runner
+
+        tool_runner.request_stop()
+        start = time.perf_counter()
+        try:
+            result = tool_runner.run_bounded(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                env=dict(os.environ),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                encoding=None,
+                errors=None,
+                timeout=60,
+            )
+        finally:
+            tool_runner.clear_stop()
+        assert time.perf_counter() - start < 10, "it ran on after the stop"
+        assert result.returncode != 0
+
+    def test_ctrl_c_ends_a_retrys_backoff(self):
+        import threading
+
+        from scripts.core import tool_runner
+        from scripts.core.config import RetryConfig
+
+        tool = ToolDefinition(
+            name="crashes",
+            command=[sys.executable, "-c", "import sys; sys.exit(3)"],
+            output_file=None,
+            timeout=30,
+            ok_return_codes=(0,),
+            retries=RetryConfig(max_attempts=3, backoff_base=30, backoff_max=30),
+        )
+        threading.Timer(1.0, tool_runner.request_stop).start()
+        start = time.perf_counter()
+        try:
+            result = ToolRunner([tool]).run_tool(tool)
+        finally:
+            tool_runner.clear_stop()
+        assert time.perf_counter() - start < 10, "it slept out a 30 s backoff"
+        assert result.failure == "interrupted"

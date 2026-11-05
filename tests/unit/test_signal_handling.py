@@ -69,16 +69,17 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
     captured = {"handler": None}
 
     def fake_signal(sig, handler):
-        captured["handler"] = handler
-        if sig == 2:
+        previous = captured.get(sig)
+        captured[sig] = captured["handler"] = handler
+        if sig == 2 and previous is None:
             handler(2, None)
-        return None
+        return previous
 
     # Ensure that the import inside cmd_scan picks up our fake module
     monkeypatch.setitem(
         sys.modules,
         "signal",
-        types.SimpleNamespace(signal=fake_signal, SIGINT=2, SIGTERM=15),
+        types.SimpleNamespace(signal=fake_signal, SIGINT=2, SIGTERM=15, SIG_DFL=0),
     )
 
     args = types.SimpleNamespace(
