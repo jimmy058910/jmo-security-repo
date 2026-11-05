@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from scripts.cli.terminal import stream_is_tty
+from scripts.cli.terminal import ask, stream_is_tty
 from scripts.cli.tool_manager import (
     ToolManager,
     ToolStatus,
@@ -1047,12 +1047,15 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
             prompt = "Remove JMo suite? (Tools will remain installed) [y/N]: "
 
         try:
-            response = input(prompt).strip().lower()
-        except (EOFError, KeyboardInterrupt):
+            answer = ask(prompt)
+        except KeyboardInterrupt:
+            answer = None
+        if answer is None:
+            # Stdin closed or ended: nobody agreed to a removal (#1553).
             print("\nCancelled.")
             return 0
 
-        if response != "y":
+        if answer.strip().lower() != "y":
             print("Cancelled.")
             return 0
 

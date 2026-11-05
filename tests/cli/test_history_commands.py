@@ -7,6 +7,7 @@ import sqlite3
 import stat
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -702,6 +703,45 @@ class TestCmdHistoryQuery:
 
 class TestCmdHistoryPrune:
     """Tests for cmd_history_prune function (lines 364-427)."""
+
+    def test_prune_declines_when_stdin_is_closed(
+        self, sample_database, capsys, monkeypatch
+    ):
+        """`jmo history prune <&-` crashed with `RuntimeError: lost sys.stdin`
+        (#1553). Nobody agreed to a deletion, so nothing is deleted."""
+        import sqlite3
+        import sys
+
+        def _fail(prompt: str = "") -> str:
+            raise AssertionError(f"prompted with nobody to answer: {prompt!r}")
+
+        monkeypatch.setattr(sys, "stdin", None)
+        monkeypatch.setattr("builtins.input", _fail)
+
+        class Args:
+            db = str(sample_database)
+            older_than = "1h"
+            dry_run = False
+            force = False
+
+        assert cmd_history_prune(Args()) == 0
+        assert "Aborted." in capsys.readouterr().out
+        conn = sqlite3.connect(sample_database)
+        assert conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0] == 2
+        conn.close()
+
+    def test_prune_a_typed_no_aborts_on_its_own_line(self, sample_database, capsys):
+        with mock.patch("builtins.input", return_value="n"):
+
+            class Args:
+                db = str(sample_database)
+                older_than = "1h"
+                dry_run = False
+                force = False
+
+            assert cmd_history_prune(Args()) == 0
+        out = capsys.readouterr().out
+        assert out.endswith("1h\nAborted.\n"), repr(out)
 
     def test_prune_success_force_flag(self, sample_database, capsys):
         """Test pruning old scans with --force flag."""

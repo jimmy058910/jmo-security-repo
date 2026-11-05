@@ -565,6 +565,13 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **A prompt with stdin closed declines instead of crashing (#1553).** `jmo schedule
+  delete`, `jmo history prune` and `jmo tools uninstall` caught end of input but not a
+  closed stdin (`<&-`), where Python raises `RuntimeError: lost sys.stdin`, so they exited
+  1 with a traceback. Each now cancels, exit 0, as it does at end of input. `jmo wizard`
+  with stdin closed and no `--yes` stops at once with exit 2 and says how to run it,
+  where it spent 35 s on its tool check first and then crashed; a wizard whose stdin ends
+  before its questions are answered stops with a message, exit 1, and no traceback.
 - **A quoted `~` in a results or history path means the home directory (#1302).**
   `jmo scan --results-dir '~/x'`, as a quoted cron line or a generated script passes it,
   wrote its reports into a directory literally named `~` under the working directory, and

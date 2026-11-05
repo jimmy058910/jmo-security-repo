@@ -24,6 +24,7 @@ import subprocess  # nosec B404 - CLI needs subprocess
 from pathlib import Path
 
 from scripts.cli.cpu_utils import get_cpu_count
+from scripts.cli.terminal import stdin_closed
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
 from scripts.cli.wizard_flows.command_builder import (
     build_command_parts,
@@ -792,15 +793,23 @@ def run_wizard(
     # Set custom db_path for this wizard run (via WizardConfig class method)
     WizardConfig.set_db_path(db_path)
 
+    # Presets fully specify the wizard when target_type and target are both given
+    has_full_presets = target_type is not None and target is not None
+    if not (yes or has_full_presets) and stdin_closed():
+        # Its first question could never be answered: say so now, not after
+        # the tool pre-flight (35-73 s) and a traceback (#1553).
+        print(
+            "jmo wizard asks questions, and stdin is closed, so nothing can "
+            "answer them. Run it in a terminal, or pass --yes (with "
+            "--target-type and --target) to run without questions."
+        )
+        return 2
+
     _print_header("JMo Security Wizard")
     print("Welcome! This wizard will guide you through your first security scan.")
     print("Press Ctrl+C at any time to cancel.")
 
     config = WizardConfig()
-
-    # Check if we have enough presets to skip interactive mode
-    # Presets fully specify the wizard when: target_type + target are both provided
-    has_full_presets = target_type is not None and target is not None
 
     try:
         if yes or has_full_presets:
@@ -1064,6 +1073,16 @@ def run_wizard(
     except KeyboardInterrupt:
         print(_colorize("\n\nWizard cancelled", "yellow"))
         return 130
+    except EOFError:
+        # `jmo wizard < /dev/null`, or a pipe that ran out of answers.
+        print(
+            _colorize(
+                "\n\nWizard stopped: stdin ended before every question was "
+                "answered. Run it in a terminal, or pass --yes.",
+                "yellow",
+            )
+        )
+        return 1
     except (OSError, ValueError, RuntimeError) as e:
         # System/configuration errors (file I/O, invalid inputs, etc.)
         print(_colorize(f"\n\nWizard error: {e}", "red"))
@@ -1169,8 +1188,15 @@ def run_diff_wizard(
         current: Current results directory (for non-interactive diff)
 
     Returns:
-        Exit code (0 = success, 1 = error, 130 = cancelled)
+        Exit code (0 = success, 1 = error, 2 = nothing can answer, 130 = cancelled)
     """
+    if not yes and stdin_closed():
+        print(
+            "jmo wizard --mode diff asks questions, and stdin is closed, so "
+            "nothing can answer them. Run it in a terminal, or pass --yes "
+            "--baseline DIR --current DIR."
+        )
+        return 2
     return run_diff_wizard_impl(
         use_docker=use_docker, yes=yes, baseline=baseline, current=current
     )

@@ -24,6 +24,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
+from scripts.cli.terminal import ask
 from scripts.core.history_db import (
     DEFAULT_DB_PATH,
     compute_diff,
@@ -506,13 +507,15 @@ def cmd_history_prune(args) -> int:
 
             if not force and not dry_run:
                 try:
-                    confirm = input("Proceed? (y/N): ")
-                    if confirm.lower() != "y":
-                        sys.stdout.write("Aborted.\n")
-                        conn.close()
-                        return 0
-                except (KeyboardInterrupt, EOFError):
-                    sys.stdout.write("\nAborted.\n")
+                    confirm = ask("Proceed? (y/N): ")
+                except KeyboardInterrupt:
+                    confirm = None
+                # None: stdin closed or ended, or Ctrl-C, so nobody agreed
+                # (#1553); end the prompt's line first.
+                if confirm is None or confirm.lower() != "y":
+                    sys.stdout.write(
+                        "\nAborted.\n" if confirm is None else "Aborted.\n"
+                    )
                     conn.close()
                     return 0
 

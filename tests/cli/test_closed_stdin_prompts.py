@@ -334,3 +334,121 @@ def test_resume_prompt_still_asks_a_terminal(home, resumable_scan, monkeypatch):
     assert rc == 0
     assert asked == ["Resume previous scan? [Y/n] "]
     assert scanned == 0
+
+
+# --------------------------------------------------------------------------
+# The confirmations and the wizard (#1553). Each crashed with
+# `RuntimeError: lost sys.stdin` when stdin was closed: an EOFError handler does
+# not catch it, and the wizard spent 35-73 s on its tool pre-flight first.
+# --------------------------------------------------------------------------
+
+
+def test_schedule_delete_declines(closed_stdin, tmp_path, capsys):
+    from scripts.cli.schedule_commands import _cmd_schedule_delete
+    from scripts.core.schedule_manager import ScanSchedule, ScheduleManager
+
+    manager = ScheduleManager(config_dir=tmp_path / "schedules")
+    manager.create(
+        ScanSchedule.from_simple_args(name="nightly", cron="0 2 * * *", image="a:1")
+    )
+
+    rc = _cmd_schedule_delete(argparse.Namespace(name="nightly", force=False), manager)
+
+    assert rc == 0, "a declined delete is not an error"
+    assert manager.get("nightly") is not None
+    said = capsys.readouterr()
+    assert "Cancelled" in said.out + said.err
+
+
+def test_tools_uninstall_declines(closed_stdin, home):
+    (home / ".jmo").mkdir()
+    args = argparse.Namespace(all=False, dry_run=False, yes=False)
+
+    with (
+        patch("scripts.cli.tool_commands._check_pip_package", return_value=True),
+        patch("subprocess.run") as run,
+    ):
+        rc = tool_commands.cmd_tools_uninstall(args)
+
+    assert rc == 0
+    assert (home / ".jmo").exists()
+    run.assert_not_called()
+
+
+def test_the_wizard_refuses_before_its_preflight(closed_stdin, capsys):
+    """Nothing can answer its first question, so it says so at once."""
+    from scripts.cli import wizard
+
+    with patch.object(
+        wizard, "check_tools_for_matrix", side_effect=AssertionError("pre-flight ran")
+    ):
+        rc = wizard.run_wizard()
+
+    said = capsys.readouterr()
+    assert rc == 2
+    assert "--yes" in said.out + said.err
+    assert "Traceback" not in said.out + said.err
+
+
+def test_the_diff_wizard_refuses_too(closed_stdin, capsys):
+    from scripts.cli import wizard
+
+    rc = wizard.run_diff_wizard()
+
+    assert rc == 2
+    assert "--yes" in capsys.readouterr().out
+
+
+def test_the_wizard_still_runs_with_yes(closed_stdin):
+    """`--yes` asks nothing, so a closed stdin is no reason to refuse."""
+    from scripts.cli import wizard
+
+    with patch.object(wizard, "check_tools_for_matrix", return_value=(False, None)):
+        assert wizard.run_wizard(yes=True) == 0
+
+
+def test_the_wizard_at_end_of_input_says_so_without_a_traceback(home, capsys):
+    """`jmo wizard < /dev/null`: stdin is open but ends. It printed
+    "Wizard error: EOF when reading a line" and a traceback."""
+    from scripts.cli import wizard
+
+    with (
+        patch.object(wizard, "select_execution_mode", side_effect=EOFError),
+        patch("builtins.input", side_effect=EOFError),
+    ):
+        rc = wizard.run_wizard()
+
+    said = capsys.readouterr()
+    assert rc == 1
+    assert "--yes" in said.out + said.err
+    assert "Traceback" not in said.out + said.err
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="`<&-` is POSIX shell syntax")
+def test_schedule_delete_with_stdin_really_closed(tmp_path):
+    """The real thing once: a child started with `<&-`, where Python itself sets
+    `sys.stdin` to None. It exited 1 with `RuntimeError: lost sys.stdin`."""
+    import os
+    import subprocess
+
+    from scripts.core.schedule_manager import ScanSchedule, ScheduleManager
+
+    home = tmp_path / "home"
+    ScheduleManager(config_dir=home / ".jmo").create(
+        ScanSchedule.from_simple_args(name="nightly", cron="0 2 * * *", image="a:1")
+    )
+    env = {**os.environ, "HOME": str(home)}
+    command = 'exec "$0" -m scripts.cli.jmo schedule delete nightly <&-'
+    done = subprocess.run(
+        ["sh", "-c", command, sys.executable],
+        env=env,
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert "Traceback" not in done.stderr
+    assert "Cancelled" in done.stdout + done.stderr
+    assert ScheduleManager(config_dir=home / ".jmo").get("nightly") is not None
