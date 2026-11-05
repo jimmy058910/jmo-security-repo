@@ -157,12 +157,14 @@ class ToolRegistry:
         self._load_registry()
 
     def _find_versions_yaml(self) -> Path:
-        """Find versions.yaml in the repository."""
-        # Try relative to this file
+        """Find versions.yaml: beside this module in a wheel, else the repository's."""
         script_dir = Path(__file__).resolve().parent
         repo_root = script_dir.parent.parent  # scripts/core -> scripts -> repo_root
 
         candidates = [
+            # An installed wheel has no repository root: setup.py copies the
+            # pins in as package data (#1511).
+            script_dir / "versions.yaml",
             repo_root / "versions.yaml",
             Path.cwd() / "versions.yaml",
         ]

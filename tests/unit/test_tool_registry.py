@@ -274,6 +274,30 @@ def test_toolregistry_handles_missing_versions_file():
         ToolRegistry(versions_path=Path("/nonexistent/versions.yaml"))
 
 
+def test_an_installed_wheel_reads_the_pins_it_carries(monkeypatch, tmp_path):
+    """A wheel install has no repository root: its pins are package data (#1511).
+
+    Laid out as site-packages is: `scripts/core/` holds the module and the
+    `versions.yaml` the build copies beside it, and the directory two levels up
+    holds no pins of its own. Before #1511 the registry looked only there and
+    in the working directory, so every `jmo tools` command from `uv tool
+    install`, pipx or pip raised FileNotFoundError.
+    """
+    import scripts.core.tool_registry as tool_registry
+
+    site = tmp_path / "site-packages"
+    core = site / "scripts" / "core"
+    core.mkdir(parents=True)
+    packaged = core / "versions.yaml"
+    packaged.write_text("binary_tools: {}\n", encoding="utf-8")
+    elsewhere = tmp_path / "cwd"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.setattr(tool_registry, "__file__", str(core / "tool_registry.py"))
+
+    assert tool_registry.ToolRegistry()._versions_path == packaged
+
+
 # ========== Category 4: Platform Detection ==========
 
 
