@@ -512,69 +512,60 @@ CIS_CONTROLS_V8_1 = {
 # =============================================================================
 
 # Maps tool/finding types to NIST CSF 2.0
+# Each entry quotes "The NIST Cybersecurity Framework (CSF) 2.0", NIST CSWP 29
+# (2024-02-26), for its subcategory. They carried CSF 1.1 ids and text until
+# #1572; tests/unit/test_compliance_nist_csf_text.py quotes the source.
 NIST_CSF_2_0 = {
     "secrets": [
         {
             "function": "PROTECT",
             "category": "PR.DS",
-            "subcategory": "PR.DS-1",
-            "description": "Data-at-rest is protected",
+            "subcategory": "PR.DS-01",
+            "description": "The confidentiality, integrity, and availability of data-at-rest are protected",
         },
         {
             "function": "PROTECT",
-            "category": "PR.AC",
-            "subcategory": "PR.AC-1",
-            "description": "Identities and credentials are issued, managed, verified, revoked, and audited",
+            "category": "PR.AA",
+            "subcategory": "PR.AA-01",
+            "description": "Identities and credentials for authorized users, services, and hardware are managed by the organization",
         },
     ],
     "sast": [
         {
-            "function": "DETECT",
-            "category": "DE.CM",
-            "subcategory": "DE.CM-8",
-            "description": "Vulnerability scans are performed",
-        },
-        {
             "function": "IDENTIFY",
             "category": "ID.RA",
-            "subcategory": "ID.RA-1",
-            "description": "Asset vulnerabilities are identified and documented",
+            "subcategory": "ID.RA-01",
+            "description": "Vulnerabilities in assets are identified, validated, and recorded",
         },
     ],
     "sca": [
         {
             "function": "IDENTIFY",
             "category": "ID.RA",
-            "subcategory": "ID.RA-1",
-            "description": "Asset vulnerabilities are identified and documented",
+            "subcategory": "ID.RA-01",
+            "description": "Vulnerabilities in assets are identified, validated, and recorded",
         },
         {
             "function": "GOVERN",
             "category": "GV.SC",
-            "subcategory": "GV.SC-3",
-            "description": "Cybersecurity supply chain risk management processes are identified, established, assessed, managed, and agreed upon by organizational stakeholders",
+            "subcategory": "GV.SC-03",
+            "description": "Cybersecurity supply chain risk management is integrated into cybersecurity and enterprise risk management, risk assessment, and improvement processes",
         },
     ],
     "iac": [
         {
             "function": "PROTECT",
-            "category": "PR.IP",
-            "subcategory": "PR.IP-1",
-            "description": "A baseline configuration of information technology systems is created and maintained",
-        },
-        {
-            "function": "PROTECT",
-            "category": "PR.PT",
-            "subcategory": "PR.PT-3",
-            "description": "The principle of least functionality is incorporated",
+            "category": "PR.PS",
+            "subcategory": "PR.PS-01",
+            "description": "Configuration management practices are established and applied",
         },
     ],
     "dast": [
         {
-            "function": "DETECT",
-            "category": "DE.CM",
-            "subcategory": "DE.CM-8",
-            "description": "Vulnerability scans are performed",
+            "function": "IDENTIFY",
+            "category": "ID.RA",
+            "subcategory": "ID.RA-01",
+            "description": "Vulnerabilities in assets are identified, validated, and recorded",
         },
     ],
 }
@@ -584,55 +575,55 @@ CWE_TO_NIST_CSF_2_0 = {
     "CWE-798": [
         {
             "function": "PROTECT",
-            "category": "PR.AC",
-            "subcategory": "PR.AC-1",
-            "description": "Identities and credentials are issued, managed, verified, revoked, and audited",
+            "category": "PR.AA",
+            "subcategory": "PR.AA-01",
+            "description": "Identities and credentials for authorized users, services, and hardware are managed by the organization",
         },
         {
             "function": "PROTECT",
             "category": "PR.DS",
-            "subcategory": "PR.DS-1",
-            "description": "Data-at-rest is protected",
+            "subcategory": "PR.DS-01",
+            "description": "The confidentiality, integrity, and availability of data-at-rest are protected",
         },
     ],
     "CWE-259": [
         {
             "function": "PROTECT",
-            "category": "PR.AC",
-            "subcategory": "PR.AC-1",
-            "description": "Identities and credentials are issued, managed, verified, revoked, and audited",
+            "category": "PR.AA",
+            "subcategory": "PR.AA-01",
+            "description": "Identities and credentials for authorized users, services, and hardware are managed by the organization",
         },
     ],
     "CWE-327": [
         {
             "function": "PROTECT",
             "category": "PR.DS",
-            "subcategory": "PR.DS-2",
-            "description": "Data-in-transit is protected",
+            "subcategory": "PR.DS-02",
+            "description": "The confidentiality, integrity, and availability of data-in-transit are protected",
         },
     ],
     "CWE-79": [
         {
-            "function": "DETECT",
-            "category": "DE.CM",
-            "subcategory": "DE.CM-8",
-            "description": "Vulnerability scans are performed",
+            "function": "IDENTIFY",
+            "category": "ID.RA",
+            "subcategory": "ID.RA-01",
+            "description": "Vulnerabilities in assets are identified, validated, and recorded",
         },
     ],
     "CWE-89": [
         {
-            "function": "DETECT",
-            "category": "DE.CM",
-            "subcategory": "DE.CM-8",
-            "description": "Vulnerability scans are performed",
+            "function": "IDENTIFY",
+            "category": "ID.RA",
+            "subcategory": "ID.RA-01",
+            "description": "Vulnerabilities in assets are identified, validated, and recorded",
         },
     ],
     "CWE-1104": [
         {
             "function": "GOVERN",
             "category": "GV.SC",
-            "subcategory": "GV.SC-3",
-            "description": "Cybersecurity supply chain risk management processes are identified, established, assessed, managed, and agreed upon by organizational stakeholders",
+            "subcategory": "GV.SC-03",
+            "description": "Cybersecurity supply chain risk management is integrated into cybersecurity and enterprise risk management, risk assessment, and improvement processes",
         },
     ],
 }

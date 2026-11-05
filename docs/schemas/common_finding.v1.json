@@ -84,7 +84,7 @@
           "description": "NIST framework mappings",
           "properties": {
             "sp80053": { "type": "array", "items": { "type": "string" }, "description": "NIST SP 800-53 controls (e.g., ['AC-6', 'IA-5'])" },
-            "csf": { "type": "array", "items": { "type": "string" }, "description": "NIST Cybersecurity Framework (e.g., ['PR.AC-1', 'DE.CM-1'])" },
+            "csf": { "type": "array", "items": { "type": "string" }, "description": "NIST Cybersecurity Framework (e.g., ['PR.AA-01', 'DE.CM-01'])" },
             "ssdf": { "type": "array", "items": { "type": "string" }, "description": "NIST SSDF practices (e.g., ['PW.8.2'])" }
           }
         },
@@ -133,7 +133,7 @@
             "properties": {
               "function": { "type": "string", "enum": ["GOVERN", "IDENTIFY", "PROTECT", "DETECT", "RESPOND", "RECOVER"], "description": "CSF Function" },
               "category": { "type": "string", "description": "Category ID (e.g., 'GV.SC', 'PR.DS')" },
-              "subcategory": { "type": "string", "description": "Subcategory ID (e.g., 'PR.DS-1')" },
+              "subcategory": { "type": "string", "description": "Subcategory ID (e.g., 'PR.DS-01')" },
               "description": { "type": "string", "description": "Subcategory description" }
             }
           },

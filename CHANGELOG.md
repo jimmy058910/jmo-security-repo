@@ -217,6 +217,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **Breaking. A finding's NIST CSF 2.0 mappings name CSF 2.0 subcategories, in CSF 2.0's
+  words (#1572).** They carried CSF 1.1: `PR.AC-1`, `PR.IP-1`, `PR.PT-3` and `DE.CM-8` do
+  not exist in CSF 2.0, and `GV.SC-3` quoted 1.1's ID.SC-1. Checked against NIST CSWP 29
+  itself, each entry now quotes its subcategory there, with CSF 2.0's two-digit ids:
+  `PR.AA-01` for credentials, `PR.PS-01` for IaC (in place of both `PR.IP-1` and
+  `PR.PT-3`), `ID.RA-01` for SAST, DAST, CWE-79 and CWE-89 (in place of `DE.CM-8`, which
+  has no CSF 2.0 counterpart), and `PR.DS-01`, `PR.DS-02` and `GV.SC-03` as before, with
+  their own text. A report or policy that matched an old id needs the new one. The PCI DSS
+  entries are not yet checked against the PCI SSC's document.
 - **Breaking. A finding names its target, and the same finding in two repositories is two
   findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
   `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a

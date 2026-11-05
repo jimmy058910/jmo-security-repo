@@ -502,8 +502,9 @@ def test_compliance_summary_basic(tmp_path: Path):
                     {
                         "function": "PROTECT",
                         "category": "PR.DS",
-                        "subcategory": "PR.DS-2",
-                        "description": "Data-in-transit is protected",
+                        "subcategory": "PR.DS-02",
+                        "description": "The confidentiality, integrity, and "
+                        "availability of data-in-transit are protected",
                     }
                 ],
                 "pciDss4_0": [
@@ -617,7 +618,7 @@ def test_compliance_summary_nist_csf_functions(tmp_path: Path):
                     {
                         "function": "PROTECT",
                         "category": "PR.DS",
-                        "subcategory": "PR.DS-1",
+                        "subcategory": "PR.DS-01",
                         "description": "Test",
                     }
                 ]
@@ -630,7 +631,7 @@ def test_compliance_summary_nist_csf_functions(tmp_path: Path):
                     {
                         "function": "DETECT",
                         "category": "DE.CM",
-                        "subcategory": "DE.CM-1",
+                        "subcategory": "DE.CM-01",
                         "description": "Test",
                     }
                 ]

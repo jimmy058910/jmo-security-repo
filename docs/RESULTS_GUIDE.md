@@ -540,7 +540,7 @@ All findings follow the **CommonFinding schema v1.2.0**. Here's how to query the
     "owaspTop10_2021": ["A05:2021"],
     "cweTop25_2024": [{"id": "CWE-1104", "rank": 23}],
     "cisControlsV8_1": [{"control": "4.1", "implementationGroup": "IG1"}],
-    "nistCsf2_0": [{"function": "PROTECT", "category": "PR.IP", "subcategory": "PR.IP-1"}],
+    "nistCsf2_0": [{"function": "PROTECT", "category": "PR.PS", "subcategory": "PR.PS-01"}],
     "pciDss4_0": [{"requirement": "2.2.1", "priority": "HIGH"}],
     "mitreAttack": [{"tactic": "Initial Access", "technique": "T1190"}]
   }
