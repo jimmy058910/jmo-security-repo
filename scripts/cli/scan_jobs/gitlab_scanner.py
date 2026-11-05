@@ -540,7 +540,6 @@ def _discover_container_images(repo_path: Path, label: str = "") -> set[str]:
     return images
 
 
-# TODO(issue-#1409): the images scanned here never reach the progress display.
 def _scan_named_images(
     clone_path: Path,
     full_path: str,

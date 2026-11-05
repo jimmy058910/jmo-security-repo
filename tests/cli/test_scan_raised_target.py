@@ -414,6 +414,96 @@ def test_a_target_whose_post_scan_step_fails_is_recorded_once(
     assert any("alpha" in r.getMessage() for r in caplog.records), caplog.text
 
 
+def test_each_image_a_gitlab_target_names_reaches_the_progress_display(
+    tmp_path, monkeypatch
+):
+    """Found mid-scan, so no target count held them: the images a GitLab target
+    named never reached the progress display, and a failed one surfaced only
+    in the final ERROR line (#1409). Each is reported as a target when its
+    GitLab target's results are recorded, a failing display included."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+    def scan_gitlab_repo(info, results_dir, tools, *args, images, **kwargs):
+        for image, state in (("alpine:3.19", State.RAN), ("nginx:1.27", None)):
+            images.claim(image, info["full_path"])
+            row = (
+                ToolRun("trivy", state, seconds=2.0)
+                if state
+                else ToolRun("trivy", State.FAILED, Reason.SCANNER_ERROR)
+            )
+            images.add(info["full_path"], image, {"trivy": row})
+        return info["full_path"], {"trivy": ToolRun("trivy", State.RAN)}
+
+    monkeypatch.setattr("scripts.cli.scan_jobs.scan_gitlab_repo", scan_gitlab_repo)
+    seen: list[tuple[str, str, str]] = []
+
+    def progress(target_type, target_id, rows, elapsed=0.0):
+        seen.append((target_type, target_id, rows["trivy"].state.value))
+        if target_id == "alpine:3.19":
+            raise OSError("the display is gone")
+
+    got = _orchestrator(tmp_path / "results").scan_all(
+        ScanTargets(gitlab_repos=[{"full_path": "group/app"}]),
+        {},
+        progress_callback=progress,
+    )
+
+    assert sorted(seen) == [
+        ("gitlab", "group/app", "ran"),
+        ("image", "alpine:3.19", "ran"),
+        ("image", "nginx:1.27", "failed"),
+    ]
+    # A display that raised on one image lost neither image from the results.
+    assert sorted((kind, name) for kind, name, _rows in got) == [
+        ("gitlab", "group/app"),
+        ("image", "alpine:3.19"),
+        ("image", "nginx:1.27"),
+    ]
+
+
+def test_a_found_image_whose_checkpoint_fails_costs_no_other_image(
+    tmp_path, monkeypatch
+):
+    """A checkpoint that raised on the first image a GitLab target named ended
+    the loop over them: the images after it were neither in the results nor
+    on the display (#1556's class, inside the found images)."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+    def scan_gitlab_repo(info, results_dir, tools, *args, images, **kwargs):
+        for image in ("alpine:3.19", "nginx:1.27"):
+            images.claim(image, info["full_path"])
+            images.add(info["full_path"], image, {"trivy": ToolRun("trivy", State.RAN)})
+        return info["full_path"], {"trivy": ToolRun("trivy", State.RAN)}
+
+    monkeypatch.setattr("scripts.cli.scan_jobs.scan_gitlab_repo", scan_gitlab_repo)
+    real = ScanSession.mark_target_complete
+
+    def first_image_fails(self, target_type, target_id, *args, **kwargs):
+        if target_id.endswith("alpine:3.19"):
+            raise OSError("the session file is gone")
+        return real(self, target_type, target_id, *args, **kwargs)
+
+    monkeypatch.setattr(ScanSession, "mark_target_complete", first_image_fails)
+    session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
+    session.register_target("gitlab", "group/app", ["trivy"])
+    shown: list[str] = []
+
+    got = _orchestrator(tmp_path / "results").scan_all(
+        ScanTargets(gitlab_repos=[{"full_path": "group/app"}]),
+        {},
+        progress_callback=lambda kind, name, rows, elapsed=0.0: shown.append(name),
+        session=session,
+        session_path=tmp_path / "session.json",
+    )
+
+    assert sorted(name for _kind, name, _rows in got) == [
+        "alpine:3.19",
+        "group/app",
+        "nginx:1.27",
+    ]
+    assert sorted(shown) == ["alpine:3.19", "group/app", "nginx:1.27"]
+
+
 def test_a_timings_write_that_fails_does_not_replace_the_targets_failure(
     tmp_path, monkeypatch, caplog
 ):

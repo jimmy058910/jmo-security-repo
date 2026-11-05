@@ -2802,6 +2802,10 @@ class ProgressTracker:
 
         with self._lock:
             self.completed += 1
+            # An image a GitLab target names is found mid-scan, after the
+            # total was counted: it grows the total rather than reading
+            # `[2/1]` and 200% (#1409).
+            self.total = max(self.total, self.completed)
             percentage = int((self.completed / self.total) * 100)
             status_symbol = {
                 TARGET_OK: "✓",

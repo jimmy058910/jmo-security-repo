@@ -1277,11 +1277,45 @@ class ScanOrchestrator:
             for image, image_rows in discovered.found_in(gitlab_id):
                 all_results.append(("image", image, image_rows))
                 image_id = found_image_id(image)
-                if session is not None:
-                    session.register_target(
-                        "image", image_id, tools, found_in=gitlab_id
+                # Each step below fails on its own, as a target's do after its
+                # scan (#1556): a checkpoint or a display that raises must not
+                # cost the images after this one their place in the results.
+                try:
+                    if session is not None:
+                        session.register_target(
+                            "image", image_id, tools, found_in=gitlab_id
+                        )
+                    _checkpoint("image", image_id, image, image_rows)
+                except Exception as e:
+                    logger.error(
+                        "image %s, named by %s, was scanned, but checkpointing "
+                        "it failed (%s: %s); its results stand",
+                        image,
+                        gitlab_id,
+                        type(e).__name__,
+                        e,
+                        exc_info=True,
                     )
-                _checkpoint("image", image_id, image, image_rows)
+                # No target count held it, so the display never showed it,
+                # and a failed one surfaced only in the final ERROR line
+                # (#1409).
+                if progress_callback:
+                    try:
+                        progress_callback(
+                            "image",
+                            image,
+                            image_rows,
+                            elapsed=max(
+                                (r.seconds or 0.0 for r in image_rows.values()),
+                                default=0.0,
+                            ),
+                        )
+                    except Exception:
+                        logger.debug(
+                            "Progress callback failed for image %s",
+                            image,
+                            exc_info=True,
+                        )
 
         # A tool someone named that no target in this scan reads runs nowhere.
         # Its rows say `skipped` on every target; this line says it once. Only

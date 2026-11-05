@@ -221,6 +221,20 @@ class TestUpdate:
         assert tracker.current_target == "/path/to/repo"
         assert tracker.current_target_type == "repo"
 
+    def test_a_target_found_mid_scan_grows_the_total(self):
+        """An image a GitLab target names is found mid-scan, after the total
+        was counted: its bar and label must not read `[2/1]` (#1409)."""
+        tracker = make_tracker(total_targets=1)
+        tracker.update("gitlab", "group/app")
+        tracker.update("image", "alpine:3.19")
+
+        (task,) = [
+            t for t in tracker.target_progress.tasks if t.id == tracker.target_task
+        ]
+        assert tracker.total_targets == 2
+        assert (task.completed, task.total) == (2, 2)
+        assert task.description.startswith("Targets [2/2]")
+
     def test_resets_tool_tracking(self):
         """Test that target completion resets tool-level tracking."""
         tracker = make_tracker()

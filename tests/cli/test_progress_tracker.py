@@ -62,6 +62,25 @@ class TestProgressTracker:
             tracker.update("image", "nginx:latest", ALL_OK, 5.2)
             assert tracker.completed == 2
 
+    def test_a_target_found_mid_scan_grows_the_total(self):
+        """An image a GitLab target names is found mid-scan, after the total
+        was counted. Its line must not read `[2/1]` and 200% (#1409)."""
+        tracker = ProgressTracker(total=1, args=Namespace())
+        tracker.start()
+        try:
+            with patch("scripts.cli.jmo._log") as mock_log:
+                tracker.update("gitlab", "group/app", ALL_OK, 3.0)
+                tracker.update("image", "alpine:3.19", ALL_FAILED, 1.0)
+                tracker.update("image", "nginx:1.27", ALL_OK, 1.0)
+        finally:
+            tracker.stop()
+
+        lines = [c.args[2] for c in mock_log.call_args_list]
+        assert [line.split(" ", 1)[0] for line in lines] == ["[1/1]", "[2/2]", "[3/3]"]
+        assert all("Progress: 100%" in line for line in lines), lines
+        assert "image: alpine:3.19" in lines[1] and "NO findings" in lines[1]
+        assert tracker.total == 3
+
     def test_update_calls_log(self):
         """Test update() calls _log with progress message."""
         args = Namespace()
