@@ -373,6 +373,47 @@ def test_a_scan_that_succeeded_keeps_its_timings_when_what_follows_it_fails(
     assert len(gather_results(results)) == EARLIER_FINDINGS
 
 
+@pytest.mark.parametrize("fails", ["progress", "checkpoint"])
+def test_a_target_whose_post_scan_step_fails_is_recorded_once(
+    tmp_path, monkeypatch, caplog, fails
+):
+    """One `try` covered the scan's result and the steps after it, so a
+    checkpoint or a progress display that raised appended the target a second
+    time, as failed, beside its scanned rows: two results, two history rows
+    (#1556). The step's failure is logged; the target is recorded once."""
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    results = tmp_path / "results"
+    alpha = tmp_path / "alpha"
+    alpha.mkdir()
+
+    def scan_repository(repo, results_dir, *args, result_name, **kwargs):
+        return result_name, {"trivy": ToolRun("trivy", State.RAN, exit_code=0)}
+
+    monkeypatch.setattr("scripts.cli.scan_jobs.scan_repository", scan_repository)
+    session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
+    session.register_target("repo", "alpha", ["trivy"])
+    callbacks = {}
+    if fails == "progress":
+        callbacks["progress_callback"] = _progress_display_fails
+    else:
+        monkeypatch.setattr(ScanSession, "mark_target_complete", _checkpoint_fails)
+
+    with caplog.at_level(logging.ERROR, logger="scripts.cli.scan_orchestrator"):
+        got = _orchestrator(results).scan_all(
+            ScanTargets(repos=[alpha]),
+            {},
+            session=session,
+            session_path=tmp_path / "session.json",
+            **callbacks,
+        )
+
+    assert [
+        (kind, name, {tool: row.state for tool, row in rows.items()})
+        for kind, name, rows in got
+    ] == [("repo", "alpha", {"trivy": State.RAN})]
+    assert any("alpha" in r.getMessage() for r in caplog.records), caplog.text
+
+
 def test_a_timings_write_that_fails_does_not_replace_the_targets_failure(
     tmp_path, monkeypatch, caplog
 ):

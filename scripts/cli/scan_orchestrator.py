@@ -1480,17 +1480,6 @@ class ScanOrchestrator:
             for target_type, target_id, out_dir, future in futures:
                 try:
                     name, rows, elapsed = future.result()
-                    all_results.append((target_type, name, rows))
-                    if target_type == "gitlab":
-                        _record_found(target_id)
-
-                    # Checkpoint after each completed target
-                    _checkpoint(target_id, name, rows)
-
-                    # Call progress callback if provided
-                    if progress_callback:
-                        progress_callback(target_type, target_id, rows, elapsed=elapsed)
-
                 except Exception as e:
                     # Log error but continue with other targets
                     logger.error(
@@ -1505,15 +1494,10 @@ class ScanOrchestrator:
                         tools, target_type, Reason.SCANNER_ERROR, detail=error
                     )
                     all_results.append((target_type, target_id, failed_rows))
-                    # Only a scan that raised has no timings of its own to
-                    # keep. This `try` also covers what runs after a good scan
-                    # (`_record_found`, `_checkpoint`, the progress callback):
-                    # its `ran` timings and output are on disk, and the report
-                    # must keep reading them (#1518).
-                    if future.exception() is not None:
-                        _record_raised_scan(
-                            out_dir, target_id, target_type, failed_rows, error
-                        )
+                    # The scan raised, so it has no timings of its own to keep.
+                    _record_raised_scan(
+                        out_dir, target_id, target_type, failed_rows, error
+                    )
 
                     # The callback used to be skipped on this path, so a target
                     # whose scanner *raised* never reached the progress display
@@ -1537,5 +1521,29 @@ class ScanOrchestrator:
                                 target_id,
                                 exc_info=True,
                             )
+                    continue
+
+                all_results.append((target_type, name, rows))
+                # What runs after a scan that worked is not the scan: a step
+                # that raises is logged, and the target stays recorded once,
+                # with its rows. One `try` around both appended it again as
+                # failed (#1556), and its `ran` timings and output on disk
+                # stand for the report (#1518).
+                try:
+                    if target_type == "gitlab":
+                        _record_found(target_id)
+                    _checkpoint(target_id, name, rows)
+                    if progress_callback:
+                        progress_callback(target_type, target_id, rows, elapsed=elapsed)
+                except Exception as e:
+                    logger.error(
+                        "%s %s was scanned, but recording it afterwards failed "
+                        "(%s: %s); its results stand",
+                        target_type,
+                        target_id,
+                        type(e).__name__,
+                        e,
+                        exc_info=True,
+                    )
 
         return all_results
