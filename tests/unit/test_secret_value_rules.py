@@ -17,6 +17,7 @@ from scripts.core.rule_bundle import BUNDLE_DIR
 from scripts.core.secret_value_rules import (
     CREDENTIAL_CWES,
     MESSAGE_SECRET_METAVARS,
+    MESSAGE_TEMPLATES,
     SECRET_LIKE_RULE_ID,
     SECRET_VALUE_RULES,
     is_secret_value_finding,
@@ -117,7 +118,34 @@ def test_a_listed_rule_whose_message_interpolates_says_which_metavariables_hold_
 
 
 def test_the_measured_interpolations_are_listed() -> None:
-    """Meta-guard on the parse above."""
-    assert MESSAGE_SECRET_METAVARS[
-        "yaml.kubernetes.security.secrets-in-config-file.secrets-in-config-file"
-    ] == ("$VALUE",)
+    """Meta-guard on the parse above: the three rules whose message carries the
+    secret, each pinned, since `<=` alone would let `()` through."""
+    assert {rule: held for rule, held in MESSAGE_SECRET_METAVARS.items() if held} == {
+        "yaml.kubernetes.security.secrets-in-config-file.secrets-in-config-file": (
+            "$VALUE",
+        ),
+        "python.lang.security.audit.logging.logger-credential-leak."
+        "python-logger-credential-disclosure": ("$FORMAT_STRING",),
+        "ruby.rails.security.brakeman.check-rails-secret-yaml."
+        "check-rails-secret-yaml": ("$VALUE",),
+    }
+
+
+@pytest.mark.parametrize(
+    "rule_id", sorted(r for r, held in MESSAGE_SECRET_METAVARS.items() if held)
+)
+def test_a_message_carrying_the_secret_is_rebuilt_from_the_rules_own_template(
+    rule_id: str,
+) -> None:
+    """opengrep renders a metavariable into the message as the source spells
+    it, while `abstract_content` normalises it (`"x %s" % y` becomes
+    `"x %s"%y`), so replacing the value in the message misses (review of
+    #1585). Such a message is rebuilt from the rule's template instead, which
+    must be the bundle's own text."""
+    assert MESSAGE_TEMPLATES[rule_id] == BUNDLE[rule_id]["message"]
+
+
+def test_only_those_rules_have_a_template() -> None:
+    assert set(MESSAGE_TEMPLATES) == {
+        r for r, held in MESSAGE_SECRET_METAVARS.items() if held
+    }

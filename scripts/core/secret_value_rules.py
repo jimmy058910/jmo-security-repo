@@ -18,9 +18,11 @@ from __future__ import annotations
 import re
 
 #: Rule ids that may name a secret. Widened by token|passwd|pwd|key it caught 27
-#: more on 2026-11-05, none matching a value (key sizes, JWT verification).
+#: more on 2026-11-05, none matching a value (key sizes, JWT verification);
+#: `entropy` catches the one rule that looks for secret strings by randomness.
 SECRET_LIKE_RULE_ID = re.compile(
-    r"hard-?code|secret|password|credential|api-?key|private-key", re.IGNORECASE
+    r"hard-?code|secret|password|credential|api-?key|private-key|entropy",
+    re.IGNORECASE,
 )
 
 #: Hard-coded credentials, password and cryptographic key: a finding of any tool
@@ -63,15 +65,21 @@ SECRET_VALUE_RULES: dict[str, bool] = {  # nosec B105
     "terraform.aws.security.aws-provider-static-credentials.aws-provider-static-credentials": True,
     "terraform.lang.security.rds-insecure-password-storage-in-source-code.rds-insecure-password-storage-in-source-code": True,
     "yaml.kubernetes.security.secrets-in-config-file.secrets-in-config-file": True,
+    # Measured by the review of #1585: a default value (bicep), a literal
+    # set_password() and basic-auth tuple, a high-entropy string, and a
+    # resource whose snippet reaches its `value` line two lines down.
+    "0xdea.c.high-entropy-assignment.raptor-high-entropy-assignment": True,
+    "generic.bicep.security.secure-parameter-for-secrets.secure-parameter-for-secrets": True,
+    "python.django.security.audit.unvalidated-password.unvalidated-password": True,
+    "python.requests.security.no-auth-over-http.no-auth-over-http": True,
+    "terraform.azure.security.keyvault.keyvault-ensure-secret-expires.keyvault-ensure-secret-expires": True,
     # About handling a secret, not its value: weak hashing, an empty or missing
     # password, a settings reference, a resource's encryption or expiry.
-    "generic.bicep.security.secure-parameter-for-secrets.secure-parameter-for-secrets": False,
     "go.lang.security.audit.md5-used-as-password.md5-used-as-password": False,
     "java.lang.security.audit.md5-used-as-password.md5-used-as-password": False,
     "javascript.lang.security.audit.md5-used-as-password.md5-used-as-password": False,
     "php.lang.security.ldap-bind-without-password.ldap-bind-without-password": False,
     "php.lang.security.md5-used-as-password.md5-used-as-password": False,
-    "python.django.security.audit.unvalidated-password.unvalidated-password": False,
     "python.django.security.hashids-with-django-secret.hashids-with-django-secret": False,
     "python.django.security.passwords.password-empty-string.password-empty-string": False,
     "python.django.security.passwords.use-none-for-password-default.use-none-for-password-default": False,
@@ -83,7 +91,6 @@ SECRET_VALUE_RULES: dict[str, bool] = {  # nosec B105
     "ruby.lang.security.md5-used-as-password.md5-used-as-password": False,
     "terraform.aws.security.aws-secretsmanager-secret-unencrypted.aws-secretsmanager-secret-unencrypted": False,
     "terraform.azure.security.azure-scale-set-password.azure-scale-set-password": False,
-    "terraform.azure.security.keyvault.keyvault-ensure-secret-expires.keyvault-ensure-secret-expires": False,
     "yaml.openapi.security.api-key-in-query-parameter.api-key-in-query-parameter": False,
 }
 
@@ -97,6 +104,7 @@ MESSAGE_SECRET_METAVARS: dict[str, tuple[str, ...]] = {
     "hardcoded-password-default-argument": (),
     "python.lang.security.audit.logging.logger-credential-leak."
     "python-logger-credential-disclosure": ("$FORMAT_STRING",),
+    "python.django.security.audit.unvalidated-password.unvalidated-password": (),
     "ruby.rails.security.brakeman.check-rails-secret-yaml.check-rails-secret-yaml": (
         "$VALUE",
     ),
@@ -104,6 +112,24 @@ MESSAGE_SECRET_METAVARS: dict[str, tuple[str, ...]] = {
     "check-rails-session-secret-handling": (),
     "yaml.kubernetes.security.secrets-in-config-file.secrets-in-config-file": (
         "$VALUE",
+    ),
+}
+
+
+#: The message of each rule whose message carries the secret, as the bundle
+#: writes it, `$NAME` unfilled. The adapter rebuilds such a message from it with
+#: the secret's metavariables set to "[redacted]": opengrep renders a value into
+#: the message as the source spells it, which `abstract_content` does not (a
+#: test holds these equal to the bundle).
+MESSAGE_TEMPLATES: dict[str, str] = {
+    "python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure": (
+        "Detected a python logger call with a potential hardcoded secret $FORMAT_STRING being logged. This may lead to secret credentials being exposed. Make sure that the logger is not logging  sensitive information."
+    ),
+    "ruby.rails.security.brakeman.check-rails-secret-yaml.check-rails-secret-yaml": (
+        "$VALUE Found a string literal assignment to a production Rails session secret in `secrets.yaml`. Do not commit secret values to source control! Any user in possession of this value may falsify arbitrary session data in your application. Read this value from an environment variable, KMS, or file on disk outside of source control."
+    ),
+    "yaml.kubernetes.security.secrets-in-config-file.secrets-in-config-file": (
+        "Secrets ($VALUE) should not be stored in infrastructure as code files. Use an alternative such as Bitnami Sealed Secrets or KSOPS to encrypt Kubernetes Secrets. "
     ),
 }
 
