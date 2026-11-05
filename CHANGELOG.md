@@ -496,6 +496,11 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **Storing a scan in history no longer writes in the scanned repository (#1582).** Its
+  `git status` refreshed stale stat data in the repository's index and wrote it back through
+  `.git/index.lock`, so a scan changed `.git/index`, and a git command run there at the same
+  moment failed with "Unable to create ... index.lock: File exists" (measured). It now runs
+  `git --no-optional-locks status`, which reads the same answer and writes nothing.
 - **trivy, checkov and hadolint findings of one check on one Kubernetes resource or
   Dockerfile line are one finding (#1354).** No Kubernetes pair in the equivalence table
   merged: checkov reports a resource's whole range and its finding kept only the first line,
