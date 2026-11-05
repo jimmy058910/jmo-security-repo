@@ -650,6 +650,10 @@ All notable changes to JMo Security will be documented in this file.
   `sigstore-rekor-types` → `pydantic[email]` → `email-validator`, and nothing in that
   chain reads zone-file text, so JMo never reached that parser. The lock now holds
   opentelemetry-api 1.45.2 and dnspython 2.9.2; nothing else moved.
+- **One line nested too deeply no longer loses a whole NDJSON output (#1594).** The loader
+  trufflehog's and nuclei's adapters share caught only a decode error; `json.loads` raises
+  `RecursionError` on deep nesting, which escaped and dropped every finding of the file. The
+  line is now skipped and counted in the loader's WARNING, as a malformed one is.
 - **Storing a scan in history no longer takes a lock in the scanned repository (#1582).**
   Its `git status` took `.git/index.lock` on every run, and when the index's stat data was
   stale it wrote the index back through it, so a scan changed `.git/index`, and a git

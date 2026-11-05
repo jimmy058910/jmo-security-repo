@@ -237,9 +237,6 @@ def safe_load_ndjson_file(
     # promoting it would produce the always-fires warning #784 was about.
     try:
         data = json.loads(raw)
-        # Yield items from the parsed data
-        yield from _flatten_to_dicts(data)
-        return
     except json.JSONDecodeError as e:
         if log_errors:
             logger.debug(
@@ -248,6 +245,15 @@ def safe_load_ndjson_file(
                 e.msg,
                 e.pos,
             )
+    except RecursionError:
+        # Nested past the interpreter's limit, which json.loads raises as a
+        # RecursionError, not a decode error. Read line by line, where the
+        # line that is too deep is skipped and counted (#1594).
+        pass
+    else:
+        # Outside the try, so a fallback never yields an item twice.
+        yield from _flatten_to_dicts(data)
+        return
 
     # Fall back to line-by-line NDJSON parsing.
     #
@@ -263,6 +269,14 @@ def safe_load_ndjson_file(
             continue
         try:
             obj = json.loads(line)
+        except RecursionError:
+            # Too deeply nested to parse: this line is lost, not the file (#1594).
+            skipped += 1
+            if log_errors:
+                logger.debug(
+                    "Skipping line %d in %s: nested too deeply to parse", line_num, p
+                )
+            continue
         except json.JSONDecodeError as e:
             skipped += 1
             if log_errors:
