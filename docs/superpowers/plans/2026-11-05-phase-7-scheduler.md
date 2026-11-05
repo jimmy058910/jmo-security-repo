@@ -12,8 +12,8 @@ each tool carrying a measured cost class; Ctrl-C stops the scan and leaves no pr
 behind on any platform; opengrep's findings stop depending on what else runs; and
 these open issues close: #1208, #1308, the osv-scanner retry round's #1373, zap's
 issue #1422, `--timeout`'s #1486, the startup version probe's #1581, the
-`--gitlab-group` placeholder of #1407, and the opengrep issue the coordinator files
-from golden's measurement below (PR 7a closes #1406).
+`--gitlab-group` placeholder of #1407, opengrep's loss under load (#1591), and
+zizmor's unread `.pre-commit-config.yaml` (#1592) (PR 7a closes #1406).
 
 **Architecture:** one PR, 7b, after 7a merges. The gate and the process registry are
 two small objects in `scripts/core/tool_runner.py` that `scan_all` installs for the
@@ -121,7 +121,7 @@ RAM-derived budget would change nothing.
    the gate could not count it. trufflehog runs with `TMPDIR` set to a folder under the
    scan's results directory, removed after the run. Its clone size on app B is measured
    in Task B1 and recorded.
-8. **opengrep's loss under load is fixed by what Task B1 measures, not guessed.** The
+8. **opengrep's loss under load (#1591) is fixed by what Task B1 measures, not guessed.** The
    candidate levers, in order: the gate keeping opengrep's run from overlapping the
    other heavy runs (Task B2), `-j 2` (Decided from measurement 2), an explicit
    `--max-memory`. Excluding minified vendored bundles is the last resort, since it
@@ -141,7 +141,7 @@ sampler used above, so the numbers can be re-run), `tests/unit/test_tool_descrip
   on the ZAP fixture site, and osv-scanner's per-lockfile retry round on 20 npm
   lockfiles with one truncated (#1373).
 - [ ] trufflehog's history clone on app B: its size in `$TMPDIR` (Decided 7).
-- [ ] opengrep under load (Decided 8): reproduce golden's loss on juice-shop's
+- [ ] opengrep under load (#1591, Decided 8): reproduce golden's loss on juice-shop's
   `three.js` and WebGoat's `ace.js` with opengrep alone beside a process holding a
   fixed amount of memory, stepping it up; record the free memory at which
   `Limit_reached` appears, at `-j 4` and `-j 2`, and with `--max-memory` set. That
@@ -224,7 +224,7 @@ passed): 114 `refresh_loop`, 1 `run_server`. The target is 0.
 - [ ] A session-end check that no non-daemon thread and no `refresh_loop` thread is
   alive (the one `run_server` thread seen is a test server, to be found and closed).
 
-### Task B6: zap's concurrency and heap (#1422), `--timeout` (#1486), the placeholder (#1407)
+### Task B6: zap (#1422), `--timeout` (#1486), the placeholder (#1407), zizmor (#1592)
 
 **Files:** `scripts/core/tool_descriptors.py`, `scripts/cli/scan_utils.py`
 (`tool_timeout`), `scripts/cli/jmo.py` (`--timeout` help), `scripts/cli/scan_orchestrator.py`
@@ -237,6 +237,13 @@ passed): 114 `refresh_loop`, 1 `run_server`. The target is 0.
   (Decided 5).
 - [ ] Once the first-run lane has removed `--gitlab-group`, delete
   `_discover_gitlab_repos`' `group:` placeholder (`scan_orchestrator.py:967`).
+- [ ] zizmor reads `.pre-commit-config.yaml` (#1592): zizmor 1.31 audits it
+  (`archived-uses`, `typosquat-uses`, `insecure-url-scheme`), and JMo never hands it
+  over. Add `.pre-commit-config.yaml` and `.pre-commit-config.yml` to zizmor's
+  `file_patterns`. The golden lane's
+  `tests/integration/test_zizmor_answer_key.py::test_jmo_hands_zizmor_no_pre_commit_config`
+  (PR F) then fails by design: in the same commit it is flipped into the answer key's
+  scope, so this item waits for PR F in `dev`.
 
 ### Task B8: the startup probe asks only the tools a scan can run (#1581)
 
@@ -260,7 +267,7 @@ Measured: 44.5 s before the first scan line on a first run, 25.9 s of it zap's
   6) and at the default budget: peak, wall, and processes left 5 s after a SIGINT 3 s
   into the scan phase, against the baseline above (1,314 MB, 85 s, 6 alive). Measured
   with no other suite running. Numbers in the PR body.
-- [ ] opengrep's counts under the full matrix at the default budget: juice-shop 223,
+- [ ] opengrep's counts under the full matrix at the default budget (#1591): juice-shop 223,
   WebGoat 428, three runs each (Decided 8).
 - [ ] The thread count at the end of a `tests/cli` session: 0 (was 115).
 - [ ] Windows: Ctrl-C and the Job Object checked on a Windows machine by a script Jimmy
