@@ -325,13 +325,51 @@ TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
 MIN_MEMORY_BUDGET_MB = 700
 
 
-def default_memory_budget_mb() -> int:
+CGROUP_ROOT = Path("/sys/fs/cgroup")
+
+
+def _cgroup_free_mb(root: Path) -> int | None:
+    """What this process's cgroup memory limit leaves, in MB: cgroup v2's
+    `memory.max` less `memory.current`, else v1's `limit_in_bytes` less
+    `usage_in_bytes`. None with no limit (`max`, or v1's near-2**63 value) or
+    no cgroup files."""
+    for limit_file, usage_file in (
+        (root / "memory.max", root / "memory.current"),
+        (
+            root / "memory" / "memory.limit_in_bytes",
+            root / "memory" / "memory.usage_in_bytes",
+        ),
+    ):
+        try:
+            limit = limit_file.read_bytes().strip()
+            usage = int(usage_file.read_bytes().strip())
+        except (OSError, ValueError):
+            continue
+        if limit == b"max":
+            return None
+        try:
+            limit_bytes = int(limit)
+        except ValueError:
+            continue
+        if limit_bytes >= 1 << 60:
+            return None
+        return max(0, limit_bytes - usage) // (1024 * 1024)
+    return None
+
+
+def default_memory_budget_mb(cgroup_root: Path = CGROUP_ROOT) -> int:
     """Half the memory free now, never below `MIN_MEMORY_BUDGET_MB`. Decided
     2026-11-05: what a scan's tool runs may hold at once unless `--memory-budget`
-    or `jmo.yml`'s `memory_budget_mb` says otherwise."""
+    or `jmo.yml`'s `memory_budget_mb` says otherwise.
+
+    Free is the smaller of psutil's and what a container's cgroup limit leaves:
+    psutil reads `/proc/meminfo`, which in a container shows the host's."""
     import psutil
 
     free_mb = int(psutil.virtual_memory().available) // (1024 * 1024)
+    in_cgroup = _cgroup_free_mb(cgroup_root)
+    if in_cgroup is not None:
+        free_mb = min(free_mb, in_cgroup)
     return max(MIN_MEMORY_BUDGET_MB, free_mb // 2)
 
 

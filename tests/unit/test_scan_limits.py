@@ -176,3 +176,62 @@ def test_a_limit_below_one_is_refused(budget: int, slots: int) -> None:
     with pytest.raises(ValueError):
         with scan_limits(budget_mb=budget, slots=slots):
             pass
+
+
+class TestTheDefaultBudgetSeesAContainersLimit:
+    """psutil reads `/proc/meminfo`, which in a container shows the host: a
+    `--memory 2g` container on a 64 GB host got a 30 GB budget and the gate
+    bounded nothing (review of PR 7b). The default budget takes the smaller of
+    the memory free and what the cgroup's limit leaves."""
+
+    @staticmethod
+    def _budget(monkeypatch, tmp_path, free_mb: int, files: dict[str, str]) -> int:
+        import types
+
+        from scripts.cli.scan_utils import default_memory_budget_mb
+
+        for rel, text in files.items():
+            (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / rel).write_bytes(text.encode())
+        monkeypatch.setattr(
+            "psutil.virtual_memory",
+            lambda: types.SimpleNamespace(available=free_mb * 1024 * 1024),
+        )
+        return default_memory_budget_mb(cgroup_root=tmp_path)
+
+    MB = 1024 * 1024
+
+    def test_cgroup_v2_limit(self, monkeypatch, tmp_path):
+        files = {
+            "memory.max": f"{2048 * self.MB}\n",
+            "memory.current": f"{512 * self.MB}\n",
+        }
+        assert self._budget(monkeypatch, tmp_path, 30_000, files) == 768
+
+    def test_cgroup_v1_limit(self, monkeypatch, tmp_path):
+        files = {
+            "memory/memory.limit_in_bytes": f"{4096 * self.MB}\n",
+            "memory/memory.usage_in_bytes": f"{1024 * self.MB}\n",
+        }
+        assert self._budget(monkeypatch, tmp_path, 30_000, files) == 1536
+
+    def test_no_limit_leaves_the_free_memory(self, monkeypatch, tmp_path):
+        files = {"memory.max": "max\n", "memory.current": f"{512 * self.MB}\n"}
+        assert self._budget(monkeypatch, tmp_path, 4000, files) == 2000
+
+    def test_v1s_no_limit_value_leaves_the_free_memory(self, monkeypatch, tmp_path):
+        files = {
+            "memory/memory.limit_in_bytes": "9223372036854771712\n",
+            "memory/memory.usage_in_bytes": f"{1024 * self.MB}\n",
+        }
+        assert self._budget(monkeypatch, tmp_path, 4000, files) == 2000
+
+    def test_no_cgroup_files_leave_the_free_memory(self, monkeypatch, tmp_path):
+        assert self._budget(monkeypatch, tmp_path, 4000, {}) == 2000
+
+    def test_a_full_container_still_gets_700(self, monkeypatch, tmp_path):
+        files = {
+            "memory.max": f"{1024 * self.MB}\n",
+            "memory.current": f"{1000 * self.MB}\n",
+        }
+        assert self._budget(monkeypatch, tmp_path, 30_000, files) == 700
