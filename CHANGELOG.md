@@ -508,6 +508,10 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **One line nested too deeply no longer loses a whole NDJSON output (#1594).** The loader
+  trufflehog's and nuclei's adapters share caught only a decode error; `json.loads` raises
+  `RecursionError` on deep nesting, which escaped and dropped every finding of the file. The
+  line is now skipped and counted in the loader's WARNING, as a malformed one is.
 - **Storing a scan in history no longer takes a lock in the scanned repository (#1582).**
   Its `git status` took `.git/index.lock` on every run, and when the index's stat data was
   stale it wrote the index back through it, so a scan changed `.git/index`, and a git

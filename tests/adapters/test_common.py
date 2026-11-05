@@ -388,6 +388,39 @@ class TestNdjsonFailuresAreAnnounced:
             "4 line(s)" in m and "6 parsed successfully" in m for m in warnings
         ), f"expected a summary naming both counts, got: {warnings}"
 
+    def test_a_line_nested_past_the_interpreter_limit_is_skipped_and_counted(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """#1594: json.loads raises RecursionError, not JSONDecodeError, on a
+        line nested too deeply. It escaped the loop, and the report's
+        catch-all then dropped the whole file: every finding of the output,
+        for one pathological line."""
+        good = [json.dumps({"DetectorName": "AWS", "Raw": f"K{i}"}) for i in range(3)]
+        deep = "[" * 100_000 + "]" * 100_000
+        ndjson = tmp_path / "trufflehog.json"
+        ndjson.write_bytes(("\n".join([good[0], deep, *good[1:]]) + "\n").encode())
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            got = list(safe_load_ndjson_file(ndjson))
+
+        assert [r["Raw"] for r in got] == ["K0", "K1", "K2"]
+        assert any(
+            "1 line(s)" in m and "3 parsed successfully" in m
+            for m in self._warnings(caplog)
+        )
+
+    def test_a_whole_file_nested_past_the_limit_reads_as_nothing(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        deep = tmp_path / "trufflehog.json"
+        deep.write_bytes(b"[" * 100_000 + b"]" * 100_000)
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            got = list(safe_load_ndjson_file(deep))
+
+        assert got == []
+        assert any("1 line(s)" in m for m in self._warnings(caplog))
+
     def test_one_summary_not_one_warning_per_bad_line(
         self, tmp_path: Path, caplog
     ) -> None:
