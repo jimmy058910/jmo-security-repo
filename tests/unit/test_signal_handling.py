@@ -95,7 +95,13 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         log_level=None,
         human_logs=False,
     )
+    from scripts.core import tool_runner
     from scripts.core.tool_runner import clear_stop
+
+    contained = []
+    monkeypatch.setattr(
+        tool_runner, "contain_process_tree", lambda: contained.append(True) or False
+    )
 
     try:
         rc = jmo.cmd_scan(args)
@@ -109,6 +115,8 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
     # logged, and this test asserted the scan then exited 0. It still has to
     # reach target setup, or it says nothing about the signal path.
     assert rc == 130
+    # Windows' Job Object (a no-op elsewhere) is set up before any tool runs.
+    assert contained == [True]
     assert (out_base / "individual-repos").exists(), (
         "the scan did not reach target setup, so this says nothing about "
         "signal handling"

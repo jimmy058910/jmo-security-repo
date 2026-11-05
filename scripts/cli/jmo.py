@@ -3398,9 +3398,16 @@ def cmd_scan(args) -> int:
     # 2026-11-05: exit 130 with no report, the session saved for
     # `jmo scan --resume` (after the scan returns, not here, where it could
     # land mid-checkpoint). A second signal exits at once.
-    from scripts.core.tool_runner import clear_stop, request_stop, stop_requested
+    from scripts.core.tool_runner import (
+        clear_stop,
+        contain_process_tree,
+        request_stop,
+        stop_requested,
+    )
 
     clear_stop()
+    # Windows: every process jmo starts dies with it, however jmo exits (B3).
+    contain_process_tree()
     signals_seen = [0]
 
     def _handle_stop(signum, frame):

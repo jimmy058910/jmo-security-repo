@@ -191,6 +191,95 @@ def clear_stop() -> None:
     _STOP.clear()
 
 
+_JOB: Any = None
+
+
+def contain_process_tree() -> bool:
+    """Windows: put this process in a Job Object that kills every process in
+    it when its last handle closes, so every tool and grandchild jmo starts
+    dies when jmo exits, however it exits (v2.0.0 Phase 7, B3). Windows does
+    not kill a process's children with it, and `taskkill /T` runs only on a
+    timeout or Ctrl-C. Children join the job as they start; nested jobs need
+    Windows 8 or later. True once set up; False elsewhere, or when Windows
+    refuses, in which case the scan runs as before. Idempotent."""
+    global _JOB
+    if _JOB is not None:
+        return True
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    class BasicLimit(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class IoCounters(ctypes.Structure):
+        _fields_ = [
+            (name, ctypes.c_uint64)
+            for name in (
+                "ReadOperationCount",
+                "WriteOperationCount",
+                "OtherOperationCount",
+                "ReadTransferCount",
+                "WriteTransferCount",
+                "OtherTransferCount",
+            )
+        ]
+
+    class ExtendedLimit(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", BasicLimit),
+            ("IoInfo", IoCounters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel32.SetInformationJobObject.restype = wintypes.BOOL
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
+    kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        logger.debug("CreateJobObjectW failed: %d", ctypes.get_last_error())
+        return False
+    info = ExtendedLimit()
+    info.BasicLimitInformation.LimitFlags = 0x2000  # KILL_ON_JOB_CLOSE
+    extended_limit_information = 9  # JobObjectExtendedLimitInformation
+    if not kernel32.SetInformationJobObject(
+        job, extended_limit_information, ctypes.byref(info), ctypes.sizeof(info)
+    ) or not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
+        logger.debug("Job Object setup failed: %d", ctypes.get_last_error())
+        kernel32.CloseHandle(job)
+        return False
+    # Held, never closed: the handle closes when jmo exits, and the job then
+    # kills what is left in it.
+    _JOB = job
+    return True
+
+
 def _run_bounded(
     command: list[str],
     *,
