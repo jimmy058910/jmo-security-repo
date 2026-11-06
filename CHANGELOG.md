@@ -279,6 +279,10 @@ All notable changes to JMo Security will be documented in this file.
   scan's yara-x row say the engine is missing and name the extra, where they said "See JMo
   documentation", raised a traceback and "its executable could not be found". A default
   `jmo tools install` leaves yara-x out while its engine is absent, so it succeeds there.
+- **Breaking. The history database is `--history-db` on every command (#1082).** `jmo
+  wizard`, `jmo diff` and every `jmo history` and `jmo trends` subcommand spelled it
+  `--db`, while `jmo scan` and `jmo ci` spelled it `--history-db`, and nothing said so.
+  `--db` is gone, with no alias: it is a usage error (exit 2).
 - **Breaking. A finding names its target, and the same finding in two repositories is two
   findings.** Each finding carries `target`: the kind of target it was scanned from (`repo`,
   `image`, `iac`, `url`, `gitlab` or `k8s`) and the name of its results folder, which for a
@@ -565,6 +569,57 @@ All notable changes to JMo Security will be documented in this file.
   command run there at the same moment failed with "Unable to create ... index.lock: File
   exists" (measured). It now runs `git --no-optional-locks status`, which reads the same
   answer and takes no lock.
+- **The wizard's Docker commands name an image that exists.** They used
+  `ghcr.io/jimmy058910/jmo-security:v<version>`, but a release tags its images without
+  the `v` (`1.1.1`, `1.1`, `1`, `latest`), so every `docker run` the wizard printed,
+  ran or wrote into a script, Makefile or workflow failed with "not found" (exit 125).
+  The tag is now the release's own, and a test reads release.yml's tag patterns.
+- **The wizard's native GitHub Actions workflow installs YARA-X.** It ran `pip install
+  jmo-security`, which no longer brings YARA-X now that it is the `[yara]` extra (#1577),
+  so its scans ran without it; it installs `jmo-security[yara]`.
+- **`jmo wizard --yes` and `--target DIR` scan a project as one target.** A directory
+  with no `.git` was read as a directory of repositories, and `--yes` with no target
+  always read the working directory that way, so a project (or a repository, under
+  `--yes`) was scanned subdirectory by subdirectory and its own root files never. A
+  directory is now scanned as a directory of repositories only when its subdirectories
+  are repositories (its own files, if it has any, are then not scanned, as before);
+  anything else is one target.
+- **The wizard reads its history where its scans write it (#1484).** It read
+  `~/.jmo/history.db` while the scan it launched stored to the working directory's
+  `.jmo/history.db`, so its trend step found no history unless it ran from the home
+  directory; in Docker mode the history was lost with the container. Its default is now
+  the scan's, it passes `--history-db` to the scan it runs, and in Docker mode it mounts
+  the database's directory (created first) so the history persists.
+- **A scan redirected to a log no longer fills it with progress frames (#1082).** The
+  progress line's `\r` frames overwrite each other on a terminal but pile up in a file: a
+  20-minute scan left a 46 KB log around 6 real lines. They are now written only to a
+  terminal; the per-target lines still reach the log.
+- **"N files could not be analysed" is one short line (#1082).** It carried ten files'
+  reasons, each up to 400 characters, on one line. The line now gives the count, the
+  consequence and where `SUMMARY.md` lists every file; a JSON log carries the detail as
+  fields (`tools`, `unanalysed_count`, `sample`, `detail_file`). With no `SUMMARY.md`
+  written, the sample stays in the line.
+- **A prompt with stdin closed declines instead of crashing (#1553).** `jmo schedule
+  delete`, `jmo history prune` and `jmo tools uninstall` caught end of input but not a
+  closed stdin (`<&-`), where Python raises `RuntimeError: lost sys.stdin`, so they exited
+  1 with a traceback. Each now cancels, exit 0, as it does at end of input. `jmo wizard`
+  with stdin closed and no `--yes` stops at once with exit 2 and says how to run it,
+  where it spent 35 s on its tool check first and then crashed; a wizard whose stdin ends
+  before its questions are answered stops with a message, exit 1, and no traceback.
+- **A quoted `~` in a results or history path means the home directory (#1302).**
+  `jmo scan --results-dir '~/x'`, as a quoted cron line or a generated script passes it,
+  wrote its reports into a directory literally named `~` under the working directory, and
+  exited 0. Every path option now expands a leading `~` where the parser reads it: every
+  `--results-dir` and history database, `jmo report`'s results directory and `--out`,
+  `--config`, `--output`, the wizard's `--target`, `--baseline`, `--current` and
+  `--emit-*` files, `jmo diff`'s directories, the trends exports, and the rest. Scan
+  targets were already expanded where the scan reads them. So is the MCP server's
+  `JMO_HISTORY_DB`.
+- **No subprocess in `scripts/cli` or `scripts/core` can wait forever (#1285).** `jmo tools
+  uninstall`'s `pip uninstall` and `pip show`, and `jmo schedule install`'s two `crontab`
+  calls, had no timeout; a hung `crontab` is now reported as a schedule error after 30 s.
+  A test fails on any new call without `timeout=`, except the wizard's scan, whose tools
+  each run under their own.
 - **An exported schedule workflow mounts a checkout whose path holds a space.** Its
   `docker run -v $(pwd):/workspace` left the substitution unquoted, so the shell split
   such a path into two arguments; it is now `-v "$(pwd)":/workspace`.

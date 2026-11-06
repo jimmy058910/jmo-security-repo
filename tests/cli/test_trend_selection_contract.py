@@ -353,7 +353,7 @@ def test_empty_json_is_still_json(mixed_db: Path, capsys) -> None:
     then the default invocation.
     """
     args = _parse(
-        "analyze", "--branch", "nope", "--format", "json", "--db", str(mixed_db)
+        "analyze", "--branch", "nope", "--format", "json", "--history-db", str(mixed_db)
     )
     rc = cmd_trends_analyze(args)
 
@@ -373,7 +373,7 @@ def test_empty_json_is_still_json(mixed_db: Path, capsys) -> None:
 )
 def test_empty_result_is_not_an_error(command, subcommand: str, mixed_db: Path) -> None:
     """rc 0, matching `jmo history list` for the same empty query."""
-    args = _parse(subcommand, "--branch", "nope", "--db", str(mixed_db))
+    args = _parse(subcommand, "--branch", "nope", "--history-db", str(mixed_db))
     assert command(args) == 0
 
 
@@ -385,7 +385,9 @@ def test_empty_message_names_the_filters_that_excluded_everything(
     The default invocation applied an implicit branch and an implicit window,
     then reported neither.
     """
-    args = _parse("analyze", "--branch", "nope", "--days", "7", "--db", str(mixed_db))
+    args = _parse(
+        "analyze", "--branch", "nope", "--days", "7", "--history-db", str(mixed_db)
+    )
     cmd_trends_analyze(args)
 
     out = capsys.readouterr().out
@@ -428,7 +430,7 @@ def test_developers_honours_the_branch_it_advertises(
     """
     outputs = []
     for branch in ("dev", "feature/x"):
-        args = _parse("developers", "--branch", branch, "--db", str(mixed_db))
+        args = _parse("developers", "--branch", branch, "--history-db", str(mixed_db))
         cmd_trends_developers(args)
         outputs.append(capsys.readouterr().out)
 
@@ -445,7 +447,7 @@ def test_developers_survives_the_empty_path(
     """
     db = tmp_path / "empty.db"
     _make_db(db, [])
-    args = _parse("developers", "--db", str(db))
+    args = _parse("developers", "--history-db", str(db))
 
     rc = cmd_trends_developers(args)
 
@@ -487,7 +489,7 @@ def test_developers_reads_findings_as_the_mapping_they_are(
     conn.commit()
     conn.close()
 
-    args = _parse("developers", "--db", str(mixed_db))
+    args = _parse("developers", "--history-db", str(mixed_db))
 
     rc = cmd_trends_developers(args)
 
@@ -568,7 +570,7 @@ def test_developers_empty_message_names_the_filters(
     number. Both now return 0, so the exit code alone cannot tell them
     apart -- the message is what carries the information.
     """
-    args = _parse("developers", "--branch", "nope", "--db", str(mixed_db))
+    args = _parse("developers", "--branch", "nope", "--history-db", str(mixed_db))
 
     rc = cmd_trends_developers(args)
 
@@ -652,7 +654,7 @@ def test_scan_ids_cannot_be_combined_with_a_selector(
         "scan-0001",
         "scan-0002",
         *extra,
-        "--db",
+        "--history-db",
         str(mixed_db),
     )
 
@@ -675,7 +677,7 @@ def test_scan_ids_alone_is_still_accepted(mixed_db: Path) -> None:
         "scan-0002",
         "--format",
         "json",
-        "--db",
+        "--history-db",
         str(mixed_db),
     )
     assert cmd_trends_analyze(args) == 0
@@ -743,7 +745,7 @@ def test_each_export_flag_writes_a_non_empty_file(
     not evidence that it works.
     """
     out = tmp_path / f"out{flag}"
-    args = _parse("analyze", flag, str(out), "--db", str(mixed_db))
+    args = _parse("analyze", flag, str(out), "--history-db", str(mixed_db))
 
     rc = cmd_trends_analyze(args)
 

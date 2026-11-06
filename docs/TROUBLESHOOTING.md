@@ -126,7 +126,7 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo
 docker run --rm \
   -v "$(pwd)/.jmo:/scan/.jmo" \
   -v "$(pwd):/scan" \
-  ghcr.io/jimmy058910/jmo-security:v1.0.1 scan --repo /scan
+  ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 ### arm64 image is missing a tool

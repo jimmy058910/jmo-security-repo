@@ -1560,7 +1560,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install JMo Security
-        run: pip install jmo-security
+        run: pip install "jmo-security[yara]"
 
       - name: Install Security Tools
         run: |
@@ -1611,7 +1611,7 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/jimmy058910/jmo-security:v<version>  # the jmo release that generated it
+      image: ghcr.io/jimmy058910/jmo-security:<version>  # the jmo release that generated it
     steps:
 
       - uses: actions/checkout@v4

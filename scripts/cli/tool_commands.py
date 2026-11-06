@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from scripts.cli.terminal import stream_is_tty
+from scripts.cli.terminal import ask, stream_is_tty
 from scripts.cli.tool_manager import (
     ToolManager,
     ToolStatus,
@@ -547,6 +547,26 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         missing = manager.get_missing_tools([*TOOL_MATRIX, POLICY_ENGINE])
 
     if not missing:
+        # Nothing this command can install is not the same as every tool ready:
+        # a default tool can be off the list and still not run (yara-x without
+        # its [yara] extra, #1577). Statuses are cached, so this re-checks
+        # nothing. A named tool has already said where it stands, above.
+        not_ready = (
+            []
+            if tools_arg
+            else [
+                s
+                for s in manager.check_matrix([*TOOL_MATRIX, POLICY_ENGINE]).values()
+                if not s.execution_ready
+            ]
+        )
+        if not_ready:
+            print(colorize("Nothing to install, but these tools cannot run:", "yellow"))
+            for status in not_ready:
+                print(
+                    f"  {status.name}: {status.execution_warning or status.install_hint}"
+                )
+            return 0
         print(colorize("All tools are already installed!", "green"))
         return 0
 
@@ -1047,12 +1067,15 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
             prompt = "Remove JMo suite? (Tools will remain installed) [y/N]: "
 
         try:
-            response = input(prompt).strip().lower()
-        except (EOFError, KeyboardInterrupt):
+            answer = ask(prompt)
+        except KeyboardInterrupt:
+            answer = None
+        if answer is None:
+            # Stdin closed or ended: nobody agreed to a removal (#1553).
             print("\nCancelled.")
             return 0
 
-        if response != "y":
+        if answer.strip().lower() != "y":
             print("Cancelled.")
             return 0
 
@@ -1082,6 +1105,7 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                timeout=120,
             )
             if result.returncode == 0:
                 print(colorize("done", "green"))
@@ -1124,6 +1148,7 @@ def _check_pip_package(package: str) -> bool:
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=30,
         )
         return result.returncode == 0
     except Exception:

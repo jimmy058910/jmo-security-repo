@@ -479,7 +479,13 @@ def test_progress_line_writer_goes_through_the_fallback_table() -> None:
     spinner = ProgressTracker._SPINNER_FRAMES[0]
     line = f"\r[0/1] {spinner} trufflehog (0s) [0%]"
 
-    console = _LegacyConsole("cp437")
+    class _LegacyTerminal(_LegacyConsole):
+        """A console is a terminal: the progress line goes only to one (#1082)."""
+
+        def isatty(self) -> bool:
+            return True
+
+    console = _LegacyTerminal("cp437")
     with patch("scripts.cli.jmo.sys.stderr", console):
         ProgressTracker._write_progress_line(line)
 

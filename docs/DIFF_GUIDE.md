@@ -82,7 +82,7 @@ jmo diff \
 jmo diff \
   --scan scan-id-1 \
   --scan scan-id-2 \
-  --db /custom/path/history.db \
+  --history-db /custom/path/history.db \
   --format json
 ```
 
@@ -112,7 +112,7 @@ jmo diff [OPTIONS] [BASELINE] [CURRENT]
 | Option | Description |
 |--------|-------------|
 | `--scan SCAN_ID` | Scan ID (provide twice: baseline, current) |
-| `--db PATH` | History database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | History database path (default: `.jmo/history.db`) |
 
 ### Output Options
 
@@ -461,7 +461,7 @@ COUNT=$(jq '[.findings.new[] | select(.compliance.owaspTop10_2021 != null)] | le
 ### "Scan ID not found in database"
 
 - List available scans: `jmo history list`
-- Check database path: `--db .jmo/history.db`
+- Check database path: `--history-db .jmo/history.db`
 
 ### "No findings in diff output"
 

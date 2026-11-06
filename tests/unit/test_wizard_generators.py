@@ -177,7 +177,6 @@ def test_generate_github_actions_native_mode_repo(mock_config):
     assert "runs-on: ubuntu-latest" in result
     assert "container:" not in result  # No container in native mode
     assert "setup-python@v5" in result  # its version: the test below
-    assert "pip install jmo-security" in result
     assert "Install Security Tools" in result
     assert "jmo scan" in result
     # The checkout itself: `--repos-dir .` scanned each subdirectory of it as a
@@ -187,6 +186,26 @@ def test_generate_github_actions_native_mode_repo(mock_config):
     assert "--profile-name" not in result
     # Tools comment lists the whole matrix, derived rather than typed
     assert f"# Tools: {', '.join(TOOL_MATRIX)}" in result
+
+
+def test_the_native_workflow_installs_jmo_with_yara_x(mock_config):
+    """yara-x is the `[yara]` extra (decided 2026-11-05, #1577): a workflow that
+    installs bare `jmo-security` runs every scan without it."""
+    import shlex
+
+    from packaging.requirements import Requirement
+
+    mock_config.use_docker = False
+    steps = yaml.safe_load(generate_github_actions(mock_config))["jobs"][
+        "security-scan"
+    ]["steps"]
+    (install,) = [s for s in steps if s.get("name") == "Install JMo Security"]
+
+    words = shlex.split(install["run"])
+    assert words[:2] == ["pip", "install"]
+    requirement = Requirement(words[2])
+    assert requirement.name == "jmo-security"
+    assert requirement.extras == {"yara"}
 
 
 def test_the_native_workflow_installs_the_scanners(mock_config):

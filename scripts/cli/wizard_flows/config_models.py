@@ -14,6 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from scripts.core.history_db import DEFAULT_DB_PATH
+
 # What a scan uses when neither the wizard nor jmo.yml sets threads/timeout.
 # The same values as the shipped jmo.yml's top level.
 DEFAULT_THREADS = 4
@@ -149,14 +151,18 @@ class WizardConfig:
 
     @classmethod
     def get_db_path(cls) -> Path:
-        """Get the history database path, respecting custom --db flag.
+        """Get the history database path, respecting a custom --history-db.
+
+        The default is the scan's: `.jmo/history.db` in the working directory.
+        It was `~/.jmo/history.db`, so the wizard read a database its own scans
+        never wrote unless it ran from the home directory (#1484).
 
         Returns:
             Path to SQLite history database
         """
         if cls._custom_db_path:
             return Path(cls._custom_db_path).expanduser().resolve()
-        return Path.home() / ".jmo" / "history.db"
+        return DEFAULT_DB_PATH
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

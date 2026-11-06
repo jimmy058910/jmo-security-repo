@@ -116,7 +116,7 @@ jmo trends analyze [OPTIONS]
 | `--min-scans N` | Minimum scans required for analysis (default: 2) |
 | `--format FORMAT` | Output format: `terminal` (default), `json`, `html` |
 | `--output FILE` | Write output to file instead of stdout |
-| `--db PATH` | Database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | Database path (default: `.jmo/history.db`) |
 | `--export FORMAT` | Export data: `csv`, `prometheus`, `grafana`, `dashboard` |
 | `--export-file FILE` | Export file path (required with `--export`) |
 
@@ -225,7 +225,7 @@ jmo trends show [SCAN_ID] [OPTIONS]
 | `--window N` | Number of scans before/after to show (default: 5) |
 | `--branch NAME` | Filter scans by branch |
 | `--format FORMAT` | Output format: `terminal` (default), `json` |
-| `--db PATH` | Database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | Database path (default: `.jmo/history.db`) |
 
 #### Examples
 
@@ -258,7 +258,7 @@ jmo trends regressions [OPTIONS]
 | `--branch NAME` | Filter by branch |
 | `--severity LEVEL` | Show regressions for severity level (default: CRITICAL,HIGH) |
 | `--format FORMAT` | Output format: `terminal` (default), `json` |
-| `--db PATH` | Database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | Database path (default: `.jmo/history.db`) |
 
 #### Examples
 
@@ -293,7 +293,7 @@ jmo trends score [OPTIONS]
 | `--branch NAME` | Filter by branch |
 | `--scans N` | Show last N scans (default: all) |
 | `--format FORMAT` | Output format: `terminal` (default), `json` |
-| `--db PATH` | Database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | Database path (default: `.jmo/history.db`) |
 
 #### Score Calculation
 
@@ -344,7 +344,7 @@ jmo trends compare SCAN_ID_1 SCAN_ID_2 [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--format FORMAT` | Output format: `terminal` (default), `json` |
-| `--db PATH` | Database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | Database path (default: `.jmo/history.db`) |
 
 #### Examples
 
@@ -373,7 +373,7 @@ jmo trends insights [OPTIONS]
 | `--branch NAME` | Filter by branch |
 | `--scans N` | Analyze last N scans (default: all) |
 | `--format FORMAT` | Output format: `terminal` (default), `json` |
-| `--db PATH` | Database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | Database path (default: `.jmo/history.db`) |
 
 #### Examples
 
@@ -437,7 +437,7 @@ jmo trends developers [OPTIONS]
 | `--format FORMAT` | Output format: `terminal` (default), `json` |
 | `--team-map FILE` | JSON file mapping developers to teams |
 | `--velocity` | Show developer velocity metrics |
-| `--db PATH` | Database path (default: `.jmo/history.db`) |
+| `--history-db PATH` | Database path (default: `.jmo/history.db`) |
 
 #### Examples
 
@@ -701,11 +701,11 @@ jobs:
 security_trends:
   stage: security
   script:
-    - jmo scan --repo . --store-history --db scans.db
-    - jmo trends analyze --db scans.db --format html --output trends.html
-    - jmo trends regressions --db scans.db
-    - jmo trends score --db scans.db
-    - jmo trends analyze --db scans.db --export grafana --export-file dashboard.json
+    - jmo scan --repo . --store-history --history-db scans.db
+    - jmo trends analyze --history-db scans.db --format html --output trends.html
+    - jmo trends regressions --history-db scans.db
+    - jmo trends score --history-db scans.db
+    - jmo trends analyze --history-db scans.db --export grafana --export-file dashboard.json
   artifacts:
     paths:
       - scans.db
@@ -739,7 +739,7 @@ docker run --rm \
 docker run --rm \
   -v $PWD/.jmo:/scan/.jmo \
   jmo-security:latest \
-  trends analyze --db /scan/.jmo/history.db
+  trends analyze --history-db /scan/.jmo/history.db
 ```
 
 **Docker Compose Example:**

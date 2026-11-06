@@ -679,3 +679,22 @@ class TestTheDescriptionMatchesTheSchema:
         for query in examples:
             params = ["x"] * query.count("?")
             execute_readonly_query(db_path=db, query=query, params=params or None)
+
+
+def test_jmo_history_db_expands_a_leading_tilde(mcp_db, tmp_path, monkeypatch):
+    """A quoted `~` in an MCP client's config reaches the server as typed; it
+    named a directory called `~` and the query said "Database not found"
+    (the #1302 class)."""
+    import shutil
+
+    from scripts.jmo_mcp.jmo_server import query_findings_db
+
+    home = tmp_path / "home"
+    home.mkdir()
+    shutil.copy(mcp_db, home / "h.db")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("JMO_HISTORY_DB", "~/h.db")
+    mcp_db.unlink()  # so only the home copy can answer
+
+    assert query_findings_db(query="SELECT 1")["row_count"] == 1

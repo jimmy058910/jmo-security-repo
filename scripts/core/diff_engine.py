@@ -219,7 +219,7 @@ class DiffEngine:
         Args:
             baseline_scan_id: Baseline scan UUID
             current_scan_id: Current scan UUID
-            db_path: Path to history.db (default: ~/.jmo/history.db)
+            db_path: Path to history.db (default: .jmo/history.db, DEFAULT_DB_PATH)
 
         Returns:
             DiffResult with classified findings and statistics

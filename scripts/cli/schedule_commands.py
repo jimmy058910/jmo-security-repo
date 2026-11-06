@@ -23,6 +23,7 @@ from pathlib import Path
 import yaml
 from croniter import croniter
 
+from scripts.cli.terminal import ask
 from scripts.core.cron_installer import (
     CronInstaller,
     CronInstallError,
@@ -454,15 +455,13 @@ def _cmd_schedule_delete(args, manager: ScheduleManager) -> int:
     if not args.force:
         _warn(f"Delete schedule '{args.name}'? This cannot be undone.")
         try:
-            response = input("Type 'yes' to confirm: ")
-        except (EOFError, KeyboardInterrupt):
-            # Nobody is there to confirm a destructive action, so decline it.
-            # Every peer prompt already does this -- `history prune`,
-            # `tools uninstall`, the first-run and resume prompts -- and this
-            # was the one that raised instead (#789).
+            response = ask("Type 'yes' to confirm: ")
+        except KeyboardInterrupt:
             _info("Cancelled")
             return 0
-        if response.lower() != "yes":
+        # None: nobody is there to confirm a destructive action, so decline it
+        # (#789 for end of input, #1553 for a closed stdin).
+        if response is None or response.lower() != "yes":
             _info("Cancelled")
             return 0
 

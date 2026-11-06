@@ -192,13 +192,31 @@ def cmd_report(args, _log_fn) -> int:
     # run, so anything quieter is invisible exactly when it matters. It cannot
     # become the always-fires warning #784 removed, because a healthy scan
     # produces no diagnostics and this stays silent.
+    #
+    # One short line for a reader, the detail as fields for a log consumer
+    # (#1082): it was one JSON line carrying ten files' reasons, each up to 400
+    # characters. SUMMARY.md's table lists every file; without one, the sample
+    # stays in the line, so the files are still named somewhere.
     diagnostics = collect_tool_diagnostics(results_dir)
     if diagnostics:
+        sample = sorted({d.render() for d in diagnostics})[:10]
+        summary_md = out_dir / "SUMMARY.md" if "md" in cfg.outputs else None
         logger.warning(
             "%s - they are NOT clean results, and any finding they contain is "
-            "absent from this report: %s",
+            "absent from this report%s",
             summarize(diagnostics),
-            "; ".join(sorted({d.render() for d in diagnostics})[:10]),
+            f"; each is listed in {summary_md}"
+            if summary_md
+            else ": " + "; ".join(sample),
+            extra={
+                "jmo_fields": {
+                    "tools": sorted({d.tool for d in diagnostics}),
+                    "unanalysed_count": len({d.path for d in diagnostics if d.path})
+                    or len(diagnostics),
+                    "sample": sample,
+                    **({"detail_file": str(summary_md)} if summary_md else {}),
+                }
+            },
         )
 
     # Apply suppressions

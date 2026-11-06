@@ -155,7 +155,9 @@ class TestCommandListStructure:
 
         # Find -v flags
         v_indices = [i for i, arg in enumerate(cmd_list) if arg == "-v"]
-        assert len(v_indices) == 2, "Should have 2 volume mounts"
+        # The repository, the results, and the history database's directory
+        # (#1484).
+        assert len(v_indices) == 3, "Should have 3 volume mounts"
 
     def test_native_command_is_list(self):
         """Test that native commands are built as lists

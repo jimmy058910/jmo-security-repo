@@ -26,6 +26,14 @@ from unittest.mock import patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _run_in_tmp(tmp_path, monkeypatch):
+    """The wizard's history default is the working directory's
+    `.jmo/history.db` (#1484), so each test runs where its database is, and
+    none can read the repository's own."""
+    monkeypatch.chdir(tmp_path)
+
+
 class TestRunDiffWizardDirectoryMode:
     """Test cases for run_diff_wizard in directory comparison mode."""
 

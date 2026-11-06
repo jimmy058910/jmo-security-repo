@@ -72,10 +72,10 @@ class TestSqliteModeDefault:
     def test_default_database_is_the_one_the_product_writes(
         self, tmp_path, monkeypatch, capsys
     ):
-        """`--db` unset must mean `.jmo/history.db`, not `~/.jmo/scans.db`.
+        """`--history-db` unset must mean `.jmo/history.db`, not `~/.jmo/scans.db`.
 
         Nothing in JMo has ever written a file called `scans.db`, so SQLite
-        mode could not run without `--db` -- including the
+        mode could not run without `--history-db` -- including the
         `jmo diff --scan abc123 --scan def456` printed in the command's own
         help text.
 

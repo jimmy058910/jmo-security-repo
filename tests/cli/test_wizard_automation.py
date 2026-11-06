@@ -36,12 +36,29 @@ class TestApplyTargetPreset:
         assert tc.repo_path == str(repo_path)
 
     def test_repo_target_repos_dir(self, tmp_path: Path) -> None:
-        """Test preset for directory containing repos."""
+        """A directory whose subdirectories are repositories is scanned as one."""
+        for name in ("api", "web"):
+            (tmp_path / name / ".git").mkdir(parents=True)
+
         tc = TargetConfig()
         _apply_target_preset(tc, "repo", str(tmp_path))
 
         assert tc.type == "repo"
         assert tc.repo_mode == "repos-dir"
+        assert tc.repo_path == str(tmp_path)
+
+    def test_a_project_without_git_is_scanned_as_itself(self, tmp_path: Path) -> None:
+        """An unpacked project has no .git. As a directory of repositories it
+        was scanned subdirectory by subdirectory, never its own root files: a
+        `src/` and a `docs/` became two repositories and `setup.py` was missed."""
+        (tmp_path / "setup.py").write_text("print('hi')\n", encoding="utf-8")
+        (tmp_path / "src").mkdir()
+        (tmp_path / "docs").mkdir()
+
+        tc = TargetConfig()
+        _apply_target_preset(tc, "repo", str(tmp_path))
+
+        assert tc.repo_mode == "repo"
         assert tc.repo_path == str(tmp_path)
 
     def test_repo_target_targets_file(self, tmp_path: Path) -> None:
@@ -170,6 +187,42 @@ class TestWizardWithPresets:
         mock_tools.assert_called_once_with(
             yes=True, use_docker=False, auto_fix=True, install_deps=True
         )
+
+    @pytest.mark.parametrize(
+        ("layout", "mode"),
+        [("repository", "repo"), ("project", "repo"), ("repositories", "repos-dir")],
+    )
+    @patch("scripts.cli.wizard.execute_scan")
+    @patch("scripts.cli.wizard._check_policy_tools")
+    @patch("scripts.cli.wizard.check_tools_for_matrix")
+    def test_yes_without_a_target_scans_the_working_directory_as_it_is(
+        self,
+        mock_tools: MagicMock,
+        mock_policy: MagicMock,
+        mock_scan: MagicMock,
+        layout: str,
+        mode: str,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`jmo wizard --yes` in a repository scanned each subdirectory as a
+        repository of its own and never the root: the default was repos-dir
+        whatever the working directory held."""
+        if layout == "repository":
+            (tmp_path / ".git").mkdir()
+        elif layout == "repositories":
+            (tmp_path / "api" / ".git").mkdir(parents=True)
+        (tmp_path / "src").mkdir()
+        monkeypatch.chdir(tmp_path)
+        mock_tools.return_value = (True, [])
+        mock_policy.return_value = (True, False)
+        mock_scan.return_value = 0
+
+        assert run_wizard(yes=True) == 0
+
+        config = mock_scan.call_args[0][0]
+        assert config.target.repo_mode == mode
+        assert Path(config.target.repo_path) == tmp_path.resolve()
 
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")

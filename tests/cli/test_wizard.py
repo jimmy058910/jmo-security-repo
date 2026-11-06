@@ -149,8 +149,44 @@ def test_docker_tag_tracks_the_shipped_version():
     """
     from scripts.cli.jmo import __version__
 
-    assert f"v{__version__}" == JMO_DOCKER_TAG
-    assert JMO_DOCKER_IMAGE_FULL.endswith(f":v{__version__}")
+    assert __version__ == JMO_DOCKER_TAG
+    assert JMO_DOCKER_IMAGE_FULL.endswith(f":{JMO_DOCKER_TAG}")
+
+
+def test_docker_tag_is_one_the_release_publishes():
+    """The tag must be one release.yml pushes, rendered from its own patterns.
+
+    It was `v{version}`, and docker/metadata-action's `type=semver` drops the
+    `v`: GHCR holds `1.1.1`, never `v1.1.1`, so every Docker command the wizard
+    printed or wrote failed with "not found" (rc 125). Both sides are read
+    here, so a pattern change in release.yml fails this until the wizard
+    follows.
+    """
+    import re
+
+    import yaml
+
+    from scripts.cli.jmo import __version__
+
+    release = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
+    steps = [
+        step
+        for job in yaml.safe_load(release.read_text(encoding="utf-8"))["jobs"].values()
+        for step in job.get("steps", [])
+        if "docker/metadata-action" in str(step.get("uses", ""))
+    ]
+    assert steps, "release.yml has no docker/metadata-action step"
+    major, minor, *_ = __version__.split(".")
+    published = set()
+    for step in steps:
+        for pattern in re.findall(r"type=semver,pattern=(\S+)", step["with"]["tags"]):
+            published.add(
+                pattern.replace("{{version}}", __version__)
+                .replace("{{major}}", major)
+                .replace("{{minor}}", minor)
+            )
+    assert __version__ in published, published  # the extractor found the pattern
+    assert JMO_DOCKER_TAG in published, (JMO_DOCKER_TAG, published)
 
 
 def test_generate_command_tsv_mode():
@@ -1005,9 +1041,15 @@ def test_execute_scan_decline(mock_yes_no):
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
 @patch("scripts.cli.wizard.subprocess.run")
 @patch("scripts.cli.tool_manager.ToolManager")
-def test_execute_scan_docker_mode(mock_tool_manager_class, mock_run, mock_yes_no):
+def test_execute_scan_docker_mode(
+    mock_tool_manager_class, mock_run, mock_yes_no, tmp_path, monkeypatch
+):
     """Test execute_scan in Docker mode."""
     from scripts.cli.wizard import execute_scan
+
+    # It creates the directories it mounts, the history database's among
+    # them, which resolves against the working directory (#1484).
+    monkeypatch.chdir(tmp_path)
 
     mock_run.return_value = MagicMock(returncode=0)
 
@@ -1389,11 +1431,13 @@ def _docker_tsv_config(tmp_path: Path) -> WizardConfig:
 @patch("scripts.cli.tool_manager.ToolManager")
 @patch("scripts.cli.wizard.subprocess.run")
 def test_docker_mounts_exist_before_the_container_starts(
-    mock_run, mock_tool_manager_class, tmp_path
+    mock_run, mock_tool_manager_class, tmp_path, monkeypatch
 ):
     """Docker creates a missing bind-mount source as root, and the image's
     user (uid 1000) cannot write it: measured, `mkdir: Permission denied`.
-    The clone destination and the results directory are both written."""
+    The clone destination, the results directory and the history database's
+    directory (#1484) are all written."""
+    monkeypatch.chdir(tmp_path)
     mock_tool_manager_class.return_value = _fake_tool_manager()
     config = _docker_tsv_config(tmp_path)
     seen: dict[str, bool] = {}
@@ -1401,6 +1445,7 @@ def test_docker_mounts_exist_before_the_container_starts(
     def record(*_a, **_k):
         seen["clones"] = (tmp_path / "clones").is_dir()
         seen["results"] = (tmp_path / "results").is_dir()
+        seen["history"] = (tmp_path / ".jmo").is_dir()
         return MagicMock(returncode=0)
 
     mock_run.side_effect = record
@@ -1409,7 +1454,7 @@ def test_docker_mounts_exist_before_the_container_starts(
 
     execute_scan(config, yes=True)
 
-    assert seen == {"clones": True, "results": True}
+    assert seen == {"clones": True, "results": True, "history": True}
 
 
 @pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])

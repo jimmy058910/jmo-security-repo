@@ -557,7 +557,7 @@ def _docker_config(tmp_path, repo_mode: str):
 @pytest.mark.parametrize("repo_mode", ["repo", "tsv"])
 @pytest.mark.parametrize("artifact", ["script", "make"])
 def test_docker_artifacts_create_the_directories_they_mount(
-    artifact, repo_mode, tmp_path
+    artifact, repo_mode, tmp_path, monkeypatch
 ):
     """Run as emitted, with the results directory (and tsv's clone destination)
     absent: every mount source must exist by the time docker runs."""
@@ -567,6 +567,8 @@ def test_docker_artifacts_create_the_directories_they_mount(
 
     from scripts.cli.wizard import generate_command
 
+    # The history database's directory resolves against the working directory.
+    monkeypatch.chdir(tmp_path)
     config = _docker_config(tmp_path, repo_mode)
     command = generate_command(config)
     bin_dir = tmp_path / "bin"
@@ -602,13 +604,16 @@ def test_docker_artifacts_create_the_directories_they_mount(
     assert log.read_text(encoding="utf-8").splitlines() == ["ran"]
 
 
-def test_the_printed_docker_command_says_to_create_its_directories(tmp_path, capsys):
+def test_the_printed_docker_command_says_to_create_its_directories(
+    tmp_path, capsys, monkeypatch
+):
     """Declined at "Execute now?", the wizard prints the command to run later;
     run by hand, the directories it mounts must come first."""
     import shlex
 
     from scripts.cli import wizard
 
+    monkeypatch.chdir(tmp_path)
     config = _docker_config(tmp_path, "tsv")
     with patch.object(wizard, "_prompt_yes_no", return_value=False):
         assert wizard.execute_scan(config) == 0
@@ -616,7 +621,11 @@ def test_the_printed_docker_command_says_to_create_its_directories(tmp_path, cap
     later = capsys.readouterr().out.split("run it later:")[1].splitlines()
     lines = [line.strip() for line in later if line.strip()]
     # Resolved, as the mounts are: /var is a symlink on macOS.
-    dirs = [Path(config.results_dir).resolve(), (tmp_path / "clones").resolve()]
+    dirs = [
+        Path(config.results_dir).resolve(),
+        (tmp_path / "clones").resolve(),
+        (tmp_path / ".jmo").resolve(),  # the history database's (#1484)
+    ]
     expected = shlex.join(["mkdir", "-p", *map(str, dirs)])
     assert lines[0] == expected, lines
     assert lines[1].startswith("docker run"), lines

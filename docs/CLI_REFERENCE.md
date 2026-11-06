@@ -41,7 +41,7 @@ These flags are shared across multiple commands:
 | `--human-logs` | Human-friendly colored logs instead of JSON | all commands |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` | all commands |
 | `--results-dir DIR` | Results directory | scan, ci, report |
-| `--db PATH` | SQLite database path (default: `.jmo/history.db`) | history, trends, diff, wizard |
+| `--history-db PATH` | SQLite database path (default: `.jmo/history.db`) | history, trends, diff, wizard |
 | `--threads N` | Worker thread count | scan, report, ci |
 | `--timeout SECS` | Per-tool timeout | scan, ci |
 | `--tools TOOL...` | Override tool list (space- or comma-separated; an unknown name exits 2) | scan, ci |
@@ -225,7 +225,7 @@ Interactive setup wizard for guided security scanning.
 | `--emit-gha [FILE]` | Generate GitHub Actions workflow (default: `.github/workflows/jmo-security.yml`) |
 | `--policy NAME` | Policy to evaluate after scan (repeatable) |
 | `--skip-policies` | Skip policy evaluation entirely (overrides config defaults) |
-| `--db PATH` | Path to SQLite history database (default: `~/.jmo/history.db`) |
+| `--history-db PATH` | Path to the history database (default: `.jmo/history.db`, as for `jmo scan`) |
 
 **Tool Pre-flight Check:**
 
@@ -270,7 +270,7 @@ Compare two scans to identify new, resolved, and modified findings.
 | `--severity SEV` | Filter by severity (comma-separated: `CRITICAL,HIGH`) |
 | `--tool TOOL` | Filter by tool (comma-separated: `opengrep,trivy`) |
 | `--only TYPE` | Show only: `new`, `resolved`, `modified` |
-| `--db PATH` | Path to SQLite database (default: `~/.jmo/scans.db`) |
+| `--history-db PATH` | Path to the history database (default: `.jmo/history.db`) |
 
 ---
 
@@ -489,7 +489,7 @@ Manually store a completed scan.
 | `--commit HASH` | Git commit hash (auto-detected if not provided) |
 | `--branch NAME` | Git branch name (auto-detected if not provided) |
 | `--tag TAG` | Git tag (auto-detected if not provided) |
-| `--db PATH` | Path to SQLite database (default: `.jmo/history.db`) |
+| `--history-db PATH` | Path to SQLite database (default: `.jmo/history.db`) |
 
 **jmo history list**
 
@@ -499,7 +499,7 @@ Manually store a completed scan.
 | `--since DELTA` | Filter by time delta (e.g., `7d`, `30d`, `90d`) |
 | `--limit N` | Maximum number of results (default: 50) |
 | `--json` | Output as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history show**
 
@@ -513,7 +513,7 @@ Scans stored before v2.0.0 have no rows.
 | `SCAN_ID` | Scan UUID, full or partial (positional, required) |
 | `--findings` | Include all findings in output |
 | `--json` | Output as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history query**
 
@@ -523,7 +523,7 @@ Execute custom SQL query.
 |------|-------------|
 | `QUERY` | SQL query to execute (positional, required) |
 | `--format FORMAT` | Output format: `table`, `json`, `csv` (default: `table`) |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history prune**
 
@@ -534,7 +534,7 @@ Delete old scans.
 | `--older-than DELTA` | Delete scans older than time delta (e.g., `30d`, `90d`, `180d`) (required) |
 | `--dry-run` | Show what would be deleted without deleting |
 | `--force` | Skip confirmation prompt |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history export**
 
@@ -545,7 +545,7 @@ Export scans to JSON/CSV.
 | `--scan-id ID` | Export specific scan by UUID |
 | `--since DELTA` | Export scans from time delta (e.g., `30d`) |
 | `--format FORMAT` | Output format: `json`, `csv` (default: `json`) |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history stats**
 
@@ -554,7 +554,7 @@ Show database statistics.
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history diff**
 
@@ -565,7 +565,7 @@ Compare two scans.
 | `SCAN_ID_1` | First scan ID (baseline) (positional, required) |
 | `SCAN_ID_2` | Second scan ID (comparison) (positional, required) |
 | `--json` | Output as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history trends**
 
@@ -576,7 +576,7 @@ Show security trends over time for a branch.
 | `--branch NAME` | Branch name (default: every branch) |
 | `--days N` | Number of days to analyze (default: 30) |
 | `--json` | Output as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history optimize**
 
@@ -585,7 +585,7 @@ Optimize database performance (VACUUM, ANALYZE).
 | Flag | Description |
 |------|-------------|
 | `--json` | Output results as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history migrate**
 
@@ -595,7 +595,7 @@ Apply pending database schema migrations.
 |------|-------------|
 | `--target-version VERSION` | Target schema version (default: apply all pending) |
 | `--json` | Output results as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history verify**
 
@@ -604,7 +604,7 @@ Verify database integrity (PRAGMA checks).
 | Flag | Description |
 |------|-------------|
 | `--json` | Output results as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo history repair**
 
@@ -614,7 +614,7 @@ Repair corrupted database (dump/reimport).
 |------|-------------|
 | `--force` | Skip confirmation prompt |
 | `--json` | Output results as JSON |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 ---
 
@@ -639,7 +639,7 @@ Analyze security trends with flexible filters.
 | `--verbose` | Show detailed output (top rules, etc.) |
 | `--export-json FILE` | Export analysis to JSON file |
 | `--export-html FILE` | Export analysis to HTML file |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo trends show**
 
@@ -649,7 +649,7 @@ Show trend context for a specific scan.
 |------|-------------|
 | `SCAN_ID` | Scan ID to show context for (positional, required) |
 | `--context N` | Number of scans before/after to show (default: 5) |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo trends regressions**
 
@@ -661,7 +661,7 @@ List all detected regressions.
 | `--severity SEV` | Filter by severity: `CRITICAL`, `HIGH` |
 | `--fail-on-any` | Exit with error code 1 if any regressions found (for CI) |
 | `--branch NAME` | Git branch to analyze (default: every branch) |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo trends score**
 
@@ -672,7 +672,7 @@ Show security posture score history.
 | `--last N` | Last N scans to analyze |
 | `--days N` | Number of days to analyze |
 | `--branch NAME` | Git branch to analyze (default: every branch) |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo trends compare**
 
@@ -683,7 +683,7 @@ Compare two specific scans side-by-side.
 | `SCAN_ID_1` | First scan ID (positional, required) |
 | `SCAN_ID_2` | Second scan ID (positional, required) |
 | `--verbose` | Show sample findings from diff |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo trends insights**
 
@@ -693,7 +693,7 @@ List all automated insights.
 |------|-------------|
 | `--last N` | Last N scans to analyze |
 | `--branch NAME` | Git branch to analyze (default: every branch) |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 **jmo trends explain**
 
@@ -712,7 +712,7 @@ Show developer remediation rankings.
 | `--last N` | Last N scans to analyze |
 | `--top N` | Show top N developers (default: 10) |
 | `--branch NAME` | Git branch to analyze (default: every branch) |
-| `--db PATH` | Path to SQLite database |
+| `--history-db PATH` | Path to SQLite database |
 
 ---
 

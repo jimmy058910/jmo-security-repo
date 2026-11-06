@@ -62,7 +62,7 @@ jmo scan --repo ./myapp --results-dir ./results
 jmo history store --results-dir ./results
 
 # Specify database path
-jmo history store --results-dir ./results --db ./scans.db
+jmo history store --results-dir ./results --history-db ./scans.db
 ```
 
 ---
@@ -364,7 +364,7 @@ jmo history store --results-dir RESULTS_DIR [OPTIONS]
 - `--commit HASH` - Git commit hash (auto-detected if in Git repo)
 - `--branch NAME` - Git branch name (auto-detected if in Git repo)
 - `--tag TAG` - Git tag (auto-detected if in Git repo)
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Example:**
 
@@ -386,7 +386,7 @@ jmo history list [OPTIONS]
 - `--since TIMESTAMP` - Filter by timestamp (Unix epoch or ISO 8601 format)
 - `--limit N` - Limit results (default: 50)
 - `--json` - Output as JSON instead of table
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Example:**
 
@@ -431,7 +431,7 @@ jmo history show SCAN_ID [OPTIONS]
 **Options:**
 
 - `--json` - Output as JSON
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Example:**
 
@@ -505,7 +505,7 @@ jmo history diff SCAN_ID_1 SCAN_ID_2 [OPTIONS]
 **Options:**
 
 - `--json` - Output the full diff as JSON
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Use Cases:**
 
@@ -569,7 +569,7 @@ jmo history query [OPTIONS]
 - `--path PATTERN` - Filter by file path pattern (supports wildcards)
 - `--limit N` - Limit results (default: 100)
 - `--json` - Output as JSON
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Example:**
 
@@ -600,7 +600,7 @@ jmo history prune [OPTIONS]
 - `--older-than SECONDS` - Delete scans older than N seconds
 - `--keep-scans N` - Keep only the N most recent scans
 - `--dry-run` - Show what would be deleted without deleting
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Example:**
 
@@ -631,7 +631,7 @@ jmo history export OUTPUT_FILE [OPTIONS]
 
 - `--scan-id ID` - Export specific scan only
 - `--include-findings` - Include full finding details (default: metadata only)
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Example:**
 
@@ -653,7 +653,7 @@ jmo history stats [OPTIONS]
 
 **Options:**
 
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Example:**
 
@@ -695,7 +695,7 @@ jmo history optimize [OPTIONS]
 
 **Options:**
 
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 - `--json` - Output results as JSON
 
 **Description:**
@@ -750,7 +750,7 @@ jmo history verify [OPTIONS]
 
 **Options:**
 
-- `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--history-db PATH` - Database path (default: `.jmo/history.db`)
 
 **Description:**
 
@@ -839,7 +839,7 @@ jmo history migrate
 **Database Location:**
 
 - Default: `.jmo/history.db` (relative to working directory)
-- Custom: Use `--db PATH` or `--history-db PATH` flags
+- Custom: `--history-db PATH`, the same flag on every command that reads or writes the history
 - CI/CD: Recommended `.jmo/` directory (gitignored by default)
 - **Security:** File permissions automatically enforced (0o600 on Unix)
 
@@ -930,8 +930,8 @@ jmo history export --include-findings monthly-report.json
 ```yaml
 security_scan:
   script:
-    - jmo scan --repo . --store-history --db scans.db
-    - jmo history stats --db scans.db
+    - jmo scan --repo . --store-history --history-db scans.db
+    - jmo history stats --history-db scans.db
   artifacts:
     paths:
       - scans.db

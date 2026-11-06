@@ -29,6 +29,9 @@ from scripts.core.validation import (
     validate_url,
 )
 
+# `crontab` reads or writes one small file; a run longer than this is hung.
+CRONTAB_TIMEOUT = 30
+
 
 class UnsupportedPlatformError(Exception):
     """Platform does not support local cron."""
@@ -175,6 +178,7 @@ class CronInstaller:
 
         Raises:
             CronNotAvailableError: If crontab command not found
+            CronInstallError: If crontab does not answer in time
         """
         try:
             result = subprocess.run(
@@ -184,6 +188,7 @@ class CronInstaller:
                 encoding="utf-8",
                 errors="replace",
                 check=False,
+                timeout=CRONTAB_TIMEOUT,
             )
             if result.returncode == 0:
                 return (
@@ -192,6 +197,10 @@ class CronInstaller:
             return []
         except FileNotFoundError:
             raise CronNotAvailableError("crontab command not found")
+        except subprocess.TimeoutExpired:
+            raise CronInstallError(
+                f"crontab -l did not answer within {CRONTAB_TIMEOUT} s"
+            ) from None
 
     def _set_crontab(self, lines: list[str]) -> bool:
         """Set crontab from list of lines.
@@ -216,10 +225,15 @@ class CronInstaller:
                 errors="replace",
                 capture_output=True,
                 check=True,
+                timeout=CRONTAB_TIMEOUT,
             )
             return result.returncode == 0
         except subprocess.CalledProcessError as e:
             raise CronInstallError(f"Failed to install crontab: {e.stderr}")
+        except subprocess.TimeoutExpired:
+            raise CronInstallError(
+                f"crontab did not finish installing within {CRONTAB_TIMEOUT} s"
+            ) from None
 
     def _remove_schedule_entries(
         self, lines: list[str], schedule_name: str

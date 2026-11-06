@@ -49,7 +49,7 @@ def _get_prompt_yes_no():
 
 
 def _get_db_path() -> Path:
-    """Get the history database path, respecting custom --db flag.
+    """Get the history database path, respecting a custom --history-db.
 
     Returns:
         Path to SQLite history database
