@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - working tree and git history)
-RUN TRUFFLEHOG_VERSION="3.99.7" && \
+RUN TRUFFLEHOG_VERSION="3.99.8" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -38,7 +38,7 @@ RUN GITLEAKS_VERSION="8.30.1" && \
     chmod +x /usr/local/bin/gitleaks
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.55.0" && \
+RUN SYFT_VERSION="1.57.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -88,7 +88,7 @@ RUN NUCLEI_VERSION="3.11.1" && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
 # Download OPA (Policy-as-Code engine)
-RUN OPA_VERSION="1.21.4" && \
+RUN OPA_VERSION="1.22.2" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
     -o /usr/local/bin/opa && \
@@ -105,7 +105,7 @@ RUN SHELLCHECK_VERSION="0.11.0" && \
     chmod +x /usr/local/bin/shellcheck
 
 # Download zizmor (GitHub Actions); assets are named by target triple, no version
-RUN ZIZMOR_VERSION="1.31.1" && \
+RUN ZIZMOR_VERSION="1.32.0" && \
     ZIZMOR_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-${ZIZMOR_ARCH}-unknown-linux-gnu.tar.gz" \
     -o /tmp/zizmor.tar.gz && \
@@ -116,7 +116,7 @@ RUN ZIZMOR_VERSION="1.31.1" && \
 # Download opengrep (SAST); a static binary named by flavour and arch, no
 # archive, no version in the name. No checksum file is published: each asset
 # has a cosign .sig and .cert beside it, which this build does not check.
-RUN OPENGREP_VERSION="1.32.0" && \
+RUN OPENGREP_VERSION="1.33.1" && \
     OPENGREP_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_${OPENGREP_ARCH}" \
     -o /usr/local/bin/opengrep && \
@@ -198,7 +198,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python security tools one by one for better error visibility
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.30 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.4.3 && \
     checkov --version && \
     echo "✓ checkov installed"
 

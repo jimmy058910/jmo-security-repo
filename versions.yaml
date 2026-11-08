@@ -1,7 +1,7 @@
 schema_version: '1.0'
 python_tools:
   checkov:
-    version: 3.3.30
+    version: 3.4.3
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
@@ -14,7 +14,7 @@ python_tools:
     critical: false
 binary_tools:
   trufflehog:
-    version: 3.99.7
+    version: 3.99.8
     github_repo: trufflesecurity/trufflehog
     description: Secrets scanner (working tree and git history)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
@@ -36,7 +36,7 @@ binary_tools:
     critical: true
     brew_package: gitleaks
   syft:
-    version: 1.55.0
+    version: 1.57.0
     github_repo: anchore/syft
     description: SBOM generator
     release_pattern: syft_{version}_linux_{arch}.tar.gz
@@ -92,7 +92,7 @@ binary_tools:
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
   zizmor:
-    version: 1.31.1
+    version: 1.32.0
     github_repo: zizmorcore/zizmor
     description: GitHub Actions auditor (workflows, composite actions, Dependabot config)
     # Named by target triple, no version in the name, no checksum file.
@@ -114,7 +114,7 @@ binary_tools:
     critical: false
     notes: v2.0.0 - reads lockfiles against offline databases; a scan never downloads
   opengrep:
-    version: 1.32.0
+    version: 1.33.1
     github_repo: opengrep/opengrep
     description: Multi-language SAST scanner (runs JMo's offline rule bundle)
     # A static binary, no archive and no version in the name; the architecture
@@ -134,7 +134,7 @@ special_tools:
     critical: true
     installation: tar.gz with Java dependency
   opa:
-    version: 1.21.4
+    version: 1.22.2
     github_repo: open-policy-agent/opa
     description: Open Policy Agent (policy-as-code engine)
     release_pattern: opa_linux_{arch}_static
@@ -185,6 +185,54 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-11-08'
+  action: Updated opa
+  tools_updated:
+  - tool: opa
+    old_version: 1.21.4
+    new_version: 1.22.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-11-08'
+  action: Updated opengrep
+  tools_updated:
+  - tool: opengrep
+    old_version: 1.32.0
+    new_version: 1.33.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-11-08'
+  action: Updated zizmor
+  tools_updated:
+  - tool: zizmor
+    old_version: 1.31.1
+    new_version: 1.32.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-11-08'
+  action: Updated syft
+  tools_updated:
+  - tool: syft
+    old_version: 1.55.0
+    new_version: 1.57.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-11-08'
+  action: Updated trufflehog
+  tools_updated:
+  - tool: trufflehog
+    old_version: 3.99.7
+    new_version: 3.99.8
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-11-08'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.3.30
+    new_version: 3.4.3
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-10-25'
   action: Updated opa
   tools_updated:
