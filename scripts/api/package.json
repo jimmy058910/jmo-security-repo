@@ -12,8 +12,8 @@
   "dependencies": {
     "express": "^5.2.1",
     "cors": "^2.8.5",
-    "express-rate-limit": "^8.7.1",
-    "resend": "^6.34.1"
+    "express-rate-limit": "^8.7.2",
+    "resend": "^6.37.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
