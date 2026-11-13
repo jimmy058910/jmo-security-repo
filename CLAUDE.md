@@ -19,7 +19,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 14 scanner
 1. **One formatter:** `ruff format` (Black left with #1179). The `ruff` lint hook runs before `ruff-format` in `.pre-commit-config.yaml`; never add a second formatter
 2. **Test Coverage:** CI's only enforced floor is **85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`, so there is still no *local* gate. Cite the step, never a line number: it has moved three times (#756). Measure current coverage rather than quoting a figure from this file
 3. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`. **No AI-attribution markers of any kind, in commit messages or PR bodies** — not `Co-Authored-By: Claude`, not `Generated with Claude Code`, and **not a `Claude-Session:` link**. Decided 2026-09-11, and it applies to every repo in the workspace, not only this public one. **This has to be stated here, in the repo's own `CLAUDE.md`, or it does not hold**: Claude Code's harness injects an instruction to append the trailer **every single session** and defers only to a `CLAUDE.md`, so the workspace-level ban in `C:\Projects\CLAUDE.md` sat one directory above this repo and lost silently — **0 trailers in the ~250 commits before 2026-09-02, near-universal after**, with that prohibition unchanged the whole time. A rule that competes with something re-injected on every turn has to live where the harness reads it
-4. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). **Never** modify identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`) without explicit user authorization. **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
+4. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). Ask before modifying identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`). **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
 
 Subprocess safety (never `shell=True`), path-traversal validation, and cross-platform
 test requirements are enforced in [python-safety.rules.md](.claude/rules/python-safety.rules.md)
@@ -124,14 +124,14 @@ make test-fast                         # Fast parallel tests (recommended for de
 
 One command neither lists: run `python scripts/dev/test_wizard_tools.py` before `jmo wizard`. It tests wizard tool detection non-interactively — isolated venvs, version detection, and the Java dependency.
 
-### Version Management (CRITICAL)
+### Version Management
 
 ```bash
 python3 scripts/dev/update_versions.py --check-latest  # Check updates
 python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
 ```
 
-**NEVER manually edit tool versions in Dockerfiles!** See [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
+Do not hand-edit tool versions in Dockerfiles: `versions.yaml` is the single source of truth and `--sync` writes it into them, so a hand edit drifts from it. See [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
 
 ## AI Tooling Ecosystem
 
@@ -216,8 +216,8 @@ files, so scope a rule to the code it actually governs.
 | File | Purpose |
 |------|---------|
 | `pyproject.toml` | Single declaration of all deps — runtime, extras, and `[dependency-groups] dev` (PEP 735) |
-| `uv.lock` | The only lockfile. Universal, tracked, generated (NEVER hand-edit; use `make deps-lock`) |
-| `versions.yaml` | Tool versions (NEVER edit manually; use `update_versions.py`) |
+| `uv.lock` | The only lockfile. Universal, tracked, generated (do not hand-edit; regenerate with `make deps-lock`) |
+| `versions.yaml` | Tool versions (change them with `update_versions.py`, not by hand) |
 
 ### jmo.yml Key Settings
 
