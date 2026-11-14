@@ -129,7 +129,13 @@ def test_the_bulk_warning_is_one_short_line_with_structured_detail(
     assert "NOT clean results" in warn["msg"]
     assert "SUMMARY.md" in warn["msg"]
     assert "Syntax error" not in warn["msg"], "per-file detail is in the message"
-    assert len(warn["msg"]) < 300
+    # The message names SUMMARY.md by the path it was given, and here that is
+    # under the machine's tmp dir: macOS's /private/var/folders/... took the
+    # whole line to 303, over a bound of 300 that counted the path. Bound what
+    # the message itself says, 160 characters today. Ten bare file names would
+    # add 118, so 200 still fails on them, as 300 did on Linux with the path.
+    assert warn["detail_file"] in warn["msg"]
+    assert len(warn["msg"].replace(warn["detail_file"], "")) < 200
     assert warn["tools"] == ["opengrep"]
     assert warn["unanalysed_count"] == 30
     assert len(warn["sample"]) == 10
