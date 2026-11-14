@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.dev import image_size
 from tests.conftest import assert_no_jmo_traceback, skip_on_windows
 
 # Registry this suite audits. Overridable so the same tests can be pointed at an
@@ -105,49 +106,22 @@ def registry_compressed_mb(image: str) -> float | None:
     `ensure_image` above applies to pulls (#941): outcomes must stay
     distinguishable, because one blanket skip hides bugs and absent
     prerequisites behind the same signal.
+
+    The number is `scripts/dev/image_size.py`'s, which release.yml's size
+    benchmark prints too, so the release table and this range check read one
+    measurement (#1482). It resolves a multi-arch index's linux/amd64 manifest
+    by digest and sums that manifest's layers: summing the index itself adds
+    the per-platform manifest sizes, a few KB, and reports ~0 MiB, which is
+    what the benchmark printed for v1.1.1. An empty or unexpected manifest
+    shape fails rather than yielding a 0 the range assertion would judge.
     """
     repo = image.rsplit(":", 1)[0]
     if not _has_registry_host(repo):
         return None
-
-    result = _docker("manifest", "inspect", image, timeout=60)
-    if result.returncode != 0:
-        pytest.fail(
-            f"docker manifest inspect {image} failed (rc={result.returncode}): "
-            f"{result.stderr.strip()[:400]}"
-        )
-    doc = json.loads(result.stdout)
-
-    layers = doc.get("layers")
-    if layers is None:
-        # A manifest LIST (multi-arch). Resolve the linux/amd64 child by digest,
-        # then sum that child's layers. Summing the list itself would add the
-        # per-arch manifest sizes — a few KB — and quietly report ~0 MiB.
-        amd64 = [
-            m["digest"]
-            for m in doc.get("manifests", [])
-            if m.get("platform", {}).get("architecture") == "amd64"
-            and m.get("platform", {}).get("os") == "linux"
-        ]
-        if not amd64:
-            pytest.fail(f"{image}: manifest list has no linux/amd64 entry")
-        child = _docker("manifest", "inspect", f"{repo}@{amd64[0]}", timeout=60)
-        if child.returncode != 0:
-            pytest.fail(
-                f"docker manifest inspect {repo}@{amd64[0]} failed "
-                f"(rc={child.returncode}): {child.stderr.strip()[:400]}"
-            )
-        layers = json.loads(child.stdout).get("layers", [])
-
-    total = sum(int(layer["size"]) for layer in layers)
-    if total <= 0:
-        # Without this, an empty or unexpected manifest shape yields 0 and the
-        # range assertion below would be judging a number nothing produced.
-        pytest.fail(
-            f"{image}: manifest reported {len(layers)} layer(s) totalling "
-            f"{total} bytes, which cannot be right"
-        )
-    return total / (1024 * 1024)
+    try:
+        return image_size.compressed_bytes(image, "amd64") / image_size.MIB
+    except image_size.ImageSizeError as exc:
+        pytest.fail(str(exc))
 
 
 def ensure_image(image: str) -> None:

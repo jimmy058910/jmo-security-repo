@@ -98,7 +98,7 @@ jobs:
           TRUFFLEHOG_VERSION: ${{ steps.pins.outputs.TRUFFLEHOG_VERSION }}
         run: |
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -561,13 +561,13 @@ jobs:
           OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
         run: |
           # Install opengrep for SAST testing (a static binary, no archive)
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
           # Install trufflehog for secrets testing
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -605,7 +605,25 @@ jobs:
       - e2e-summary
       - docker-e2e-suite
       - validation-summary
-    if: failure()
+    # Two limits on `failure()`:
+    #   - Default branch only (#1559). A task dispatched on a feature branch to
+    #     verify a change filed #1549 and #1600, each closed as not planned. A
+    #     scheduled run is always the default branch's, and is named outright
+    #     because a schedule event's payload is not documented to carry
+    #     `repository`.
+    #   - A timeout counts (#1565). A job that hits its timeout-minutes ends
+    #     `cancelled`, which failure() does not see, so a hung nightly job filed
+    #     nothing. e2e-summary and validation-summary fail on a cancelled job
+    #     they need, and `contains(needs.*.result, 'cancelled')` covers the
+    #     jobs listed above. always(), not !cancelled(): GitHub documents
+    #     cancelled() only as "the workflow was canceled", and if a job's
+    #     timeout set it, !cancelled() would hide exactly this case. So a run
+    #     someone cancels by hand on the default branch files too.
+    if: >-
+      always() &&
+      (github.event_name == 'schedule' ||
+       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) &&
+      (failure() || contains(needs.*.result, 'cancelled'))
     steps:
       - name: Create issue on failure
         uses: actions/github-script@v9
@@ -817,7 +835,12 @@ jobs:
 
   e2e-macos:
     name: E2E macOS Tests
-    runs-on: macos-14
+    # macos-latest, as ci.yml's macOS shard: GitHub retired macos-14, and from
+    # 2026-11-06 every run of this job was cancelled before a step ("The
+    # configuration 'macos-14-arm64-us-default' is not supported"), so E2E
+    # Test Summary failed daily for want of its report. macos-latest is arm64
+    # (macos-26-arm64 on 2026-11-14), which the opengrep asset below assumes.
+    runs-on: macos-latest
     timeout-minutes: 120
     # Run on 4AM weekday schedule OR manual e2e/all selection
     if: |
@@ -880,12 +903,12 @@ jobs:
           brew install trivy syft hadolint
 
           # opengrep: a static binary, no archive, pinned from versions.yaml
-          # like checkov above. macos-14 is arm64, whose assets say "arm64";
+          # like checkov above. macos-latest is arm64, whose assets say "arm64";
           # Homebrew's bin is on PATH and writable by the runner.
           OPENGREP_VERSION="$(python3 -c \
             "import yaml; print(yaml.safe_load(open('versions.yaml'))['binary_tools']['opengrep']['version'])")"
           echo "opengrep pin from versions.yaml: ${OPENGREP_VERSION}"
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_osx_arm64" \
             -o "$(brew --prefix)/bin/opengrep"
           chmod +x "$(brew --prefix)/bin/opengrep"
@@ -982,13 +1005,13 @@ jobs:
           CHECKOV_VERSION: ${{ steps.pins.outputs.CHECKOV_VERSION }}
         run: |
           # Opengrep - for SQL injection detection tests (a static binary, no archive)
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
 
           # Trivy - for CVE detection tests
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             -o /tmp/trivy.tar.gz
           gzip -t /tmp/trivy.tar.gz
@@ -996,7 +1019,7 @@ jobs:
 
           # TruffleHog - for secret detection tests
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -1105,7 +1128,7 @@ jobs:
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             -o /tmp/trivy.tar.gz
           gzip -t /tmp/trivy.tar.gz
@@ -1113,20 +1136,20 @@ jobs:
 
           # opengrep: a static binary, no archive; assets are named by flavour
           # and arch.
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
 
           # Hadolint - Dockerfile linter
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
             -o /usr/local/bin/hadolint
           chmod +x /usr/local/bin/hadolint
 
           # TruffleHog - secrets scanner
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -1136,7 +1159,7 @@ jobs:
           # Gitleaks - secrets scanner, working tree and git history. No job
           # installed it, so the G1 tests had only ever skipped (#1326).
           v="$GITLEAKS_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/gitleaks/gitleaks/releases/download/v${v}/gitleaks_${v}_linux_x64.tar.gz" \
             -o /tmp/gitleaks.tar.gz
           gzip -t /tmp/gitleaks.tar.gz
@@ -1145,7 +1168,7 @@ jobs:
 
           # zizmor - GitHub Actions auditor. Assets are named by target
           # triple, with no version.
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz" \
             -o /tmp/zizmor.tar.gz
           gzip -t /tmp/zizmor.tar.gz
@@ -1157,9 +1180,9 @@ jobs:
           # offline database is fetched: its tests read the frozen one in
           # tests/fixtures/osv-db.
           base="https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}"
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "${base}/osv-scanner_SHA256SUMS" -o /tmp/osv-scanner_SHA256SUMS
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "${base}/osv-scanner_linux_amd64" -o /tmp/osv-scanner_linux_amd64
           sum=$(awk '$2 == "osv-scanner_linux_amd64" {print $1}' /tmp/osv-scanner_SHA256SUMS)
           echo "${sum:?no checksum for osv-scanner_linux_amd64}  /tmp/osv-scanner_linux_amd64" | sha256sum -c -
@@ -1171,7 +1194,7 @@ jobs:
 
           # Syft: its contract had no install line, so it had never run in
           # CI (#1073).
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
             -o /tmp/syft.tar.gz
           gzip -t /tmp/syft.tar.gz
@@ -1529,6 +1552,36 @@ jobs:
 
           echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures and zero errors:" \
             "${E2E_SEEN_SUITES# }."
+
+      # The step above reads pytest-report.json files, which only e2e-ubuntu
+      # and e2e-macos write. A job that hits its timeout-minutes ends
+      # `cancelled`, not `failure`, so the notify job's failure() never saw it:
+      # Tool Output Contract Tests was cancelled at its limit in run
+      # 41627396139 and this job passed, filing no issue (#1565). Every job
+      # this one needs runs under this job's own `if:`, so none is meant to be
+      # skipped while this job runs, and anything but `success` fails it.
+      # always(): it reports even when the step above has already failed.
+      - name: Fail the run if an e2e job did not succeed
+        if: always()
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          needs = json.loads(os.environ["NEEDS"])
+          if not needs:
+              print("::error::this job read no result for the jobs it needs")
+              sys.exit(1)
+          bad = {job: n.get("result") for job, n in needs.items() if n.get("result") != "success"}
+          for job, result in sorted(bad.items()):
+              print(f"::error::{job} ended {result}, not success")
+          if not bad:
+              print(f"All {len(needs)} e2e jobs succeeded: {', '.join(sorted(needs))}.")
+          sys.exit(1 if bad else 0)
+          PY
 
 # ==============================================================================
 # PERFORMANCE TESTS - Benchmark comparison
@@ -1904,9 +1957,14 @@ jobs:
       )
     steps:
       - name: Check validation results
+        # Anything but success: validate-image shares this job's `if:`, so it
+        # never skips here, and a timeout ends it `cancelled`, which a check
+        # for "failure" passed and the notify job's failure() missed (#1565).
+        env:
+          RESULT: ${{ needs.validate-image.result }}
         run: |
-          if [ "${{ needs.validate-image.result }}" == "failure" ]; then
-            echo "::error::The Docker image failed validation"
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::Docker image validation ended ${RESULT}, not success"
             exit 1
           fi
           echo "The Docker image validated successfully"
