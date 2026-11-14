@@ -144,6 +144,54 @@ def test_scan_with_missing_tool(mock_installer):
     pass
 ```
 
+## Stubbing a sleep or a clock: patch the module's name, not `time`
+
+**Rule:** replace the name the module under test looks up. Never set an
+attribute on the shared `time` module.
+
+```python
+# WRONG: both set `sleep` on the one `time` module every thread uses
+monkeypatch.setattr(frf.time, "sleep", lambda s: None)
+monkeypatch.setattr("scripts.core.tool_runner.time.sleep", lambda s: None)
+
+# CORRECT: swap the module's own `time`, keeping whatever else it reads there
+monkeypatch.setattr(frf, "time", SimpleNamespace(sleep=lambda s: None))
+monkeypatch.setattr(
+    "scripts.core.tool_runner.time",
+    SimpleNamespace(sleep=lambda s: None, perf_counter=time.perf_counter),
+)
+```
+
+A dotted target resolves to its last object: `"pkg.mod.time.sleep"` sets
+`sleep` on `time` itself, while `"pkg.mod.time"` changes only `pkg.mod`'s name
+for it. A stub that leaves out an attribute the module reads fails with
+`AttributeError`, which is the loud failure you want.
+
+**Why it matters here:** the suite leaks `refresh_loop` progress threads
+(#1208), each waking on `time.sleep(0.25)`. A no-op `time.sleep` sets every one
+of them spinning for as long as the stub is active, and they compete with the
+test for the interpreter. Measured in one process without xdist, as the
+`windows-2022` shard runs, after `tests/cli/test_scan_target_names.py` and
+`test_scan_runtime_accounting.py`:
+
+| Measurement | Old patch | Module-local stub (#1617) |
+|---|---|---|
+| `test_a_flaky_server_still_gives_the_files_and_exit_0`, call + teardown | 7.54 s + 3.93 s | 0.00 s + 0.00 s |
+| loops in one second of a thread outside the module that sleeps 0.25 s per loop | 18,490,309 | 4 |
+
+On `windows-2022` that test is where two `dev` push runs (43447028759,
+43551336332) hit the 60 s `--timeout`: exit code 1 and no summary under a green
+check, with 115 `refresh_loop` threads in the dump. The cost scales with the
+work a test does while its stub is active. The retry tests, which call one
+mocked function, measured 0.00 s with the old patch too, which is how the
+defect stayed invisible.
+
+**Spotting it:** a pytest-timeout dump whose `refresh_loop` stacks end one frame
+deeper, inside a test's lambda. Guard a new stub as #1617 does, by asserting
+`time.sleep is real_sleep` while the stub is active. The slowdown depends on
+the leaked threads, so it goes away once #1208 stops them; the stub would
+still reach every other thread, so the rule stays.
+
 ## Timeout Configuration
 
 - All tests have a **120s timeout** by default (configurable in `pyproject.toml`).
