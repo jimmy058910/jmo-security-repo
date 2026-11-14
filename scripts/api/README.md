@@ -200,6 +200,9 @@ npm start
 npm ci && npm test
 ```
 
+CI runs the same two commands on every pull request and push, in `ci.yml`'s
+`subscribe-api` job.
+
 **Test subscription:**
 
 ```bash

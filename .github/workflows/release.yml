@@ -360,7 +360,7 @@ jobs:
         run: |
           # Install TruffleHog for secrets scanning
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -689,7 +689,7 @@ jobs:
           ASSET="go-containerregistry_Linux_x86_64.tar.gz"
           cd "$(mktemp -d)"
           for f in "$ASSET" checksums.txt; do
-            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
               "$BASE/$f" -o "$f"
           done
           # Saved under the asset's own name: sha256sum -c opens the file the
@@ -776,6 +776,11 @@ jobs:
     needs: docker-merge
     if: always() && needs.docker-merge.result == 'success' && !inputs.dry_run
     steps:
+      - name: Checkout repository
+        # For scripts/dev/image_size.py, the measurement this job shares with
+        # tests/e2e/test_docker_workflows.py's IMAGE_SIZE_RANGE check.
+        uses: actions/checkout@v7
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
         with:
@@ -796,45 +801,22 @@ jobs:
             echo "value=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Pull and measure the image
+      - name: Measure the image
+        # The compressed size of each platform's image: its own manifest's
+        # layers, resolved from the index by digest. This step read the index's
+        # `manifests[].size` instead, the size of each manifest document, and
+        # printed `deep | 7.8KiB` for v1.1.1 (#1482); it also appended a
+        # hard-coded "155 MB savings" list no measurement produced. A size that
+        # cannot be read fails the step, never a blank or a guess.
         env:
           REF_NAME: ${{ github.ref_name }}
           TAG_VALUE: ${{ steps.tag.outputs.value }}
           REGISTRY: ${{ env.REGISTRY_GHCR }}
           IMAGE_NAME: ${{ env.IMAGE_NAME_GHCR }}
         run: |
-          {
-            echo "## Docker Image Size ($REF_NAME)"
-            echo ""
-            echo "| Image | Size (amd64) | Size (arm64) | Reduction vs v0.6.0 |"
-            echo "|-------|--------------|--------------|---------------------|"
-          } > size-comparison.md
-
           IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG_VALUE}"
-          echo "Measuring $IMAGE..."
-
-          # Get size for amd64 platform from manifest
-          SIZE_AMD64=$(docker manifest inspect "$IMAGE" | \
-            jq -r '.manifests[] | select(.platform.architecture=="amd64") | .size' | \
-            numfmt --to=iec-i --suffix=B --format="%.1f")
-
-          # Get size for arm64 platform from manifest
-          SIZE_ARM64=$(docker manifest inspect "$IMAGE" | \
-            jq -r '.manifests[] | select(.platform.architecture=="arm64") | .size' | \
-            numfmt --to=iec-i --suffix=B --format="%.1f")
-
-          echo "| ${TAG_VALUE} | ${SIZE_AMD64} | ${SIZE_ARM64} | TBD (manual comparison) |" >> size-comparison.md
-
-          {
-            echo ""
-            echo "**Phase 1 Optimizations Applied (155 MB savings):**"
-            echo "- Nuclei template filtering (65 MB)"
-            echo "- Python bytecode cleanup (40 MB)"
-            echo "- Binary stripping (15 MB)"
-            echo "- Java runtime cleanup (30 MB)"
-            echo "- .dockerignore exclusions (5 MB)"
-          } >> size-comparison.md
-
+          printf '## Docker Image Size (%s)\n\n' "$REF_NAME" > size-comparison.md
+          python3 scripts/dev/image_size.py "$IMAGE" amd64 arm64 >> size-comparison.md
           cat size-comparison.md
 
       - name: Upload size comparison
@@ -990,7 +972,7 @@ jobs:
         env:
           SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
         run: |
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
             -o /tmp/syft.tar.gz
           gzip -t /tmp/syft.tar.gz
