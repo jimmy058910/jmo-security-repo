@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -2037,7 +2038,14 @@ class TestFailureKind:
     def test_the_last_failure_is_the_one_reported(
         self, tmp_path, monkeypatch, first, then, expected
     ):
-        monkeypatch.setattr("scripts.core.tool_runner.time.sleep", lambda s: None)
+        # Swap tool_runner's own `time` name. "scripts.core.tool_runner.time.sleep"
+        # resolves to `time.sleep` itself, and a no-op there sets every progress
+        # thread leaked by earlier tests spinning (#1208).
+        real_sleep = time.sleep
+        monkeypatch.setattr(
+            "scripts.core.tool_runner.time",
+            SimpleNamespace(sleep=lambda s: None, perf_counter=time.perf_counter),
+        )
         calls = iter([first] + [then] * 5)
 
         def bounded(cmd, **kwargs):
@@ -2051,6 +2059,7 @@ class TestFailureKind:
 
         assert (result.returncode, result.failure, result.timed_out) == expected
         assert result.attempts == 3
+        assert time.sleep is real_sleep, "the stub reached every thread's time.sleep"
 
     def test_the_tool_runs_in_its_working_directory(self, tmp_path, monkeypatch):
         """zap.bat finds its jar relative to the working directory: from

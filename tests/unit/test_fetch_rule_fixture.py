@@ -14,8 +14,10 @@ import hashlib
 import io
 import shutil
 import subprocess
+import time
 import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -220,6 +222,29 @@ class _Body(io.BytesIO):
         return False
 
 
+def _stub_retry_wait(monkeypatch, wait) -> None:
+    """Replace the retry wait for `fetch_rule_fixture` alone.
+
+    `frf.time` is the `time` module itself, so patching `frf.time.sleep` patches
+    `time.sleep` for every thread in the session. Progress threads leaked by
+    earlier tests (#1208) then loop on a no-op sleep: measured after two
+    `tests/cli` files, the flaky-server test below took 7.5 s and 3.9 s of
+    teardown instead of 0.01 s, and on the single-process windows-2022 shard it
+    hit the 60 s timeout. Swapping the module's own `time` name keeps the stub
+    here.
+    """
+    monkeypatch.setattr(frf, "time", SimpleNamespace(sleep=wait))
+
+
+def test_the_retry_wait_is_stubbed_for_this_module_alone(monkeypatch) -> None:
+    real_sleep = time.sleep
+
+    _stub_retry_wait(monkeypatch, lambda s: None)
+
+    assert time.sleep is real_sleep, "the stub reached every thread's time.sleep"
+    assert frf.time.sleep is not real_sleep
+
+
 def _script_urlopen(monkeypatch, outcomes):
     """urlopen that raises or returns what `outcomes` says, one per call; returns
     the call count (a list) and the waits made between attempts."""
@@ -235,7 +260,7 @@ def _script_urlopen(monkeypatch, outcomes):
         return _Body(outcome)
 
     monkeypatch.setattr(frf.urllib.request, "urlopen", urlopen)
-    monkeypatch.setattr(frf.time, "sleep", slept.append)
+    _stub_retry_wait(monkeypatch, slept.append)
     return calls, slept
 
 
@@ -277,7 +302,7 @@ def test_a_flaky_server_still_gives_the_files_and_exit_0(tmp_path, monkeypatch) 
     monkeypatch.setattr(frf, "FILES", {p: _sha(d) for p, d in GOOD.items()})
     monkeypatch.setattr(frf, "COMMIT", "c0ffee")
     failed: set[str] = set()
-    monkeypatch.setattr(frf.time, "sleep", lambda s: None)
+    _stub_retry_wait(monkeypatch, lambda s: None)
 
     def urlopen(request, timeout=None):
         url = request.full_url
