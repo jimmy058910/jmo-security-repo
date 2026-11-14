@@ -13,17 +13,23 @@ clone fails the test instead of being scanned as nothing.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
+from scripts.core.tool_descriptors import DESCRIPTORS
+from scripts.core.tool_utils import find_tool
+from tests.conftest import scanner_states
 from tests.e2e.conftest import (
     current_platform,
     validate_basic_scan,
     validate_multi_target,
 )
+from tests.fixtures.samples.zap import fixture_server as fx
 from tests.integration.targets import (
     JUICE_SHOP_COMMIT,
     JUICE_SHOP_URL,
@@ -117,22 +123,8 @@ SCAN_WORKFLOWS = [
         "linux",
         id="U3-iac-native",
     ),
-    pytest.param(
-        "U4",
-        "URL DAST - native CLI",
-        lambda repo: [
-            "ci",
-            "--url",
-            "http://testphp.vulnweb.com",
-            "--tools",
-            "zap",
-            "--allow-missing-tools",
-        ],
-        validate_basic_scan,
-        "linux",
-        marks=[pytest.mark.requires_tools],
-        id="U4-url-dast",
-    ),
+    # U4, the URL case, is test_url_dast_scan below: its target is a server the
+    # test starts, on a port known only once it is running.
     pytest.param(
         "U5",
         "Multi-target - native CLI",
@@ -248,6 +240,52 @@ def test_scan_workflow(
     # says why in its log's tail, such as a tool it could not find (#1546).
     print(stderr[-4000:])
     validator(results_dir)
+
+
+# What zap reports for the spider site's /search, which reflects `q` unescaped.
+REFLECTED_XSS = "Cross Site Scripting (Reflected)"
+
+
+@pytest.mark.e2e
+@pytest.mark.slow
+@pytest.mark.requires_tools
+@pytest.mark.timeout(1200)
+def test_url_dast_scan(jmo_scan_runner, tmp_path):
+    """U4: a URL scan with zap reaches its target and reports what it found.
+
+    U4 scanned http://testphp.vulnweb.com, a third-party host that stopped
+    answering, and passed while zap reached nothing: `validate_basic_scan` asks
+    a URL target for a target count only, and the target's results directory
+    exists when every tool failed (#1550). The target is now
+    fixture_server.py's spider site, served from this process on 127.0.0.1,
+    and the scan must show zap ran, reached the site and found its reflected
+    XSS. zap's 15-30 s on the site, plus a fresh ZAP home, fit the budget.
+    """
+    if current_platform() != "linux":
+        pytest.skip(f"U4 is for linux, running on {current_platform()}")
+    zap = DESCRIPTORS["zap"]
+    if not any(find_tool(name) for name in (zap.binary, zap.name) if name):
+        pytest.skip("zap is not installed")
+
+    log = tmp_path / "requests.jsonl"
+    site = fx.start("spider", log)
+    try:
+        rc, _stdout, stderr, results_dir = jmo_scan_runner(
+            ["ci", "--url", site.url, "--tools", "zap", "--allow-missing-tools"]
+        )
+    finally:
+        site.close()
+
+    assert rc in (0, 1), f"U4 exited {rc}.\nstderr: {stderr[-2000:]}"
+    print(stderr[-4000:])
+    validate_basic_scan(results_dir)
+    states = scanner_states(results_dir)
+    assert states.get("zap") == "ran", states
+    attacked = Counter(r["op"] for r in fx.read_log(log) if r["payload"])
+    assert attacked["search"], f"zap sent no attack to /search: {attacked}"
+    summary = json.loads((results_dir / "summaries" / "findings.json").read_bytes())
+    titles = {f.get("title") for f in summary["findings"]}
+    assert REFLECTED_XSS in titles, sorted(titles)
 
 
 @pytest.mark.e2e
