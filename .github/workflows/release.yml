@@ -360,7 +360,7 @@ jobs:
         run: |
           # Install TruffleHog for secrets scanning
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -689,7 +689,7 @@ jobs:
           ASSET="go-containerregistry_Linux_x86_64.tar.gz"
           cd "$(mktemp -d)"
           for f in "$ASSET" checksums.txt; do
-            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
               "$BASE/$f" -o "$f"
           done
           # Saved under the asset's own name: sha256sum -c opens the file the
@@ -972,7 +972,7 @@ jobs:
         env:
           SYFT_VERSION: ${{ steps.pins.outputs.SYFT_VERSION }}
         run: |
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
             -o /tmp/syft.tar.gz
           gzip -t /tmp/syft.tar.gz
