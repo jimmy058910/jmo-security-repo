@@ -82,7 +82,9 @@ DOC_CHECKER = REPO_ROOT / "scripts" / "dev" / "check_doc_links.py"
 # means deleting duplicated prose, not promoting a container, and that is a
 # different reading with a different risk.
 KNOWN_BROKEN: dict[str, tuple[int, bool]] = {
-    "packaging/README.md": (7, True),
+    # 7 -> 4 when #1286 deleted the Homebrew formula and its sections, three of
+    # whose duplicated copies left a stray opener.
+    "packaging/README.md": (4, True),
 }
 
 

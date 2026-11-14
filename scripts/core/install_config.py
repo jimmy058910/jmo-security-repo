@@ -17,6 +17,11 @@ from scripts.core.yara_rules import Review
 # Replace magic numbers with named constants for clarity and easy adjustment
 
 DOWNLOAD_TIMEOUT_SECONDS = 300
+# A download is tried this many times, this far apart, as every Dockerfile
+# download is (`curl --retry 3 --retry-delay 5`): GitHub's transient errors
+# failed image builds until then (#1573).
+DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_RETRY_DELAY_SECONDS = 5
 PIP_INSTALL_TIMEOUT_SECONDS = 600
 SUBPROCESS_DEFAULT_TIMEOUT = 120
 DOWNLOAD_CHUNK_SIZE = 8192
@@ -28,18 +33,21 @@ MAX_CLEANUP_RETRIES = 3
 # ============================================================================
 # INSTALLATION METHOD PRIORITIES
 # ============================================================================
-# Installation method priorities per platform
-# "install_script" uses official install scripts from tool maintainers (most reliable)
-# "binary" downloads pre-built binaries from GitHub releases
+# Installation method priorities per platform: pip for the Python tool
+# (checkov, in its own venv), then the pinned release binary, checked against
+# its release's sha256 where the project publishes one.
 #
 # npm and brew are gone (v2.0.0). npm served only cdxgen; brew was the first
 # macOS choice and never honoured the pinned version (PINNED_INSTALL_METHODS
 # excludes it), so macOS now installs the same pinned binary as everyone else.
+# apt and the official install scripts went in #1374: apt installed the
+# distribution's shellcheck, not the pin, and the scripts (trivy, syft) were
+# fetched from `main` and run before the checked binary.
 
 INSTALL_PRIORITIES: dict[Platform, list[str]] = {
-    "linux": ["apt", "pip", "install_script", "binary"],
-    "macos": ["pip", "install_script", "binary"],
-    "windows": ["pip", "binary", "manual"],
+    "linux": ["pip", "binary"],
+    "macos": ["pip", "binary"],
+    "windows": ["pip", "binary"],
 }
 
 
@@ -95,9 +103,15 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 # scripts/core/yara_rules.py drops the others during the fetch (decision 6),
 # and YARA_RULES_REVIEWED lists the files it cannot decide alone.
 #
-# Pinned by commit and by the tarball's sha256, checked before extraction: the
-# repository publishes no releases, and a rule set that changes under you
-# changes your findings. A bump re-reads every file the fetch then refuses.
+# Pinned by commit, and by git's ids for what it holds, checked before
+# extraction: the repository publishes no releases, and a rule set that changes
+# under you changes your findings. Not by the archive's sha256: GitHub builds
+# `/archive/` tarballs on request and does not promise their bytes stay the same
+# (#1573). The ids are what the commit holds, recomputed from the archive by
+# scripts/core/git_archive.py; read them for a new pin with
+#   gh api repos/Neo23x0/signature-base/git/trees/<ref> \
+#     --jq '.tree[] | select(.path=="yara" or .path=="LICENSE") | "\(.path) \(.sha)"'
+# A bump re-reads every file the fetch then refuses.
 YARA_RULES_BUNDLE: dict[str, str] = {
     "repo": "Neo23x0/signature-base",
     "ref": "36ab70428fc5b52701b7ee6107c853ff019ed759",  # 2026-10-29
@@ -105,7 +119,8 @@ YARA_RULES_BUNDLE: dict[str, str] = {
         "https://github.com/Neo23x0/signature-base/"
         "archive/36ab70428fc5b52701b7ee6107c853ff019ed759.tar.gz"
     ),
-    "sha256": "f63f2184ba3608876d695b4003b6e198ba129438dbd5aa9cb4b51ff0a86ebbe4",
+    "tree": "9266045ebadb60de83fc00d6421413043aa4e6a8",  # git id of yara/ at ref
+    "license_blob": "a2486e663132108cffe118790d6195a662a39ab2",  # of LICENSE
     # Directory inside the archive holding the rules; everything else (IOCs,
     # scripts) is dropped, and the LICENSE is copied beside them.
     "subdir": "yara",
@@ -180,21 +195,26 @@ YARA_RULES_REVIEWED: dict[str, Review] = {
 #                  "aarch64" on Linux, "arm64" on macOS (opengrep)
 
 BINARY_URLS: dict[str, str | dict[str, str]] = {
-    # trivy: Windows uses lowercase "windows-64bit.zip", Linux uses "Linux-64bit.tar.gz"
+    # trivy: "Linux-64bit.tar.gz", "macOS-ARM64.tar.gz", "windows-64bit.zip"
+    # (v0.74.0's assets, listed 2026-11-05). No Windows arm64 build, so Windows
+    # is the 64bit one on every architecture, as for zizmor.
     "trivy": {
-        "windows": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_windows-{trivy_arch}.zip",
-        "default": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_{os}-{trivy_arch}.tar.gz",
+        "windows": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_windows-64bit.zip",
+        "macos": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_macOS-{trivy_arch}.tar.gz",
+        "default": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_Linux-{trivy_arch}.tar.gz",
     },
     # Anchore syft: Windows uses .zip, Linux uses .tar.gz
     "syft": {
         "windows": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_windows_{arch_amd}.zip",
         "default": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_{os_lower}_{arch_amd}.tar.gz",
     },
-    # hadolint: "Linux-x86_64" (capital L, hyphen, lowercase arch)
-    # Windows provides .exe directly, Linux/macOS provide binary without extension
+    # hadolint: "hadolint-linux-x86_64", "hadolint-macos-arm64",
+    # "hadolint-windows-x86_64.exe" (v2.15.1's assets, listed 2026-11-05). The
+    # checksum file names them so, and is matched by name (#1374).
     "hadolint": {
-        "windows": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-Windows-x86_64.exe",
-        "default": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-{os}-{arch}",
+        "windows": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-windows-x86_64.exe",
+        "macos": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-macos-{arch}",
+        "default": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-linux-{arch}",
     },
     # shellcheck: lowercase "linux.x86_64" with dots
     # Windows is a single arch-less .zip - the {os_lower}.{arch_aarch} scheme
@@ -238,25 +258,50 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "windows": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_windows_{arch_amd}.exe",
         "default": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_{os_lower}_{arch_amd}",
     },
-    "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
+    # nuclei: "linux_amd64.zip", "macOS_arm64.zip", "windows_amd64.zip"
+    # (v3.11.1's assets, listed 2026-11-05). No Windows arm64 build.
+    "nuclei": {
+        "windows": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_windows_amd64.zip",
+        "macos": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_macOS_{arch_amd}.zip",
+        "default": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_linux_{arch_amd}.zip",
+    },
     # OPA (Open Policy Agent): "opa_linux_amd64" (no version in filename)
     # Windows provides .exe directly, Linux/macOS provide binary without extension
     "opa": {
-        "windows": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_windows_{arch_amd}.exe",
+        # No Windows arm64 build (v1.21.4's assets, listed 2026-11-05).
+        "windows": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_windows_amd64.exe",
         "default": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_{os_lower}_{arch_amd}",
     },
 }
 
 
 # ============================================================================
-# OFFICIAL INSTALL SCRIPTS
+# RELEASE CHECKSUMS (#1374)
 # ============================================================================
-# Official install scripts (preferred over direct binary downloads)
-# These are maintained by tool authors and handle platform detection correctly
+# Where each tool's release publishes the sha256 of its assets, in `sha256sum`
+# form (scripts/core/checksums.py). A download is checked against it before it
+# is extracted or installed; a mismatch, or an asset the file does not list,
+# fails the install and leaves the installed binary alone. {asset} is the
+# downloaded file's name, for a project that writes one file per asset.
+# Read at each pinned tag on 2026-11-05.
+CHECKSUM_URLS: dict[str, str] = {
+    "trivy": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_checksums.txt",
+    "syft": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_checksums.txt",
+    "trufflehog": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_checksums.txt",
+    "gitleaks": "https://github.com/gitleaks/gitleaks/releases/download/v{version}/gitleaks_{version}_checksums.txt",
+    "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_checksums.txt",
+    "hadolint": "https://github.com/hadolint/hadolint/releases/download/v{version}/checksums.sha256",
+    "osv-scanner": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_SHA256SUMS",
+    "opa": "https://github.com/open-policy-agent/opa/releases/download/v{version}/{asset}.sha256",
+}
 
-INSTALL_SCRIPTS: dict[str, str] = {
-    "trivy": "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh",
-    "syft": "https://raw.githubusercontent.com/anchore/syft/main/install.sh",
+# The tools whose project publishes no checksum file, and what it publishes
+# instead: `jmo tools install` installs them and says they were not verified.
+UNCHECKSUMMED: dict[str, str] = {
+    "zizmor": "zizmor publishes no checksums",
+    "shellcheck": "shellcheck publishes no checksums",
+    "opengrep": "opengrep publishes signatures (.sig), no checksums",
+    "zap": "ZAP publishes its checksums only in its release notes",
 }
 
 

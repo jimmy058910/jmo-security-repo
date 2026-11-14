@@ -192,6 +192,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Removed
 
+- **The Homebrew formula and the packaging install-tools scripts (#1286).**
+  `packaging/homebrew/jmo-security.rb` could not install the current package (it asked for
+  Python 3.10, pinned v1.0.0 with an empty sha256, and listed none of rich, rapidfuzz,
+  croniter, requests or yara-x), and its post-install message piped
+  `install-tools-homebrew.sh` from `main` into bash. That script and
+  `install-tools-{linux,windows}` installed none of shellcheck, grype, yara, opa, gitleaks,
+  zizmor or osv-scanner, and nothing else referred to them. `jmo tools install` installs
+  every scanner at its pin. The packaging guides and CONTRIBUTING lose their Homebrew
+  sections.
 - **Breaking. 16 scanners leave; a scan runs 12.** noseyparker, semgrep-secrets, bandit,
   trivy-rbac, prowler, kubescape, akto, scancode, cdxgen, dependency-check, horusec, falco,
   falcoctl, afl++, mobsf and lynis are gone, with their adapters, installer entries,
@@ -286,6 +295,12 @@ All notable changes to JMo Security will be documented in this file.
   not DETECT, and `jmo diff` against a scan stored before this shows those findings'
   compliance as changed. The PCI DSS entries are not yet checked against the PCI SSC's
   document.
+- **`make tools` installs the scanners through `jmo tools install` (#1562).**
+  `scripts/dev/install_tools.sh` installed them itself, from `latest`, unpinned and
+  unchecked, three by piping an install script from `main`, and ZAP on Linux as a snap
+  jmo never looked for, so a machine set up with `make tools` reported zap missing. It
+  now installs only the developer prerequisites (python3, pip, jq, curl, git, shfmt) and
+  runs `jmo tools install --yes`, or `jmo tools update --yes` for `make tools-upgrade`.
 - **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
   publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
   dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
@@ -710,6 +725,28 @@ All notable changes to JMo Security will be documented in this file.
   failed at its first write. Both now run `mkdir -p` on the results directory (and tsv's
   clone destination) before `docker run`, and the command the wizard prints to run later
   starts with the same line. The wizard's own run already did this.
+- **`jmo tools install` downloads trivy, nuclei and hadolint on macOS, and trivy, nuclei
+  and opa on Windows ARM64.** Their URLs named assets the releases do not have: trivy and
+  nuclei call macOS `macOS` and hadolint `macos`, not `Darwin`, and none of the three
+  publishes a Windows arm64 build, so each was a 404 there. Rendering every download for
+  six platform and architecture pairs found 53 of 66 names in their release; all 66 now
+  are, and Windows ARM64 installs the x86_64 build, as it already did for zizmor and
+  opengrep. `tests/unit/test_release_asset_names.py` renders each one against the
+  releases' asset names.
+- **A tool beside the Python interpreter is found only if pip installed it (#1288).**
+  `find_tool` looked in the interpreter's directory for every name, so under a system
+  Python in `/usr/bin` it found `docker`, `curl` or `wget` there whatever `PATH` said, and
+  six tests that hide those tools failed. The lookup now covers only the pip-installed
+  scanners (`ISOLATED_TOOLS`: checkov), which is what it was for.
+- **`jmo tools install yara-x` retries its download, and pins what the commit holds
+  (#1573).** The rules download ran once, so one transient GitHub error failed an image
+  build or an install; it now tries four times, 5 s apart, as every Dockerfile download
+  does. The pin was the sha256 of the archive GitHub generates on request, bytes GitHub
+  does not promise to keep; it is now git's ids for the commit's `yara/` tree and its
+  `LICENSE`, recomputed from the archive's members before anything is extracted
+  (`scripts/core/git_archive.py`, checked against git itself), and readable for any
+  commit from GitHub's API. `manifest.json` records `tree` in place of `sha256`. A real
+  install at the pin lands the same 719 files and 5,696 rules as before.
 - **A PHP, JSP, VBS or batch script renamed to `.jpg` is reported as disguised
   (#1578).** yara-x's `filetype` variable, which signature-base's rules read as LOKI
   sets it, was set for EXE, ELF, RTF and minidumps only, from 4 bytes. It is now set
@@ -1292,6 +1329,19 @@ All notable changes to JMo Security will be documented in this file.
   workflow also stops putting `--gitlab-token '${{ secrets.GITLAB_TOKEN }}'` on `docker
   run`'s command line, where the process list showed the token: the step sets
   `GITLAB_TOKEN` in its environment and `-e GITLAB_TOKEN` forwards it by name.
+- **`jmo tools install` checks each download against the sha256 its release publishes
+  (#1374).** It verified nothing, so an interrupted, redirected or tampered download was
+  installed and run as it was. Eight of the twelve downloaded tools publish a checksum
+  file (trivy, syft, trufflehog, gitleaks, nuclei, hadolint, osv-scanner, opa): the
+  download is checked before it is extracted or installed, and a mismatch, an asset the
+  file does not list, or a checksum file that cannot be fetched fails the install and
+  leaves the binary already installed alone. zizmor, shellcheck, opengrep and ZAP publish
+  no checksum file; they install with `[WARN] not verified: <why>` under their row. Every
+  binary now comes from its pinned release: Linux no longer installs shellcheck with
+  `apt` (the distribution's version, not the pin), and Linux and macOS no longer run
+  trivy's and syft's install scripts, which were fetched from their `main` branches.
+  hadolint's URLs use its release's own asset names. Measured with real installs from
+  GitHub at the pins: 8 verified, 4 reported unverified, 12 installed.
 - **The workflow `jmo wizard` generates uploads `results/summaries/`, not all of
   `results/` (#1329).** The raw trufflehog and gitleaks outputs under `results/individual-*/`
   held every secret found in plaintext, and a CI artifact is readable by anyone who can read

@@ -89,12 +89,12 @@ Run this analyzer before submitting PRs to ensure your changes are properly docu
 
 **File:** `install_tools.sh`
 
-Installs external security scanning tools (opengrep, trivy, checkov, etc.) based on platform detection (Linux/macOS/WSL).
+`make tools`: installs the developer prerequisites (python3, pip, jq, curl, git, shfmt) on Linux, WSL or macOS, then every scanner through `jmo tools install`, which pins and checks each one (#1562).
 
 **Usage:**
 
 ```bash
-jmo tools install
+make tools          # or: make tools-upgrade, which runs jmo tools update
 ```
 
 ---

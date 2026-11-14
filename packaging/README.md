@@ -1,6 +1,6 @@
 # JMo Security Packaging
 
-Distribution packaging for Homebrew (macOS/Linux) and Winget (Windows).
+Distribution packaging for Winget (Windows). JMo has no Homebrew formula: install it with `pip install "jmo-security[yara]"` ([QUICKSTART](../QUICKSTART.md)).
 
 ---
 
@@ -10,8 +10,6 @@ Distribution packaging for Homebrew (macOS/Linux) and Winget (Windows).
 packaging/
 ├── README.md                           # This file
 ├── TESTING.md                          # Comprehensive testing guide
-├── homebrew/
-│   └── jmo-security.rb                 # Homebrew formula
 └── winget/
     ├── manifests/                      # Winget manifests
     │   └── j/jmo/jmo-security/0.9.0/
@@ -25,8 +23,6 @@ packaging/
 packaging/
 ├── README.md                           # This file
 ├── TESTING.md                          # Comprehensive testing guide
-├── homebrew/
-│   └── jmo-security.rb                 # Homebrew formula
 └── winget/
     ├── manifests/                      # Winget manifests
     │   └── j/jmo/jmo-security/0.9.0/
@@ -37,116 +33,6 @@ packaging/
         └── build_installer.py          # Windows installer build script
 
 ```text
-
----
-
-## 🍺 Homebrew Formula
-
-### Local Testing
-
-Test the formula before submitting to homebrew-core:
-
-```bash
-# Install from local formula
-brew install --build-from-source packaging/homebrew/jmo-security.rb
-
-# Verify installation
-jmo --help
-jmo wizard --help
-
-# Run formula tests
-brew test jmo-security
-
-# Audit formula
-brew audit --strict --online jmo-security
-```
-
----
-
-## 🍺 Homebrew Formula
-
-### Local Testing
-
-Test the formula before submitting to homebrew-core:
-
-```bash
-# Install from local formula
-brew install --build-from-source packaging/homebrew/jmo-security.rb
-
-# Verify installation
-jmo --help
-jmo wizard --help
-
-# Run formula tests
-brew test jmo-security
-
-# Audit formula
-brew audit --strict --online jmo-security
-```
-
-## Install from local formula
-
-brew install --build-from-source packaging/homebrew/jmo-security.rb
-
-## Verify installation
-
-jmo --help
-jmo wizard --help
-
-## Run formula tests
-
-brew test jmo-security
-
-## Audit formula
-
-brew audit --strict --online jmo-security
-
-```text
-
-### Submission to homebrew-core
-
-1. **Fork homebrew-core:**
-   ```bash
-   cd $(brew --repo homebrew/core)
-   hub fork
-   ```
-
-1. **Create branch:**
-
-   ```bash
-   git checkout -b jmo-security
-   ```
-
-2. **Copy formula:**
-
-   ```bash
-   cp /path/to/jmo-security-repo/packaging/homebrew/jmo-security.rb \
-      Formula/j/jmo-security.rb
-   ```
-
-3. **Test and submit:**
-
-   ```bash
-   brew audit --new-formula jmo-security
-   brew test jmo-security
-   brew install --build-from-source jmo-security
-
-   git add Formula/j/jmo-security.rb
-   git commit -m "jmo-security 0.9.0 (new formula)"
-   git push YOUR_FORK jmo-security
-
-   # Open PR to Homebrew/homebrew-core
-   hub pull-request
-   ```
-
-### Auto-Update Workflow
-
-GitHub Actions workflow automatically updates formula on new releases:
-
-- Workflow: `.github/workflows/update-homebrew-formula.yml`
-- Triggers: `release.published`, `workflow_dispatch`
-- Updates: Tarball URL, SHA256
-- Creates PR to this repository with updated formula
 
 ---
 
@@ -169,54 +55,6 @@ python packaging/windows/build_installer.py --version 0.9.0
 # dist/jmo-security-0.9.0-win64.exe
 # dist/jmo-security-0.9.0-win64.exe.sha256
 ```
-
-### Submission to homebrew-core
-
-1. **Fork homebrew-core:**
-
-   ```bash
-   cd $(brew --repo homebrew/core)
-   hub fork
-   ```
-
-2. **Create branch:**
-
-   ```bash
-   git checkout -b jmo-security
-   ```
-
-3. **Copy formula:**
-
-   ```bash
-   cp /path/to/jmo-security-repo/packaging/homebrew/jmo-security.rb \
-      Formula/j/jmo-security.rb
-   ```
-
-4. **Test and submit:**
-
-   ```bash
-   brew audit --new-formula jmo-security
-   brew test jmo-security
-   brew install --build-from-source jmo-security
-
-   git add Formula/j/jmo-security.rb
-   git commit -m "jmo-security 0.9.0 (new formula)"
-   git push YOUR_FORK jmo-security
-
-   # Open PR to Homebrew/homebrew-core
-   hub pull-request
-   ```
-
-### Auto-Update Workflow
-
-GitHub Actions workflow automatically updates formula on new releases:
-
-- Workflow: `.github/workflows/update-homebrew-formula.yml`
-- Triggers: `release.published`, `workflow_dispatch`
-- Updates: Tarball URL, SHA256
-- Creates PR to this repository with updated formula
-
----
 
 ## 📦 Winget Package
 
@@ -371,16 +209,13 @@ GitHub Actions workflow automatically updates manifest on new releases:
    - GitHub Actions automatically triggers release workflow
    - Publishes to PyPI
    - Builds Docker images
-   - Updates Homebrew formula (PR created)
    - Updates Winget manifest (PR created)
 
 3. **Review and merge PRs:**
-   - Review Homebrew formula PR
    - Review Winget manifest PR
    - Merge both to repository
 
 4. **Submit to package managers:**
-   - Submit Homebrew formula to homebrew-core (manual)
    - Submit Winget manifest to microsoft/winget-pkgs (manual)
 
 ### Manual
@@ -397,24 +232,9 @@ GitHub Actions workflow automatically updates manifest on new releases:
    - `jmo-security-0.9.0-win64.exe`
 
 4. **Trigger auto-update workflows:**
-   - `.github/workflows/update-homebrew-formula.yml`
    - `.github/workflows/update-winget-manifest.yml`
 
 5. **Follow submission process** (see above)
-
----
-
-## 📊 Package Manager Comparison
-
-| Feature | Homebrew | Winget |
-|---------|----------|--------|
-| **Platforms** | macOS, Linux | Windows 10+ |
-| **Install method** | Source build + virtualenv | Pre-built exe installer |
-| **Dependency management** | Automatic (Python deps) | Bundled (PyInstaller) |
-| **Auto-update** | `brew upgrade` | `winget upgrade` |
-| **User base** | 90M+ installs/month | Built into Windows 11 |
-| **Approval time** | 1-2 weeks | 1-2 weeks |
-| **Maintenance** | Formula updates | Manifest updates |
 
 ---
 
@@ -424,7 +244,6 @@ See [TESTING.md](TESTING.md) for comprehensive testing guide.
 
 **Quick checklist:**
 
-- [ ] Homebrew: Install, scan, upgrade, uninstall (macOS/Linux)
 - [ ] Winget: Install, scan, upgrade, uninstall (Windows)
 - [ ] Cross-platform: Feature parity verified
 - [ ] Documentation: All install methods documented
@@ -432,13 +251,6 @@ See [TESTING.md](TESTING.md) for comprehensive testing guide.
 ---
 
 ## 📚 Resources
-
-### Homebrew
-
-- **Formula Cookbook:** <https://docs.brew.sh/Formula-Cookbook>
-- **Python for Formula Authors:** <https://docs.brew.sh/Python-for-Formula-Authors>
-- **How to Open a PR:** <https://docs.brew.sh/How-To-Open-a-Homebrew-Pull-Request>
-- **homebrew-core:** <https://github.com/Homebrew/homebrew-core>
 
 ### Winget
 
@@ -456,18 +268,6 @@ See [TESTING.md](TESTING.md) for comprehensive testing guide.
 ---
 
 ## 🐛 Troubleshooting
-
-### Homebrew Issues
-
-**Formula audit fails:**
-
-```bash
-# Fix style violations
-brew style packaging/homebrew/jmo-security.rb
-
-# Re-audit
-brew audit --strict --online jmo-security
-```
 
 ### Submission to microsoft/winget-pkgs
 
@@ -535,16 +335,13 @@ GitHub Actions workflow automatically updates manifest on new releases:
    - GitHub Actions automatically triggers release workflow
    - Publishes to PyPI
    - Builds Docker images
-   - Updates Homebrew formula (PR created)
    - Updates Winget manifest (PR created)
 
 3. **Review and merge PRs:**
-   - Review Homebrew formula PR
    - Review Winget manifest PR
    - Merge both to repository
 
 4. **Submit to package managers:**
-   - Submit Homebrew formula to homebrew-core (manual)
    - Submit Winget manifest to microsoft/winget-pkgs (manual)
 
 ### Manual
@@ -561,24 +358,9 @@ GitHub Actions workflow automatically updates manifest on new releases:
    - `jmo-security-0.9.0-win64.exe`
 
 4. **Trigger auto-update workflows:**
-   - `.github/workflows/update-homebrew-formula.yml`
    - `.github/workflows/update-winget-manifest.yml`
 
 5. **Follow submission process** (see above)
-
----
-
-## 📊 Package Manager Comparison
-
-| Feature | Homebrew | Winget |
-|---------|----------|--------|
-| **Platforms** | macOS, Linux | Windows 10+ |
-| **Install method** | Source build + virtualenv | Pre-built exe installer |
-| **Dependency management** | Automatic (Python deps) | Bundled (PyInstaller) |
-| **Auto-update** | `brew upgrade` | `winget upgrade` |
-| **User base** | 90M+ installs/month | Built into Windows 11 |
-| **Approval time** | 1-2 weeks | 1-2 weeks |
-| **Maintenance** | Formula updates | Manifest updates |
 
 ---
 
@@ -588,7 +370,6 @@ See [TESTING.md](TESTING.md) for comprehensive testing guide.
 
 **Quick checklist:**
 
-- [ ] Homebrew: Install, scan, upgrade, uninstall (macOS/Linux)
 - [ ] Winget: Install, scan, upgrade, uninstall (Windows)
 - [ ] Cross-platform: Feature parity verified
 - [ ] Documentation: All install methods documented
@@ -596,13 +377,6 @@ See [TESTING.md](TESTING.md) for comprehensive testing guide.
 ---
 
 ## 📚 Resources
-
-### Homebrew
-
-- **Formula Cookbook:** <https://docs.brew.sh/Formula-Cookbook>
-- **Python for Formula Authors:** <https://docs.brew.sh/Python-for-Formula-Authors>
-- **How to Open a PR:** <https://docs.brew.sh/How-To-Open-a-Homebrew-Pull-Request>
-- **homebrew-core:** <https://github.com/Homebrew/homebrew-core>
 
 ### Winget
 
@@ -620,58 +394,6 @@ See [TESTING.md](TESTING.md) for comprehensive testing guide.
 ---
 
 ## 🐛 Troubleshooting
-
-### Homebrew Issues
-
-**Formula audit fails:**
-
-```bash
-# Fix style violations
-brew style packaging/homebrew/jmo-security.rb
-
-# Re-audit
-brew audit --strict --online jmo-security
-```
-
-## Fix style violations
-
-brew style packaging/homebrew/jmo-security.rb
-
-## Re-audit
-
-brew audit --strict --online jmo-security
-
-```text
-
-**Installation fails:**
-
-```bash
-# Verbose output
-brew install --build-from-source --verbose packaging/homebrew/jmo-security.rb
-
-# Check logs
-cat ~/Library/Logs/Homebrew/jmo-security/
-```
-
-**Installation fails:**
-
-```bash
-# Verbose output
-brew install --build-from-source --verbose packaging/homebrew/jmo-security.rb
-
-# Check logs
-cat ~/Library/Logs/Homebrew/jmo-security/
-```
-
-## Verbose output
-
-brew install --build-from-source --verbose packaging/homebrew/jmo-security.rb
-
-## Check logs
-
-cat ~/Library/Logs/Homebrew/jmo-security/
-
-```text
 
 ### Winget Issues
 

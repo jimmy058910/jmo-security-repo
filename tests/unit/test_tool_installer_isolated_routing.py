@@ -170,9 +170,11 @@ class TestPinnedInstallVerdict:
         assert "[FAIL] semgrep" in out
         assert "[OK]" not in out
 
-    @pytest.mark.parametrize("method", ["install_script", "apt"])
-    def test_an_unpinned_package_manager_still_only_warns(self, method):
-        """apt/install_script install whatever they carry; a mismatch there is not a lie."""
+    @pytest.mark.parametrize("method", ["extract_app"])
+    def test_a_method_outside_the_pinned_set_still_only_warns(self, method):
+        """Only PINNED_INSTALL_METHODS turn a mismatch into a failure (apt and
+        the install scripts, which installed whatever they carried, left in
+        #1374)."""
         installer = ToolInstaller(manager=MagicMock())
         out = installer._validate_installed_version(
             InstallResult(

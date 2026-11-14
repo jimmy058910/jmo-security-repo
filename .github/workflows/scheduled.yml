@@ -727,15 +727,29 @@ jobs:
         # uv sync installs the project, so `jmo` resolves from the venv now.
         run: jmo --help || echo "jmo CLI not available"
 
+      # `make tools` installs the scanners with `jmo tools install`, into
+      # ~/.jmo/bin and (checkov) its own venv, neither on PATH (#1562). A scan
+      # finds them there, but test_real_tool_scans.py checks for a tool with
+      # shutil.which and patches Path.home, so without these lines its trivy,
+      # opengrep, trufflehog and checkov tests skip, green. `make tools` used to
+      # install them onto PATH. Only checkov's launcher is linked: the venv's
+      # bin also holds a python, which would shadow the project's.
       - name: Install external security tools
         run: |
           make tools || echo "Some tools failed to install, continuing..."
+          echo "$HOME/.jmo/bin" >> "$GITHUB_PATH"
+          checkov_launcher="$HOME/.jmo/tools/venvs/checkov/bin/checkov"
+          if [[ -x "$checkov_launcher" ]]; then
+            mkdir -p "$RUNNER_TEMP/jmo-venv-tools"
+            ln -sf "$checkov_launcher" "$RUNNER_TEMP/jmo-venv-tools/checkov"
+            echo "$RUNNER_TEMP/jmo-venv-tools" >> "$GITHUB_PATH"
+          fi
 
       # U4 in tests/e2e/test_scan_workflows.py scans a URL with zap. `make tools`
-      # installs zap as the `zaproxy` snap, which jmo does not look for, so U4
-      # scanned nothing (#1546). Install it the way jmo finds it, in
-      # ~/.jmo/bin/zap/, and run it on the runner's JDK 17 (jmo's own Linux
-      # remediation for zap's Java is openjdk-17).
+      # used to install zap as the `zaproxy` snap, which jmo does not look for,
+      # so U4 scanned nothing (#1546). This step makes sure zap is where jmo
+      # finds it, in ~/.jmo/bin/zap/, and runs it on the runner's JDK 17 (jmo's
+      # own Linux remediation for zap's Java is openjdk-17).
       - name: Install zap where jmo finds it
         run: |
           : "${JAVA_HOME_17_X64:?the runner image has no JDK 17}"

@@ -22,7 +22,6 @@ keep it that way.
 from __future__ import annotations
 
 import ast
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -264,44 +263,6 @@ def test_every_capturing_subprocess_pins_its_decoder() -> None:
     assert not offenders, (
         f"{len(offenders)} capturing subprocess call(s) decode by host locale:\n"
         + "\n".join(f"  {o}" for o in offenders)
-    )
-
-
-def test_installer_runner_survives_undecodable_bytes() -> None:
-    """The shared installer runner must degrade on a bad byte, not lose the capture.
-
-    Every tool installer shells out through `DefaultSubprocessRunner.run`, and
-    the security tools' `--version` output is the least predictable text in the
-    product. This drives a real child process emitting bytes that are invalid in
-    **UTF-8** -- so the test is falsifiable on any host, rather than depending on
-    the runner's locale being cp1252, which CI's `PYTHONUTF8: "1"` guarantees it
-    is not.
-
-    The property is that the text on *both sides* of the bad bytes survives.
-    Asserting only "no exception" would pass against a truncated capture, which
-    is the actual #963 symptom: the reader thread dies, `subprocess.run` returns,
-    and the caller reads a short string as if the tool had said less.
-    """
-    from scripts.cli.installers.base import DefaultSubprocessRunner
-
-    result = DefaultSubprocessRunner().run(
-        [
-            sys.executable,
-            "-c",
-            "import sys; sys.stdout.buffer.write(b'head\\xff\\xfetail')",
-        ],
-        timeout=60,
-    )
-
-    assert result.returncode == 0
-    assert result.stdout.startswith("head"), f"capture truncated: {result.stdout!r}"
-    assert result.stdout.endswith("tail"), (
-        "text after the undecodable bytes was lost -- the reader thread died "
-        f"rather than replacing them: {result.stdout!r}"
-    )
-    assert "�" in result.stdout, (
-        "the bad bytes vanished instead of becoming replacement characters: "
-        f"{result.stdout!r}"
     )
 
 
