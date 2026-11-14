@@ -193,7 +193,7 @@ jobs:
           # download pattern (--fail + retry + integrity check). Short
           # local var `v` keeps the URL line within yamllint's 140-char limit.
           v="$TRUFFLEHOG_VERSION"
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -1356,7 +1356,7 @@ jobs:
           # flakes that have broken other installs here, bounded timeouts. This
           # is a bare static binary, so there is no archive to `gzip -t`; the
           # `opa version` call below is the integrity check.
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors \
             --connect-timeout 30 --max-time 600 \
             "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static" \
             -o /usr/local/bin/opa
@@ -1610,18 +1610,18 @@ jobs:
           # All downloads pinned + hardened (--fail + retry + integrity)
           # to avoid the upstream install.sh GitHub API flake. See PR #350
           # and release.rules.md "CI install hardening".
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             -o /tmp/trivy.tar.gz
           gzip -t /tmp/trivy.tar.gz
           tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
           pip install "checkov==${CHECKOV_VERSION}"
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
             -o /usr/local/bin/hadolint
           chmod +x /usr/local/bin/hadolint
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
             -o /tmp/trufflehog.tar.gz
           gzip -t /tmp/trufflehog.tar.gz
@@ -1630,14 +1630,14 @@ jobs:
           # Gitleaks: no job installed it, so the git-history tests (G1) had
           # only ever skipped in CI (#1326). amd64 is spelled x64.
           v="$GITLEAKS_VERSION"  # short alias to keep URL line under 140 chars
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/gitleaks/gitleaks/releases/download/v${v}/gitleaks_${v}_linux_x64.tar.gz" \
             -o /tmp/gitleaks.tar.gz
           gzip -t /tmp/gitleaks.tar.gz
           tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
           chmod +x /usr/local/bin/gitleaks
           # zizmor: assets are named by target triple, with no version.
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz" \
             -o /tmp/zizmor.tar.gz
           gzip -t /tmp/zizmor.tar.gz
@@ -1645,7 +1645,7 @@ jobs:
           chmod +x /usr/local/bin/zizmor
           # opengrep: a static binary, no archive; assets are named by flavour
           # and arch.
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
@@ -1654,9 +1654,9 @@ jobs:
           # offline database is fetched: its tests read the frozen one in
           # tests/fixtures/osv-db.
           base="https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}"
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "${base}/osv-scanner_SHA256SUMS" -o /tmp/osv-scanner_SHA256SUMS
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "${base}/osv-scanner_linux_amd64" -o /tmp/osv-scanner_linux_amd64
           sum=$(awk '$2 == "osv-scanner_linux_amd64" {print $1}' /tmp/osv-scanner_SHA256SUMS)
           echo "${sum:?no checksum for osv-scanner_linux_amd64}  /tmp/osv-scanner_linux_amd64" | sha256sum -c -
@@ -1664,7 +1664,7 @@ jobs:
           chmod +x /usr/local/bin/osv-scanner
           # Syft: its contract had no install line, so it had never run in
           # CI (#1073).
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
             -o /tmp/syft.tar.gz
           gzip -t /tmp/syft.tar.gz
