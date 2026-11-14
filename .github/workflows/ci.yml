@@ -1212,6 +1212,36 @@ jobs:
         if: steps.changes.outputs.dashboard != 'true'
         run: echo "No dashboard-relevant changes; the wheel check above still ran."
 
+  # The subscribe endpoint's own test (scripts/api/subscribe_endpoint.test.js,
+  # #1437) ran nowhere: no job installed its dependencies or called it, so a
+  # Dependabot bump of /scripts/api (#1607 was one) merged on checks that never
+  # loaded the module. Not path-filtered like dashboard-smoke: `npm ci` and the
+  # test take seconds, and a job that always runs cannot skip itself green.
+  subscribe-api:
+    name: subscribe-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: scripts/api/package-lock.json
+
+      - name: Install the endpoint's dependencies
+        working-directory: scripts/api
+        run: npm ci
+
+      - name: Test the subscribe endpoint (node --test)
+        working-directory: scripts/api
+        run: npm test
+
   # The only job that runs `jmo` the way a user does.
   #
   # Before this existed, a PR ran 8,995 tests and invoked ZERO jmo subcommands.
