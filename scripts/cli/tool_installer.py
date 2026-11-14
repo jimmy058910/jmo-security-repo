@@ -1471,9 +1471,15 @@ class ToolInstaller:
                         duration_seconds=time.time() - start_time,
                     )
 
-                # Extract if archive (download_file already has correct extension)
+                # Extract if archive (download_file already has correct
+                # extension), into a directory of its own: the search takes
+                # the first file whose name holds the tool's, and the download's
+                # directory also holds `<asset>.checksums`, which CI's runner
+                # listed first and installed as the binary.
+                extract_dir = tmppath / "extracted"
+                extract_dir.mkdir()
                 binary_path = self._extract_and_find_binary(
-                    download_file, tool_name, tmppath
+                    download_file, tool_name, extract_dir
                 )
 
                 if not binary_path:

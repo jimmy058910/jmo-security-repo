@@ -107,6 +107,43 @@ def test_a_zip_is_extracted_and_its_exe_installed(
     assert (tmp_path / "bin" / "gitleaks.exe").read_bytes() == BINARY
 
 
+@pytest.mark.parametrize("newest_name_first", [False, True])
+def test_the_checksum_file_saved_beside_the_archive_is_never_installed(
+    installer: ToolInstaller,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    newest_name_first: bool,
+) -> None:
+    """The checksum check saves `<asset>.checksums` beside the download. The
+    binary search took the first file whose name holds the tool's, in the
+    order the filesystem lists them, and searched the download's directory,
+    so on CI's runner `gitleaks.exe` was installed holding the checksum line.
+    Both orders, so this fails on any filesystem."""
+    real_rglob = Path.rglob
+
+    def ordered(self: Path, pattern: str, *args, **kwargs):
+        found = real_rglob(self, pattern, *args, **kwargs)
+        return iter(sorted(found, reverse=newest_name_first))
+
+    monkeypatch.setattr(Path, "rglob", ordered)
+    installer.platform = "windows"
+    version = ToolRegistry().get_tool("gitleaks").version
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("gitleaks.exe", BINARY)
+    _serve(
+        installer,
+        f"gitleaks_{version}_windows_x64.zip",
+        buf.getvalue(),
+        f"gitleaks_{version}_checksums.txt",
+    )
+
+    result = _install(installer, "gitleaks")
+
+    assert result.success, result.message
+    assert (tmp_path / "bin" / "gitleaks.exe").read_bytes() == BINARY
+
+
 def test_a_raw_windows_exe_keeps_its_exe_name(
     installer: ToolInstaller, tmp_path: Path
 ) -> None:
