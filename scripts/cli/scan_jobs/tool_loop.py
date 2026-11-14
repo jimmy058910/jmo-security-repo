@@ -411,6 +411,9 @@ def _failure(
     The log line matters: the Rich progress glyph is the only other trace, and
     a non-TTY run (CI, cron, a detached scan) never renders one.
     """
+    if result.failure == "interrupted":
+        # Ctrl-C: the scan is stopping, and says so once (`cmd_scan`).
+        return Reason.INTERRUPTED, "it was stopped by Ctrl-C"
     if result.failure == "missing_tool":
         # It resolved, got a command line, and then could not be executed:
         # always a defect (find_tool's old "python:yara" pseudo-path), never
@@ -767,6 +770,9 @@ def run_tools(
             capture_stdout=inv.capture_stdout,
             cwd=inv.cwd,
             env=inv.env,
+            exclusive=_descriptor(tool).exclusive,
+            memory_mb=inv.memory_mb or _descriptor(tool).memory_mb,
+            temp_dir=inv.temp_dir,
         )
 
     rows: TargetRows = {}

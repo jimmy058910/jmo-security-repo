@@ -1433,3 +1433,70 @@ class TestUniqueResultNames:
             "work__app",
         ]
         assert sorted(name for _, name, _ in results) == ["oss__app", "work__app"]
+
+
+def test_no_gitlab_group_placeholder_is_ever_a_target(tmp_path):
+    """`--gitlab-group` is gone (issue #1407, Phase 8 PR A), and with it the
+    placeholder discovery built from it: one target named `group:<name>`, which
+    cloned `<url>/group:<name>.git` and wrote its results under a folder whose
+    colon is an NTFS alternate data stream. A caller that still sets the
+    attribute gets nothing from it."""
+    from types import SimpleNamespace
+
+    orch = ScanOrchestrator(ScanConfig(tools=["trufflehog"], results_dir=tmp_path))
+    args = SimpleNamespace(
+        gitlab_url="https://gitlab.example.com",
+        gitlab_token="t",
+        gitlab_repo=None,
+        gitlab_group="platform",
+    )
+
+    assert orch._discover_gitlab_repos(args) == []
+
+
+class TestCtrlCKeepsWhatFinished:
+    """A target whose every run finished before Ctrl-C is checkpointed, so
+    `--resume` does not scan it again; one that Ctrl-C cut short is not. The
+    targets are collected in submission order, and every target behind a
+    slow one lost its checkpoint (review of PR 7b)."""
+
+    def test_only_the_cut_short_target_is_scanned_again(self, tmp_path):
+        import threading
+
+        from scripts.core import tool_runner
+        from scripts.core.scan_timings import Reason, State, ToolRun
+
+        config = ScanConfig(results_dir=tmp_path, tools=["trivy"], max_workers=2)
+        orchestrator = ScanOrchestrator(config)
+        slow, fast = tmp_path / "slow", tmp_path / "fast"
+        slow.mkdir()
+        fast.mkdir()
+        fast_done = threading.Event()
+
+        def scan(repo, *args, **kwargs):
+            if Path(repo).name == "fast":
+                fast_done.set()
+                return "fast", {"trivy": ToolRun("trivy", State.RAN)}
+            fast_done.wait(10)
+            tool_runner.request_stop()
+            return "slow", {"trivy": ToolRun("trivy", State.FAILED, Reason.INTERRUPTED)}
+
+        session = MagicMock()
+        session.found_images.return_value = {}
+        session.is_target_completed.return_value = False
+        try:
+            with (
+                patch("scripts.cli.scan_jobs.scan_repository", side_effect=scan),
+                patch("scripts.cli.scan_session.save_session"),
+            ):
+                orchestrator.scan_all(
+                    ScanTargets(repos=[slow, fast]),
+                    {},
+                    session=session,
+                    session_path=tmp_path / "s.json",
+                )
+        finally:
+            tool_runner.clear_stop()
+
+        completed = [c.args[1] for c in session.mark_target_complete.call_args_list]
+        assert completed == ["fast"]

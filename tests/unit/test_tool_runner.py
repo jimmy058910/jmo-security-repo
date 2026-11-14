@@ -63,8 +63,9 @@ def test_duration_is_measured_with_perf_counter() -> None:
             "Use time.perf_counter() -- see this test's docstring for measurements."
         )
 
-    assert text.count("time.perf_counter()") == 6, (
-        "Expected 6 perf_counter() calls (1 start_time + 5 duration subtractions). "
+    assert text.count("time.perf_counter()") == 7, (
+        "Expected 7 perf_counter() calls (1 start_time + 6 duration subtractions, "
+        "the sixth a run Ctrl-C stopped). "
         "If a return path was added or removed, update this count -- but every "
         "elapsed-time measurement in the file must use the same clock."
     )
@@ -2075,3 +2076,243 @@ class TestFailureKind:
 
         assert result.status == "success"
         assert not (elsewhere / "out.json").exists()
+
+
+class TestExclusiveRunsOneAtATime:
+    """An `exclusive` tool runs once at a time in the process, whatever runner
+    holds it: two URL targets each have a runner, and zap allows one process
+    per home (#1422). The command is a stand-in that refuses to start while
+    another run holds its lock directory, as ZAP refuses a home in use."""
+
+    LOCKED_RUN = (
+        "import os, sys, time\n"
+        "try:\n"
+        "    os.mkdir(sys.argv[1])\n"
+        "except FileExistsError:\n"
+        "    sys.exit(7)\n"
+        "time.sleep(0.6)\n"
+        "os.rmdir(sys.argv[1])\n"
+    )
+
+    def _two_at_once(self, tmp_path, *, exclusive: bool) -> list[ToolResult]:
+        import threading
+
+        lock_dir = tmp_path / "in-use"
+        results: list[ToolResult] = []
+
+        def run() -> None:
+            tool = ToolDefinition(
+                name="zap",
+                command=[sys.executable, "-c", self.LOCKED_RUN, str(lock_dir)],
+                output_file=None,
+                timeout=30,
+                ok_return_codes=(0,),
+                capture_stdout=True,
+                exclusive=exclusive,
+            )
+            results.append(ToolRunner([tool]).run_tool(tool))
+
+        threads = [threading.Thread(target=run) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        return results
+
+    def test_two_exclusive_runs_never_overlap(self, tmp_path):
+        results = self._two_at_once(tmp_path, exclusive=True)
+        assert [r.status for r in results] == ["success", "success"], results
+        # Each counts from its own start, not from when it began to wait.
+        assert all(r.duration < 5 for r in results)
+
+    def test_without_it_the_two_overlap(self, tmp_path):
+        """The control: the stand-in does catch two runs at once."""
+        results = self._two_at_once(tmp_path, exclusive=False)
+        assert sorted(r.returncode for r in results) == [0, 7], results
+
+    def test_ctrl_c_ends_the_wait_and_the_run_never_starts(self, tmp_path):
+        import threading
+
+        from scripts.core import tool_runner
+
+        marker = tmp_path / "started"
+        tool = ToolDefinition(
+            name="exclusive-under-test",
+            command=[sys.executable, "-c", f"open({str(marker)!r}, 'w')"],
+            output_file=None,
+            timeout=30,
+            exclusive=True,
+        )
+        held = tool_runner._exclusive(tool.name)
+        held.acquire()
+        results: list[ToolResult] = []
+        waiter = threading.Thread(
+            target=lambda: results.append(ToolRunner([tool]).run_tool(tool))
+        )
+        try:
+            waiter.start()
+            time.sleep(0.5)
+            assert waiter.is_alive(), "the run did not wait for the lock"
+            tool_runner.request_stop()
+            waiter.join(timeout=5)
+            assert not waiter.is_alive(), "Ctrl-C did not end the wait"
+        finally:
+            tool_runner.clear_stop()
+            held.release()
+            waiter.join(timeout=5)
+        assert results[0].failure == "interrupted"
+        assert results[0].duration == 0.0
+        assert not marker.exists()
+
+
+def test_the_only_popen_in_the_product_is_the_bounded_runners() -> None:
+    """The first-run lane's guard (#1285) requires `timeout=` on every
+    `subprocess.run`, `check_output` and `call`; it cannot see `Popen`. The one
+    `Popen` under `scripts/cli` and `scripts/core` is `_run_bounded`'s, bounded
+    by `communicate(timeout=)` and killed as a tree when that expires
+    (`TestTimeoutKillsTheProcessTree`), registered for Ctrl-C. A process
+    started anywhere else would be neither: start it through `run_bounded`."""
+    import ast
+
+    scripts = TOOL_RUNNER_SOURCE.parents[1]
+    found = []
+    for path in sorted(
+        [
+            *scripts.joinpath("cli").rglob("*.py"),
+            *scripts.joinpath("core").rglob("*.py"),
+        ]
+    ):
+        tree = ast.parse(path.read_bytes())
+        for func in ast.walk(tree):
+            if not isinstance(func, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for node in ast.walk(func):
+                callee = node.func if isinstance(node, ast.Call) else None
+                name = getattr(callee, "attr", None) or getattr(callee, "id", None)
+                if name == "Popen":
+                    found.append((path.relative_to(scripts).as_posix(), func.name))
+    # Nested functions would count a call twice; the set is what is asserted.
+    assert sorted(set(found)) == [("core/tool_runner.py", "_run_bounded")], found
+
+
+class TestCtrlCReachesEveryRun:
+    """Review of PR 7b: a run that starts as Ctrl-C arrives, and one waiting
+    out a retry's backoff, end with the scan."""
+
+    @staticmethod
+    def _ends_within(seconds: float, call) -> list:
+        """Run `call` on a daemon thread; what it returned, or [] when it was
+        still running after `seconds` (whether it ends, not how fast)."""
+        import threading
+
+        out: list = []
+        worker = threading.Thread(target=lambda: out.append(call()), daemon=True)
+        worker.start()
+        worker.join(timeout=seconds)
+        return [] if worker.is_alive() else out
+
+    def test_a_process_started_after_the_stop_is_killed_at_once(self):
+        """`request_stop` kills the runs it finds registered; one whose
+        `Popen` had not registered yet would run to its timeout."""
+        import os
+
+        from scripts.core import tool_runner
+
+        tool_runner.request_stop()
+        try:
+            done = self._ends_within(
+                10,
+                lambda: tool_runner.run_bounded(
+                    [sys.executable, "-c", "import time; time.sleep(30)"],
+                    env=dict(os.environ),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    encoding=None,
+                    errors=None,
+                    timeout=60,
+                ),
+            )
+        finally:
+            tool_runner.clear_stop()
+        assert done, "it ran on after the stop"
+        assert done[0].returncode != 0
+
+    def test_ctrl_c_ends_a_retrys_backoff(self):
+        import threading
+
+        from scripts.core import tool_runner
+        from scripts.core.config import RetryConfig
+
+        tool = ToolDefinition(
+            name="crashes",
+            command=[sys.executable, "-c", "import sys; sys.exit(3)"],
+            output_file=None,
+            timeout=30,
+            ok_return_codes=(0,),
+            retries=RetryConfig(max_attempts=3, backoff_base=30, backoff_max=30),
+        )
+        threading.Timer(1.0, tool_runner.request_stop).start()
+        try:
+            done = self._ends_within(10, lambda: ToolRunner([tool]).run_tool(tool))
+        finally:
+            tool_runner.clear_stop()
+        assert done, "it slept out a 30 s backoff"
+        assert done[0].failure == "interrupted"
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="reads /proc for the pid's state")
+def test_an_interrupted_wait_kills_the_whole_tree(tmp_path):
+    """A Ctrl-C on the main thread raises KeyboardInterrupt inside the wait.
+    `--tsv` clones run there, before the scan's own handler is installed, and
+    each runs in a session of its own, where the terminal's Ctrl-C never
+    reaches it: git kept downloading after jmo exited (review of PR 7b).
+    `subprocess.run`, which they used before, killed its child on any
+    exception."""
+    import os
+
+    from scripts.core import tool_runner
+
+    pid_file = tmp_path / "pid"
+    proc = subprocess.Popen(
+        ["bash", "-c", f"sleep 30 & echo $! > {pid_file}; wait"],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 5
+    while not (pid_file.exists() and pid_file.read_bytes().strip()):
+        assert time.monotonic() < deadline, "the stand-in never started"
+        time.sleep(0.05)
+    grandchild = int(pid_file.read_bytes())
+
+    real = proc.communicate
+    calls: list[int] = []
+
+    def interrupted(*args, **kwargs):
+        if not calls:
+            calls.append(1)
+            raise KeyboardInterrupt
+        return real(*args, **kwargs)
+
+    proc.communicate = interrupted  # type: ignore[method-assign]
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            tool_runner._finish(proc, ["bash"], 60)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                state = Path(f"/proc/{grandchild}/stat").read_bytes().split(b")")[-1]
+            except OSError:
+                break  # gone
+            if state.split()[0] == b"Z":
+                break  # dead, waiting to be reaped
+            time.sleep(0.05)
+        else:
+            raise AssertionError(f"the grandchild {grandchild} outlived the Ctrl-C")
+    finally:
+        for pid in (grandchild, proc.pid):
+            try:
+                os.kill(pid, 9)
+            except OSError:
+                pass
+        proc.wait(timeout=10)

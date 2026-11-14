@@ -21,6 +21,8 @@ import re
 import subprocess  # nosec B404 - this module intentionally shells out to git
 from pathlib import Path
 
+from scripts.core.tool_runner import run_bounded
+
 logger = logging.getLogger(__name__)
 
 #: Seconds any one git command may take. A clone of a large repository is
@@ -96,17 +98,20 @@ def run(cmd: list[str], cwd: Path | None = None) -> tuple[int, str, str]:
     other OS error (a `cwd` that cannot be entered).
     """
     try:
-        cp = subprocess.run(  # nosec B603 - list argv, shell=False
+        # A timeout kills git's whole tree: an https clone works in a
+        # grandchild, `git-remote-https`, which `subprocess.run` left alive
+        # holding its connection (measured, #1308).
+        cp = run_bounded(
             cmd,
-            cwd=str(cwd) if cwd else None,
-            capture_output=True,
+            cwd=Path(cwd) if cwd else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
             env=_git_env(),
             # git clone/fetch of arbitrary public repos echoes remote ref names
             # and commit subjects, which are UTF-8 and frequently non-ASCII.
             encoding="utf-8",
             errors="replace",
-            check=False,
             timeout=GIT_TIMEOUT,
         )
     except FileNotFoundError as e:

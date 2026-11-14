@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,21 @@ def scrub_git_environment() -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     scrub_git_environment()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _no_progress_refresh_thread_outlives_the_session():
+    """A started `ProgressTracker` keeps a thread waking 4 times a second until
+    it is stopped. `cmd_scan` never stopped its own and the tracker's tests
+    seldom did: 114 were alive at the end of a `tests/cli` session (#1208), a
+    drag on every later test's time budget. A leak with no guard comes back."""
+    yield
+    leaked = sorted(t.name for t in threading.enumerate() if "refresh_loop" in t.name)
+    assert not leaked, (
+        f"{len(leaked)} progress refresh thread(s) still running at the end of "
+        "the session: a ProgressTracker was started and never stopped (#1208): "
+        f"{leaked[:5]}"
+    )
 
 
 # ============================================================================

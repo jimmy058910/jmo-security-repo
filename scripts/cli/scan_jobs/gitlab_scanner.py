@@ -49,6 +49,7 @@ from scripts.core.tool_descriptors import (
     DOCKERFILE_PATTERNS,
     is_dockerfile,
 )
+from scripts.core.tool_runner import run_bounded
 from scripts.core.validation import (
     IMAGE_REFERENCE_PATTERN,
     gitlab_clone_base,
@@ -260,6 +261,25 @@ class DiscoveredImages:
         """The (reference, rows) of each image `target` named and scanned."""
         with self._lock:
             return list(self._found.get(target, ()))
+
+
+def _git_clone(
+    cmd: list[str], *, env: dict[str, str], timeout: float
+) -> subprocess.CompletedProcess:
+    """Run the clone, output as bytes. A timeout kills git's whole tree: an
+    https clone works in `git-remote-https`, which `subprocess.run`'s timeout
+    left alive, as the `--tsv` clone's did (#1308). Raises
+    `subprocess.TimeoutExpired` once the tree is dead."""
+    return run_bounded(
+        cmd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding=None,
+        errors=None,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+    )
 
 
 def _gitlab_out_dir(results_dir: Path, full_path: str) -> Path:
@@ -789,13 +809,7 @@ def scan_gitlab_repo(
             )
 
             # Run clone with timeout using secure credential passing
-            result = subprocess.run(
-                clone_cmd,
-                capture_output=True,
-                timeout=timeout,
-                check=False,
-                env=clone_env,
-            )
+            result = _git_clone(clone_cmd, env=clone_env, timeout=timeout)
 
             if result.returncode != 0:
                 # Clone failed - return failure for all tools

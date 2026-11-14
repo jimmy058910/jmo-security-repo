@@ -321,6 +321,9 @@ class ScanConfig:
     # default: only a tool someone named is worth a warning when no target in
     # the scan is one it reads (#1279).
     explicit_tools: bool = False
+    # The most memory, in MB, the scan's tool runs hold at once; None: the
+    # default (`default_memory_budget_mb`), read when the scan starts.
+    memory_budget_mb: int | None = None
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -332,6 +335,10 @@ class ScanConfig:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
         if self.max_workers is not None and self.max_workers < 1:
             raise ValueError(f"max_workers must be >= 1, got {self.max_workers}")
+        if self.memory_budget_mb is not None and self.memory_budget_mb < 1:
+            raise ValueError(
+                f"memory_budget_mb must be >= 1, got {self.memory_budget_mb}"
+            )
 
 
 # How one target's scan ended, derived from its accounting rows. Named
@@ -522,6 +529,26 @@ def _record_raised_scan(
             out_dir,
             exc_info=True,
         )
+
+
+def tools_read_by(targets: ScanTargets, tools: list[str]) -> list[str]:
+    """The `tools` that read a target type `targets` holds, in their order.
+    A tool outside it runs nowhere in this scan: its rows say `skipped`, and
+    startup asks it nothing (#1581). Against the types present together, not
+    each alone: nuclei reads no repository, but runs when the scan also has a
+    URL."""
+    read: set[str] = set()
+    for target_type, present in (
+        ("repo", targets.repos),
+        ("image", targets.images),
+        ("iac", targets.iac_files),
+        ("url", targets.urls),
+        ("gitlab", targets.gitlab_repos),
+        ("k8s", targets.k8s_resources),
+    ):
+        if present:
+            read.update(TOOL_SCAN_TYPES[target_type])
+    return [t for t in tools if t in read]
 
 
 class ScanOrchestrator:
@@ -955,9 +982,9 @@ class ScanOrchestrator:
         """
         Discover GitLab repositories from CLI arguments.
 
-        Supports:
-        - --gitlab-repo: Single repository (format: group/project)
-        - --gitlab-group: All repos in a group
+        Supports `--gitlab-repo`, one repository (format: group/project).
+        `--gitlab-group` is gone until JMo can list a group's projects (#1407):
+        its placeholder cloned `group:<name>.git`, which is not a project.
 
         Returns:
             List of dicts with keys: full_path, url, token, repo, group, name
@@ -983,24 +1010,6 @@ class ScanOrchestrator:
                     "repo": repo,
                     "group": group,
                     "name": full_path.replace("/", "_"),
-                }
-            )
-
-        # GitLab group (would need API call to enumerate)
-        if getattr(args, "gitlab_group", None):
-            # Note: Actual implementation would query GitLab API
-            # For now, create a placeholder entry
-            # TODO(issue-#1407): clones `group:<name>.git`, and the colon in the
-            # results folder is an NTFS alternate data stream.
-            group = args.gitlab_group
-            gitlab_repos.append(
-                {
-                    "full_path": f"group:{group}",
-                    "url": url,
-                    "token": getattr(args, "gitlab_token", ""),
-                    "repo": "",
-                    "group": group,
-                    "name": f"group_{group}",
                 }
             )
 
@@ -1124,6 +1133,15 @@ class ScanOrchestrator:
         """
         return not targets.is_empty()
 
+    def get_effective_memory_budget(self) -> int:
+        """The scan's memory budget in MB: the configured one, else half the
+        memory free now, never below 700 (`default_memory_budget_mb`)."""
+        if self.config.memory_budget_mb is not None:
+            return self.config.memory_budget_mb
+        from scripts.cli.scan_utils import default_memory_budget_mb
+
+        return default_memory_budget_mb()
+
     def get_effective_max_workers(self) -> int:
         """
         Calculate effective max_workers value.
@@ -1207,7 +1225,7 @@ class ScanOrchestrator:
         Returns:
             (target type, target name, rows by tool) for every scanned target
         """
-        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, wait
 
         from scripts.cli.scan_jobs import (
             scan_gitlab_repo,
@@ -1225,6 +1243,7 @@ class ScanOrchestrator:
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
         from scripts.cli.scan_jobs.url_scanner import url_folder_name
         from scripts.cli.scan_session import found_image_id
+        from scripts.core.tool_runner import scan_limits, stop_requested
 
         all_results: list[tuple[str, str, dict[str, ToolRun]]] = []
         futures = []
@@ -1326,17 +1345,7 @@ class ScanOrchestrator:
         # in isolation: nuclei is skipped on a repository, but runs if the same
         # scan also has URLs.
         if self.config.explicit_tools:
-            routed: set[str] = set()
-            for target_type, present in (
-                ("repo", targets.repos),
-                ("image", targets.images),
-                ("iac", targets.iac_files),
-                ("url", targets.urls),
-                ("gitlab", targets.gitlab_repos),
-                ("k8s", targets.k8s_resources),
-            ):
-                if present:
-                    routed.update(TOOL_SCAN_TYPES[target_type])
+            routed = set(tools_read_by(targets, tools))
             unrouted = [t for t in tools if t not in routed]
             if unrouted:
                 logger.warning(
@@ -1362,7 +1371,13 @@ class ScanOrchestrator:
         )
         url_folders = unique_names([url_folder_name(url) for url in targets.urls])
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # One memory budget and `max_workers` CPU slots for every tool run in
+        # the scan, whatever its target (Phase 7, B2). Entered first, so it
+        # outlasts every target's thread.
+        with (
+            scan_limits(self.get_effective_memory_budget(), max_workers),
+            ThreadPoolExecutor(max_workers=max_workers) as executor,
+        ):
             for repo, result_name in zip(targets.repos, repo_names, strict=True):
                 if _is_completed("repo", result_name):
                     skipped_count += 1
@@ -1518,7 +1533,20 @@ class ScanOrchestrator:
                 )
 
             # Collect results as they complete
+            def _await(pending) -> None:
+                """Wait in slices: on Windows a blocking wait keeps Ctrl-C's
+                handler from running. Once a stop is requested, a target not
+                yet started never starts (B4)."""
+                while not wait([pending], timeout=0.5).done:
+                    if stop_requested():
+                        for *_, queued in futures:
+                            queued.cancel()
+
             for target_type, target_id, out_dir, future in futures:
+                _await(future)
+                if future.cancelled():
+                    # Stopped before it started: `--resume` scans it.
+                    continue
                 try:
                     name, rows, elapsed = future.result()
                 except Exception as e:
@@ -1565,6 +1593,13 @@ class ScanOrchestrator:
                     continue
 
                 all_results.append((target_type, name, rows))
+                if stop_requested() and any(
+                    r.reason is Reason.INTERRUPTED for r in rows.values()
+                ):
+                    # Ctrl-C cut its runs short: not a completed target, so
+                    # it is not checkpointed and `--resume` scans it again.
+                    # One that finished before it keeps its checkpoint.
+                    continue
                 # What runs after a scan that worked is not the scan: a step
                 # that raises is logged, and the target stays recorded once,
                 # with its rows. One `try` around both appended it again as

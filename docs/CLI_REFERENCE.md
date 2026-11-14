@@ -44,6 +44,7 @@ These flags are shared across multiple commands:
 | `--history-db PATH` | SQLite database path (default: `.jmo/history.db`) | history, trends, diff, wizard |
 | `--threads N` | Worker thread count | scan, report, ci |
 | `--timeout SECS` | Per-tool timeout | scan, ci |
+| `--memory-budget MB` | Most memory the scan's tool runs hold at once | scan, ci |
 | `--tools TOOL...` | Override tool list (space- or comma-separated; an unknown name exits 2) | scan, ci |
 | `--skip-tools TOOL...` | Remove tools from the list (same rules) | scan, ci |
 | `--fail-on SEV` | Severity threshold for exit code | report, ci |
@@ -152,8 +153,9 @@ flag. Two with the same folder name (`alice/app` and `bob/app`, a common case wi
 | `--config FILE` | Config file (default: `jmo.yml`) |
 | `--tools TOOL [TOOL ...]` | Override tools list from config (default: the [tool matrix](TOOLS.md#the-tool-matrix)). `--tools trivy opengrep` and `--tools trivy,opengrep` are the same. A name that is not in the matrix is a usage error (exit 2) naming it, and a tool removed in v2.0.0 says so |
 | `--skip-tools TOOL [TOOL ...]` | Remove tools from the list (same splitting and checking) |
-| `--timeout SECS` | Per-tool timeout in seconds (default: 600) |
-| `--threads N` | Concurrent repos to scan (default: auto) |
+| `--timeout SECS` | Per-tool timeout in seconds (default: `jmo.yml`'s `timeout`, else 600). Given here, it also wins over a tool's minimum (opengrep and zap: 900 s), where `jmo.yml`'s cannot lower one; a `per_tool.<tool>.timeout` wins over both |
+| `--threads N` | Concurrent repos to scan (default: auto), and the most tool runs at once across the scan |
+| `--memory-budget MB` | Most memory, in MB, the scan's tool runs hold at once (default: `jmo.yml`'s `memory_budget_mb`, else half the memory free at scan start, never below 700). Each tool's run is counted at its measured cost; a run larger than the budget runs alone |
 | `--allow-missing-tools` | Skip missing tools instead of failing (creates empty JSON) |
 
 **History Storage:**

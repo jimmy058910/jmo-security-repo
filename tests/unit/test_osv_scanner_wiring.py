@@ -658,6 +658,33 @@ def test_one_broken_lockfile_costs_only_its_own_findings(tmp_path, monkeypatch) 
     assert (row.invocations, row.seconds) == (3, 12.0)
 
 
+def test_each_run_of_the_split_costs_the_gate_its_database(
+    tmp_path, monkeypatch
+) -> None:
+    """Each run of the per-lockfile round loads its ecosystem's whole database
+    (#1373): 21 npm lockfiles with one truncated held 2,447 MB, 4 runs at once
+    of about 600 MB each (measured, Phase 7 B1). Each is a run the scan's
+    memory gate admits at osv-scanner's measured cost, as the combined run is,
+    so a 700 MB budget holds the round to one at a time."""
+    _cache(tmp_path, monkeypatch, "npm")
+    repo = tmp_path / "repo"
+    _plant(repo, ["package-lock.json", "a/package-lock.json", "b/package-lock.json"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def respond(d, round_no):
+        return _failed(d, EXTRACTION_ERROR) if round_no == 1 else _ok(d)
+
+    runner = Scripted(respond)
+    _run(repo, out, runner)
+
+    combined, each = runner.rounds
+    assert len(each) == 3
+    cost = DESCRIPTORS["osv-scanner"].memory_mb
+    assert cost >= 600
+    assert [d.memory_mb for d in [*combined, *each]] == [cost] * 4
+
+
 def test_a_split_leaves_no_output_of_an_earlier_scan_behind(
     tmp_path, monkeypatch
 ) -> None:

@@ -432,7 +432,7 @@ per_tool:
     timeout: 900  # 15 minutes for a large codebase
 ```
 
-For a one-off quick run, `--timeout` overrides the default:
+For a one-off quick run, `--timeout` overrides the default. Given on the command line it also lowers opengrep's and zap's 900 s minimum, which `jmo.yml`'s `timeout` cannot; a tool's own `per_tool` timeout still wins:
 
 ```bash
 jmo scan --repo . --tools trufflehog opengrep --timeout 300

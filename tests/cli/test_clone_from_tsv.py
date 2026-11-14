@@ -72,7 +72,7 @@ class TestRun:
         """
         monkeypatch.setenv("GIT_ASKPASS", "/some/askpass")
         monkeypatch.setenv("SSH_ASKPASS", "/some/ssh-askpass")
-        with patch("scripts.cli.clone_from_tsv.subprocess.run") as sp:
+        with patch("scripts.cli.clone_from_tsv.run_bounded") as sp:
             sp.return_value = subprocess.CompletedProcess([], 0, "", "")
             run(["git", "status"])
 
@@ -85,7 +85,6 @@ class TestRun:
         assert env["SSH_ASKPASS"] == "/dev/null"
         assert env["SSH_ASKPASS_REQUIRE"] == "force"
         assert kwargs["stdin"] is subprocess.DEVNULL
-        assert kwargs.get("shell", False) is False
 
     def test_no_askpass_program_runs_not_even_one_git_config_names(
         self, tmp_path, monkeypatch
@@ -144,13 +143,51 @@ class TestRun:
 
     def test_a_timeout_is_a_failure_not_a_traceback(self) -> None:
         with patch(
-            "scripts.cli.clone_from_tsv.subprocess.run",
+            "scripts.cli.clone_from_tsv.run_bounded",
             side_effect=subprocess.TimeoutExpired(["git"], GIT_TIMEOUT),
         ):
             rc, _out, err = run(["git", "clone", "--", REMOTE_URL, "x"])
 
         assert rc == 124
         assert "timed out" in err
+
+
+@skip_on_windows
+def test_a_timeout_kills_the_clones_whole_process_tree(tmp_path, monkeypatch) -> None:
+    """An https clone works in a grandchild, `git-remote-https`. On a timeout
+    `subprocess.run` killed only `git`, and the helper lived on, holding its
+    connection: measured against a server that accepts and never answers, both
+    `git remote-https` processes were alive 5 s after the timeout (#1308).
+    A stand-in for git starts a sleeping child the same way."""
+    import sys
+    import time
+
+    pid_file = tmp_path / "helper.pid"
+    fake_git = tmp_path / "git.py"
+    fake_git.write_bytes(
+        b"import subprocess, sys, time\n"
+        b"helper = subprocess.Popen(['sleep', '60'])\n"
+        b"open(sys.argv[1], 'w').write(str(helper.pid))\n"
+        b"time.sleep(60)\n"
+    )
+    # Long enough for a slow machine to start the helper and write its pid.
+    monkeypatch.setattr(clone_mod, "GIT_TIMEOUT", 5)
+
+    rc, _out, err = run([sys.executable, str(fake_git), str(pid_file)])
+
+    assert rc == 124, err
+    assert pid_file.exists(), "the stand-in timed out before it started its helper"
+    helper = int(pid_file.read_bytes())
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(helper, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        os.kill(helper, 9)
+        pytest.fail(f"the clone's helper {helper} outlived its timeout")
 
 
 class TestParseTsv:

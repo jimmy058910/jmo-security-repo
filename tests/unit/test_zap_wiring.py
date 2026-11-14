@@ -481,6 +481,9 @@ class TestTheCommandLine:
 
         assert inv.command == (
             str(Path("/opt/zap/zap.sh")),
+            # zap.sh passes it to java; without it zap.sh takes a quarter of
+            # RAM (#1422).
+            "-Xmx512m",
             "-cmd",
             "-silent",
             "-dir",
@@ -723,6 +726,80 @@ class TestZapsFlagsReachJava:
         assert definition.command[0] == java
         assert definition.command[-2:] == flags
         assert not [r for r in caplog.records if "zap.bat" in r.getMessage()]
+
+
+class TestZapsHeap:
+    """zap's heap is `per_tool.zap.heap`, 512m by default, on every OS (#1422,
+    Decided 2026-11-05). Left to itself zap.sh took a quarter of RAM
+    (`-Xmx7008m` on a 28 GB machine), which the memory gate could not count;
+    and 512m ran out after about 13,000 requests on a wide site, so a wide
+    site raises it. The gate reserves the heap plus 90 MB: a 2g zap admitted
+    as a 600 MB run could take the budget three times over."""
+
+    @staticmethod
+    def _zap_bat(tmp_path, monkeypatch):
+        zap_dir = tmp_path / "zap"
+        zap_dir.mkdir()
+        (zap_dir / "zap.bat").write_bytes(b"")
+        (zap_dir / "zap-2.17.0.jar").write_bytes(b"")
+        monkeypatch.setattr(
+            tool_utils,
+            "find_tool",
+            lambda name: "C:/jre/bin/java.exe" if name == "java" else None,
+        )
+        return zap_dir / "zap.bat"
+
+    def test_by_default_zap_sh_gets_512m_and_the_gate_reserves_602(
+        self, tmp_path, monkeypatch
+    ):
+        rows, _, defs = _run(tmp_path, monkeypatch, ["zap"])
+
+        assert rows["zap"].state is State.RAN, rows["zap"]
+        assert defs["zap"].command[1] == "-Xmx512m"
+        assert defs["zap"].memory_mb == 512 + 90
+
+    def test_a_wide_sites_heap_reaches_zap_sh_and_the_gate(self, tmp_path, monkeypatch):
+        _, _, defs = _run(
+            tmp_path, monkeypatch, ["zap"], per_tool_config={"zap": {"heap": "2g"}}
+        )
+
+        assert defs["zap"].command[1] == "-Xmx2g"
+        assert defs["zap"].memory_mb == 2048 + 90
+
+    def test_on_windows_the_java_line_takes_the_same_heap(self, tmp_path, monkeypatch):
+        zap_bat = self._zap_bat(tmp_path, monkeypatch)
+        ctx = _ctx(tmp_path, binary=str(zap_bat), tool_config={"heap": "1536M"})
+
+        (inv,) = DESCRIPTORS["zap"].invocations["url"](ctx)
+
+        assert inv.command[:3] == ("C:/jre/bin/java.exe", "-Xmx1536M", "-jar")
+        assert inv.memory_mb == 1536 + 90
+
+    @pytest.mark.parametrize(
+        ("heap", "mb"), [("524288k", 512), ("768m", 768), ("1G", 1024)]
+    )
+    def test_each_unit_java_reads_counts_in_mb(self, tmp_path, heap, mb):
+        (inv,) = DESCRIPTORS["zap"].invocations["url"](
+            _ctx(tmp_path, tool_config={"heap": heap})
+        )
+
+        assert inv.command[1] == f"-Xmx{heap}"
+        assert inv.memory_mb == mb + 90
+
+    @pytest.mark.parametrize("heap", [1024, "1024", "2 g", "-Xmx2g", "lots"])
+    def test_a_size_java_would_not_read_is_refused_by_name(
+        self, tmp_path, caplog, heap
+    ):
+        """A bare `1024` is 1024 bytes to java, and zap would not start: the
+        default runs instead, and the warning names the key."""
+        with caplog.at_level(logging.WARNING):
+            (inv,) = DESCRIPTORS["zap"].invocations["url"](
+                _ctx(tmp_path, tool_config={"heap": heap})
+            )
+
+        assert inv.command[1] == "-Xmx512m"
+        assert inv.memory_mb == 512 + 90
+        assert any("per_tool.zap.heap" in r.getMessage() for r in caplog.records)
 
 
 class TestTheLoopWritesTheRowsPlan:

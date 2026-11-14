@@ -29,6 +29,8 @@ per_tool:
     flags:
     - --no-progress
   zap:
+    # zap's Java heap, 512m by default; raise it for a wide site (heap: 2g).
+    # A zap run reserves its heap plus 90 MB of the scan's memory budget.
     flags:
     - -config
     - api.disablekey=true

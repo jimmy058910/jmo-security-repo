@@ -26,6 +26,32 @@ PARTIAL = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _stop_every_tracker(monkeypatch):
+    """A started tracker's refresh thread wakes 4 times a second until it is
+    stopped: these tests started 16 and stopped 1, and with `cmd_scan`'s own
+    they left 114 alive at the end of a `tests/cli` session (#1208)."""
+    started: list[ProgressTracker] = []
+    real_start = ProgressTracker.start
+
+    def start(self):
+        started.append(self)
+        real_start(self)
+
+    monkeypatch.setattr(ProgressTracker, "start", start)
+    yield
+    for tracker in started:
+        tracker.stop()
+
+
+def test_a_tracker_used_as_a_context_stops_its_refresh_thread():
+    with ProgressTracker(total=1, args=Namespace()) as tracker:
+        thread = tracker._refresh_thread
+        assert thread is not None and thread.is_alive()
+
+    assert not thread.is_alive()
+
+
 class TestProgressTracker:
     """Tests for ProgressTracker class."""
 

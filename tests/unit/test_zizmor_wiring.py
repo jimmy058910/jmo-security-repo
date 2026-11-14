@@ -61,6 +61,8 @@ PATTERNS = (
     "**/action.yaml",
     ".github/dependabot.yml",
     ".github/dependabot.yaml",
+    "**/.pre-commit-config.yaml",
+    "**/.pre-commit-config.yml",
 )
 
 WORKFLOW = (
@@ -90,11 +92,23 @@ DEPENDABOT = (
 )
 
 
+# A hook fetched over plain http: `insecure-url-scheme`, an offline audit.
+PRE_COMMIT = (
+    b"repos:\n"
+    b"-   repo: http://github.com/pre-commit/pre-commit-hooks\n"
+    b"    rev: v2.3.0\n"
+    b"    hooks:\n"
+    b"    -   id: check-yaml\n"
+)
+
+
 def _content(name: str) -> bytes:
     if name.startswith("action."):
         return ACTION
     if name.startswith("dependabot."):
         return DEPENDABOT
+    if name.startswith(".pre-commit-config."):
+        return PRE_COMMIT
     return WORKFLOW
 
 
@@ -156,7 +170,7 @@ def test_jmo_tools_check_says_there_is_no_windows_arm64_build() -> None:
 
 
 class TestDescriptor:
-    def test_it_is_walk_fed_with_the_six_patterns(self) -> None:
+    def test_it_is_walk_fed_with_the_eight_patterns(self) -> None:
         d = DESCRIPTORS["zizmor"]
         assert d.exclusion_style is ExclusionStyle.WALK
         assert d.exclusion_flag is None
@@ -192,6 +206,10 @@ PLANTED = {
     ".github/dependabot.yml": True,
     "action.yml": True,  # a repository that is itself an action
     "actions/setup/action.yaml": True,
+    # zizmor audits a pre-commit config's hook repositories (#1592).
+    ".pre-commit-config.yaml": True,
+    "tools/lint/.pre-commit-config.yml": True,
+    "node_modules/hooks/.pre-commit-config.yaml": False,
     # Vendored trees: pruned by the walk, as for hadolint and shellcheck.
     "node_modules/evil/.github/workflows/ci.yml": False,
     "vendor/act/action.yml": False,
