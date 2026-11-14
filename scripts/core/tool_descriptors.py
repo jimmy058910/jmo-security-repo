@@ -390,6 +390,9 @@ class Invocation:
     # what limits it to a set that can be empty (opengrep's `--baseline-commit`).
     # Not set: 0 files is a failure, `EXAMINED_ZERO`.
     skip_if_empty: SkipIfEmpty | None = None
+    # What this run reserves of the scan's memory budget, where its command
+    # line sets it (zap's heap, `zap_heap`). Not set: the descriptor's class.
+    memory_mb: int | None = None
 
 
 @dataclass(frozen=True)
@@ -2105,14 +2108,45 @@ def zap_plan(target: str, report: Path, timeout: int, api_spec: str = "") -> str
     return yaml.safe_dump(document, sort_keys=False)
 
 
-# zap.bat's heap: it reads `%USERPROFILE%\ZAP\.ZAP_JVM.properties` instead when
-# that file exists, `-Xmx512m` otherwise.
-ZAP_HEAP = "-Xmx512m"
+# zap's Java heap, `per_tool.zap.heap` (#1422, Decided 2026-11-05). Left to
+# itself `zap.sh` takes a quarter of RAM (`-Xmx7008m` on a 28 GB machine,
+# measured) and zap.bat 512m, unless a `.ZAP_JVM.properties` says otherwise;
+# an `-Xmx` argument overrides both. 512m ran out after about 13,000 requests
+# on a wide site (#1422), so a wide site raises it.
+ZAP_HEAP_DEFAULT = "512m"
+# What a zap run holds besides its heap: java was 554 MB on a small site with
+# a 512m heap it had not filled. The gate reserves heap + this.
+ZAP_JVM_OVERHEAD_MB = 90
+_HEAP = re.compile(r"(\d+)([kmg])", re.IGNORECASE)
+_HEAP_MB = {"k": 1 / 1024, "m": 1, "g": 1024}
 
 
-def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
+def zap_heap(tool_config: Mapping[str, Any]) -> tuple[str, int]:
+    """zap's `-Xmx` argument and what its run reserves of the memory budget,
+    from `per_tool.zap.heap` (`512m`, `2g`, ...).
+
+    A value java would not read as a size with a unit is refused with a
+    warning and the default used: a bare `1024` is 1024 bytes to java, and
+    zap would not start."""
+    heap = str(tool_config.get("heap", ZAP_HEAP_DEFAULT))
+    match = _HEAP.fullmatch(heap)
+    if match is None:
+        logging.getLogger(__name__).warning(
+            "per_tool.zap.heap %r is not a size java reads (512m, 2g); using %s",
+            heap,
+            ZAP_HEAP_DEFAULT,
+        )
+        return zap_heap({})
+    mb = int(match.group(1)) * _HEAP_MB[match.group(2).lower()]
+    return f"-Xmx{heap}", max(1, round(mb)) + ZAP_JVM_OVERHEAD_MB
+
+
+def zap_java(
+    launcher: Path, heap: str = f"-Xmx{ZAP_HEAP_DEFAULT}"
+) -> tuple[tuple[str, ...], str]:
     """What runs zap in place of `zap.bat`, beside it: `java -Xmx512m -jar
-    <its directory>/zap-<version>.jar`; or, with no command, why not.
+    <its directory>/zap-<version>.jar`, with the heap `zap_heap` gives; or,
+    with no command, why not.
 
     zap.bat is that same java line followed by its own arguments, so running
     it puts JMo's arguments through cmd.exe (`is_batch_launcher`): a plan
@@ -2136,7 +2170,7 @@ def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
     java = find_tool("java")
     if not java:
         return (), "java, which zap runs on, could not be found"
-    return (java, ZAP_HEAP, "-jar", str(jars[0])), ""
+    return (java, heap, "-jar", str(jars[0])), ""
 
 
 def _zap_java_executable(launcher: Path) -> str | None:
@@ -2158,9 +2192,11 @@ def _zap_url(ctx: ScanContext) -> list[Invocation]:
     if ctx.plan is None:
         raise ValueError("zap runs the plan the scan loop writes, and none was given")
     binary = Path(ctx.binary)
-    launch: tuple[str, ...] = (ctx.binary,)
+    heap, memory_mb = zap_heap(ctx.tool_config)
+    # zap.sh takes `-Xmx` anywhere in its arguments and passes it to java.
+    launch: tuple[str, ...] = (ctx.binary, heap)
     if is_batch_launcher(binary):
-        launch, problem = zap_java(binary)
+        launch, problem = zap_java(binary, heap)
         if problem:
             # `_zap_launch` fails the row before the scan loop builds it.
             raise ValueError(problem)
@@ -2183,6 +2219,7 @@ def _zap_url(ctx: ScanContext) -> list[Invocation]:
             # definition it cannot read writes no report.
             ok_return_codes=(0, 2),
             cwd=binary.parent if binary.parent != Path() else None,
+            memory_mb=memory_mb,
         )
     ]
 
@@ -2618,7 +2655,9 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="zap",
-            memory_mb=600,  # java 554 MB: the 512 MB heap and the JVM
+            # java 554 MB: the 512 MB heap and the JVM. A run reserves its own
+            # heap + 90 instead (`zap_heap`), so `per_tool.zap.heap` moves it.
+            memory_mb=600,
             # A second run on JMo's ZAP home exits 1 with no report (#1422).
             exclusive=True,
             invocations={"url": _zap_url},

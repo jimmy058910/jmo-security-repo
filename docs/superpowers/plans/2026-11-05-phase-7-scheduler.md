@@ -268,8 +268,9 @@ passed): 114 `refresh_loop`, 1 `run_server`. The target is 0.
 (`tool_timeout`), `scripts/cli/jmo.py` (`--timeout` help), `scripts/cli/scan_orchestrator.py`
 
 - [x] zap `exclusive=True`; test: two URL targets, both zap rows `ran`.
-- [ ] zap's heap: `per_tool.zap.heap`, default `512m`, passed as `-Xmx` to `zap.sh` and
-  to the java line alike (Decided 4).
+- [x] zap's heap: `per_tool.zap.heap`, default `512m`, passed as `-Xmx` to `zap.sh` and
+  to the java line alike (Decided 4). A run reserves heap + 90 MB (`zap_heap`); a size
+  without a unit is refused with a warning, since java reads `1024` as bytes.
 - [x] An explicit `--timeout` wins over opengrep's and zap's 900 s floors, as
   `per_tool.<tool>.timeout` does; `jmo.yml`'s `timeout` does not; the help says so
   (Decided 5).
@@ -364,8 +365,8 @@ Changed in review:
 - trufflehog's folder moved (Decided 7).
 - "start" is shown when a run is admitted.
 
-Open: zap's heap. Decided 4 is re-confirmed on the corrected premise (below), and is to
-be built before 7b is pushed.
+zap's heap (Decided 4, re-confirmed on the corrected premise below) was built on
+2026-11-14, after 7b was rebased onto dev `6b7190c4`; with it 7b closes #1422.
 
 ## Decided 2026-11-05 (Jimmy)
 

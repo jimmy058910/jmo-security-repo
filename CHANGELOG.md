@@ -1248,7 +1248,12 @@ All notable changes to JMo Security will be documented in this file.
   timeout. The clone's whole process tree is killed now, on a timeout or a Ctrl-C.
 - **Two URL targets each get a zap report.** ZAP allows one process per home, and both
   runs used JMo's: the second exited 1 at once, with no report. zap now runs one at a time
-  in a scan (#1422, in part).
+  in a scan (#1422).
+- **zap's Java heap is `per_tool.zap.heap`, 512m by default on every OS** (#1422). 512m
+  was fixed on Windows and ran out after about 13,000 requests on a wide site; on Linux
+  and macOS `zap.sh` took a quarter of RAM (`-Xmx7008m` on a 28 GB machine), which the
+  memory budget could not count. A wide site raises it (`per_tool: {zap: {heap: 2g}}`),
+  and a zap run reserves its heap plus 90 MB of the budget.
 - **zizmor reads every `.pre-commit-config.yaml`**, and audits its hooks' repositories
   (archived, typosquatted, or fetched over plain http). JMo never handed it one (#1592).
 - **No progress thread outlives a scan in the same process.** Every in-process scan left
