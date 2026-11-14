@@ -563,6 +563,24 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A release's image-size table reports each platform's image (#1482).** It read the
+  multi-arch index's `manifests[].size`, the size of each platform's manifest document,
+  and printed `7.8KiB` for both platforms of v1.1.1, beside a hard-coded "155 MB
+  savings" list no measurement produced. It now resolves each platform's manifest and
+  sums its layers (2156.3 MiB for v1.1.1's linux/amd64, 1964.8 MiB for linux/arm64), the
+  same measurement the Docker E2E suite judges `IMAGE_SIZE_RANGE` on, and it fails
+  rather than print a size it cannot read.
+- **The scheduled tests report a failure where it happened, and only for the default
+  branch.** A task dispatched on a feature branch no longer files a nightly-failure issue
+  (#1559). A job that hits its time limit ends cancelled, not failed, so a hung nightly
+  job filed nothing and E2E Test Summary stayed green; both summaries now fail on any job
+  they need that did not succeed, and the notify job counts a cancelled one (#1565). E2E
+  macOS Tests runs on `macos-latest`: GitHub retired `macos-14`, and the job had been
+  cancelled before its first step on every run since 2026-11-06. The URL scan case, U4,
+  scans a site the test serves instead of `testphp.vulnweb.com`, which went down, and it
+  fails when zap reaches nothing, where it used to pass (#1550). Workflow tool downloads
+  retry for two minutes instead of 15 seconds, and the subscribe endpoint's test runs in
+  CI.
 - **`opentelemetry-api` 1.45.1's CVE-2026-126360 and `dnspython` 2.9.0's CVE-2026-128089
   failing the `quick-checks` pip-audit gate.** Both advisories were published on
   2026-11-13. The first
