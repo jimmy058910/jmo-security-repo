@@ -563,6 +563,22 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`opentelemetry-api` 1.45.1's CVE-2026-126360 and `dnspython` 2.9.0's CVE-2026-128089
+  failing the `quick-checks` pip-audit gate.** Both advisories were published on
+  2026-11-13. The first
+  ([GHSA-mf5v-w3w3-f6cg](https://github.com/advisories/GHSA-mf5v-w3w3-f6cg), fixed in
+  1.45.2) is quadratic-time parsing of a W3C `traceparent`, the header beside the
+  `tracestate` of CVE-2026-114603, and it is reached the same way: `mcp`'s server
+  middleware extracts trace context from every request's `_meta`, though over stdio only
+  the client that launched `jmo mcp-server` can send one. A `traceparent` of about 20,000
+  characters took 1.0 s to parse on 1.45.1; 1.45.2 refuses anything over 512 characters at
+  once. The second
+  ([GHSA-vvf4-9x63-8xvv](https://github.com/advisories/GHSA-vvf4-9x63-8xvv), fixed in
+  2.9.2) is unbounded memory and CPU use when a zone file's WKS record names a service
+  number above 65535. dnspython reaches the lock through `sigstore` →
+  `sigstore-rekor-types` → `pydantic[email]` → `email-validator`, and nothing in that
+  chain reads zone-file text, so JMo never reached that parser. The lock now holds
+  opentelemetry-api 1.45.2 and dnspython 2.9.2; nothing else moved.
 - **Storing a scan in history no longer takes a lock in the scanned repository (#1582).**
   Its `git status` took `.git/index.lock` on every run, and when the index's stat data was
   stale it wrote the index back through it, so a scan changed `.git/index`, and a git
