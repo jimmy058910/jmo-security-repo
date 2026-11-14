@@ -35,6 +35,11 @@ from typing import Any, TypeGuard
 # The adapter's own reader flattens arrays at any depth; whatever it reads, the
 # redaction has to reach.
 from scripts.core.adapters.common import _flatten_to_dicts
+from scripts.core.adapters.opengrep_adapter import (
+    REDACTED,
+    redact_results,
+    secret_texts,
+)
 from scripts.core.adapters.trufflehog_adapter import (
     SECRET_BEARING_FIELDS,
     _is_pytest_name_matched_as_lob_key,
@@ -165,8 +170,90 @@ def _replace(path: Path, data: bytes) -> None:
         raise
 
 
+#: opengrep's debug log, beside its output in a target's folder
+#: (`tool_descriptors.OPENGREP_LOG`): it records the text of every match.
+OPENGREP_LOG = Path(".opengrep") / "semgrep.log"
+
+
+def _spellings(secret: str) -> set[str]:
+    """A secret as opengrep's log may write it: as is, and escaped as Python's
+    repr and JSON escape it (a quote or backslash in it appears escaped)."""
+    return {secret, repr(secret)[1:-1], json.dumps(secret)[1:-1]}
+
+
+def _redact_opengrep_output(path: Path) -> int:
+    """Redact `opengrep.json` as the adapter redacts its findings
+    (`redact_results`), and replace the secrets it quoted in opengrep's log
+    beside it (#1585). The log goes first: its secrets are found through the
+    JSON, so a JSON rewritten before a log that then could not be would leave
+    them there for good. Returns how many results changed."""
+    try:
+        document = json.loads(path.read_bytes().decode("utf-8", "ignore"))
+    except (OSError, ValueError, RecursionError) as e:
+        logger.warning(
+            "%s could not be read, so it may still hold secrets: %s", path, e
+        )
+        return 0
+    results = document.get("results") if isinstance(document, dict) else None
+    if not isinstance(results, list):
+        return 0
+    redacted = redact_results(results)
+    changed = sum(1 for old, new in zip(results, redacted, strict=True) if old != new)
+    if not changed:
+        return 0
+    spellings = sorted(
+        {s for secret in secret_texts(results) for s in _spellings(secret)},
+        key=len,
+        reverse=True,
+    )
+    log = path.parent / OPENGREP_LOG
+    try:
+        text = log.read_bytes().decode("utf-8", "surrogateescape")
+    except FileNotFoundError:
+        text = None
+    except OSError as e:
+        logger.warning(
+            "%s could not be read, so it and %s may still hold secrets: %s",
+            log,
+            path.name,
+            e,
+        )
+        return 0
+    if text is not None:
+        scrubbed = text
+        for secret in spellings:
+            scrubbed = scrubbed.replace(secret, REDACTED)
+        if scrubbed != text:
+            try:
+                _replace(log, scrubbed.encode("utf-8", "surrogateescape"))
+            except OSError as e:
+                logger.warning(
+                    "%s could not be rewritten, so it and %s may still hold "
+                    "secrets: %s: %s",
+                    log,
+                    path.name,
+                    type(e).__name__,
+                    e,
+                )
+                return 0
+    document["results"] = redacted
+    try:
+        _replace(path, json.dumps(document).encode("utf-8"))
+    except OSError as e:
+        logger.warning(
+            "%s could not be rewritten, so it may still hold secrets: %s: %s",
+            path,
+            type(e).__name__,
+            e,
+        )
+        return 0
+    return changed
+
+
 def redact_secret_outputs(outputs: Iterable[Path]) -> int:
-    """Replace the secrets in every trufflehog and gitleaks output among `outputs`.
+    """Replace the secrets in every trufflehog, gitleaks and opengrep output
+    among `outputs` (opengrep's: the results of rules that match a secret's
+    value, and its log).
 
     Other outputs are skipped. A file already redacted is not rewritten. A file
     that cannot be read, parsed or rewritten is named at WARNING and left as it
@@ -180,7 +267,11 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
 
     total = 0
     for path in outputs:
-        redact = _REDACTORS.get(path.name.split(".", 1)[0])
+        tool = path.name.split(".", 1)[0]
+        if tool == "opengrep":
+            total += _redact_opengrep_output(path)
+            continue
+        redact = _REDACTORS.get(tool)
         if redact is None:
             continue
         try:

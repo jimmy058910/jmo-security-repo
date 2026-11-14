@@ -650,6 +650,10 @@ All notable changes to JMo Security will be documented in this file.
   `sigstore-rekor-types` → `pydantic[email]` → `email-validator`, and nothing in that
   chain reads zone-file text, so JMo never reached that parser. The lock now holds
   opentelemetry-api 1.45.2 and dnspython 2.9.2; nothing else moved.
+- **One line nested too deeply no longer loses a whole NDJSON output (#1594).** The loader
+  trufflehog's and nuclei's adapters share caught only a decode error; `json.loads` raises
+  `RecursionError` on deep nesting, which escaped and dropped every finding of the file. The
+  line is now skipped and counted in the loader's WARNING, as a malformed one is.
 - **Storing a scan in history no longer takes a lock in the scanned repository (#1582).**
   Its `git status` took `.git/index.lock` on every run, and when the index's stat data was
   stale it wrote the index back through it, so a scan changed `.git/index`, and a git
@@ -1347,8 +1351,22 @@ All notable changes to JMo Security will be documented in this file.
   held every secret found in plaintext, and a CI artifact is readable by anyone who can read
   the run. Both GitHub Actions templates, and the CI examples in the docs (GitHub Actions,
   GitLab and Jenkins), now upload the summaries, which hold no secret scanner's raw output.
-  They still quote source text: a finding's `context.snippet`, and an opengrep finding's
-  `raw`, quote the code it matched, a hard-coded secret included (#1585).
+  They still quote source text: a finding's `context.snippet` and an opengrep finding's
+  `raw` quote the code around it.
+- **A secret an opengrep rule matches reaches no report, raw output or history (#1585).**
+  A finding from a rule that matches a credential's value quoted it in its snippet, its
+  raw record (`extra.lines`, `metavars`, `dataflow_trace`) and, where the rule's message
+  interpolates what it matched (`secrets-in-config-file`'s `$VALUE`, say), its message,
+  so the secret reached findings.json, findings.sarif, the dashboard, the PCI report and
+  history (measured). A reviewed list, `scripts/core/secret_value_rules.py`, marks the 32
+  bundled rules that match a value; any rule with CWE-798/259/321 counts too. Their
+  findings carry no snippet, their raw record keeps no matched code, and a message that
+  quoted the value is the rule's own text with `[redacted]` in its place, which changes
+  those findings' ids once (two on one line keep apart by column). Another rule's finding
+  over the same lines keeps no code either, and one whose snippet would reach them has
+  none. The report rewrites `opengrep.json` the same way and replaces the secrets in
+  `.opengrep/semgrep.log`, and a later report reads the same findings. A secret no listed
+  rule matched can still appear in a nearby finding's snippet.
 - **A report takes the secrets out of the secret scanners' raw outputs once it has read
   them (#1329).** `trufflehog.json`, `gitleaks.json` and their `.git.json` history files
   held every secret found, deleted ones included. The report `jmo scan`, `jmo ci` and
