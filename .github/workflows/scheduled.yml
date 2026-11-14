@@ -605,7 +605,25 @@ jobs:
       - e2e-summary
       - docker-e2e-suite
       - validation-summary
-    if: failure()
+    # Two limits on `failure()`:
+    #   - Default branch only (#1559). A task dispatched on a feature branch to
+    #     verify a change filed #1549 and #1600, each closed as not planned. A
+    #     scheduled run is always the default branch's, and is named outright
+    #     because a schedule event's payload is not documented to carry
+    #     `repository`.
+    #   - A timeout counts (#1565). A job that hits its timeout-minutes ends
+    #     `cancelled`, which failure() does not see, so a hung nightly job filed
+    #     nothing. e2e-summary and validation-summary fail on a cancelled job
+    #     they need, and `contains(needs.*.result, 'cancelled')` covers the
+    #     jobs listed above. always(), not !cancelled(): GitHub documents
+    #     cancelled() only as "the workflow was canceled", and if a job's
+    #     timeout set it, !cancelled() would hide exactly this case. So a run
+    #     someone cancels by hand on the default branch files too.
+    if: >-
+      always() &&
+      (github.event_name == 'schedule' ||
+       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) &&
+      (failure() || contains(needs.*.result, 'cancelled'))
     steps:
       - name: Create issue on failure
         uses: actions/github-script@v9
@@ -1530,6 +1548,36 @@ jobs:
           echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures and zero errors:" \
             "${E2E_SEEN_SUITES# }."
 
+      # The step above reads pytest-report.json files, which only e2e-ubuntu
+      # and e2e-macos write. A job that hits its timeout-minutes ends
+      # `cancelled`, not `failure`, so the notify job's failure() never saw it:
+      # Tool Output Contract Tests was cancelled at its limit in run
+      # 41627396139 and this job passed, filing no issue (#1565). Every job
+      # this one needs runs under this job's own `if:`, so none is meant to be
+      # skipped while this job runs, and anything but `success` fails it.
+      # always(): it reports even when the step above has already failed.
+      - name: Fail the run if an e2e job did not succeed
+        if: always()
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          needs = json.loads(os.environ["NEEDS"])
+          if not needs:
+              print("::error::this job read no result for the jobs it needs")
+              sys.exit(1)
+          bad = {job: n.get("result") for job, n in needs.items() if n.get("result") != "success"}
+          for job, result in sorted(bad.items()):
+              print(f"::error::{job} ended {result}, not success")
+          if not bad:
+              print(f"All {len(needs)} e2e jobs succeeded: {', '.join(sorted(needs))}.")
+          sys.exit(1 if bad else 0)
+          PY
+
 # ==============================================================================
 # PERFORMANCE TESTS - Benchmark comparison
 # Only runs on manual dispatch (PR benchmarks handled in ci.yml)
@@ -1904,9 +1952,14 @@ jobs:
       )
     steps:
       - name: Check validation results
+        # Anything but success: validate-image shares this job's `if:`, so it
+        # never skips here, and a timeout ends it `cancelled`, which a check
+        # for "failure" passed and the notify job's failure() missed (#1565).
+        env:
+          RESULT: ${{ needs.validate-image.result }}
         run: |
-          if [ "${{ needs.validate-image.result }}" == "failure" ]; then
-            echo "::error::The Docker image failed validation"
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::Docker image validation ended ${RESULT}, not success"
             exit 1
           fi
           echo "The Docker image validated successfully"
