@@ -729,3 +729,17 @@ def test_a_scan_usage_error_stops_ci_before_the_report(minimal_args, report_rc):
 
     assert rc == 2
     assert not mock_report.called, "the report ran over results no scan wrote"
+
+
+def test_a_scan_stopped_by_ctrl_c_writes_no_report(minimal_args):
+    """Decided 2026-11-05: after Ctrl-C a scan exits 130 with no report. `jmo
+    ci` ran its report anyway, over the killed runs' partial output, and stored
+    it in history as a scan."""
+    mock_scan = MagicMock(return_value=130)
+    mock_report = MagicMock(return_value=0)
+
+    with patch("scripts.cli.jmo._log"):
+        rc = cmd_ci(minimal_args, mock_scan, mock_report)
+
+    assert rc == 130
+    assert not mock_report.called, "the report ran over a scan Ctrl-C stopped"

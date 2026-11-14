@@ -63,25 +63,23 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
     # the real ~/.jmo/config.yml unpatched (#978 CI follow-up).
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
-    # Monkeypatch signal.signal to immediately invoke handler once to set stop flag
+    # One Ctrl-C, delivered as the handler is installed: before any job is
+    # submitted. Only for SIGINT: a second signal is the "quit at once" path,
+    # which `os._exit`s and would take the test process with it.
     captured = {"handler": None}
 
     def fake_signal(sig, handler):
-        # Record and invoke once to simulate interrupt before jobs submit
-        captured["handler"] = handler
-        try:
+        previous = captured.get(sig)
+        captured[sig] = captured["handler"] = handler
+        if sig == 2 and previous is None:
             handler(2, None)
-        except Exception as _e:
-            # In tests we intentionally swallow errors from handler invocation
-            # to simulate an interrupt being handled gracefully.
-            return None
-        return None
+        return previous
 
     # Ensure that the import inside cmd_scan picks up our fake module
     monkeypatch.setitem(
         sys.modules,
         "signal",
-        types.SimpleNamespace(signal=fake_signal, SIGINT=2, SIGTERM=15),
+        types.SimpleNamespace(signal=fake_signal, SIGINT=2, SIGTERM=15, SIG_DFL=0),
     )
 
     args = types.SimpleNamespace(
@@ -98,15 +96,32 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         log_level=None,
         human_logs=False,
     )
-    rc = jmo.cmd_scan(args)
+    from scripts.core import tool_runner
+    from scripts.core.tool_runner import clear_stop
 
-    # Two conditions, not one. `rc == 0` alone held for years while the
-    # configured tool applied to no target type, so the run it was blessing
-    # scanned nothing -- an assertion that cannot distinguish "completed
-    # cleanly" from "did nothing" is not testing the signal path.
-    assert rc == 0
+    contained = []
+    monkeypatch.setattr(
+        tool_runner, "contain_process_tree", lambda: contained.append(True) or False
+    )
+
+    try:
+        rc = jmo.cmd_scan(args)
+    finally:
+        # The stop is process-wide: left set, every later scan in this test
+        # process would stop before its first tool.
+        clear_stop()
+
+    # Ctrl-C stops the scan (v2.0.0 Phase 7, B4; decided 2026-11-05): exit 130,
+    # no report, the session kept for `jmo scan --resume`. It used to be only
+    # logged, and this test asserted the scan then exited 0. It still has to
+    # reach target setup, or it says nothing about the signal path.
+    assert rc == 130
+    # Windows' Job Object (a no-op elsewhere) is set up before any tool runs.
+    assert contained == [True]
     assert (out_base / "individual-repos").exists(), (
         "the scan did not reach target setup, so this says nothing about "
         "signal handling"
     )
+    assert not (out_base / "summaries").exists()
+    assert (tmp_path / ".jmo" / "scan-session.json").exists()
     # Because of stop flag, at least one repo may not be scanned; ensure no crash

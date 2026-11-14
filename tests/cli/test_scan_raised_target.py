@@ -573,7 +573,7 @@ def test_a_gitlab_repository_keeps_its_findings_when_its_image_step_fails(
         earlier_scan(results_dir / result_name, ("gitlab", label), "trivy")
         return result_name, {"trivy": ToolRun("trivy", State.RAN, exit_code=0)}
 
-    monkeypatch.setattr(f"{GITLAB_SCANNER}.subprocess.run", run)
+    monkeypatch.setattr(f"{GITLAB_SCANNER}._git_clone", run)
     monkeypatch.setattr(f"{GITLAB_SCANNER}.scan_repository", scan_repository)
     if fails == "the image step":
         monkeypatch.setattr(f"{GITLAB_SCANNER}._scan_named_images", explode)

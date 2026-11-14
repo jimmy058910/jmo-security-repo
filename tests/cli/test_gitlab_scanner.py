@@ -39,7 +39,7 @@ class TestGitlabScanner:
         """Test basic GitLab repo scanning with trufflehog"""
         # Mock subprocess.run for git clone
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone"
         ) as mock_subprocess:
             # Mock scan_repository function
             with patch(
@@ -78,9 +78,7 @@ class TestGitlabScanner:
     def test_scan_gitlab_group_scan(self, tmp_path):
         """Test GitLab group scan (wildcard repo)"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -112,9 +110,7 @@ class TestGitlabScanner:
     def test_scan_gitlab_sanitizes_path(self, tmp_path):
         """Test that GitLab paths are sanitized for directory names"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -146,9 +142,7 @@ class TestGitlabScanner:
     def test_scan_gitlab_with_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -189,9 +183,7 @@ class TestGitlabScanner:
     def test_scan_gitlab_tool_failure(self, tmp_path):
         """Test handling of tool failures"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -223,9 +215,7 @@ class TestGitlabScanner:
     def test_scan_gitlab_with_retries(self, tmp_path):
         """Test GitLab scanning with retries"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -269,9 +259,7 @@ class TestGitlabScanner:
     def test_scan_gitlab_creates_output_directory(self, tmp_path):
         """Test that output directories are created"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -306,7 +294,7 @@ class TestGitlabScanner:
     def test_scan_gitlab_clone_failure(self, tmp_path):
         """Test GitLab scan when git clone fails"""
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone"
         ) as mock_subprocess:
             # Mock failed clone
             mock_subprocess.return_value = MagicMock(returncode=1)
@@ -497,7 +485,7 @@ spec:
         import subprocess
 
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone"
         ) as mock_subprocess:
             # Mock timeout exception
             mock_subprocess.side_effect = subprocess.TimeoutExpired("git", 600)
@@ -528,7 +516,7 @@ spec:
     def test_scan_gitlab_generic_exception(self, tmp_path):
         """Test GitLab scan when unexpected exception occurs"""
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone"
         ) as mock_subprocess:
             # Mock unexpected exception
             mock_subprocess.side_effect = RuntimeError("Unexpected error")
@@ -558,9 +546,7 @@ spec:
     def test_scan_gitlab_with_image_discovery(self, tmp_path):
         """Test GitLab scan with container image discovery and scanning"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -618,7 +604,7 @@ spec:
         that hands the job none scans the repository and names no image."""
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -649,9 +635,7 @@ spec:
     def test_scan_gitlab_url_formats(self, tmp_path):
         """Test handling of different GitLab URL formats with secure credential passing"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -698,9 +682,7 @@ spec:
     def test_scan_gitlab_cleanup_exception(self, tmp_path):
         """Test temp directory cleanup handles exceptions gracefully"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -744,9 +726,7 @@ spec:
             return "/usr/bin/trufflehog" if tool == "trufflehog" else None
 
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -792,9 +772,7 @@ spec:
         }
 
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -829,9 +807,7 @@ spec:
     def test_scan_gitlab_image_scan_exception(self, tmp_path):
         """Test handling of image scan exceptions"""
         with (
-            patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
-            ) as mock_subprocess,
+            patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
                 "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
             ) as mock_scan_repo,
@@ -899,7 +875,7 @@ spec:
 
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -938,7 +914,7 @@ spec:
 
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -985,7 +961,7 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
         images = DiscoveredImages(tmp_path / "individual-images")
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -1055,7 +1031,7 @@ class TestAFailurePastTheRepositoryScanIsTheImagesOwn:
         WARNING names the target and the error."""
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -1180,7 +1156,7 @@ class TestAReferenceNoToolIsGivenIsAFailedImageRow:
         images = DiscoveredImages(tmp_path / "individual-images")
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -1234,7 +1210,7 @@ class TestAnImageOnARegistryWithAPortIsScanned:
         images = DiscoveredImages(tmp_path / "individual-images")
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -1339,7 +1315,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         """
         monkeypatch.setenv("GITLAB_TOKEN", "glpat-from-env")
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone"
         ) as mock_subprocess:
             mock_subprocess.return_value = MagicMock(
                 returncode=128, stderr=b"fatal: repository not found"
@@ -1360,7 +1336,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
 
     def test_a_failed_clone_still_records_a_row(self, tmp_path):
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone"
         ) as mock_subprocess:
             mock_subprocess.return_value = MagicMock(
                 returncode=128, stderr=b"fatal: repository not found"
@@ -1384,7 +1360,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         import subprocess as _sp
 
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             side_effect=_sp.TimeoutExpired(cmd="git clone", timeout=600),
         ):
             _full_path, statuses = scan_gitlab_repo(
@@ -1404,7 +1380,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
 
     def test_an_unexpected_error_still_records_a_row(self, tmp_path):
         with patch(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
             side_effect=RuntimeError("disk on fire"),
         ):
             _full_path, statuses = scan_gitlab_repo(
@@ -1429,7 +1405,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         out of it still abandons the target, with images to scan or not."""
         with (
             patch(
-                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                "scripts.cli.scan_jobs.gitlab_scanner._git_clone",
                 return_value=MagicMock(returncode=0),
             ),
             patch(
@@ -2239,7 +2215,7 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
 
         with (
             patch(
-                f"{self.SCANNER}.subprocess.run",
+                f"{self.SCANNER}._git_clone",
                 return_value=MagicMock(returncode=0),
             ) as run,
             patch(
@@ -2477,3 +2453,42 @@ class TestAGitlabUrlIsClonedFromTheHostItNames:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process liveness check")
+def test_a_timed_out_gitlab_clone_leaves_no_process(tmp_path) -> None:
+    """The GitLab clone ran through `subprocess.run`, whose timeout kills only
+    `git`, and an https clone's `git-remote-https` lived on, as the `--tsv`
+    clone's did (#1308). A stand-in for git starts a sleeping child."""
+    import os
+    import subprocess
+    import time
+
+    from scripts.cli.scan_jobs import gitlab_scanner
+
+    pid_file = tmp_path / "helper.pid"
+    fake_git = tmp_path / "git.py"
+    fake_git.write_bytes(
+        b"import subprocess, sys, time\n"
+        b"helper = subprocess.Popen(['sleep', '60'])\n"
+        b"open(sys.argv[1], 'w').write(str(helper.pid))\n"
+        b"time.sleep(60)\n"
+    )
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        gitlab_scanner._git_clone(
+            [sys.executable, str(fake_git), str(pid_file)],
+            env=dict(os.environ),
+            timeout=2,
+        )
+
+    helper = int(pid_file.read_bytes())
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(helper, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    os.kill(helper, 9)
+    pytest.fail(f"the clone's helper {helper} outlived its timeout")

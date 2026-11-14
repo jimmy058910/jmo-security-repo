@@ -9,14 +9,21 @@ Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import re
+import shutil
 import signal
+import stat
 import subprocess
 import sys
+import threading
 import time
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -89,6 +96,15 @@ class ToolDefinition:
     # Merged over the environment `run_tool` builds (osv-scanner's database
     # directory, Phase 4).
     env: Mapping[str, str] | None = None
+    # One run of this tool at a time in the process, whatever runner holds it
+    # (`ToolDescriptor.exclusive`: zap, #1422).
+    exclusive: bool = False
+    # What the run costs the scan's memory budget, in MB
+    # (`ToolDescriptor.memory_mb`; `scan_limits`).
+    memory_mb: int = 0
+    # The child's temporary directory (`TMPDIR`, `TMP`, `TEMP`), made before
+    # the run and removed after it: trufflehog's history clone, on disk.
+    temp_dir: Path | None = None
 
     @property
     def retry_config(self) -> RetryConfig:
@@ -160,16 +176,289 @@ def _terminate_tree(proc: subprocess.Popen) -> None:
         pass
 
 
+# Ctrl-C (v2.0.0 Phase 7, B4). The scanners run in sessions of their own, so a
+# terminal's SIGINT never reaches them: measured, 5 s after one jmo and 5
+# scanner processes were still running, and the scan finished, reported and
+# exited 0. `request_stop` is what the signal handler calls: no run starts after
+# it, and every running process tree is killed.
+_STOP = threading.Event()
+_LIVE: dict[int, subprocess.Popen] = {}
+# Re-entrant: `request_stop` takes it inside the signal handler, which runs on
+# the main thread between bytecodes, possibly while that thread holds it.
+_LIVE_LOCK = threading.RLock()
+
+
+def request_stop() -> int:
+    """Stop the scan: no tool run starts after this, and every one running is
+    killed with its whole process tree. Returns how many were running."""
+    _STOP.set()
+    with _LIVE_LOCK:
+        running = list(_LIVE.values())
+    for proc in running:
+        _terminate_tree(proc)
+    return len(running)
+
+
+def stop_requested() -> bool:
+    return _STOP.is_set()
+
+
+# One lock per `exclusive` tool, held for the whole of a run, retries included:
+# two zap runs on JMo's one ZAP home, and the second exits 1 with no report
+# (#1422).
+_EXCLUSIVE: dict[str, threading.Lock] = {}
+_EXCLUSIVE_LOCK = threading.Lock()
+
+
+def _exclusive(name: str) -> threading.Lock:
+    with _EXCLUSIVE_LOCK:
+        return _EXCLUSIVE.setdefault(name, threading.Lock())
+
+
+class ScanLimits:
+    """One scan's limits on the tool runs it holds at once (v2.0.0 Phase 7).
+
+    Memory: a run is admitted while the running total plus its cost
+    (`ToolDefinition.memory_mb`) fits `budget_mb`, or when nothing else is
+    running, so a run larger than the budget runs alone and never waits for
+    ever. First come, first served: a large run waiting is not passed by a
+    smaller one that would fit. CPU: at most `slots` runs at once, whatever the
+    budget. Measured before (app B, default matrix): 1,314 MB, since each
+    target ran 4 tools and `threads` targets ran together, whatever each cost.
+    """
+
+    def __init__(self, budget_mb: int, slots: int) -> None:
+        if budget_mb < 1 or slots < 1:
+            raise ValueError(
+                "a memory budget and a slot count are at least 1, "
+                f"got {budget_mb} MB and {slots} slot(s)"
+            )
+        self.budget_mb = budget_mb
+        self.slots = slots
+        self._slots = threading.BoundedSemaphore(slots)
+        self._turn = threading.Condition()
+        self._queue: deque[object] = deque()
+        self._used_mb = 0
+        self._running = 0
+
+    def admit(self, memory_mb: int) -> bool:
+        """Wait for a slot, then for the budget; False when Ctrl-C ends the
+        wait, holding neither."""
+        while not self._slots.acquire(timeout=0.25):
+            if _STOP.is_set():
+                return False
+        ticket = object()
+        with self._turn:
+            self._queue.append(ticket)
+            while not (
+                self._queue[0] is ticket
+                and (self._running == 0 or self._used_mb + memory_mb <= self.budget_mb)
+            ):
+                if _STOP.is_set():
+                    self._queue.remove(ticket)
+                    self._turn.notify_all()
+                    self._slots.release()
+                    return False
+                self._turn.wait(timeout=0.25)
+            self._queue.popleft()
+            self._used_mb += memory_mb
+            self._running += 1
+            # The next in line may fit beside this one.
+            self._turn.notify_all()
+        return True
+
+    def release(self, memory_mb: int) -> None:
+        with self._turn:
+            self._used_mb -= memory_mb
+            self._running -= 1
+            self._turn.notify_all()
+        self._slots.release()
+
+
+_LIMITS: ScanLimits | None = None
+
+
+@contextmanager
+def scan_limits(budget_mb: int, slots: int) -> Iterator[ScanLimits]:
+    """Hold every `ToolRunner` run in this process to these limits until the
+    block ends (`scan_all` holds one for its scan). Outside one a run is
+    unlimited, as a direct `ToolRunner` use always was."""
+    global _LIMITS
+    limits = ScanLimits(budget_mb, slots)
+    _LIMITS = limits
+    try:
+        yield limits
+    finally:
+        _LIMITS = None
+
+
+def current_scan_limits() -> ScanLimits | None:
+    return _LIMITS
+
+
+def jmo_temp_root() -> Path:
+    """Where JMo's runs keep temporary files: on disk, outside any results
+    folder (CI uploads those whole)."""
+    return Path.home() / ".jmo" / "tmp"
+
+
+def run_temp_dir(label: str, out_dir: Path) -> Path:
+    """A run's own temporary directory: this jmo's pid (what
+    `sweep_stale_temp_dirs` reads), the target's output folder hashed (two
+    targets never share one), and `label`."""
+    digest = hashlib.sha256(str(Path(out_dir).resolve()).encode()).hexdigest()[:12]
+    return jmo_temp_root() / f"{os.getpid()}-{digest}-{label}"
+
+
+def sweep_stale_temp_dirs() -> None:
+    """Remove what a jmo that is no longer running left in `jmo_temp_root`:
+    a second Ctrl-C exits at once and an OOM kill runs nothing, and a
+    trufflehog clone holds the history's secrets."""
+    import psutil
+
+    root = jmo_temp_root()
+    if not root.is_dir():
+        return
+    for folder in root.iterdir():
+        owner = re.match(r"(\d+)-", folder.name)
+        if owner is None or int(owner.group(1)) == os.getpid():
+            continue
+        if not psutil.pid_exists(int(owner.group(1))):
+            _remove_tree(folder)
+
+
+def _remove_tree(path: Path) -> None:
+    """Remove a run's temporary directory, read-only files included (git makes
+    its objects read-only, and Windows will not delete those as they are).
+    Never raises: it runs after the run, whose result an error here would
+    replace. What it cannot remove is named in a WARNING."""
+
+    def writable_then_retry(func, failed, _exc) -> None:
+        if func not in (os.unlink, os.remove, os.rmdir):
+            return
+        try:
+            os.chmod(failed, os.stat(failed).st_mode | stat.S_IWRITE)
+            func(failed)
+        except OSError:
+            pass
+
+    try:
+        shutil.rmtree(path, onexc=writable_then_retry)
+    except Exception:  # Acceptable: cleanup must not replace the run's result
+        pass
+    if path.exists():
+        logger.warning(
+            "%s could not be removed; it may hold a copy of the scanned "
+            "repository, delete it",
+            path,
+        )
+
+
+def clear_stop() -> None:
+    """For a new scan in the same process (tests, the MCP server)."""
+    _STOP.clear()
+
+
+_JOB: Any = None
+
+
+def contain_process_tree() -> bool:
+    """Windows: put this process in a Job Object that kills every process in
+    it when its last handle closes, so every tool and grandchild jmo starts
+    dies when jmo exits, however it exits (v2.0.0 Phase 7, B3). Windows does
+    not kill a process's children with it, and `taskkill /T` runs only on a
+    timeout or Ctrl-C. Children join the job as they start; nested jobs need
+    Windows 8 or later. True once set up; False elsewhere, or when Windows
+    refuses, in which case the scan runs as before. Idempotent."""
+    global _JOB
+    if _JOB is not None:
+        return True
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    class BasicLimit(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class IoCounters(ctypes.Structure):
+        _fields_ = [
+            (name, ctypes.c_uint64)
+            for name in (
+                "ReadOperationCount",
+                "WriteOperationCount",
+                "OtherOperationCount",
+                "ReadTransferCount",
+                "WriteTransferCount",
+                "OtherTransferCount",
+            )
+        ]
+
+    class ExtendedLimit(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", BasicLimit),
+            ("IoInfo", IoCounters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel32.SetInformationJobObject.restype = wintypes.BOOL
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
+    kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        logger.debug("CreateJobObjectW failed: %d", ctypes.get_last_error())
+        return False
+    info = ExtendedLimit()
+    info.BasicLimitInformation.LimitFlags = 0x2000  # KILL_ON_JOB_CLOSE
+    extended_limit_information = 9  # JobObjectExtendedLimitInformation
+    if not kernel32.SetInformationJobObject(
+        job, extended_limit_information, ctypes.byref(info), ctypes.sizeof(info)
+    ) or not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
+        logger.debug("Job Object setup failed: %d", ctypes.get_last_error())
+        kernel32.CloseHandle(job)
+        return False
+    # Held, never closed: the handle closes when jmo exits, and the job then
+    # kills what is left in it.
+    _JOB = job
+    return True
+
+
 def _run_bounded(
     command: list[str],
     *,
     env: dict[str, str],
     stdout: int,
     stderr: int,
-    encoding: str,
-    errors: str,
+    encoding: str | None,
+    errors: str | None,
     timeout: float | None,
     cwd: Path | None = None,
+    stdin: int | None = None,
 ) -> subprocess.CompletedProcess:
     """``subprocess.run``, but a timeout kills the whole process tree.
 
@@ -189,10 +478,27 @@ def _run_bounded(
         encoding=encoding,
         errors=errors,
         cwd=cwd,
+        stdin=stdin,
         # POSIX only: makes the child a process-group leader so killpg reaches
         # its descendants. Not valid on Windows, where taskkill /T is used.
         start_new_session=(sys.platform != "win32"),
     )
+    with _LIVE_LOCK:
+        _LIVE[proc.pid] = proc
+    # Started as Ctrl-C arrived: `request_stop` had already taken its list.
+    if _STOP.is_set():
+        _terminate_tree(proc)
+    try:
+        return _finish(proc, command, timeout)
+    finally:
+        with _LIVE_LOCK:
+            _LIVE.pop(proc.pid, None)
+
+
+def _finish(
+    proc: subprocess.Popen, command: list[str], timeout: float | None
+) -> subprocess.CompletedProcess:
+    """Wait for `proc`; on a timeout, kill its tree and raise TimeoutExpired."""
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -205,7 +511,42 @@ def _run_bounded(
         except subprocess.TimeoutExpired:
             out, err = "", ""
         raise subprocess.TimeoutExpired(command, timeout or 0, output=out, stderr=err)
+    except BaseException:
+        # Ctrl-C on the main thread (`--tsv` clones run there, before the
+        # scan's handler is installed), or any other error in the wait: the
+        # child runs in a session of its own, which the terminal's Ctrl-C never
+        # reaches, so nothing else would stop it.
+        _terminate_tree(proc)
+        raise
     return subprocess.CompletedProcess(command, proc.returncode, out, err)
+
+
+def run_bounded(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    stdout: int,
+    stderr: int,
+    encoding: str | None,
+    errors: str | None,
+    timeout: float | None,
+    cwd: Path | None = None,
+    stdin: int | None = None,
+) -> subprocess.CompletedProcess:
+    """`_run_bounded` for a caller outside this module: a command whose
+    timeout kills its whole process tree, as a scanner's does. A clone's
+    `git-remote-https` outlived a `subprocess.run` timeout (#1308)."""
+    return _run_bounded(
+        command,
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+        encoding=encoding,
+        errors=errors,
+        timeout=timeout,
+        cwd=cwd,
+        stdin=stdin,
+    )
 
 
 @dataclass
@@ -234,7 +575,8 @@ class ToolResult:
         returncode: Process return code: the last one a crash exited with, or
             -1 when there was none (a timeout, a spawn failure).
         failure: Which kind of failure ended the run, from `_classify_failure`:
-            "crash", "timeout", "missing_tool", "system_error", "unknown", or ""
+            "crash", "timeout", "missing_tool", "system_error", "unknown",
+            "interrupted" (Ctrl-C killed it or kept it from starting), or ""
             when it did not fail. The scan's accounting row maps it to a
             reason; matching `error_message` text for it was load-bearing prose.
         stdout: Standard output (empty if not captured)
@@ -401,6 +743,40 @@ class ToolRunner:
         return "crash"
 
     def run_tool(self, tool: ToolDefinition) -> ToolResult:
+        """Run one tool (`_run_tool`). An `exclusive` one first waits until no
+        other run of it is running; then, inside a scan, every run waits for
+        the scan's limits (`scan_limits`). Its duration and timeout count from
+        when it starts, and Ctrl-C ends a wait: the run never starts."""
+        lock = _exclusive(tool.name) if tool.exclusive else None
+        if lock is not None:
+            while not lock.acquire(timeout=0.25):
+                if _STOP.is_set():
+                    return self._interrupted(tool, 0, None)
+        try:
+            limits = _LIMITS
+            if limits is not None and not limits.admit(tool.memory_mb):
+                return self._interrupted(tool, 0, None)
+            if self.progress_callback:
+                try:
+                    self.progress_callback(tool.name, "start", 0)
+                except Exception:  # Acceptable: a display must not stop the scan
+                    pass
+            try:
+                if tool.temp_dir is not None:
+                    tool.temp_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    return self._run_tool(tool)
+                finally:
+                    if tool.temp_dir is not None:
+                        _remove_tree(tool.temp_dir)
+            finally:
+                if limits is not None:
+                    limits.release(tool.memory_mb)
+        finally:
+            if lock is not None:
+                lock.release()
+
+    def _run_tool(self, tool: ToolDefinition) -> ToolResult:
         """
         Run a single tool with timeout and typed retry support.
 
@@ -502,10 +878,16 @@ class ToolRunner:
             child_env.pop("PYTHONPATH", None)
             child_env.pop("PYTHONHOME", None)
 
+        if tool.temp_dir is not None:
+            # TMPDIR on Linux and macOS, TMP and TEMP on Windows.
+            for name in ("TMPDIR", "TMP", "TEMP"):
+                child_env[name] = str(tool.temp_dir)
         if tool.env:
             child_env.update(tool.env)
 
         while True:
+            if _STOP.is_set():
+                return self._interrupted(tool, attempt, start_time)
             attempt += 1
 
             try:
@@ -605,7 +987,7 @@ class ToolRunner:
                 if attempts_by_type["crash"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["crash"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break  # Budget exhausted
 
@@ -640,7 +1022,7 @@ class ToolRunner:
                 if attempts_by_type["timeout"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["timeout"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break  # Budget exhausted
 
@@ -673,7 +1055,7 @@ class ToolRunner:
                 if attempts_by_type["system_error"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["system_error"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break
 
@@ -691,10 +1073,13 @@ class ToolRunner:
                 if attempts_by_type["unknown"] < budget:
                     delay = rc.backoff_delay(attempts_by_type["unknown"])
                     if delay > 0:
-                        time.sleep(delay)
+                        _STOP.wait(delay)  # Ctrl-C ends the backoff
                     continue
                 break
 
+        # A run Ctrl-C killed failed because it was killed, not on its own.
+        if _STOP.is_set():
+            return self._interrupted(tool, attempt, start_time)
         # All retries exhausted for the last failure type
         duration = time.perf_counter() - start_time
         return ToolResult(
@@ -711,6 +1096,24 @@ class ToolRunner:
             failure=last_failure,
         )
 
+    @staticmethod
+    def _interrupted(
+        tool: ToolDefinition, attempt: int, start_time: float | None
+    ) -> ToolResult:
+        """The result of a run Ctrl-C stopped, or kept from starting (no
+        `start_time`: it never started)."""
+        return ToolResult(
+            tool=tool.name,
+            status="error",
+            returncode=-1,
+            attempts=attempt,
+            duration=0.0 if start_time is None else time.perf_counter() - start_time,
+            output_file=tool.output_file,
+            capture_stdout=tool.capture_stdout,
+            error_message="stopped by Ctrl-C",
+            failure="interrupted",
+        )
+
     def run_all_parallel(self) -> list[ToolResult]:
         """
         Run all tools in parallel using ThreadPoolExecutor.
@@ -723,16 +1126,8 @@ class ToolRunner:
         """
         results: list[ToolResult] = []
 
-        # Signal start of all tools if progress callback exists
-        if self.progress_callback:
-            for tool in self.tools:
-                try:
-                    self.progress_callback(tool.name, "start", 0)
-                except (
-                    Exception
-                ):  # Acceptable: callback protection — must not crash scan flow
-                    pass
-
+        # Each run says "start" as it is admitted (`run_tool`), not here: a run
+        # waiting on the scan's gate showed as running, its clock ticking.
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tool executions
             future_to_tool = {

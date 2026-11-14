@@ -17,14 +17,14 @@ produce nothing.
 
 Every comparable input goes into one repository where JMo's zizmor row reads
 it: a workflow under `.github/workflows/`, an action as `<dir>/action.yml`, a
-Dependabot config at `.github/dependabot.yml`. One `jmo scan --tools zizmor`
-reads them all, and each file's findings, as JMo's adapter reads them, must
-equal its snapshot's. A pre-commit config, which zizmor audits and JMo never
-hands it, is out of scope.
+Dependabot config at `.github/dependabot.yml`, a pre-commit config as
+`<dir>/.pre-commit-config.yaml`. One `jmo scan --tools zizmor` reads them all,
+and each file's findings, as JMo's adapter reads them, must equal its
+snapshot's.
 
-Measured at v1.31.1 (2026-11-05): 279 snapshots, 72 comparable, 199 findings;
-the 69 inputs JMo reads hold 192 of them, and all 69 match. The three
-pre-commit inputs hold the other 7.
+Measured at v1.31.1 (2026-11-05): 279 snapshots, 72 comparable, 199 findings.
+JMo read 69 of the inputs, holding 192 findings, until it handed zizmor
+pre-commit configs too (#1592); the three pre-commit inputs hold the other 7.
 """
 
 from __future__ import annotations
@@ -194,11 +194,11 @@ def test_each_kind_of_input_lands_where_jmo_reads_it() -> None:
         assert jmo_reads(read), read
 
 
-def test_jmo_hands_zizmor_no_pre_commit_config() -> None:
-    """The exclusion in the scan test rests on this. It fails by design when
-    issue #1592 lands (zizmor's row reads pre-commit configs): then delete this
-    test, and the three pre-commit cases come into scope on their own."""
-    assert not jmo_reads(placement("archived-uses/pre-commit/.pre-commit-config.yaml"))
+def test_jmo_hands_zizmor_a_pre_commit_config() -> None:
+    """zizmor audits a pre-commit config's hook repositories, and JMo hands
+    it one wherever it is (#1592): the three pre-commit cases are in the scan
+    test's scope. Before, this asserted the opposite, and they were left out."""
+    assert jmo_reads(placement("archived-uses/pre-commit/.pre-commit-config.yaml"))
 
 
 # --- the key, through jmo scan ------------------------------------------------------
@@ -257,8 +257,8 @@ def test_zizmor_reports_its_own_snapshots_through_jmo_scan(
         shutil.copyfile(file, repo / where)
         placed[where] = case
     # A parser that found nothing would pass everything below.
-    assert len(placed) >= 69, len(placed)
-    assert sum(sum(c.findings.values()) for c in placed.values()) >= 192
+    assert len(placed) >= 72, len(placed)
+    assert sum(sum(c.findings.values()) for c in placed.values()) >= 199
 
     results = tmp_path / "results"
     run = jmo_runner(

@@ -92,6 +92,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     tools = parse_tool_names(cli_tools or cfg.tools)
     explicit_tools = bool(cli_tools) or cfg.tools_from_file
     threads = getattr(args, "threads", None) or cfg.threads
+    memory_budget_mb = getattr(args, "memory_budget", None) or cfg.memory_budget_mb
     timeout = getattr(args, "timeout", None) or cfg.timeout or 600
     include = cfg.include
     exclude = cfg.exclude
@@ -142,6 +143,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
         "tools": tools,
         "explicit_tools": explicit_tools,
         "threads": threads,
+        "memory_budget_mb": memory_budget_mb,
         "timeout": timeout,
         "include": include,
         "exclude": exclude,
@@ -285,13 +287,25 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
         "--timeout",
         type=int,
         default=None,
-        help="Per-tool timeout seconds (default: from config or 600)",
+        help="Per-tool timeout in seconds (default: jmo.yml's, else 600). Given "
+        "here, it also wins over a tool's minimum (opengrep and zap: 900 s); "
+        "jmo.yml's does not, and per_tool.<tool>.timeout wins over both",
     )
     parser.add_argument(
         "--threads",
         type=int,
         default=None,
-        help="Concurrent repos to scan (default: auto)",
+        help="Concurrent targets to scan, and the most tool runs at once across "
+        "the scan (default: auto)",
+    )
+    parser.add_argument(
+        "--memory-budget",
+        type=_positive_int,
+        default=None,
+        metavar="MB",
+        help="Most memory, in MB, the scan's tool runs hold at once (default: "
+        "jmo.yml's memory_budget_mb, else half the memory free at scan start, "
+        "never below 700). A run larger than it runs alone",
     )
     parser.add_argument(
         "--allow-missing-tools",
@@ -2755,6 +2769,13 @@ class ProgressTracker:
         self._start_time = time.time()
         self._start_refresh_thread()
 
+    def __enter__(self) -> ProgressTracker:
+        self.start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.stop()
+
     def stop(self):
         """Stop the background refresh thread."""
         self._stop_refresh = True
@@ -3190,49 +3211,6 @@ def cmd_scan(args) -> int:
         pass
     args._startup_tool_manager = _startup_tm
 
-    # Check for critical tool updates (non-blocking warning).
-    #
-    # Deliberately after `tools` is resolved: this used to run first and, with
-    # nothing to scope it, probed every tool in the registry - 32 `--version`
-    # subprocesses for a scan that requested one. A scan can only be affected by
-    # a tool it actually runs.
-    _warn_critical_updates(tools, manager=_startup_tm)
-
-    # Tool availability pre-flight (skipped in Docker mode). It offers to
-    # install, and it can be cancelled; it no longer removes a missing tool,
-    # whose row on every target it reads says `not installed`. The names were
-    # validated against the matrix above, so none carries anything a shell
-    # would read.
-    missing_tools: list[str] = []
-    if not os.environ.get("DOCKER_CONTAINER"):
-        tools, missing_tools = _check_scan_tools(args, tools)
-        if not tools:
-            # The user cancelled at the prompt, which logged it. An empty
-            # request never reaches here: it is refused above.
-            return 1
-        if getattr(args, "allow_missing_tools", False) and set(tools) <= set(
-            missing_tools
-        ):
-            # #811: the flag records an explicit empty result for a tool the
-            # user knows they lack. With every tool missing there is nothing to
-            # scan with, and a CI job asserting only `rc != 0` must be able to
-            # tell this from the failure it meant to test, so it is said.
-            _log(
-                args,
-                "ERROR",
-                "--allow-missing-tools was given, but none of the requested "
-                "tool(s) are installed, so there is nothing to scan with: "
-                f"{', '.join(missing_tools)}",
-            )
-            return 1
-        if missing_tools:
-            _log(
-                args,
-                "WARN",
-                f"{len(missing_tools)} requested tool(s) are not installed and "
-                f"will not run: {', '.join(missing_tools)}",
-            )
-
     # Create ScanConfig from effective settings
     scan_config = ScanConfig(
         tools=tools,
@@ -3244,6 +3222,7 @@ def cmd_scan(args) -> int:
             else int(eff["retries"] or 0)
         ),
         max_workers=_get_max_workers(args, eff, cfg),
+        memory_budget_mb=eff.get("memory_budget_mb"),
         include_patterns=eff.get("include", []) or [],
         exclude_patterns=eff.get("exclude", []) or [],
         allow_missing_tools=getattr(args, "allow_missing_tools", False),
@@ -3279,6 +3258,54 @@ def cmd_scan(args) -> int:
     # Log scan targets summary
     _log(args, "INFO", f"Scan targets: {targets.summary()}")
 
+    # Startup asks only the requested tools some target here reads, so after
+    # discovery: zap's `-version` alone was 25.9 s of a repository scan's 44.5 s
+    # startup, where zap cannot run (#1581). A tool left out still gets its
+    # `skipped` row. A refused target is refused above, before any is asked.
+    from scripts.cli.scan_orchestrator import tools_read_by
+
+    runnable = tools_read_by(targets, tools)
+
+    # Check for critical tool updates (non-blocking warning). Scoped, as an
+    # empty list and never None: unscoped it probes every tool in the registry,
+    # 32 `--version` subprocesses for a scan that requested one.
+    _warn_critical_updates(runnable, manager=_startup_tm)
+
+    # Tool availability pre-flight (skipped in Docker mode). It offers to
+    # install, and it can be cancelled; it no longer removes a missing tool,
+    # whose row on every target it reads says `not installed`. The names were
+    # validated against the matrix above, so none carries anything a shell
+    # would read.
+    missing_tools: list[str] = []
+    if runnable and not os.environ.get("DOCKER_CONTAINER"):
+        checked, missing_tools = _check_scan_tools(args, runnable)
+        if not checked:
+            # The user cancelled at the prompt, which logged it.
+            return 1
+        if getattr(args, "allow_missing_tools", False) and set(runnable) <= set(
+            missing_tools
+        ):
+            # #811: the flag records an explicit empty result for a tool the
+            # user knows they lack. With every tool these targets read missing
+            # there is nothing to scan with, and a CI job asserting only
+            # `rc != 0` must be able to tell this from the failure it meant to
+            # test, so it is said.
+            _log(
+                args,
+                "ERROR",
+                "--allow-missing-tools was given, but none of the requested "
+                "tool(s) that read these targets are installed, so there is "
+                f"nothing to scan with: {', '.join(missing_tools)}",
+            )
+            return 1
+        if missing_tools:
+            _log(
+                args,
+                "WARN",
+                f"{len(missing_tools)} requested tool(s) are not installed and "
+                f"will not run: {', '.join(missing_tools)}",
+            )
+
     total_targets = (
         len(targets.repos)
         + len(targets.images)
@@ -3291,8 +3318,13 @@ def cmd_scan(args) -> int:
     # Setup results directories for each target type
     orchestrator.setup_results_directories(targets)
 
-    # Prepare per-tool config
-    per_tool_config = eff.get("per_tool", {}) or {}
+    # Prepare per-tool config. A `--timeout` given here wins over a tool's
+    # floor (#1486); `jmo.yml`'s does not.
+    from scripts.cli.scan_utils import cli_timeout_over_floors
+
+    per_tool_config = cli_timeout_over_floors(
+        eff.get("per_tool", {}) or {}, tools, getattr(args, "timeout", None)
+    )
 
     # --- Session checkpointing ---
     from scripts.cli.scan_jobs.iac_scanner import iac_target_name
@@ -3390,24 +3422,53 @@ def cmd_scan(args) -> int:
             scan_session.register_target("k8s", f"{ctx}:{ns}", tools)
         save_session(scan_session, session_path)
 
-    # Setup signal handling for graceful shutdown
-    stop_flag = {"stop": False}
+    # Ctrl-C and SIGTERM stop the scan (v2.0.0 Phase 7, B4). The scanners run
+    # in sessions of their own, so the signal never reaches them: measured, the
+    # handler here only logged it, and 5 s later jmo and 5 scanners were still
+    # running; the scan then finished, reported and exited 0. Now no tool run
+    # starts after it and every running process tree is killed. Decided
+    # 2026-11-05: exit 130 with no report, the session saved for
+    # `jmo scan --resume` (after the scan returns, not here, where it could
+    # land mid-checkpoint). A second signal exits at once.
+    from scripts.core.tool_runner import (
+        clear_stop,
+        contain_process_tree,
+        request_stop,
+        stop_requested,
+        sweep_stale_temp_dirs,
+    )
+
+    clear_stop()
+    # What a killed jmo's runs left in ~/.jmo/tmp: a trufflehog clone holds
+    # the scanned repository's history.
+    sweep_stale_temp_dirs()
+    # Windows: every process jmo starts dies with it, however jmo exits (B3).
+    contain_process_tree()
+    signals_seen = [0]
 
     def _handle_stop(signum, frame):
-        stop_flag["stop"] = True
-        # Save checkpoint before exiting
-        if scan_session is not None:
-            save_session(scan_session, session_path)
+        signals_seen[0] += 1
+        killed = request_stop()
+        if signals_seen[0] > 1:
+            os._exit(130)
         _log(
             args,
             "WARN",
-            "Received stop signal. Saving checkpoint, then exiting...",
+            f"Stopping the scan: {killed} running tool(s) stopped. Press Ctrl-C "
+            "again to quit at once.",
         )
 
     import signal
 
-    signal.signal(signal.SIGINT, _handle_stop)
-    signal.signal(signal.SIGTERM, _handle_stop)
+    # Given back when the scan ends: left installed, the next Ctrl-C (in `jmo
+    # ci`'s report, or a test session) only set the stop and was swallowed.
+    previous = {
+        sig: signal.signal(sig, _handle_stop) for sig in (signal.SIGINT, signal.SIGTERM)
+    }
+
+    def _restore_signals() -> None:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler if handler is not None else signal.SIG_DFL)
 
     # Initialize progress tracker with tool count
     # Use Rich progress display for wizard scans with human-readable output
@@ -3431,6 +3492,14 @@ def cmd_scan(args) -> int:
         "INFO",
         f"Starting scan with {total_tools} requested tool(s) for "
         f"{total_targets} target(s){missing_note}",
+    )
+    # Read once, here, so the scan holds the budget this line names.
+    scan_config.memory_budget_mb = orchestrator.get_effective_memory_budget()
+    _log(
+        args,
+        "INFO",
+        f"Tool runs held to {scan_config.memory_budget_mb} MB of memory and "
+        f"{orchestrator.get_effective_max_workers()} at a time",
     )
 
     # Per-target outcomes, so the exit code can reflect them. `scan_all`'s
@@ -3468,6 +3537,8 @@ def cmd_scan(args) -> int:
             if not scan_config.allow_missing_tools:
                 raise
             return 1
+        finally:
+            _restore_signals()
     else:
         # Use original carriage-return based progress tracker
         progress = ProgressTracker(total_targets, args, total_tools=total_tools)
@@ -3507,6 +3578,25 @@ def cmd_scan(args) -> int:
             if not scan_config.allow_missing_tools:
                 raise
             return 1
+        finally:
+            # Its refresh thread wakes 4 times a second until stopped: never
+            # stopped here, every in-process scan left one behind, 114 alive
+            # at the end of a `tests/cli` session (#1208).
+            progress.stop()
+            _restore_signals()
+
+    if stop_requested():
+        if scan_session is not None:
+            save_session(scan_session, session_path)
+        done = scan_session.completed_count if scan_session is not None else 0
+        _log(
+            args,
+            "WARN",
+            f"Scan stopped by Ctrl-C: {done} of {total_targets} target(s) "
+            "completed, and no report was written. Run `jmo scan --resume` with "
+            "the same arguments to finish it.",
+        )
+        return 130
 
     # A target whose every tool failed contributed nothing to this scan. That
     # was reported correctly by each scanner, recorded correctly in

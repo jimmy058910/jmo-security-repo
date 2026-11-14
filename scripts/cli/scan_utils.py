@@ -310,13 +310,67 @@ TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
     )
 }
 
-# Per-tool minimum timeouts (seconds). A configured default may raise these but
-# never lower them; an explicit `per_tool.<tool>.timeout` wins outright. One
+# Per-tool minimum timeouts (seconds). `jmo.yml`'s `timeout` may raise these but
+# never lower them; `--timeout` on the command line (`cli_timeout_over_floors`)
+# and an explicit `per_tool.<tool>.timeout` win outright. One
 # definition for every target type: when each scanner had its own copy, zap got
 # its 900 s floor on a repository and the 600 s default on a URL.
 TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
     name: d.timeout_floor for name, d in DESCRIPTORS.items() if d.timeout_floor
 }
+
+
+# The least memory budget a scan runs with, in MB: the 700 MB target of the
+# v2.0.0 Phase 7 plan, which its largest runs fit one at a time.
+MIN_MEMORY_BUDGET_MB = 700
+
+
+CGROUP_ROOT = Path("/sys/fs/cgroup")
+
+
+def _cgroup_free_mb(root: Path) -> int | None:
+    """What this process's cgroup memory limit leaves, in MB: cgroup v2's
+    `memory.max` less `memory.current`, else v1's `limit_in_bytes` less
+    `usage_in_bytes`. None with no limit (`max`, or v1's near-2**63 value) or
+    no cgroup files."""
+    for limit_file, usage_file in (
+        (root / "memory.max", root / "memory.current"),
+        (
+            root / "memory" / "memory.limit_in_bytes",
+            root / "memory" / "memory.usage_in_bytes",
+        ),
+    ):
+        try:
+            limit = limit_file.read_bytes().strip()
+            usage = int(usage_file.read_bytes().strip())
+        except (OSError, ValueError):
+            continue
+        if limit == b"max":
+            return None
+        try:
+            limit_bytes = int(limit)
+        except ValueError:
+            continue
+        if limit_bytes >= 1 << 60:
+            return None
+        return max(0, limit_bytes - usage) // (1024 * 1024)
+    return None
+
+
+def default_memory_budget_mb(cgroup_root: Path = CGROUP_ROOT) -> int:
+    """Half the memory free now, never below `MIN_MEMORY_BUDGET_MB`. Decided
+    2026-11-05: what a scan's tool runs may hold at once unless `--memory-budget`
+    or `jmo.yml`'s `memory_budget_mb` says otherwise.
+
+    Free is the smaller of psutil's and what a container's cgroup limit leaves:
+    psutil reads `/proc/meminfo`, which in a container shows the host's."""
+    import psutil
+
+    free_mb = int(psutil.virtual_memory().available) // (1024 * 1024)
+    in_cgroup = _cgroup_free_mb(cgroup_root)
+    if in_cgroup is not None:
+        free_mb = min(free_mb, in_cgroup)
+    return max(MIN_MEMORY_BUDGET_MB, free_mb // 2)
 
 
 def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) -> int:
@@ -335,6 +389,30 @@ def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) ->
         if isinstance(override, int) and override > 0:
             return override
     return max(default, TOOL_TIMEOUT_DEFAULTS.get(tool, 0))
+
+
+def cli_timeout_over_floors(
+    per_tool_config: Mapping[str, Any], tools: list[str], cli_timeout: int | None
+) -> dict[str, Any]:
+    """`per_tool_config`, with a timeout given on the command line written in
+    as `per_tool.<tool>.timeout` for each tool with a floor (opengrep and zap,
+    900 s), so it wins over the floor as that setting does (#1486). Decided
+    2026-11-05. A tool whose own `per_tool` timeout is set keeps it; `jmo.yml`'s
+    `timeout` is not passed here, so it still meets the floor."""
+    merged = dict(per_tool_config)
+    if not cli_timeout or cli_timeout <= 0:
+        return merged
+    for tool in tools:
+        if tool not in TOOL_TIMEOUT_DEFAULTS:
+            continue
+        cfg = merged.get(tool)
+        cfg = dict(cfg) if isinstance(cfg, dict) else {}
+        own = cfg.get("timeout")
+        if isinstance(own, int) and own > 0:
+            continue
+        cfg["timeout"] = cli_timeout
+        merged[tool] = cfg
+    return merged
 
 
 def tool_flags(

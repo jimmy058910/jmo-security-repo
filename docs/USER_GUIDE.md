@@ -814,8 +814,9 @@ The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 **ZAP scan timeout:**
 
-- Each zap run is one automation plan, and `per_tool.zap.timeout` (default 900 s) is its whole budget: the spider gets a third of its minutes, the active scan the rest less two (the passive wait and startup), at least a minute each. zap stops itself and writes its report before JMo's timeout would kill it. Raise the timeout to scan deeper: `per_tool: {zap: {timeout: 1800}}`. Do not set it below 300 s: under about 180 s the plan's jobs, at least a minute each, cannot finish in time, and zap is killed before it writes its report
+- Each zap run is one automation plan, and `per_tool.zap.timeout` (default 900 s; a `--timeout` on the command line sets it too) is its whole budget: the spider gets a third of its minutes, the active scan the rest less two (the passive wait and startup), at least a minute each. zap stops itself and writes its report before JMo's timeout would kill it. Raise the timeout to scan deeper: `per_tool: {zap: {timeout: 1800}}`. Do not set it below 300 s: under about 180 s the plan's jobs, at least a minute each, cannot finish in time, and zap is killed before it writes its report
 - `-config spider.maxDuration=N` in `zap.flags` limits nothing: the plan's spider reads its own limit, and the `-config` value is not read
+- zap's Java heap is `per_tool.zap.heap`, 512m by default on every OS. A wide site can run it out (one did after about 13,000 requests); raise it with `per_tool: {zap: {heap: 2g}}`. Give a size with its unit (`768m`, `2g`): a bare number is bytes to java. A zap run reserves its heap plus 90 MB of the scan's memory budget (`--memory-budget`)
 
 **Nuclei scan issues:**
 
@@ -1198,6 +1199,11 @@ This reverts to Phase 1 deduplication only (same tool, same location).
     other needs (TruffleHog's `--since-commit` and `--branch` are history's). `history: false`
     keeps the tree's scan and skips history, and the tool's row says so
 - policy: policy-as-code settings (see [POLICY_AS_CODE.md](POLICY_AS_CODE.md))
+- memory_budget_mb: the most memory, in MB, the scan's tool runs hold at once. Each run is
+  counted at its tool's measured cost (opengrep 550 MB, osv-scanner 650, nuclei 1,450), and
+  one waits while the runs already going plus it would pass the budget; a run larger than the
+  budget runs alone. Default: half the memory free when the scan starts, never below 700.
+  `--memory-budget` overrides it. `threads` also bounds how many tool runs go at once
 
 Example:
 
@@ -1235,7 +1241,7 @@ A `jmo.yml` written for v1.x may still carry `profiles:` or `default_profile:`. 
 Notes and precedence:
 
 - Severity order is CRITICAL > HIGH > MEDIUM > LOW > INFO. Thresholds gate at and above the chosen level.
-- CLI flags override `jmo.yml` where provided: `--tools` over `tools`, `--threads` over `threads`, `--timeout` over `timeout`.
+- CLI flags override `jmo.yml` where provided: `--tools` over `tools`, `--threads` over `threads`, `--timeout` over `timeout`, `--memory-budget` over `memory_budget_mb`.
 
 ## Plugin System
 

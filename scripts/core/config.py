@@ -170,6 +170,9 @@ class Config:
     )
     fail_on: str = ""
     threads: int | str | None = None  # int for explicit count, 'auto' for detection
+    # The most memory, in MB, a scan's tool runs hold at once (v2.0.0 Phase 7);
+    # None: half the memory free at scan start, never below 700.
+    memory_budget_mb: int | None = None
     include: list[str] = field(default_factory=list)
     exclude: list[str] = field(default_factory=list)
     timeout: int | None = None
@@ -213,6 +216,7 @@ RECOGNISED_CONFIG_KEYS: frozenset[str] = frozenset(
         "fail_on",
         "include",
         "log_level",
+        "memory_budget_mb",
         "outputs",
         "per_tool",
         "policy",
@@ -414,6 +418,10 @@ def load_config(path: str | None) -> Config:
         cfg.threads = "auto"
     elif isinstance(tval, int) and tval > 0:
         cfg.threads = tval
+    # memory_budget_mb: a positive int; anything else leaves the default.
+    budget = data.get("memory_budget_mb")
+    if isinstance(budget, int) and not isinstance(budget, bool) and budget > 0:
+        cfg.memory_budget_mb = budget
     # include/exclude
     if isinstance(data.get("include"), list):
         cfg.include = [str(x) for x in data["include"]]

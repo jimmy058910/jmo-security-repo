@@ -99,6 +99,8 @@ class Reason(StrEnum):
     COULD_NOT_RUN = "could not be run"
     BEFORE_TOOLS = "target not scanned"
     SCANNER_ERROR = "scanner error"
+    # Ctrl-C stopped it, or kept it from starting (v2.0.0 Phase 7, B4).
+    INTERRUPTED = "interrupted"
 
 
 SKIP_REASONS: frozenset[Reason] = frozenset(
@@ -135,6 +137,7 @@ FAIL_REASONS: frozenset[Reason] = frozenset(
         Reason.COULD_NOT_RUN,
         Reason.BEFORE_TOOLS,
         Reason.SCANNER_ERROR,
+        Reason.INTERRUPTED,
     }
 )
 

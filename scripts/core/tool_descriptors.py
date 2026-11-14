@@ -378,6 +378,9 @@ class Invocation:
     label: str = ""
     # Merged over the environment the runner builds for the child.
     env: Mapping[str, str] | None = None
+    # The child's temporary directory, made for the run and removed after it
+    # (`ToolDefinition.temp_dir`).
+    temp_dir: Path | None = None
     # What to run instead when this invocation fails in one known way.
     fallback: Fallback | None = None
     # The files it was handed, `/`-separated and relative to `cwd`, for a row
@@ -387,6 +390,9 @@ class Invocation:
     # what limits it to a set that can be empty (opengrep's `--baseline-commit`).
     # Not set: 0 files is a failure, `EXAMINED_ZERO`.
     skip_if_empty: SkipIfEmpty | None = None
+    # What this run reserves of the scan's memory budget, where its command
+    # line sets it (zap's heap, `zap_heap`). Not set: the descriptor's class.
+    memory_mb: int | None = None
 
 
 @dataclass(frozen=True)
@@ -524,6 +530,15 @@ class ToolDescriptor:
     own_config_detail: Callable[[Path], str] | None = None
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
+    # A run's memory, in MB: its measured peak rounded up to the next 50
+    # (`scripts/dev/peakmem.py`, the Phase 7 plan's Task B1 record). The scan's
+    # memory gate admits a run while the running total plus this fits its
+    # budget. Per run: a tool with two invocations (trufflehog's tree and
+    # history) holds it twice when both run at once.
+    memory_mb: int = 0
+    # One run of it at a time in a scan, whatever its targets: zap allows one
+    # process per home directory, and every zap run uses JMo's (#1422).
+    exclusive: bool = False
     binary: str | None = None  # executable name, where it differs from `name`
     # Ships inside JMo and runs on its interpreter: nothing to install, pin or
     # update, and its version is JMo's own.
@@ -785,6 +800,13 @@ def _verification(ctx: ScanContext, flags: Sequence[str]) -> tuple[str, ...]:
     return () if verify else ("--no-verification",)
 
 
+def _run_temp_dir(label: str, out_dir: Path) -> Path:
+    # tool_runner -> paths; imported here, as `tool_utils` is elsewhere.
+    from scripts.core.tool_runner import run_temp_dir
+
+    return run_temp_dir(label, out_dir)
+
+
 def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
     root = scan_root(ctx.target)
     invocations = [
@@ -827,6 +849,12 @@ def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
                 capture_stdout=True,
                 ok_return_codes=(0, 1),
                 label="git",
+                # It clones the repository into its temporary directory: 329 MB
+                # for app B (Phase 7, B1), RAM on a tmpfs `/tmp`, where no
+                # process's memory shows it to the scan's gate. On disk, in
+                # JMo's own `~/.jmo/tmp`: not the results, which CI uploads
+                # whole, since a clone a killed jmo leaves holds the history.
+                temp_dir=_run_temp_dir("trufflehog-git", ctx.out_dir),
             )
         )
     return invocations
@@ -984,9 +1012,16 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
                 str(ctx.output.resolve()),
                 # No call home to check for a newer release.
                 "--disable-version-check",
-                # Fixed (the program plan's decision): the parity target needs
-                # 467 MB at 4 and only 1 fits 800 MB. Phase 7 owns tuning it.
-                *("-j", "4"),
+                # Fixed: at 4 its tree peaked at 662 MB on app B, at 2 at 507 MB,
+                # the same findings, about 1 s slower (Phase 7, measured).
+                *("-j", "2"),
+                # Per file and rule. opengrep's own 5 s fired while it parsed
+                # juice-shop's 836 KB minified three.js under load, reported
+                # the cut as a syntax error (Memprof_limits.Limit_reached) and
+                # dropped the file: 223 findings read 204 (#1591). At 30 s it
+                # read 223 with no error, in the same wall time. JMo's, like
+                # `-j`: opengrep refuses the flag twice (rc 2, measured).
+                *("--timeout", "30"),
                 # JMo's exclusions before the user's flags, so an explicit
                 # per_tool entry still wins; repeatable forms accumulate.
                 *ctx.exclusion_args,
@@ -1738,9 +1773,10 @@ def _native_repo(ctx: ScanContext) -> list[Invocation]:
 ZAP_PLAN = ".zap-plan.yaml"
 
 
-# TODO(issue-#1422): one ZAP home for every run: a second concurrent zap fails; heap fixed
+# TODO(issue-#1422): the heap is fixed
 def zap_home() -> Path:
-    """The ZAP home every zap run uses: JMo's own, reused across runs.
+    """The ZAP home every zap run uses: JMo's own, reused across runs. ZAP
+    allows one process per home, so zap is `exclusive`: one run at a time.
 
     ZAP stores `-config` values and plan settings in its home's `config.xml`
     and applies them to every later run: an upstream proxy stored there sent a
@@ -2072,14 +2108,45 @@ def zap_plan(target: str, report: Path, timeout: int, api_spec: str = "") -> str
     return yaml.safe_dump(document, sort_keys=False)
 
 
-# zap.bat's heap: it reads `%USERPROFILE%\ZAP\.ZAP_JVM.properties` instead when
-# that file exists, `-Xmx512m` otherwise.
-ZAP_HEAP = "-Xmx512m"
+# zap's Java heap, `per_tool.zap.heap` (#1422, Decided 2026-11-05). Left to
+# itself `zap.sh` takes a quarter of RAM (`-Xmx7008m` on a 28 GB machine,
+# measured) and zap.bat 512m, unless a `.ZAP_JVM.properties` says otherwise;
+# an `-Xmx` argument overrides both. 512m ran out after about 13,000 requests
+# on a wide site (#1422), so a wide site raises it.
+ZAP_HEAP_DEFAULT = "512m"
+# What a zap run holds besides its heap: java was 554 MB on a small site with
+# a 512m heap it had not filled. The gate reserves heap + this.
+ZAP_JVM_OVERHEAD_MB = 90
+_HEAP = re.compile(r"(\d+)([kmg])", re.IGNORECASE)
+_HEAP_MB = {"k": 1 / 1024, "m": 1, "g": 1024}
 
 
-def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
+def zap_heap(tool_config: Mapping[str, Any]) -> tuple[str, int]:
+    """zap's `-Xmx` argument and what its run reserves of the memory budget,
+    from `per_tool.zap.heap` (`512m`, `2g`, ...).
+
+    A value java would not read as a size with a unit is refused with a
+    warning and the default used: a bare `1024` is 1024 bytes to java, and
+    zap would not start."""
+    heap = str(tool_config.get("heap", ZAP_HEAP_DEFAULT))
+    match = _HEAP.fullmatch(heap)
+    if match is None:
+        logging.getLogger(__name__).warning(
+            "per_tool.zap.heap %r is not a size java reads (512m, 2g); using %s",
+            heap,
+            ZAP_HEAP_DEFAULT,
+        )
+        return zap_heap({})
+    mb = int(match.group(1)) * _HEAP_MB[match.group(2).lower()]
+    return f"-Xmx{heap}", max(1, round(mb)) + ZAP_JVM_OVERHEAD_MB
+
+
+def zap_java(
+    launcher: Path, heap: str = f"-Xmx{ZAP_HEAP_DEFAULT}"
+) -> tuple[tuple[str, ...], str]:
     """What runs zap in place of `zap.bat`, beside it: `java -Xmx512m -jar
-    <its directory>/zap-<version>.jar`; or, with no command, why not.
+    <its directory>/zap-<version>.jar`, with the heap `zap_heap` gives; or,
+    with no command, why not.
 
     zap.bat is that same java line followed by its own arguments, so running
     it puts JMo's arguments through cmd.exe (`is_batch_launcher`): a plan
@@ -2103,7 +2170,7 @@ def zap_java(launcher: Path) -> tuple[tuple[str, ...], str]:
     java = find_tool("java")
     if not java:
         return (), "java, which zap runs on, could not be found"
-    return (java, ZAP_HEAP, "-jar", str(jars[0])), ""
+    return (java, heap, "-jar", str(jars[0])), ""
 
 
 def _zap_java_executable(launcher: Path) -> str | None:
@@ -2125,9 +2192,11 @@ def _zap_url(ctx: ScanContext) -> list[Invocation]:
     if ctx.plan is None:
         raise ValueError("zap runs the plan the scan loop writes, and none was given")
     binary = Path(ctx.binary)
-    launch: tuple[str, ...] = (ctx.binary,)
+    heap, memory_mb = zap_heap(ctx.tool_config)
+    # zap.sh takes `-Xmx` anywhere in its arguments and passes it to java.
+    launch: tuple[str, ...] = (ctx.binary, heap)
     if is_batch_launcher(binary):
-        launch, problem = zap_java(binary)
+        launch, problem = zap_java(binary, heap)
         if problem:
             # `_zap_launch` fails the row before the scan loop builds it.
             raise ValueError(problem)
@@ -2150,6 +2219,7 @@ def _zap_url(ctx: ScanContext) -> list[Invocation]:
             # definition it cannot read writes no report.
             ok_return_codes=(0, 2),
             cwd=binary.parent if binary.parent != Path() else None,
+            memory_mb=memory_mb,
         )
     ]
 
@@ -2186,6 +2256,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
     for d in (
         ToolDescriptor(
             name="trufflehog",
+            memory_mb=600,  # history run 553-565 MB, tree run 488 MB, each alone
             invocations={"repo": _trufflehog_repo},
             version_probe=VersionProbe(re.compile(r"trufflehog\s+v?(\d+\.\d+\.\d+)")),
             exclusion_style=ExclusionStyle.PATTERN_FILE,
@@ -2208,6 +2279,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="gitleaks",
+            memory_mb=350,  # 328 MB with both its runs at once
             invocations={"repo": _gitleaks_repo},
             # `gitleaks version` prints the bare version (measured, 8.30.1).
             version_probe=VersionProbe(
@@ -2246,6 +2318,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="opengrep",
+            memory_mb=550,  # 507 MB at -j 2
             invocations={"repo": _opengrep_repo},
             # `opengrep --version` prints the bare version (measured, 1.32.0).
             version_probe=VersionProbe(re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE)),
@@ -2281,6 +2354,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 PASSED=(
                     "-j",
                     "--jobs",
+                    "--timeout",
                     "--rewrite-rule-ids",
                     "--no-rewrite-rule-ids",
                     "--enable-version-check",
@@ -2302,6 +2376,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="syft",
+            memory_mb=250,  # 199 MB
             invocations={"repo": _syft_repo, "image": _syft_image},
             version_probe=VersionProbe(_VERSION, command=["syft", "version"]),
             exclusion_style=ExclusionStyle.SEPARATE,
@@ -2318,6 +2393,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="trivy",
+            memory_mb=250,  # 201 MB
             own_config=("trivy.yaml", ".trivyignore"),
             invocations={
                 # No `secret`: gitleaks and trufflehog already read a repository's
@@ -2358,6 +2434,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="checkov",
+            memory_mb=300,  # 235 MB PSS on terragoat; its processes share pages
             invocations={
                 "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
@@ -2393,6 +2470,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="hadolint",
+            memory_mb=100,  # under one sample
             invocations={"repo": _file_fed("-f", "json", from_root=True)},
             own_config=(".hadolint.yaml", ".hadolint.yml"),
             version_probe=VersionProbe(
@@ -2414,6 +2492,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="shellcheck",
+            memory_mb=100,  # 39 MB
             invocations={"repo": _file_fed("--format=json")},
             own_config=(".shellcheckrc", "shellcheckrc"),
             own_config_dirs=_shellcheck_own_config_dirs,
@@ -2432,6 +2511,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="zizmor",
+            memory_mb=100,  # 20 MB
             invocations={"repo": _zizmor_repo},
             # `zizmor --version` prints `zizmor 1.30.1` (measured).
             version_probe=VersionProbe(re.compile(r"zizmor\s+v?(\d+\.\d+\.\d+)")),
@@ -2449,8 +2529,11 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             short_switches=frozenset({"-h", "-o", "-p", "-q", "-v", "-V"}),
             # The workflows GitHub runs (the root's, flat), every composite
-            # action, and Dependabot's config, which has audits of its own
-            # (6 `dependabot-cooldown` findings at 3098c766 without it).
+            # action, Dependabot's config, which has audits of its own
+            # (6 `dependabot-cooldown` findings at 3098c766 without it), and
+            # every pre-commit config, whose hook repositories zizmor audits
+            # (`archived-uses`, `typosquat-uses`, `insecure-url-scheme`: 7
+            # findings on its own 3 test inputs, #1592).
             file_patterns=(
                 ".github/workflows/*.yml",
                 ".github/workflows/*.yaml",
@@ -2458,6 +2541,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 "**/action.yaml",
                 ".github/dependabot.yml",
                 ".github/dependabot.yaml",
+                "**/.pre-commit-config.yaml",
+                "**/.pre-commit-config.yml",
             ),
             no_files_reason=Reason.NO_WORKFLOWS,
             # rc 3 with "no inputs collected": every file handed over was
@@ -2478,6 +2563,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="jmo-native",
+            memory_mb=100,  # 33 MB
             invocations={"repo": _native_repo},
             # `--version` prints `jmo-native <JMo's version>`.
             version_probe=VersionProbe(
@@ -2504,6 +2590,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="yara-x",
+            memory_mb=200,  # 153 MB
             invocations={"repo": _yara_x_repo},
             version_probe=VersionProbe(
                 re.compile(r"v?(\d+\.\d+\.\d+)"),
@@ -2530,6 +2617,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="osv-scanner",
+            memory_mb=650,  # about 600 MB a run: npm's whole offline database
             invocations={"repo": _osv_scanner_repo},
             # `osv-scanner --version` prints `osv-scanner version: 2.6.0`, then
             # `osv-scalibr version: 0.5.2` (measured).
@@ -2567,6 +2655,11 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="zap",
+            # java 554 MB: the 512 MB heap and the JVM. A run reserves its own
+            # heap + 90 instead (`zap_heap`), so `per_tool.zap.heap` moves it.
+            memory_mb=600,
+            # A second run on JMo's ZAP home exits 1 with no report (#1422).
+            exclusive=True,
             invocations={"url": _zap_url},
             version_probe=VersionProbe(
                 # Not the JVM's version, a four-part version's first three
@@ -2604,6 +2697,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ),
         ToolDescriptor(
             name="nuclei",
+            memory_mb=1450,  # 1,404 MB: its whole template set
             invocations={"url": _nuclei_url},
             version_probe=VersionProbe(_VERSION, command=["nuclei", "-version"]),
             exclusion_style=ExclusionStyle.NOT_FILESYSTEM,
