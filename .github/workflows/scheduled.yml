@@ -835,7 +835,12 @@ jobs:
 
   e2e-macos:
     name: E2E macOS Tests
-    runs-on: macos-14
+    # macos-latest, as ci.yml's macOS shard: GitHub retired macos-14, and from
+    # 2026-11-06 every run of this job was cancelled before a step ("The
+    # configuration 'macos-14-arm64-us-default' is not supported"), so E2E
+    # Test Summary failed daily for want of its report. macos-latest is arm64
+    # (macos-26-arm64 on 2026-11-14), which the opengrep asset below assumes.
+    runs-on: macos-latest
     timeout-minutes: 120
     # Run on 4AM weekday schedule OR manual e2e/all selection
     if: |
@@ -898,7 +903,7 @@ jobs:
           brew install trivy syft hadolint
 
           # opengrep: a static binary, no archive, pinned from versions.yaml
-          # like checkov above. macos-14 is arm64, whose assets say "arm64";
+          # like checkov above. macos-latest is arm64, whose assets say "arm64";
           # Homebrew's bin is on PATH and writable by the runner.
           OPENGREP_VERSION="$(python3 -c \
             "import yaml; print(yaml.safe_load(open('versions.yaml'))['binary_tools']['opengrep']['version'])")"
