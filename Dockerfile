@@ -5,7 +5,6 @@
 #
 # Stage 1: Builder - Download and extract tools
 #
-# TODO(issue-#1436): 26.04 base: pip cannot uninstall Debian packaging (checkov)
 FROM ubuntu:24.04 AS builder
 
 ARG TARGETARCH
