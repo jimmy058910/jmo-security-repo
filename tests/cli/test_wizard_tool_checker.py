@@ -164,7 +164,6 @@ class TestCheckToolsForMatrix:
         assert should_continue is True
         assert available == []
 
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -175,7 +174,6 @@ class TestCheckToolsForMatrix:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
     ):
         """All tools ready should return True with list of available tools."""
         from scripts.cli.wizard import check_tools_for_matrix
@@ -184,7 +182,6 @@ class TestCheckToolsForMatrix:
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~"}
-        mock_print_step.return_value = lambda s, t, m: None
 
         # Create ready tools
         manager_instance = MagicMock()
@@ -209,11 +206,10 @@ class TestCheckToolsForMatrix:
         assert should_continue is True
         assert "trivy" in available
         assert "semgrep" in available
-        # The whole matrix is checked: no tool list is passed in.
-        manager_instance.check_matrix.assert_called_once_with()
-        manager_instance.get_tool_summary.assert_called_once_with()
+        # No tool list given, so the whole matrix is checked (None).
+        manager_instance.check_matrix.assert_called_once_with(None)
+        manager_instance.get_tool_summary.assert_called_once_with(None)
 
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -226,7 +222,6 @@ class TestCheckToolsForMatrix:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
     ):
         """Non-interactive (yes) mode should continue with available tools."""
         from scripts.cli.tool_manager import ToolStatusType
@@ -236,7 +231,6 @@ class TestCheckToolsForMatrix:
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~"}
-        mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "commands": ["brew install hadolint"],
             "manual": None,
@@ -282,7 +276,6 @@ class TestCheckToolsForMatrix:
         assert "Skipping: hadolint" in printed
 
     @patch("scripts.cli.wizard_flows.tool_checker._auto_fix_tools")
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -295,7 +288,6 @@ class TestCheckToolsForMatrix:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
         mock_auto_fix,
     ):
         """The "N need attention" header counts exactly the tools listed below it.
@@ -313,7 +305,6 @@ class TestCheckToolsForMatrix:
         mock_detect_platform.return_value = "windows"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]"}
-        mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "commands": [],
             "manual": None,
@@ -351,21 +342,18 @@ class TestCheckToolsForMatrix:
         fix_info = mock_auto_fix.call_args[0][0]
         assert [info["name"] for info in fix_info] == ["shellcheck"]
 
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     def test_import_error_handled(
         self,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
     ):
         """ImportError should be handled gracefully."""
         from scripts.cli.wizard import check_tools_for_matrix
 
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {}
-        mock_print_step.return_value = lambda s, t, m: None
 
         # Patch ToolManager at its source module to raise ImportError
         with (
@@ -384,7 +372,6 @@ class TestCheckToolsForMatrix:
         assert should_continue is True
         assert available == []
 
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -393,14 +380,12 @@ class TestCheckToolsForMatrix:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
     ):
         """Generic exceptions should be handled gracefully."""
         from scripts.cli.wizard import check_tools_for_matrix
 
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {}
-        mock_print_step.return_value = lambda s, t, m: None
         mock_tool_manager.side_effect = RuntimeError("Unexpected error")
 
         with patch("builtins.print"):
@@ -965,7 +950,6 @@ class TestInteractiveChoices:
     """Test interactive menu choices in check_tools_for_matrix."""
 
     @patch("scripts.cli.wizard_flows.tool_checker._auto_fix_tools")
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -978,7 +962,6 @@ class TestInteractiveChoices:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
         mock_auto_fix,
     ):
         """Choice 1 triggers auto-fix."""
@@ -989,7 +972,6 @@ class TestInteractiveChoices:
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
-        mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "commands": [],
             "jmo_install": "jmo tools install checkov",
@@ -1027,7 +1009,6 @@ class TestInteractiveChoices:
         mock_auto_fix.assert_called_once()
         assert should_continue is True
 
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -1040,7 +1021,6 @@ class TestInteractiveChoices:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
     ):
         """Choice 2 continues with available tools only."""
         from scripts.cli.tool_manager import ToolStatusType
@@ -1049,7 +1029,6 @@ class TestInteractiveChoices:
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
-        mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "commands": [],
             "jmo_install": "jmo tools install checkov",
@@ -1087,7 +1066,6 @@ class TestInteractiveChoices:
         assert "trivy" in available
         assert "checkov" not in available
 
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -1100,7 +1078,6 @@ class TestInteractiveChoices:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
     ):
         """Choice 4 cancels the wizard."""
         from scripts.cli.tool_manager import ToolStatusType
@@ -1109,7 +1086,6 @@ class TestInteractiveChoices:
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
-        mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "commands": [],
             "jmo_install": "",
@@ -1155,7 +1131,6 @@ class TestInteractiveChoices:
 class TestCrashDetection:
     """Test crash detection for startup crashes (pydantic conflicts, etc)."""
 
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
@@ -1168,7 +1143,6 @@ class TestCrashDetection:
         mock_tool_manager,
         mock_colorize,
         mock_fallbacks,
-        mock_print_step,
         capsys,
     ):
         """Tool with startup crash should display crash info."""
@@ -1178,7 +1152,6 @@ class TestCrashDetection:
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]"}
-        mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "commands": [],
             "jmo_install": "",

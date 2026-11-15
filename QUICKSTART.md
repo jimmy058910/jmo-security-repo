@@ -91,9 +91,9 @@ jmo wizard
 
 The wizard guides you through:
 
-- **Tool pre-flight check** (detects missing/outdated tools, offers to install)
-- Target discovery (repos, images, URLs)
 - Docker vs native mode
+- Target discovery (repos, images, URLs)
+- **Tool pre-flight check** of the tools that target's scan runs (detects missing/outdated tools, offers to install)
 - Command preview before execution
 
 **Non-interactive:** `jmo wizard --yes`

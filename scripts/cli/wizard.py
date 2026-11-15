@@ -22,6 +22,7 @@ import os
 import shlex
 import subprocess  # nosec B404 - CLI needs subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from scripts.cli.cpu_utils import get_cpu_count
 from scripts.cli.terminal import stdin_closed
@@ -124,7 +125,10 @@ from scripts.cli.wizard_generators import (
     generate_shell_script,
 )
 from scripts.core.exceptions import ToolExecutionException
-from scripts.core.tool_registry import TOOL_MATRIX
+from scripts.core.tool_registry import TOOL_MATRIX, TOOL_SCAN_TYPES
+
+if TYPE_CHECKING:  # pragma: no cover - annotation only
+    from scripts.cli.tool_manager import ToolManager
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -314,6 +318,17 @@ def select_target_type() -> str:
     )
 
 
+def tools_for_target_type(target_type: str) -> list[str]:
+    """The tools a scan of `target_type` runs, in TOOL_MATRIX order.
+
+    The wizard's scan has one target type and never narrows `--tools`, so this
+    is what the scan's own `tools_read_by` keeps (#1581), and the only tools
+    worth checking: zap's version probe took 8.5 s of each pass over the whole
+    matrix, for a repository scan that never runs zap (#1584).
+    """
+    return [tool for tool in TOOL_MATRIX if tool in TOOL_SCAN_TYPES[target_type]]
+
+
 # Target configuration functions now delegated to target_configurators module
 def configure_repo_target() -> TargetConfig:
     """Configure repository scanning (delegates to target_configurators module)."""
@@ -351,9 +366,16 @@ def configure_k8s_target() -> TargetConfig:
     return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
-def configure_advanced() -> tuple[int | None, int | None, str]:
+def configure_advanced(
+    manager: ToolManager | None = None, tools: list[str] | None = None
+) -> tuple[int | None, int | None, str]:
     """
     Step 4: Configure advanced options.
+
+    Args:
+        manager: The wizard's ToolManager, whose statuses the pre-flight has
+            already probed; a new one probes every tool again.
+        tools: The tools this scan runs; the whole matrix when None.
 
     Returns:
         Tuple of (threads, timeout, fail_on)
@@ -366,8 +388,8 @@ def configure_advanced() -> tuple[int | None, int | None, str]:
     # Use ToolManager for consistent tool counts (single source of truth)
     from scripts.cli.tool_manager import ToolManager
 
-    tm = ToolManager()
-    summary = tm.get_tool_summary()
+    tm = ToolManager() if manager is None else manager
+    summary = tm.get_tool_summary(tools)
 
     print("\nDefaults:")
     print(f"  Threads: {default_threads}")
@@ -448,12 +470,21 @@ def _display_target_details(target: TargetConfig) -> None:
             print(f"    Namespace: {target.k8s_namespace}")
 
 
-def review_and_confirm(config: WizardConfig) -> bool:
+def review_and_confirm(
+    config: WizardConfig,
+    manager: ToolManager | None = None,
+    tools: list[str] | None = None,
+) -> bool:
     """
     Step 5: Review configuration and confirm.
 
     Shows dynamic time estimate based on available tools (Fix 2.2 - Issue #10).
     Uses ToolStatusSummary for consistent tool counts across wizard/scan.
+
+    Args:
+        config: The configuration to review
+        manager: The wizard's ToolManager, as for configure_advanced
+        tools: The tools this scan runs; the whole matrix when None
 
     Returns:
         True if user confirms, False otherwise
@@ -466,19 +497,19 @@ def review_and_confirm(config: WizardConfig) -> bool:
     try:
         from scripts.cli.tool_manager import ToolManager
 
-        tm = ToolManager()
+        tm = ToolManager() if manager is None else manager
         # check_matrix first: get_tool_summary then reads the memoised statuses
-        tool_statuses = tm.check_matrix()
-        summary = tm.get_tool_summary()
+        tool_statuses = tm.check_matrix(tools)
+        summary = tm.get_tool_summary(tools)
 
         # Get execution-ready tools for time estimate
         available_tools = [
             name for name, status in tool_statuses.items() if status.execution_ready
         ]
     except Exception:
-        # Fallback: estimate for the whole matrix if the tool check fails
+        # Fallback: estimate for every tool the scan runs if the check fails
         summary = None
-        available_tools = list(TOOL_MATRIX)
+        available_tools = list(TOOL_MATRIX if tools is None else tools)
 
     # Calculate dynamic estimate based on available tools
     min_time, max_time = calculate_time_estimate(available_tools)
@@ -567,6 +598,7 @@ def _print_scan_completion_summary(
     config: WizardConfig,
     exit_code: int,
     tools_executed: int | None = None,
+    tools_total: int | None = None,
 ) -> None:
     """Print a completion summary after scan finishes.
 
@@ -576,6 +608,7 @@ def _print_scan_completion_summary(
         config: Wizard configuration
         exit_code: Scan exit code (0=clean, 1=findings, other=error)
         tools_executed: Number of tools that ran (if known)
+        tools_total: Number of tools the scan runs; the matrix's when None
     """
     print()
     print("═" * 54)
@@ -588,7 +621,8 @@ def _print_scan_completion_summary(
 
     # Show tool execution info if available
     if tools_executed is not None:
-        print(f"  Tools executed: {tools_executed}/{len(TOOL_MATRIX)}")
+        total = len(TOOL_MATRIX) if tools_total is None else tools_total
+        print(f"  Tools executed: {tools_executed}/{total}")
 
     print()
     print(f"  Results: {config.results_dir}/")
@@ -633,13 +667,20 @@ def _get_target_display(config: WizardConfig) -> str:
         return "N/A"
 
 
-def execute_scan(config: WizardConfig, yes: bool = False) -> int:
+def execute_scan(
+    config: WizardConfig,
+    yes: bool = False,
+    manager: ToolManager | None = None,
+    tools: list[str] | None = None,
+) -> int:
     """
     Step 7: Execute the scan.
 
     Args:
         config: Wizard configuration
         yes: Skip prompts and use defaults
+        manager: The wizard's ToolManager, as for configure_advanced
+        tools: The tools this scan runs; the whole matrix when None
 
     Returns:
         Exit code from scan
@@ -697,14 +738,19 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
         try:
             from scripts.cli.tool_manager import ToolManager
 
-            tm = ToolManager()
-            summary = tm.get_tool_summary()
+            tm = ToolManager() if manager is None else manager
+            summary = tm.get_tool_summary(tools)
             tools_executed = summary.execution_ready
         except ImportError:
             pass
 
         # Print completion summary (Windows UX improvement)
-        _print_scan_completion_summary(config, result.returncode, tools_executed)
+        _print_scan_completion_summary(
+            config,
+            result.returncode,
+            tools_executed,
+            None if tools is None else len(tools),
+        )
 
         # Print results guide after scan completes
         if result.returncode == 0 or result.returncode == 1:
@@ -812,6 +858,13 @@ def run_wizard(
     config = WizardConfig()
 
     try:
+        # One ToolManager for the whole run. Its status memo is per instance,
+        # and each step that read tool status used to build its own, so every
+        # matrix tool was probed four times before the scan started: 49 s (#1584).
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
         if yes or has_full_presets:
             # Non-interactive mode: use presets or defaults
             if has_full_presets:
@@ -845,12 +898,16 @@ def run_wizard(
             config.timeout = timeout
             config.fail_on = fail_on or ""
 
-            # Tool check for non-interactive mode
+            # Tool check for non-interactive mode: the tools this target's scan
+            # runs, which are the ones `--auto-fix` installs when missing
+            tools = tools_for_target_type(config.target.type)
             should_continue, _ = check_tools_for_matrix(
                 yes=True,
                 use_docker=config.use_docker,
                 auto_fix=auto_fix,
                 install_deps=install_deps,
+                tools=tools,
+                manager=manager,
             )
             if not should_continue:
                 return 0
@@ -866,9 +923,14 @@ def run_wizard(
             # Interactive mode with new multi-target selection
             config.use_docker = select_execution_mode(force_docker)
 
+            # Step 2: the target type decides which tools the scan runs, so it
+            # is asked before any tool is checked (#1584)
+            target_type = select_target_type()
+            tools = tools_for_target_type(target_type)
+
             # Tool pre-flight check (only for native mode)
             should_continue, _ = check_tools_for_matrix(
-                yes=False, use_docker=config.use_docker
+                yes=False, use_docker=config.use_docker, tools=tools, manager=manager
             )
             if not should_continue:
                 print(_colorize("\nWizard cancelled", "yellow"))
@@ -878,9 +940,10 @@ def run_wizard(
             if not config.use_docker:
                 from scripts.cli.scan_utils import check_version_drift_before_scan
 
-                # The wizard's scan never narrows --tools, so it runs the matrix
+                # The pre-flight's manager: it reads the statuses already
+                # probed rather than probing every tool a second time
                 if not check_version_drift_before_scan(
-                    list(TOOL_MATRIX), interactive=True
+                    tools, interactive=True, manager=manager
                 ):
                     print(_colorize("\nWizard cancelled", "yellow"))
                     return 0
@@ -894,10 +957,7 @@ def run_wizard(
                 return 0
             config.policies_enabled = policies_enabled
 
-            # Step 3a: Select target type
-            target_type = select_target_type()
-
-            # Step 3b: Configure target (dispatch to appropriate function)
+            # Step 3: Configure target (dispatch to appropriate function)
             if target_type == "repo":
                 config.target = configure_repo_target()
             elif target_type == "image":
@@ -911,12 +971,12 @@ def run_wizard(
             elif target_type == "k8s":
                 config.target = configure_k8s_target()
 
-            threads, timeout, fail_on = configure_advanced()
+            threads, timeout, fail_on = configure_advanced(manager, tools)
             config.threads = threads
             config.timeout = timeout
             config.fail_on = fail_on
 
-            if not review_and_confirm(config):
+            if not review_and_confirm(config, manager, tools):
                 print(_colorize("\nWizard cancelled", "yellow"))
                 return 0
 
@@ -958,7 +1018,9 @@ def run_wizard(
 
         # Execute scan
         # Skip confirmation when using presets (has_full_presets) or --yes flag
-        result = execute_scan(config, yes=yes or has_full_presets)
+        result = execute_scan(
+            config, yes=yes or has_full_presets, manager=manager, tools=tools
+        )
 
         # Handle trend analysis after successful scan (if ≥2 scans exist)
         if result == 0 or result == 1:  # Success (0 = clean, 1 = findings)

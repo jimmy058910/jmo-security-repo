@@ -875,8 +875,9 @@ def test_configure_advanced_shows_scan_defaults(
     assert "Timeout: 777s" in out
     assert "Tools: 12 (9 ready)" in out
     assert "Profile" not in out
-    # The matrix summary is asked for, not a per-profile one
-    tm.get_tool_summary.assert_called_once_with()
+    # Called alone it summarises the matrix (None), never a profile; the wizard
+    # passes its target's tools (test_wizard_preflight_scope.py).
+    tm.get_tool_summary.assert_called_once_with(None)
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=False)

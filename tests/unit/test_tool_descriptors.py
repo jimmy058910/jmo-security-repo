@@ -100,7 +100,12 @@ OLD_VERSION_COMMANDS = {
     "syft": ["syft", "version"],
     "opa": ["opa", "version"],
     "nuclei": ["nuclei", "-version"],
-    "zap": {"windows": ["zap.bat", "-version"], "default": ["zap.sh", "-version"]},
+    # zap.sh's probe takes the run's heap cap (#1584): its JVM otherwise sized
+    # the heap from RAM, 387-407 MB against 313-365 MB in the same 8.5 s.
+    "zap": {
+        "windows": ["zap.bat", "-version"],
+        "default": ["zap.sh", "-Xmx512m", "-version"],
+    },
     # Phase 6, PR Y: the engine is yara-x, a dependency of JMo.
     "yara-x": [
         sys.executable,
