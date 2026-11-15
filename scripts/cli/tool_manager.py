@@ -22,6 +22,7 @@ from scripts.core.tool_descriptors import DESCRIPTORS, VersionProbe
 from scripts.core.tool_registry import (
     BUILTIN_TOOLS,
     DEPENDENCY_MISSING,
+    DEPENDENCY_TOOLS,
     TOOL_EXECUTION_COMMANDS,
     TOOL_MATRIX,
     ToolRegistry,
@@ -725,6 +726,14 @@ class ToolManager:
         statuses = self.check_matrix(tools)
 
         for name, status in statuses.items():
+            if name in DEPENDENCY_TOOLS:
+                # A dependency tool carries the version of whichever
+                # distribution is installed (decision J2) and versions.yaml has
+                # no row for it, so there is no pin to drift from. Comparing
+                # against the missing pin reported yara-x on every run
+                # ("installed=1.22.1 expected=None") and taught users to skip
+                # the block that a real mismatch shows up in (#1641).
+                continue
             if status.installed and status.installed_version != status.expected_version:
                 # Determine direction: ahead (installed > expected) or behind
                 direction = self._compare_version_direction(

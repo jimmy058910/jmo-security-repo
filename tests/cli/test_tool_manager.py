@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.core.install_config import ISOLATED_TOOLS
-from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
+from scripts.core.tool_registry import DEPENDENCY_TOOLS, POLICY_ENGINE, TOOL_MATRIX
 
 # ========== Category 1: VERSION_PATTERNS Constants ==========
 
@@ -699,6 +699,43 @@ def test_get_version_drift_with_drift():
     assert len(drift) == 1
     assert drift[0]["tool"] == "trivy"
     assert drift[0]["direction"] == "behind"
+
+
+def test_get_version_drift_skips_dependency_tools():
+    """A dependency tool has no pin, so no version of it can drift (#1641).
+
+    yara-x takes its version from the installed distribution (decision J2) and
+    versions.yaml has no row for it, so the comparison ran against ``None`` and
+    reported the tool on every wizard run and pre-scan check. A pinned tool in
+    the same matrix still has to be reported.
+    """
+    from scripts.cli.tool_manager import ToolManager
+
+    dependency_tool = next(iter(DEPENDENCY_TOOLS))
+
+    dependency_status = MagicMock()
+    dependency_status.installed = True
+    dependency_status.installed_version = "1.22.1"
+    dependency_status.expected_version = None
+    dependency_status.is_critical = False
+
+    pinned_status = MagicMock()
+    pinned_status.installed = True
+    pinned_status.installed_version = "0.49.0"
+    pinned_status.expected_version = "0.50.0"
+    pinned_status.is_critical = True
+
+    manager = ToolManager()
+
+    with patch.object(
+        manager,
+        "check_matrix",
+        return_value={dependency_tool: dependency_status, "trivy": pinned_status},
+    ):
+        with patch.object(manager, "_compare_version_direction", return_value="behind"):
+            drift = manager.get_version_drift([dependency_tool, "trivy"])
+
+    assert [entry["tool"] for entry in drift] == ["trivy"]
 
 
 # ========== Category 11: Execution Verification ==========
