@@ -857,14 +857,14 @@ def run_wizard(
 
     config = WizardConfig()
 
-    # One ToolManager for the whole run. Its status memo is per instance, and
-    # each step that read tool status used to build its own, so every matrix
-    # tool was probed four times before the scan started: 49 s (#1584).
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-
     try:
+        # One ToolManager for the whole run. Its status memo is per instance,
+        # and each step that read tool status used to build its own, so every
+        # matrix tool was probed four times before the scan started: 49 s (#1584).
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
         if yes or has_full_presets:
             # Non-interactive mode: use presets or defaults
             if has_full_presets:

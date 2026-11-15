@@ -61,6 +61,19 @@ def _get_unicode_fallbacks() -> dict[str, str]:
     return _UNICODE_FALLBACKS
 
 
+def _forget_statuses(manager: ToolManager | None, fix_info: list[dict]) -> None:
+    """Drop `manager`'s memoised status of each tool that needed fixing.
+
+    An install, by JMo or by hand, makes those stale, and the wizard's later
+    steps read the same manager. The other tools' statuses stand: probing them
+    again cost 8.5 s for zap alone (#1584). A tool still missing has no binary,
+    so checking it again runs nothing.
+    """
+    if manager is not None:
+        for info in fix_info:
+            manager.invalidate_status_cache(info["name"])
+
+
 # ---------------------------------------------------------------------------
 # Status Legend
 # ---------------------------------------------------------------------------
@@ -331,6 +344,8 @@ def check_tools_for_matrix(
                     )
                 )
                 print("Note: Some scan categories may be skipped")
+                # The commands [3] shows may have been run by hand meanwhile
+                _forget_statuses(manager, fix_info)
                 return True, available
             elif choice == "3":
                 # Show all commands for manual execution
@@ -745,12 +760,11 @@ def _auto_fix_tools(
     try:
         from scripts.cli.tool_manager import ToolManager
 
-        # Its status memo must not predate the installs above. The caller's
-        # manager is cleared rather than replaced: later steps read it.
+        # The caller's manager, without the statuses the installs above made
+        # stale: later steps read it.
         if manager is None:
             manager = ToolManager()
-        else:
-            manager.invalidate_status_cache()
+        _forget_statuses(manager, fix_info)
         statuses = manager.check_matrix(tools)
         summary = manager.get_tool_summary(tools)
 

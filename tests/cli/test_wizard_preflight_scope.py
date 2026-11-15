@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import collections
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -81,14 +82,15 @@ def _run_interactively(
     events: list[tuple[str, str]],
     target_type: str,
     tmp_path: Path,
+    docker: bool = False,
 ) -> int:
-    """Native mode, `target_type`, no advanced settings, and "no" to the review:
-    every step that reads tool status runs, and no scan starts."""
+    """Native mode (or Docker), `target_type`, no advanced settings, and "no" to
+    the review: every step that reads tool status runs, and no scan starts."""
     monkeypatch.setattr(wizard, "stdin_closed", lambda: False)
 
     def mode(force_docker: bool = False) -> bool:
         events.append(("asked", "execution mode"))
-        return False
+        return docker
 
     def pick() -> str:
         events.append(("asked", "target type"))
@@ -107,16 +109,20 @@ def _run_interactively(
     return wizard.run_wizard()
 
 
-@pytest.mark.parametrize("target_type", ["repo", "url"])
+@pytest.mark.parametrize(
+    ("target_type", "docker"), [("repo", False), ("url", False), ("repo", True)]
+)
 def test_no_tool_is_probed_before_the_target_type_is_known(
     monkeypatch: pytest.MonkeyPatch,
     events: list[tuple[str, str]],
     target_type: str,
+    docker: bool,
     tmp_path: Path,
 ) -> None:
     """The first two questions come at once; the probes wait for the answer
-    that decides which tools the scan runs."""
-    rc = _run_interactively(monkeypatch, events, target_type, tmp_path)
+    that decides which tools the scan runs. In Docker mode the pre-flight is
+    skipped, and the tool counts the later steps show are still the target's."""
+    rc = _run_interactively(monkeypatch, events, target_type, tmp_path, docker)
 
     assert rc == 0
     asked_type = events.index(("asked", "target type"))
@@ -139,6 +145,85 @@ def test_each_tool_the_scan_runs_is_probed_once_and_no_other(
     probed = collections.Counter(tool for kind, tool in events if kind == "probe")
     assert set(probed) == TOOL_SCAN_TYPES[target_type]
     assert {tool: n for tool, n in probed.items() if n > 1} == {}
+
+
+@pytest.fixture
+def zap_missing(monkeypatch: pytest.MonkeyPatch, events) -> set[str]:
+    """zap is not installed until something installs it: the returned set is
+    what is still missing. Nothing it needs is missing besides itself."""
+    missing = {"zap"}
+    found = ToolManager._find_binary
+
+    def find_binary(self: ToolManager, binary_name: str) -> str | None:
+        if any(binary_name.startswith(tool) for tool in missing):
+            return None
+        return found(self, binary_name)
+
+    class Installer:
+        def install_tools_parallel(self, tools: list[str], **kwargs):
+            missing.difference_update(tools)
+            return SimpleNamespace(
+                results=[
+                    SimpleNamespace(
+                        tool_name=tool, success=True, method="binary", message=""
+                    )
+                    for tool in tools
+                ]
+            )
+
+    monkeypatch.setattr(ToolManager, "_find_binary", find_binary)
+    monkeypatch.setattr(ToolManager, "_check_preinstall_deps", lambda self, t: [])
+    monkeypatch.setattr("scripts.cli.tool_installer.ToolInstaller", Installer)
+    return missing
+
+
+def _tools_line(out: str) -> str:
+    """What the advanced-settings step says of the scan's tools."""
+    return next(line.strip() for line in out.splitlines() if "Tools:" in line)
+
+
+def test_a_tool_auto_fix_installs_reads_as_ready_in_the_steps_after(
+    monkeypatch: pytest.MonkeyPatch,
+    events: list[tuple[str, str]],
+    zap_missing: set[str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """[1] Auto-fix installs zap. The later steps read the run's one manager, so
+    its memo of zap as missing has to go, and only zap's: nuclei's stands."""
+    monkeypatch.setattr("builtins.input", lambda prompt="": "1")
+
+    _run_interactively(monkeypatch, events, "url", tmp_path)
+
+    probed = collections.Counter(tool for kind, tool in events if kind == "probe")
+    assert probed == {"zap": 1, "nuclei": 1}
+    assert _tools_line(capsys.readouterr().out) == "Tools: 2 (2 ready)"
+
+
+def test_a_tool_installed_by_hand_before_continuing_reads_as_ready(
+    monkeypatch: pytest.MonkeyPatch,
+    events: list[tuple[str, str]],
+    zap_missing: set[str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """[3] shows the commands, the user runs them, then [2] continues. A new
+    manager per step used to see that install; the shared one must too."""
+    answers = iter(["3", "2"])
+
+    def answer(prompt: str = "") -> str:
+        choice = next(answers)
+        if choice == "2":
+            zap_missing.clear()  # installed by hand from the commands shown
+        return choice
+
+    monkeypatch.setattr("builtins.input", answer)
+
+    _run_interactively(monkeypatch, events, "url", tmp_path)
+
+    probed = collections.Counter(tool for kind, tool in events if kind == "probe")
+    assert probed == {"zap": 1, "nuclei": 1}
+    assert _tools_line(capsys.readouterr().out) == "Tools: 2 (2 ready)"
 
 
 @pytest.mark.parametrize(
