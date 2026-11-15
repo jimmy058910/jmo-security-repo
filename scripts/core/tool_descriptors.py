@@ -2670,9 +2670,13 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                     r"v?(\d+\.\d+\.\d+)(?!\d|\.jar|\.\d)",
                     re.IGNORECASE,
                 ),
+                # zap.sh's JVM sizes its heap from RAM unless told: the probe
+                # peaked at 387-407 MB, and 313-365 MB with the run's 512m, in
+                # the same 8.5 s (measured 2026-11-14, ZAP 2.17.0). zap.bat
+                # already starts java with -Xmx512m.
                 command={
                     "windows": ["zap.bat", "-version"],
-                    "default": ["zap.sh", "-version"],
+                    "default": ["zap.sh", f"-Xmx{ZAP_HEAP_DEFAULT}", "-version"],
                 },
                 timeout=30,  # a JVM starts first
             ),
