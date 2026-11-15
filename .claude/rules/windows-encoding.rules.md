@@ -293,9 +293,20 @@ invisible.
 
 ## Line Endings on Windows
 
-This repo has **no `.gitattributes`** and `core.autocrlf=false`, so line endings
-are stored byte-for-byte and are **mixed per file** (`scripts/cli/jmo.py` is LF;
-`scripts/core/unicode_utils.py` is CRLF).
+This repo's `.gitattributes` marks only the generated bundles `-text`, and the
+local `core.autocrlf=false`, so line endings are stored byte-for-byte and are
+**mixed per file** (`scripts/cli/jmo.py` is LF; `scripts/core/unicode_utils.py` is
+CRLF).
+
+**A CI checkout on windows-2022 is CRLF**, since the runner's Git converts text on
+checkout. A test that *parses* a tracked file must not assume LF. `read_bytes()
+.decode()` keeps the `\r\n`, so a pattern such as `\\\n` (a shell or Dockerfile
+continuation) never matches. Parse from `read_text(encoding="utf-8")`, whose
+universal newlines give `\n`, or `.replace("\r\n", "\n")`. Measured on PR #1639
+(2026-11-14): a docs-parse test left a backslash before `\r` and `shlex` raised
+"No escaped character" while collecting. The collection error interrupted the
+whole windows-2022 session, so that job ran no test and still showed green.
+Reading bytes is right only when rewriting a file, as below.
 
 `pathlib.Path.write_text()` opens with `newline=None`, translating every `\n` to
 `os.linesep` — `\r\n` on Windows. Reading a LF file and writing it back **converts

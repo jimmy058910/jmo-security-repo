@@ -1109,102 +1109,151 @@ class TestDockerHistoryPersistence:
             pytest.skip("Docker not available")
 
     def test_history_persists_between_scans(self, tmp_path: Path):
-        """History database should persist between container runs."""
+        """DOCKER_README's trend workflow: each scan mounts the project on /scan
+        and its .jmo on /scan/.jmo, and `history list` later mounts the .jmo
+        alone. A scan stores history at .jmo/history.db under its working
+        directory, /scan, so both scans land in the project's .jmo, where the
+        third container reads them (#1375). The guide mounted ~/.jmo on
+        /root/.jmo, where the image's user stores nothing; this test ran as
+        root on that mount and accepted an empty history (rc 1), so it passed
+        whether or not anything persisted."""
         image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
+        v2_tool_registry(image, "history stored under the scan's working directory")
 
-        # Create .jmo directory for history persistence
-        jmo_dir = tmp_path / ".jmo"
-        jmo_dir.mkdir()
+        project = tmp_path / "project"
+        jmo_dir = project / ".jmo"
+        jmo_dir.mkdir(parents=True)
+        (project / "app.py").write_text("x = 1\n", encoding="utf-8")
+        # The guide's `mkdir -p .jmo` gives the host user both directories; a
+        # runner's uid (1001) is not the container's jmo (1000), so open them.
+        for directory in (project, jmo_dir):
+            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            os.chmod(directory, 0o777)
 
-        # Create sample code
-        (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
+        scan = (
+            "run", "--rm",
+            "-v", f"{project}:/scan",
+            "-v", f"{jmo_dir}:/scan/.jmo",
+            image,
+            "scan", "--repo", "/scan", "--results-dir", "/scan/results",
+            "--tools", "gitleaks", "--allow-missing-tools", "--fail-on-store-error",
+        )  # fmt: skip
+        for _ in range(2):
+            ran = _docker(*scan, timeout=300)
+            assert ran.returncode in (0, 1), ran.stderr[-2000:]
 
-        # The previous attempt to mount at /home/jmo/.jmo (matching the jmo
-        # user's home) didn't work because `jmo history list` returns rc=1
-        # on an empty database — the test's primary intent is "persistence
-        # between runs", not "non-root user" specifically. Run all three
-        # containers as root with --user 0:0 so the /root/.jmo mount target
-        # is the deterministic HOME, the DB is consistently written and read,
-        # and we don't need separate chmod for non-root traversal.
-        # Run first scan
-        subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "--user",
-                "0:0",
-                "-v",
-                f"{tmp_path}:/scan",
-                "-v",
-                f"{jmo_dir}:/root/.jmo",
-                "-w",
-                "/scan",
+        listed = _docker(
+            "run", "--rm",
+            "-v", f"{jmo_dir}:/scan/.jmo",
+            image,
+            "history", "list", "--json",
+            timeout=120,
+        )  # fmt: skip
+
+        assert listed.returncode == 0, listed.stderr[-2000:]
+        assert (jmo_dir / "history.db").is_file()
+        assert len(json.loads(listed.stdout)) == 2, listed.stdout[:2000]
+
+
+@pytest.mark.docker
+@pytest.mark.e2e
+class TestDockerDocumentedMounts:
+    """The mounts DOCKER_README and docker-compose.trends.yml document for the
+    non-root image, each run as written (#1375). Two more live with their
+    neighbours: the project's .jmo on /scan/.jmo (TestDockerHistoryPersistence)
+    and a named volume on /home/jmo/.jmo (TestDockerNonRootExecution)."""
+
+    @pytest.fixture(autouse=True)
+    def check_docker(self):
+        """Skip all tests if Docker is not available."""
+        if not docker_available():
+            pytest.skip("Docker not available")
+
+    def test_a_fresh_named_volume_on_the_trivy_cache_is_writable(self):
+        """`-v trivy-cache:/home/jmo/.cache/trivy` keeps trivy's database
+        between runs. Docker gives an empty named volume the owner of the
+        image directory it covers, and the image did not create this one: the
+        volume came up root:root 755, so trivy, running as jmo, could not keep
+        its database there. Checked with `mkdir`, so nothing is downloaded."""
+        image = f"{DOCKER_REGISTRY}:latest"
+
+        ensure_image(image)
+        v2_tool_registry(image, "a /home/jmo/.cache/trivy the container user owns")
+
+        volume = f"jmo-trivy-e2e-{uuid.uuid4().hex[:12]}"
+        created = _docker("volume", "create", volume, timeout=60)
+        assert created.returncode == 0, created.stderr
+        try:
+            result = _docker(
+                "run", "--rm",
+                "-v", f"{volume}:/home/jmo/.cache/trivy",
+                "--entrypoint", "sh",
                 image,
-                "scan",
-                "--repo",
-                ".",
-                "--allow-missing-tools",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
+                "-c",
+                "mkdir -p /home/jmo/.cache/trivy/db && stat -c %U /home/jmo/.cache/trivy",
+                timeout=120,
+            )  # fmt: skip
+        finally:
+            _docker("volume", "rm", "-f", volume, timeout=60)
 
-        # Run second scan
-        subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "--user",
-                "0:0",
-                "-v",
-                f"{tmp_path}:/scan",
-                "-v",
-                f"{jmo_dir}:/root/.jmo",
-                "-w",
-                "/scan",
+        assert result.returncode == 0, (
+            "the container user cannot write a fresh named volume on "
+            f"/home/jmo/.cache/trivy: {result.stderr.strip()}"
+        )
+        assert result.stdout.strip() == "jmo", result.stdout
+
+    def test_the_compose_history_volume_keeps_history_beside_a_read_only_source(
+        self, tmp_path: Path
+    ):
+        """docker-compose.trends.yml mounts the source read-only and keeps
+        history on a named volume at /home/jmo/.jmo, naming the database with
+        --history-db, since a read-only /scan has no .jmo a scan could write.
+        A later container on the same volume lists the scan."""
+        image = f"{DOCKER_REGISTRY}:latest"
+
+        ensure_image(image)
+        v2_tool_registry(image, "--history-db on a volume at /home/jmo/.jmo")
+
+        project = tmp_path / "project"
+        results = tmp_path / "results"
+        project.mkdir()
+        results.mkdir()
+        (project / "app.py").write_text("x = 1\n", encoding="utf-8")
+        for directory in (project, results):
+            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            os.chmod(directory, 0o777)
+        db = "/home/jmo/.jmo/history.db"
+
+        volume = f"jmo-history-e2e-{uuid.uuid4().hex[:12]}"
+        created = _docker("volume", "create", volume, timeout=60)
+        assert created.returncode == 0, created.stderr
+        try:
+            scanned = _docker(
+                "run", "--rm",
+                "-v", f"{project}:/scan:ro",
+                "-v", f"{volume}:/home/jmo/.jmo",
+                "-v", f"{results}:/results",
                 image,
-                "scan",
-                "--repo",
-                ".",
-                "--allow-missing-tools",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-
-        # Check history
-        result_history = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "--user",
-                "0:0",
-                "-v",
-                f"{jmo_dir}:/root/.jmo",
+                "scan", "--repo", "/scan", "--history-db", db,
+                "--results-dir", "/results/baseline",
+                "--tools", "gitleaks", "--allow-missing-tools", "--fail-on-store-error",
+                timeout=300,
+            )  # fmt: skip
+            listed = _docker(
+                "run", "--rm",
+                "-v", f"{volume}:/home/jmo/.jmo",
                 image,
-                "history",
-                "list",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+                "history", "list", "--history-db", db, "--json",
+                timeout=120,
+            )  # fmt: skip
+        finally:
+            _docker("volume", "rm", "-f", volume, timeout=60)
 
-        # History should show scans OR exit 1 if the DB is empty/missing
-        # (jmo history list returns rc=1 when no scans exist, which is valid
-        # behavior — see scripts/cli/history_commands.py). The test's
-        # primary intent is "container can read its own history without
-        # crashing", not "scans always populate history" (which depends on
-        # what the scan finds -- a one-line `x = 1` may produce no findings to
-        # store).
-        assert result_history.returncode in (0, 1)
+        assert scanned.returncode in (0, 1), scanned.stderr[-2000:]
+        assert listed.returncode == 0, listed.stderr[-2000:]
+        assert len(json.loads(listed.stdout)) == 1, listed.stdout[:2000]
 
 
 @pytest.mark.docker

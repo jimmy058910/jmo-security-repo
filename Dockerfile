@@ -5,7 +5,6 @@
 #
 # Stage 1: Builder - Download and extract tools
 #
-# TODO(issue-#1436): 26.04 base: pip cannot uninstall Debian packaging (checkov)
 FROM ubuntu:24.04 AS builder
 
 ARG TARGETARCH
@@ -164,6 +163,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-venv \
     git \
     ca-certificates \
     jq \
@@ -196,9 +196,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python security tools one by one for better error visibility
-# Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.30 && \
+# checkov in a virtual environment of its own (#1436), the shape `jmo tools
+# install` gives it. Installed over the system's packages, it needs pip to
+# replace a Debian-packaged dependency, which pip cannot uninstall: an Ubuntu
+# 26.04 base failed here on `packaging` ("no RECORD file"). A venv never has to.
+RUN python3 -m venv /opt/checkov && \
+    /opt/checkov/bin/pip install --no-cache-dir checkov==3.3.30 && \
+    ln -s /opt/checkov/bin/checkov /usr/local/bin/checkov && \
     checkov --version && \
     echo "✓ checkov installed"
 
@@ -208,8 +212,8 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.17.2 &
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
-    && find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+    && find /usr/local/lib/python3* /opt/checkov -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/local/lib/python3* /opt/checkov -type f -name '*.pyc' -delete 2>/dev/null || true
 
 # Copy compiled binaries from builder stage
 COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
@@ -238,9 +242,6 @@ RUN strip /usr/local/bin/trufflehog \
 # Create a symlink for easier invocation
 RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
     chmod +x /usr/local/bin/zap
-
-# Mark cache directories as volumes for persistence
-VOLUME ["/root/.cache/trivy"]
 
 # Create working directory
 WORKDIR /scan
@@ -307,11 +308,14 @@ RUN echo "=== Verifying tools ===" && \
 # Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
 # /home/jmo/.jmo must exist, owned by jmo: an empty named volume mounted there
 # (DOCKER_README's osv-scanner database setup) takes this directory's
-# ownership, and without it comes up root:root and unwritable.
+# ownership, and without it comes up root:root and unwritable. So must
+# /home/jmo/.cache/trivy, DOCKER_README's trivy-cache volume (#1375): mount it
+# with -v trivy-cache:/home/jmo/.cache/trivy. The image declares no VOLUME:
+# the root one it had was never used, and made an anonymous volume per run.
 RUN userdel -r ubuntu 2>/dev/null || true && \
     useradd -m -u 1000 -s /bin/bash jmo && \
-    mkdir -p /root/.local /home/jmo/.cache /home/jmo/.jmo /home/jmo/.local && \
-    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
+    mkdir -p /root/.local /home/jmo/.cache/trivy /home/jmo/.jmo /home/jmo/.local && \
+    chown -R jmo:jmo /opt/jmo-security /scan /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user
@@ -345,10 +349,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trends` work.
 #
 # CI mode with caching (30s faster on subsequent runs):
-# docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy \
+# docker run --rm -v $(pwd):/scan -v trivy-cache:/home/jmo/.cache/trivy \
 #   ghcr.io/jimmy058910/jmo-security:latest ci --repo /scan --fail-on HIGH
 #
 # Size optimizations:
 # - Multi-stage builds: download tooling stays in the builder stage
 # - Nuclei template filtering, Python bytecode cleanup, binary stripping, Java cleanup, Git metadata exclusion
-# - Volume mounting: Use -v trivy-cache:/root/.cache/trivy for persistent caching
+# - Volume mounting: Use -v trivy-cache:/home/jmo/.cache/trivy for persistent caching

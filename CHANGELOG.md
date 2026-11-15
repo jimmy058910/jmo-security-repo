@@ -301,6 +301,10 @@ All notable changes to JMo Security will be documented in this file.
   jmo never looked for, so a machine set up with `make tools` reported zap missing. It
   now installs only the developer prerequisites (python3, pip, jq, curl, git, shfmt) and
   runs `jmo tools install --yes`, or `jmo tools update --yes` for `make tools-upgrade`.
+- **The image installs checkov in a virtual environment of its own, `/opt/checkov`
+  (#1436).** Installed over the system's Python packages, checkov needed pip to replace a
+  Debian-packaged dependency, which pip cannot uninstall, so an Ubuntu 26.04 base failed
+  the build on `packaging`. `checkov` on the image's `PATH` is a link to the venv's.
 - **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
   publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
   dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
@@ -738,6 +742,14 @@ All notable changes to JMo Security will be documented in this file.
   failed at its first write. Both now run `mkdir -p` on the results directory (and tsv's
   clone destination) before `docker run`, and the command the wizard prints to run later
   starts with the same line. The wizard's own run already did this.
+- **The Docker guide's and the example files' `jmo` commands run.** 37 of the 100 `jmo`
+  commands in `docs/DOCKER_README.md` and `docs/examples/*.yml` were rejected by jmo's own
+  parser: `jmo trends export html|json|csv|prometheus` and `jmo trends velocity`, which do
+  not exist (`trends analyze --export-html` and its siblings do the exports), `--format
+  text`, `--limit` and `--scan-id-1` on trends subcommands that take none of them, and
+  `semgrep` in `--tools` in three CI examples (opengrep replaced it). Each is rewritten
+  from the parser, and `tests/unit/test_docs_example_commands_parse.py` asks the parser
+  about every one.
 - **`jmo tools install` downloads trivy, nuclei and hadolint on macOS, and trivy, nuclei
   and opa on Windows ARM64.** Their URLs named assets the releases do not have: trivy and
   nuclei call macOS `macOS` and hadolint `macos`, not `Darwin`, and none of the three
@@ -767,6 +779,18 @@ All notable changes to JMo Security will be documented in this file.
   in the table's order, as LOKI does. Measured with signature-base's own
   `SUSP_Known_Type_Cloaked_as_JPG` at the pin: 1 of 6 renamed samples reported before,
   6 of 6 after, and a real JPEG in neither.
+- **The Docker guide's history and trivy-cache examples work with the non-root image
+  (#1375).** They mounted `/root/...`, which the image's user `jmo` cannot use, put the
+  history database under `~/.jmo` where a scan never writes it (it is `.jmo/history.db`
+  under the working directory, `/scan`), and set `JMO_HISTORY_DB_PATH`, `JMO_LOG_LEVEL`
+  and `JMO_SCAN_LABEL`, which JMo does not read. The examples now mount
+  `/scan/.jmo` and `/home/jmo/.cache/trivy`, and the compose examples name the database
+  with `--history-db` / `--db` on a volume at `/home/jmo/.jmo`. The image creates
+  `/home/jmo/.cache/trivy` owned by `jmo`, so a named volume there is writable, and no
+  longer declares `VOLUME /root/.cache/trivy`, which nothing used and which made an
+  anonymous volume on every run. The
+  guide's reset step deleted `~/.jmo`, the installed tools included; it now deletes the
+  project's `.jmo`.
 - **An installed JMo validates findings against the CommonFinding schema (#1350).** The
   validator looked for the schema under `docs/schemas/`, which only a source checkout
   has, and `jsonschema` was the `reporting` extra, so an install made the documented way
