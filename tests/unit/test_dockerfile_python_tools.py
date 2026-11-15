@@ -20,7 +20,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _run_instructions() -> list[str]:
     """Each RUN instruction of the Dockerfile, its continuation lines joined."""
-    text = (REPO_ROOT / "Dockerfile").read_bytes().decode("utf-8")
+    # read_text's universal newlines: a Windows checkout's CRLF would leave
+    # every `\` before `\r`, and no continuation line would be joined.
+    text = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
     joined = re.sub(r"\\\n", " ", text)
     return [
         line.strip() for line in joined.splitlines() if line.strip().startswith("RUN ")

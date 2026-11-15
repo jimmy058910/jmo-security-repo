@@ -39,10 +39,19 @@ def _argv(text: str) -> list[str]:
     return shlex.split(_SHELL_OPS.split(text)[0].strip().strip("\"'"))
 
 
+def _joined(path: Path) -> str:
+    """The file's text with each `\\`-continued line joined to the next.
+
+    LF first: a Windows checkout has CRLF, which the continuation pattern does
+    not match, and a backslash left before `\\r` stopped shlex with "No escaped
+    character" while the module was collected, so no Windows test ran."""
+    text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    return re.sub(r"\\\n\s*", " ", text)
+
+
 def extract(path: Path) -> list[list[str]]:
     """The argv of every `jmo` invocation in an example file."""
-    text = re.sub(r"\\\n\s*", " ", path.read_bytes().decode("utf-8"))
-    lines = text.splitlines()
+    lines = _joined(path).splitlines()
     found: list[list[str]] = []
     i = 0
     while i < len(lines):
@@ -91,10 +100,9 @@ def parse_ok(argv: list[str]) -> tuple[bool, str]:
 
 def docker_run_commands(path: Path) -> list[list[str]]:
     """The jmo argv of every `docker run <image> ...` in a markdown guide."""
-    text = re.sub(r"\\\n\s*", " ", path.read_bytes().decode("utf-8"))
     return [
         _argv(line[image.end() :])
-        for line in text.splitlines()
+        for line in _joined(path).splitlines()
         if "docker run" in line
         and (image := _IMAGE.search(line))
         and line[image.end() :].strip()
@@ -113,6 +121,19 @@ def test_the_extractor_finds_the_examples_commands() -> None:
     assert sum(source == "DOCKER_README.md" for source, _ in COMMANDS) >= 40
     subcommands = {argv[0] for _, argv in COMMANDS}
     assert {"scan", "ci", "trends", "diff"} <= subcommands, subcommands
+
+
+def test_a_crlf_checkout_yields_the_same_commands(tmp_path: Path) -> None:
+    """Windows runners check the docs out with CRLF. Read that way, the guide's
+    `\\`-continued commands crashed this module's collection, which interrupted
+    the whole windows-2022 session before its first test."""
+    for source in (DOCS / "DOCKER_README.md", *FILES):
+        crlf = tmp_path / source.name
+        lf_bytes = source.read_bytes().replace(b"\r\n", b"\n")
+        crlf.write_bytes(lf_bytes.replace(b"\n", b"\r\n"))
+
+        assert extract(crlf) == extract(source), source.name
+        assert docker_run_commands(crlf) == docker_run_commands(source), source.name
 
 
 def test_the_parser_rejects_a_command_that_does_not_exist() -> None:
