@@ -66,6 +66,7 @@ assert is_command_not_found_error(stderr)  # True if "not found" on Unix, "canno
 | File locking | More aggressive | Close files before deletion |
 | Process spawning | Different error codes | Test `!= 0`, not specific codes |
 | TEMP directory | Uses `%TEMP%` | `Path.home() / "AppData" / "Local" / "Temp"` |
+| Directory listing order | NTFS lists sorted, ext4 by hash, tmpfs newest first, so CI's order is not yours. #1633 installed the checksum file as the binary: the first `rglob` match, on CI only | Never take the first match of `rglob`/`glob`/`iterdir`/`listdir`; sort it or select by exact name. `make platform-check` forces both orders |
 | Long `--basetemp` | git object paths pass 260 chars: `test_clone_from_tsv.py`'s two push tests failed at a 238-char basetemp, 66 passed at a short one (2026-10-17) | Keep `--basetemp` short |
 
 ## Windows CI Architecture
