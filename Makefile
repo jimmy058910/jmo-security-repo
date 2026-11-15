@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-sync deps-lock deps-upgrade docker-build docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
+.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile platform-check test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-sync deps-lock deps-upgrade docker-build docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
 
 # Prefer workspace venv if available.
 #
@@ -24,6 +24,7 @@ help:
 	@echo "  test-fast    - Parallel tests, no coverage, skip slow (fastest dev loop)"
 	@echo "  test-parallel - Parallel tests with coverage (CI-like)"
 	@echo "  test-profile  - Profile test durations (identify slow tests)"
+	@echo "  platform-check - Changed tests under CRLF, a non-UTF-8 locale and forced listing order (BASE=origin/dev)"
 	@echo "  verify   - Local CI: lint+test+fast security scans"
 	@echo "  clean    - Clean temporary artifacts"
 	@echo "  normalize-report - Aggregate tool outputs and write JSON/Markdown summaries"
@@ -200,6 +201,13 @@ test-parallel:
 			-m "not smoke and not requires_tools" \
 			--cov --cov-report=term-missing tests/ ; \
 	else echo 'no tests/ directory'; fi
+
+# Before pushing a branch that changes tests: run its changed test files under
+# windows-2022's CRLF checkout, a non-UTF-8 locale and forced directory-listing
+# order (scripts/dev/platform_check.py).
+BASE ?= origin/dev
+platform-check:
+	$(PY) scripts/dev/platform_check.py --base $(BASE)
 
 # Profile test durations (run occasionally to identify slow tests)
 test-profile:
