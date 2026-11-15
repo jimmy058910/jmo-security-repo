@@ -19,7 +19,11 @@ from __future__ import annotations
 import logging
 import shlex
 import subprocess  # nosec B404 - CLI needs subprocess
-from typing import Any
+from collections.abc import Collection
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - annotation only
+    from scripts.cli.tool_manager import ToolManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,19 +34,17 @@ logger = logging.getLogger(__name__)
 
 _colorize = None
 _UNICODE_FALLBACKS = None
-_print_step = None
 
 
 def _init_ui_helpers() -> None:
     """Initialize UI helpers lazily to avoid import cycles."""
-    global _colorize, _UNICODE_FALLBACKS, _print_step
+    global _colorize, _UNICODE_FALLBACKS
     if _colorize is None:
         from scripts.cli.wizard_flows.base_flow import PromptHelper
         from scripts.cli.wizard_flows.ui_helpers import UNICODE_FALLBACKS
 
         prompter = PromptHelper()
         _colorize = prompter.colorize
-        _print_step = prompter.print_step
         _UNICODE_FALLBACKS = UNICODE_FALLBACKS
 
 
@@ -57,12 +59,6 @@ def _get_unicode_fallbacks() -> dict[str, str]:
     _init_ui_helpers()
     assert _UNICODE_FALLBACKS is not None  # guaranteed after _init_ui_helpers()
     return _UNICODE_FALLBACKS
-
-
-def _get_print_step() -> Any:
-    """Get print_step function, initializing if needed."""
-    _init_ui_helpers()
-    return _print_step
 
 
 # ---------------------------------------------------------------------------
@@ -96,9 +92,12 @@ def check_tools_for_matrix(
     use_docker: bool = False,
     auto_fix: bool = False,
     install_deps: bool = False,
+    tools: Collection[str] | None = None,
+    manager: ToolManager | None = None,
 ) -> tuple[bool, list[str]]:
     """
-    Check availability of every tool in TOOL_MATRIX.
+    Check availability of the tools the scan runs (every TOOL_MATRIX tool
+    when `tools` is None).
 
     This is the pre-flight tool check that runs before scan execution.
     If tools are missing, offers to install them or continue anyway. Every
@@ -110,21 +109,24 @@ def check_tools_for_matrix(
         use_docker: True if using Docker (tools bundled in image)
         auto_fix: Automatically install missing tools without prompting
         install_deps: Automatically install missing dependencies (Java)
+        tools: The tools the scan runs; TOOL_MATRIX when None. Each one checked
+            costs a version probe (zap's: 8.5 s), so the wizard passes its
+            target's tools (#1584).
+        manager: A ToolManager whose statuses later steps read again; a new
+            one when None
 
     Returns:
         Tuple of (should_continue: bool, available_tools: list[str])
     """
-    from scripts.cli.wizard_flows.ui_helpers import WIZARD_TOTAL_STEPS
-
     colorize = _get_colorize()
     FALLBACKS = _get_unicode_fallbacks()
-    print_step = _get_print_step()
 
     # Docker mode has all tools bundled - skip check
     if use_docker:
         return True, []
 
-    print_step(1, WIZARD_TOTAL_STEPS, "Tool Pre-flight Check")
+    # No step number: it is part of choosing the target, which sets the tools.
+    print("\n" + colorize("Tool Pre-flight Check", "bold"))
 
     # Show status legend at the start
     _print_status_legend()
@@ -138,16 +140,17 @@ def check_tools_for_matrix(
         )
         from scripts.core.tool_registry import detect_platform
 
-        manager = ToolManager()
+        if manager is None:
+            manager = ToolManager()
         platform = detect_platform()
 
         # One probe per tool: the manager memoises check_tool, so the summary
         # below reads the same statuses rather than probing again.
-        statuses = manager.check_matrix()
-        summary: ToolStatusSummary = manager.get_tool_summary()
+        statuses = manager.check_matrix(tools)
+        summary: ToolStatusSummary = manager.get_tool_summary(tools)
 
-        print(colorize(f"\nTool matrix: {summary.total} tools", "blue"))
-        print(f"\nChecking {summary.total} tools...")
+        scope = "the tool matrix" if tools is None else "the tools this scan runs"
+        print(colorize(f"\nChecking {scope}: {summary.total} tools", "blue"))
 
         missing = [s for s in statuses.values() if not s.installed]
         outdated = [s for s in statuses.values() if s.is_outdated]
@@ -289,6 +292,8 @@ def check_tools_for_matrix(
                     platform,
                     available,
                     auto_install_deps=install_deps,
+                    tools=tools,
+                    manager=manager,
                 )
 
             # No auto_fix: continue with available tools
@@ -316,7 +321,9 @@ def check_tools_for_matrix(
             choice = input("\nChoice [1]: ").strip() or "1"
             if choice == "1":
                 # Auto-fix: run remediation commands
-                return _auto_fix_tools(fix_info, platform, available)
+                return _auto_fix_tools(
+                    fix_info, platform, available, tools=tools, manager=manager
+                )
             elif choice == "2":
                 print(
                     colorize(
@@ -424,6 +431,8 @@ def _auto_fix_tools(
     platform: str,
     available: list[str],
     auto_install_deps: bool = False,
+    tools: Collection[str] | None = None,
+    manager: ToolManager | None = None,
 ) -> tuple[bool, list[str]]:
     """
     Automatically fix tools with issues using parallel installation.
@@ -437,6 +446,9 @@ def _auto_fix_tools(
         platform: Current platform (linux, macos, windows)
         available: Currently available tool names
         auto_install_deps: Automatically install dependencies without prompting
+        tools: The tools the scan runs, re-checked after installing; TOOL_MATRIX
+            when None
+        manager: The caller's ToolManager, cleared and re-read after installing
 
     Returns:
         Tuple of (should_continue, updated_available_tools)
@@ -733,10 +745,14 @@ def _auto_fix_tools(
     try:
         from scripts.cli.tool_manager import ToolManager
 
-        # A fresh manager: its status memo must not predate the installs above.
-        manager = ToolManager()
-        statuses = manager.check_matrix()
-        summary = manager.get_tool_summary()
+        # Its status memo must not predate the installs above. The caller's
+        # manager is cleared rather than replaced: later steps read it.
+        if manager is None:
+            manager = ToolManager()
+        else:
+            manager.invalidate_status_cache()
+        statuses = manager.check_matrix(tools)
+        summary = manager.get_tool_summary(tools)
 
         # Get list of execution-ready tools
         available = [name for name, s in statuses.items() if s.execution_ready]

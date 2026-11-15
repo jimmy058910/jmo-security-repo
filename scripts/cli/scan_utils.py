@@ -38,6 +38,7 @@ from scripts.core.tool_utils import (  # noqa: F401
 if TYPE_CHECKING:  # pragma: no cover - annotation only
     # Deferred: core must stay importable without cli, and this is the only
     # reference to it here.
+    from scripts.cli.tool_manager import ToolManager
     from scripts.core.tool_runner import ToolResult
 
 
@@ -84,6 +85,7 @@ def _run_inline_tool_update(drift_list: list[dict]) -> bool:
 def check_version_drift_before_scan(
     tools: Collection[str],
     interactive: bool = False,
+    manager: ToolManager | None = None,
 ) -> bool:
     """
     Pre-scan version check with context-aware behavior.
@@ -96,6 +98,8 @@ def check_version_drift_before_scan(
     Args:
         tools: The tools the scan will run
         interactive: Whether to prompt user for confirmation
+        manager: A ToolManager that has already probed these tools, whose
+            statuses are read rather than probed again; a new one when None
 
     Returns:
         True if scan should proceed, False if user cancelled in interactive mode
@@ -104,7 +108,8 @@ def check_version_drift_before_scan(
     from scripts.cli.tool_manager import ToolManager
 
     logger = logging.getLogger(__name__)
-    manager = ToolManager()
+    if manager is None:
+        manager = ToolManager()
     drift = manager.get_version_drift(tools)
 
     if not drift:

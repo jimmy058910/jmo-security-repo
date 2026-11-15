@@ -231,7 +231,7 @@ Interactive setup wizard for guided security scanning.
 
 **Tool Pre-flight Check:**
 
-Before scanning, the wizard checks every tool in the [tool matrix](TOOLS.md#the-tool-matrix) and reports which are ready, which are missing or outdated, and which it will skip because they do not apply on this platform or to this target. Missing tools can be installed with `jmo tools install <tool-name>`.
+Once you pick a target type, the wizard checks the tools a scan of that type runs, from the [tool matrix](TOOLS.md#the-tool-matrix), and reports which are ready and which are missing or outdated: a URL scan checks zap and nuclei, a repository scan neither. `--yes` and full presets check their target's tools the same way. Missing tools can be installed with `jmo tools install <tool-name>`.
 
 Use `--auto-fix` to automatically install missing tools, or use Docker mode for full tool coverage.
 

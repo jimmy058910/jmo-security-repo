@@ -8,7 +8,7 @@ fully non-interactive wizard runs. There is no --profile preset any more
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -166,17 +166,21 @@ class TestWizardWithPresets:
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
     @patch("scripts.cli.wizard.check_tools_for_matrix")
-    def test_wizard_yes_mode_checks_the_tool_matrix(
+    def test_wizard_yes_mode_checks_the_targets_tools(
         self,
         mock_tools: MagicMock,
         mock_policy: MagicMock,
         mock_scan: MagicMock,
     ) -> None:
-        """--yes runs the matrix pre-flight with the automation flags passed through.
+        """--yes runs the pre-flight with the automation flags passed through,
+        over the tools its scan runs: the working directory is a repository
+        target, so `--auto-fix` installs what a repository scan needs.
 
-        The pre-flight used to take a profile as its first argument; it now
-        checks the whole matrix and takes none.
+        It used to check the whole matrix, zap included, which a repository
+        scan never runs (#1584).
         """
+        from scripts.cli.wizard import tools_for_target_type
+
         mock_tools.return_value = (True, ["semgrep", "trivy"])
         mock_policy.return_value = (True, False)
         mock_scan.return_value = 0
@@ -185,7 +189,12 @@ class TestWizardWithPresets:
 
         assert result == 0
         mock_tools.assert_called_once_with(
-            yes=True, use_docker=False, auto_fix=True, install_deps=True
+            yes=True,
+            use_docker=False,
+            auto_fix=True,
+            install_deps=True,
+            tools=tools_for_target_type("repo"),
+            manager=ANY,
         )
 
     @pytest.mark.parametrize(

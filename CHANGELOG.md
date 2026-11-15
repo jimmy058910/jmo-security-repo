@@ -616,6 +616,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **The wizard asks for the target before it checks any tool, and then checks only the
+  tools that target's scan runs, once (#1584).** Every step that read tool status built
+  its own `ToolManager` and probed all 14 matrix tools again: twice before the second
+  question, then before "Customize advanced settings?" and again before "Proceed with
+  scan?". With every tool installed on Linux, a URL scan reached "Proceed with scan?"
+  after 49 s; it now takes 9 s, nearly all of it zap's version probe, and a repository
+  scan 4 s. `--yes` and full presets check their target's tools too, so `--auto-fix`
+  installs those rather than the whole matrix. zap's version probe on Linux and macOS
+  caps its heap at 512m, as a scan does: 313-365 MB at peak instead of 387-407 MB.
 - **A release's image-size table reports each platform's image (#1482).** It read the
   multi-arch index's `manifests[].size`, the size of each platform's manifest document,
   and printed `7.8KiB` for both platforms of v1.1.1, beside a hard-coded "155 MB

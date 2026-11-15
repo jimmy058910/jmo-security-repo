@@ -111,7 +111,7 @@ Execute scan? [Y/n]: y
 
 ## Tool Pre-Flight Check and Auto-Install
 
-When running in native mode (non-Docker), the wizard performs a pre-flight tool check and offers to **automatically fix** any issues.
+When running in native mode (non-Docker), the wizard performs a pre-flight tool check once you pick a target type, over the tools that target's scan runs, and offers to **automatically fix** any issues.
 
 ### Tool Status Display
 
