@@ -1,10 +1,12 @@
 ## Summary
 
+<!-- Open this PR against `dev`, not `main`: GitHub's form offers `main` because it is the default branch, and `main` only ever fast-forwards to `dev`. -->
+
 Describe the change in 1-2 sentences.
 
 ## Linked issues
 
-<!-- Use GitHub closing keywords (Closes/Fixes #N) so the issue auto-closes on merge. -->
+<!-- Name the issue with a closing keyword (Closes #N). On a PR to `dev` the keyword does not close the issue by itself: the maintainer copies it into the squash commit, and the issue closes when `dev` reaches `main`. -->
 
 Closes #
 Related to #
