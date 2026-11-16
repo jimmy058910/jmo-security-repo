@@ -754,6 +754,24 @@ The hook runs automatically before every push and takes ~5 seconds. To bypass in
 git push --no-verify  # Use sparingly - skips validation
 ```
 
+#### Platform check (before pushing changed tests)
+
+Three conditions reach a branch only through CI: windows-2022's CRLF checkout, a
+locale that is not UTF-8, and a filesystem that lists a directory in another order.
+Before pushing a branch that adds or changes tests, run:
+
+```bash
+make platform-check                    # the branch's changed tests, against origin/dev
+make platform-check BASE=origin/main   # against another base
+```
+
+It clones the commit twice (LF and CRLF) under `~/.cache/jmo-platform-check/`, runs
+the changed test files five times (normal, CRLF, `LC_ALL=C PYTHONUTF8=0`, listing
+order forced ascending, then descending), and lists every test that passes normally
+and fails, errors or skips under a condition. Exit 2 means a condition did not take
+effect, so the run proved nothing. It checks the commit, not uncommitted edits. The
+docstring of `scripts/dev/platform_check.py` has the details and the limits.
+
 #### Manual validation (before committing)
 
 If you're adding new Python modules, verify they're tracked:

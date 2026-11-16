@@ -739,7 +739,7 @@ def test_write_markdown(tmp_path):
     write_markdown(sample, out)
 
     assert out.exists()
-    content = out.read_text()
+    content = out.read_text(encoding="utf-8")
     assert "# Security Summary" in content
     assert "Total findings: 1" in content
     assert "HIGH" in content

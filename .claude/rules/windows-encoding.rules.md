@@ -308,6 +308,13 @@ universal newlines give `\n`, or `.replace("\r\n", "\n")`. Measured on PR #1639
 whole windows-2022 session, so that job ran no test and still showed green.
 Reading bytes is right only when rewriting a file, as below.
 
+`make platform-check` (`scripts/dev/platform_check.py`) runs a branch's changed
+tests in a CRLF clone and under a non-UTF-8 locale before a push; replayed at the
+pre-fix commit of #1639, it reported this collection error and the three other
+CRLF failures that PR then fixed. For a non-UTF-8 run by hand, `LC_ALL=C` is not
+enough: Python turns UTF-8 mode on in the C locale (`sys.flags.utf8_mode == 1`),
+so the run tests nothing. Add `PYTHONUTF8=0`.
+
 `pathlib.Path.write_text()` opens with `newline=None`, translating every `\n` to
 `os.linesep` — `\r\n` on Windows. Reading a LF file and writing it back **converts
 the whole file**, producing thousands of phantom line changes that bury the real
