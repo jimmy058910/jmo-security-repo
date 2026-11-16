@@ -24,8 +24,23 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 
 
 def _git(repo: Path, *args: str) -> None:
+    # No auto-maintenance: after the fixture's commit, git can start a detached
+    # `maintenance run --auto` that creates and removes .git/objects/maintenance.lock
+    # while the test lists .git. The nightly macOS run of 2026-11-16 (43836034094)
+    # failed on exactly that: lstat() of a lock that rglob() had just listed.
     subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        [
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            *args,
+        ],
         cwd=repo,
         check=True,
         capture_output=True,
