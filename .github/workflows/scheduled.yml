@@ -1579,9 +1579,8 @@ jobs:
       # which must not be indistinguishable from a clean pass. That is the same
       # mistake in a different costume.
       #
-      # TODO(issue-772): partial absence is not caught yet -- one report when
-      # two are expected still passes. Tightening that needs a count that
-      # survives adding a sixth e2e job; see the issue for the options.
+      # Partial absence fails too (#772, closed): one report where two are
+      # expected names the missing suite, read against EXPECTED_E2E_SUITES.
       - name: Fail the run if any e2e test failed
         env:
           # The suites that upload a pytest-report.json -- which is exactly the
