@@ -1424,11 +1424,28 @@ jobs:
         github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
       )
     steps:
-      - name: Download all test results
+      # One download per suite, each into a directory of its own named as the
+      # summary below reads it. A single `pattern: e2e-*-results-*` download
+      # extracts into `path` itself when exactly one artifact matches
+      # (download-artifact@v8's `artifacts.length === 1` branch), so on a run
+      # where only one suite uploaded, test-results/*/pytest-report.json found
+      # nothing and the summary said no suite ran (run 43418732882, #1628).
+      # merge-multiple: true always extracts into `path`, whatever the count.
+      # A suite that uploaded nothing downloads nothing, without an error, and
+      # the gate below names it.
+      - name: Download the ubuntu suite's results
         uses: actions/download-artifact@v8
         with:
-          pattern: e2e-*-results-*
-          path: test-results
+          pattern: e2e-ubuntu-results-*
+          merge-multiple: true
+          path: test-results/e2e-ubuntu-results-${{ github.run_id }}
+
+      - name: Download the macos suite's results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: e2e-macos-results-*
+          merge-multiple: true
+          path: test-results/e2e-macos-results-${{ github.run_id }}
 
       - name: Aggregate results
         run: |
@@ -1530,7 +1547,8 @@ jobs:
           # continue-on-error and fail the run natively.
           #
           # Add a job to that set and you must add it here, or its failures go
-          # unwatched exactly as #769's did.
+          # unwatched exactly as #769's did, and give it a download step of its
+          # own above (test_e2e_gate.py checks both).
           EXPECTED_E2E_SUITES: "ubuntu macos"
         run: |
           echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED} | errored: ${E2E_TOTAL_ERRORS}"
