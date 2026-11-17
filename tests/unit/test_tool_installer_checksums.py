@@ -196,7 +196,7 @@ def test_zap_installs_and_says_it_was_not_verified(
 def test_a_project_with_no_checksum_installs_and_says_it_was_not_verified(
     installer: ToolInstaller,
 ) -> None:
-    fetched = _serve(installer, {"opengrep_manylinux_x86": BINARY})
+    fetched = _serve(installer, {"opengrep_linux_x86": BINARY})
 
     result = installer._install_binary(
         "opengrep", ToolRegistry().get_tool("opengrep"), 0.0
@@ -204,4 +204,4 @@ def test_a_project_with_no_checksum_installs_and_says_it_was_not_verified(
 
     assert result.success, result.message
     assert result.warning and "not verified" in result.warning
-    assert fetched == ["opengrep_manylinux_x86"]
+    assert fetched == ["opengrep_linux_x86"]

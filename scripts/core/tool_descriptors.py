@@ -25,6 +25,7 @@ import http.client
 import json
 import logging
 import re
+import shutil
 import ssl
 import subprocess
 import sys
@@ -978,6 +979,49 @@ def _opengrep_skip_if_empty(flags: Sequence[str]) -> SkipIfEmpty | None:
     )
 
 
+#: The flags that say whether opengrep consults `.gitignore`. Either one in a
+#: user's flags is their choice, and JMo adds neither: opengrep refuses
+#: `--no-git-ignore` twice, or beside `--use-git-ignore` (rc 2, 2.0.0).
+OPENGREP_GIT_IGNORE_FLAGS = ("--no-git-ignore", "--use-git-ignore")
+
+
+def _git_lists_files(root: Path) -> bool:
+    """Whether `git ls-files` works in `root`.
+
+    opengrep 2.0.0 lists a target inside a git work tree with it, and when it
+    fails (git not installed, git refusing a repository another user owns, a
+    `.git` it cannot read) the whole run fails: rc 2, "Could not get files from
+    git ls-files", no results, where 1.32.0 walked the files (measured
+    2026-11-17). Outside a work tree it fails as well (rc 128), and there
+    `--no-git-ignore` changes nothing (measured)."""
+    git = shutil.which("git")
+    if git is None:
+        return False
+    try:
+        done = subprocess.run(
+            [git, "ls-files", "-z"],
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return done.returncode == 0
+
+
+def _opengrep_git_args(flags: Sequence[str], root: Path) -> tuple[str, ...]:
+    """`--no-git-ignore` when git cannot list the target's files, so opengrep
+    walks them as 1.32.0 did instead of failing; nothing when it can, so
+    `.gitignore` keeps out what a repository ignores. Passed always, it read
+    3,859 files of this repository's checkout instead of 494 (nested worktrees,
+    caches), in 120 s instead of 26 (2026-11-17). With git's list, 2.0.0 also
+    skips files a `.gitignore` `!` line re-includes (opengrep#922)."""
+    if any(flag in OPENGREP_GIT_IGNORE_FLAGS for flag in flags):
+        return ()
+    return () if _git_lists_files(root) else ("--no-git-ignore",)
+
+
 # opengrep's debug log, in the scan's scratch beside the outputs: dot-prefixed,
 # as `.zap-plan.yaml` is, so the report reads no `<tool>.json` out of it.
 OPENGREP_LOG = ".opengrep/semgrep.log"
@@ -1010,8 +1054,7 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
                 "--json",
                 "--output",
                 str(ctx.output.resolve()),
-                # No call home to check for a newer release.
-                "--disable-version-check",
+                *_opengrep_git_args(ctx.flags, root),
                 # Fixed: at 4 its tree peaked at 662 MB on app B, at 2 at 507 MB,
                 # the same findings, about 1 s slower (Phase 7, measured).
                 *("-j", "2"),
@@ -1031,19 +1074,23 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
             output_file=ctx.output,
             capture_stdout=False,
             cwd=root,
-            # Its debug log holds the source text of every match, and defaults
-            # to `~/.opengrep/semgrep.log`, outside the scan and outliving it
-            # (measured on 1.32.0, 2026-10-29: a scan of a key left the key in
-            # the home). `SEMGREP_LOG_FILE` is the one variable that moves it;
-            # `OPENGREP_LOG_FILE` and the two `*_USER_DATA_FOLDER` do nothing.
-            # opengrep creates the missing directories, and opens a relative
-            # path from the working directory, which is the target: so it is
-            # absolute, as `--output` is. The 255 MB extraction cache
-            # (`~/.cache/opengrep`) stays where it is: moving it into every
-            # scan would cost that much per scan.
+            # Its log defaults to `~/.opengrep/semgrep.log`, outside the scan
+            # and outliving it. On 1.32.0 it held the source text of every
+            # match (2026-10-29: a scan of a key left the key in the home); on
+            # 2.0.0 it holds the run's summary and no match text (85 bytes
+            # against 16 KB for the same scan, 2026-11-17), and it is still
+            # kept in the scan's scratch, not the home. `SEMGREP_LOG_FILE` is
+            # the one variable that moves it; `OPENGREP_LOG_FILE` and the two
+            # `*_USER_DATA_FOLDER` do nothing (1.32.0). opengrep creates the
+            # missing directories, and opens a relative path from the working
+            # directory, which is the target: so it is absolute, as `--output`
+            # is. 2.0.0 unpacks nothing; 1.32.0's 244 MB extraction cache sat
+            # in `~/.cache/opengrep`, outside the scan.
             env={"SEMGREP_LOG_FILE": str((ctx.out_dir / OPENGREP_LOG).resolve())},
             skip_if_empty=_opengrep_skip_if_empty(ctx.flags),
-            # Measured on 1.32.0 (2026-10-29): a run whose files carry errors
+            # Measured on 1.32.0 (2026-10-29), again on 2.0.0 (2026-11-17,
+            # whose invalid-config error reads "unable to find a config"
+            # where 1.32.0 said "invalid configuration"): a run whose files carry errors
             # (a syntax error, a Timeout, a Stack overflow) is rc 0, with every
             # other file's results in the output and the errors in `errors`. An
             # invalid config is rc 7 with an output holding no results and the
@@ -2320,7 +2367,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             name="opengrep",
             memory_mb=550,  # 507 MB at -j 2
             invocations={"repo": _opengrep_repo},
-            # `opengrep --version` prints the bare version (measured, 1.32.0).
+            # `opengrep --version` prints the bare version (measured, 1.32.0
+            # and 2.0.0).
             version_probe=VersionProbe(re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE)),
             exclusion_style=ExclusionStyle.INLINE,
             exclusion_flag="--exclude",
@@ -2332,8 +2380,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # JMo reads as JSON, rc 0 (measured, 1.32.0). The same for `-j`
             # ("option '-j' cannot be repeated"; `--jobs` and `-j` together,
             # and `--rewrite-rule-ids` against JMo's `--no-` form, are rc 2
-            # too), which JMo sets to 4. `--enable-version-check` would undo
-            # JMo's `--disable-version-check`. It reads no abbreviation
+            # too), which JMo sets to 2. It reads no abbreviation
             # (`--outp` is "unknown option"), and chains `-qj2` as `-q -j 2`.
             # Its `-f` is `--config`, which adds rules, as a repeated
             # `--exclude` adds exclusions. `--error` is rc 1 for any finding
@@ -2357,8 +2404,6 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                     "--timeout",
                     "--rewrite-rule-ids",
                     "--no-rewrite-rule-ids",
-                    "--enable-version-check",
-                    "--disable-version-check",
                 ),
                 EXIT_CODE=("--error", "--strict"),
             ),

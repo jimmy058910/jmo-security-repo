@@ -283,6 +283,21 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **opengrep 2.0.0 (#1622).** Its release renamed the Linux binary
+  (`opengrep_linux_<arch>`, now static), dropped the musl builds, and ships Windows as a
+  zip of `opengrep.exe` and the six DLLs it loads, which `jmo tools install` now keeps
+  beside the exe; the image, CI and the devcontainer fetch the new names. 2.0.0 lists a
+  git repository's files with `git ls-files` and fails the whole run when git cannot (git
+  not installed, or refusing a repository another user owns), where 1.32.0 walked the
+  files: JMo now tries `git ls-files` first and passes `--no-git-ignore` when it fails.
+  With the same files, 2.0.0 found what 1.32.0 found on juice-shop, and one more on this
+  repository; it writes no match text to its log, unpacks nothing on first run, and
+  scanned juice-shop about a third faster. It skips tracked files a `.gitignore` pattern
+  matches (re-included with `!`, or added with `git add -f`: 27 of juice-shop's 212
+  findings), its Dockerfile rules no longer read `*-Dockerfile` or `*_Dockerfile`, and a
+  folder scanned inside a git repository under `tests/` or `build/` examines 0 files
+  ([KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md#opengrep-also-skips-tests-build-output-and-vendored-code)).
+  `--disable-version-check` is no longer passed: 2.0.0 ignores it.
 - **Breaking. A finding's NIST CSF 2.0 mappings name CSF 2.0 subcategories, in CSF 2.0's
   words (#1572).** They carried CSF 1.1: `PR.AC-1`, `PR.IP-1`, `PR.PT-3` and `DE.CM-8` do
   not exist in CSF 2.0, and `GV.SC-3` quoted 1.1's ID.SC-1. Checked against NIST CSWP 29

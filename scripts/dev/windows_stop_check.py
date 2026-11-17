@@ -6,7 +6,7 @@ tools installed. Run it from a console window (cmd.exe, PowerShell or Windows
 Terminal; not Git Bash's mintty, which is not a Windows console), in the
 checkout, on the branch under test:
 
-    .venv\\Scripts\\python.exe windows_stop_check.py C:\\path\\to\\a\\repository
+    .venv\\Scripts\\python.exe scripts\\dev\\windows_stop_check.py C:\\path\\to\\a\\repository
 
 Two checks, each on a fresh scan of that repository (the default matrix;
 missing tools are skipped):

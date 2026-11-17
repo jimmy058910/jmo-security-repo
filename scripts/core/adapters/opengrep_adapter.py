@@ -14,7 +14,7 @@ and no registry. Its ``--json`` document is semgrep's shape, and this adapter
 is the semgrep adapter's, renamed: the tool name is hashed into every finding
 id, so every SAST id changed once, on purpose (UPGRADE.md).
 
-Tool Version: 1.32.0
+Tool Version: 2.0.0
 Output Format: JSON with a ``results`` array, ``errors`` and ``paths.scanned``.
     ``errors`` (a file that timed out or did not parse) is read by
     ``tool_diagnostics``, not here, and ``paths.scanned`` by the descriptor

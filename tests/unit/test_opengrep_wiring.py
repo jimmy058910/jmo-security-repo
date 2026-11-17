@@ -26,6 +26,12 @@ The descriptor row (task B3), measured on v1.32.0 the same day:
   only from `--strict`, which a user may not set.
 - It has no `--metrics` flag, so nothing in the command turns telemetry off.
 
+On v2.0.0 (2026-11-17): the Linux binary is static and unpacks nothing, the
+Windows asset is a zip of `opengrep.exe` and six DLLs, the rc codes above hold,
+an invalid `--config` reads "unable to find a config" (not "invalid
+configuration"), `--disable-version-check` is warned about and ignored (so JMo
+no longer passes it), and the log below holds the run's summary only.
+
 Its debug log (task B5), measured on v1.32.0 the same day under a scratch
 `HOME`:
 
@@ -70,37 +76,28 @@ from scripts.core.tool_descriptors import (
 from scripts.core.tool_diagnostics import extract_tool_diagnostics
 from scripts.core.tool_registry import ToolInfo
 
-# opengrep v1.32.0's release assets, listed with `gh release view v1.32.0 -R
-# opengrep/opengrep --json assets --jq '.assets[].name'` on 2026-10-29. A URL
-# the installer builds must be one of these, or it downloads a 404 page.
-RELEASE_ASSETS_1_32_0 = frozenset(
+# opengrep v2.0.0's release assets, listed with `gh release view v2.0.0 -R
+# opengrep/opengrep --json assets --jq '.assets[].name'` on 2026-11-17. A URL
+# the installer builds must be one of these, or it downloads a 404 page. 2.0.0
+# renamed `opengrep_manylinux_*` to `opengrep_linux_*`, dropped the musllinux
+# builds, and zips the Windows exe with the DLLs it loads.
+RELEASE_ASSETS_2_0_0 = frozenset(
     {
-        "opengrep-core_linux_aarch64.tar.gz",
-        "opengrep-core_linux_x86.tar.gz",
-        "opengrep-core_osx_aarch64.tar.gz",
-        "opengrep-core_osx_x86.tar.gz",
-        "opengrep-core_windows_x86.zip",
-        "opengrep_manylinux_aarch64",
-        "opengrep_manylinux_aarch64.cert",
-        "opengrep_manylinux_aarch64.sig",
-        "opengrep_manylinux_x86",
-        "opengrep_manylinux_x86.cert",
-        "opengrep_manylinux_x86.sig",
-        "opengrep_musllinux_aarch64",
-        "opengrep_musllinux_aarch64.cert",
-        "opengrep_musllinux_aarch64.sig",
-        "opengrep_musllinux_x86",
-        "opengrep_musllinux_x86.cert",
-        "opengrep_musllinux_x86.sig",
+        "opengrep_linux_aarch64",
+        "opengrep_linux_aarch64.cert",
+        "opengrep_linux_aarch64.sig",
+        "opengrep_linux_x86",
+        "opengrep_linux_x86.cert",
+        "opengrep_linux_x86.sig",
         "opengrep_osx_arm64",
         "opengrep_osx_arm64.cert",
         "opengrep_osx_arm64.sig",
         "opengrep_osx_x86",
         "opengrep_osx_x86.cert",
         "opengrep_osx_x86.sig",
-        "opengrep_windows_x86.exe",
-        "opengrep_windows_x86.exe.cert",
-        "opengrep_windows_x86.exe.sig",
+        "opengrep_windows_x86.zip",
+        "opengrep_windows_x86.zip.cert",
+        "opengrep_windows_x86.zip.sig",
     }
 )
 
@@ -112,13 +109,13 @@ class TestInstallUrl:
     @pytest.mark.parametrize(
         ("platform_key", "machine", "asset"),
         [
-            ("linux", "x86_64", "opengrep_manylinux_x86"),
-            ("linux", "aarch64", "opengrep_manylinux_aarch64"),
+            ("linux", "x86_64", "opengrep_linux_x86"),
+            ("linux", "aarch64", "opengrep_linux_aarch64"),
             ("macos", "x86_64", "opengrep_osx_x86"),
             ("macos", "arm64", "opengrep_osx_arm64"),
-            ("windows", "AMD64", "opengrep_windows_x86.exe"),
+            ("windows", "AMD64", "opengrep_windows_x86.zip"),
             # No Windows arm64 build exists: the x86 one is fetched there.
-            ("windows", "ARM64", "opengrep_windows_x86.exe"),
+            ("windows", "ARM64", "opengrep_windows_x86.zip"),
         ],
     )
     def test_the_url_names_a_real_asset(
@@ -133,7 +130,7 @@ class TestInstallUrl:
             return None  # "no download tool": _install_binary stops here
 
         info = ToolInfo(
-            name="opengrep", version="1.32.0", description="", category="binary_tools"
+            name="opengrep", version="2.0.0", description="", category="binary_tools"
         )
         with (
             patch("platform.machine", return_value=machine),
@@ -142,9 +139,9 @@ class TestInstallUrl:
             installer._install_binary("opengrep", info, time.time())
 
         assert urls == [
-            "https://github.com/opengrep/opengrep/releases/download/v1.32.0/" + asset
+            "https://github.com/opengrep/opengrep/releases/download/v2.0.0/" + asset
         ]
-        assert asset in RELEASE_ASSETS_1_32_0
+        assert asset in RELEASE_ASSETS_2_0_0
 
 
 def test_jmo_tools_check_says_there_is_no_windows_arm64_build() -> None:
@@ -215,10 +212,7 @@ class TestDescriptor:
             assert reserved[flag] is Reserved.OUTPUT
         for flag in ("--error", "--strict"):
             assert reserved[flag] is Reserved.EXIT_CODE
-        for flag in (
-            *("-j", "--jobs", "--rewrite-rule-ids", "--no-rewrite-rule-ids"),
-            *("--enable-version-check", "--disable-version-check"),
-        ):
+        for flag in ("-j", "--jobs", "--rewrite-rule-ids", "--no-rewrite-rule-ids"):
             assert reserved[flag] is Reserved.PASSED
         # A rule file is a list option: a user's own pack adds to JMo's.
         assert "--config" not in reserved
@@ -290,7 +284,8 @@ def test_the_command_line(tmp_path) -> None:
         "--json",
         "--output",
         str((out / "opengrep.json").resolve()),
-        "--disable-version-check",
+        # `repo` is no git work tree, so git cannot list it: opengrep walks it.
+        "--no-git-ignore",
         "-j",
         "2",
         # Per file and rule. opengrep's own 5 s cut a large minified file's
@@ -708,9 +703,7 @@ def test_a_user_jobs_flag_is_refused_with_its_reason(tmp_path, caplog) -> None:
     assert Reserved.PASSED.value in caplog.text
 
 
-@pytest.mark.parametrize(
-    "flag", ["--rewrite-rule-ids", "--no-rewrite-rule-ids", "--enable-version-check"]
-)
+@pytest.mark.parametrize("flag", ["--rewrite-rule-ids", "--no-rewrite-rule-ids"])
 def test_the_other_flags_jmo_passes_are_refused(tmp_path, flag) -> None:
     repo = tmp_path / "repo"
     _plant(repo, ["app.py"])
@@ -722,6 +715,57 @@ def test_the_other_flags_jmo_passes_are_refused(tmp_path, flag) -> None:
     assert definition.command.count(flag) == (
         1 if flag == "--no-rewrite-rule-ids" else 0
     )
+
+
+def test_a_repository_git_can_list_keeps_its_gitignore(tmp_path) -> None:
+    """Passed always, `--no-git-ignore` read 3,859 files of a developer's
+    checkout instead of 494: nested worktrees, caches and private notes a
+    `.gitignore` keeps out. Where git can list the files, it is not passed."""
+    if shutil.which("git") is None:
+        pytest.skip("git is not installed")
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, timeout=60)
+    out = tmp_path / "out"
+    out.mkdir()
+
+    _, (definition,) = _recorded(repo, out)
+
+    assert "--no-git-ignore" not in definition.command
+
+
+def test_where_git_cannot_run_opengrep_walks_the_files(tmp_path, monkeypatch) -> None:
+    """opengrep 2.0.0 fails the whole run (rc 2, no results) when `git
+    ls-files` fails in a work tree: git missing here, as on a machine with no
+    git, or refusing a repository another user owns."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    # No git on PATH. Not a stub of subprocess.run: that attribute is the one
+    # module every caller shares (testing.rules.md, the time.sleep case).
+    monkeypatch.setenv("PATH", str(tmp_path / "no-git-here"))
+
+    _, (definition,) = _recorded(repo, out)
+
+    assert definition.command.count("--no-git-ignore") == 1
+
+
+@pytest.mark.parametrize("flag", ["--no-git-ignore", "--use-git-ignore"])
+def test_a_user_s_own_git_ignore_flag_decides(tmp_path, flag) -> None:
+    """opengrep refuses `--no-git-ignore` twice, or beside `--use-git-ignore`
+    (rc 2), so a user who names either gets theirs, once, and JMo adds none."""
+    repo = tmp_path / "repo"
+    _plant(repo, ["app.py"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    _, (definition,) = _recorded(repo, out, {"opengrep": {"flags": [flag]}})
+
+    command = definition.command
+    assert command.count(flag) == 1
+    assert sum(command.count(f) for f in ("--no-git-ignore", "--use-git-ignore")) == 1
 
 
 # --- what a run with errors still gives ------------------------------------------
@@ -821,7 +865,7 @@ def test_a_run_with_errors_is_rc_0_and_keeps_the_other_files(tmp_path) -> None:
         [
             *("--config", str(BUNDLE_DIR / "python.yaml")),
             *("--no-rewrite-rule-ids", "--json", "--output", "o.json"),
-            *("--disable-version-check", "-j", "4", "."),
+            *("-j", "4", "."),
         ],
         tmp_path,
     )
@@ -844,7 +888,7 @@ def test_an_invalid_config_is_rc_7_with_no_results(tmp_path) -> None:
             *("--config", str(BUNDLE_DIR / "python.yaml")),
             *("--config", str(tmp_path / "no-such-rules.yaml")),
             *("--no-rewrite-rule-ids", "--json", "--output", "o.json"),
-            *("--disable-version-check", "-j", "4", "."),
+            *("-j", "4", "."),
         ],
         tmp_path,
     )
@@ -852,7 +896,9 @@ def test_an_invalid_config_is_rc_7_with_no_results(tmp_path) -> None:
     data = json.loads((tmp_path / "o.json").read_bytes())
     assert done.returncode == 7
     assert data["results"] == []
-    assert any("invalid configuration" in e["message"] for e in data["errors"])
+    # The wording is the version's ("invalid configuration file found" on
+    # 1.32.0, "unable to find a config" on 2.0.0); both name the missing path.
+    assert any("no-such-rules.yaml" in e["message"] for e in data["errors"])
 
 
 @pytest.mark.requires_tools
@@ -1359,8 +1405,9 @@ def test_a_scan_leaves_no_log_in_the_home_directory(tmp_path, monkeypatch) -> No
     assert _stat_of(home_log) == before, f"{home_log} was written by the scan"
     log = out / ".opengrep" / "semgrep.log"
     assert log.is_file(), sorted(p.name for p in out.rglob("*"))
-    # The log of THIS scan: its debug lines name the file it matched.
-    assert "src/a.py" in log.read_text(encoding="utf-8", errors="replace")
+    # The log of THIS scan, which `out` was empty before. 1.32.0's debug lines
+    # named the matched file; 2.0.0 writes only the run's summary there.
+    assert log.stat().st_size > 0
     # Nothing was left in the repository either.
     assert sorted(p.name for p in repo.iterdir()) == ["src"]
 

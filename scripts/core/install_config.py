@@ -243,14 +243,16 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "macos": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-apple-darwin.tar.gz",
         "default": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-unknown-linux-gnu.tar.gz",
     },
-    # opengrep: a static binary, no archive, no version in the name (v1.32.0's
-    # assets, listed 2026-10-29). ARM is "aarch64" on Linux but "arm64" on
-    # macOS, so {arch_x86} reads the platform's own name. No Windows arm64
-    # build, so Windows is the x86 one on every architecture, as for zizmor.
+    # opengrep: no version in the name (v2.0.0's assets, listed 2026-11-17).
+    # Linux and macOS are a bare binary; Windows is a zip holding opengrep.exe
+    # and the six DLLs it loads, which the installer keeps beside it. ARM is
+    # "aarch64" on Linux but "arm64" on macOS, so {arch_x86} reads the
+    # platform's own name. No Windows arm64 build, so Windows is the x86 one
+    # on every architecture, as for zizmor.
     "opengrep": {
-        "windows": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_windows_x86.exe",
+        "windows": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_windows_x86.zip",
         "macos": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_osx_{arch_x86}",
-        "default": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_manylinux_{arch_x86}",
+        "default": "https://github.com/opengrep/opengrep/releases/download/v{version}/opengrep_linux_{arch_x86}",
     },
     # osv-scanner: raw binaries, no archive, no version in the name (v2.6.0's
     # assets, listed 2026-09-28); Windows has an arm64 build.

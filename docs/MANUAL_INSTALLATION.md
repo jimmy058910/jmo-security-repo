@@ -127,11 +127,14 @@ scoop install trufflehog
 # Any platform: JMo downloads the pinned release binary into ~/.jmo/bin/
 jmo tools install opengrep
 
-# By hand: take the asset for your platform from
-# https://github.com/opengrep/opengrep/releases/tag/v1.32.0
-# (opengrep_manylinux_x86, opengrep_manylinux_aarch64, opengrep_osx_x86,
-# opengrep_osx_arm64 or opengrep_windows_x86.exe), name it `opengrep`
-# (`opengrep.exe` on Windows), make it executable and put it on your PATH
+# By hand on Linux or macOS: take the asset for your platform from
+# https://github.com/opengrep/opengrep/releases/tag/v2.0.0
+# (opengrep_linux_x86, opengrep_linux_aarch64, opengrep_osx_x86 or
+# opengrep_osx_arm64), name it `opengrep`, make it executable and put it on
+# your PATH.
+# By hand on Windows: unzip opengrep_windows_x86.zip and keep every file in
+# it together: opengrep.exe does not start without the DLLs beside it. Put
+# that folder on your PATH.
 ```
 
 #### Vulnerabilities + SBOM

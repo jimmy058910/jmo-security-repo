@@ -1682,10 +1682,9 @@ jobs:
           gzip -t /tmp/zizmor.tar.gz
           tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor
           chmod +x /usr/local/bin/zizmor
-          # opengrep: a static binary, no archive; assets are named by flavour
-          # and arch.
+          # opengrep: a static binary, no archive; assets are named by arch.
           curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
-            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_linux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
           # osv-scanner: a raw binary, checked in /tmp against the release's
@@ -1872,8 +1871,9 @@ jobs:
   # printing what it checked so the log is the evidence:
   #   1. `jmo tools install opengrep` (the product's installer, not a curl)
   #      puts the versions.yaml pin in ~/.jmo/bin, `jmo tools check` agrees, and
-  #      the file's sha256 is the one GitHub lists for the pin's
-  #      opengrep_windows_x86.exe.
+  #      ~/.jmo/bin holds opengrep.exe and every DLL of the pin's
+  #      opengrep_windows_x86.zip, byte for byte, the zip being the one whose
+  #      sha256 GitHub lists.
   #   2. The real-binary opengrep tests pass: the juice-shop fixture guard (the
   #      four findings, cwd independence, no network, the proxy control), the
   #      requires_tools tests of test_opengrep_wiring.py (among them
@@ -1881,12 +1881,13 @@ jobs:
   #      the user's profile) and `scan --validate` on every bundle file.
   #   3. `jmo scan` with per_tool.opengrep.configs holding a drive-letter path
   #      (C:\...\javascript.yaml) reads `ran`, finds the fixture's four
-  #      findings, and opengrep's own log shows it loaded that path. The four
+  #      findings, and opengrep's log counts that file's rules and no more
+  #      (the manifest's count for javascript.yaml). The four
   #      are checked twice: in opengrep's own document, whose paths carry
   #      backslashes here, and in the report phase's summaries/findings.json,
   #      where they must be forward-slash: that file is what a Windows user
   #      reads, uploads and diffs.
-  #   4. That scan's debug log is in its scratch, and no semgrep.log under the
+  #   4. That scan's log is in its scratch, and no semgrep.log under the
   #      profile gained content.
   #   5. REPORT ONLY: whether Microsoft Defender is on, and whether it flags the
   #      rule files. It never fails the job; it is the first thing to read when
@@ -2044,19 +2045,22 @@ jobs:
             throw "jmo resolves $($tool.binary_path), not $exe"
           }
 
-      - name: Check the installed file is the pinned release's Windows asset
+      - name: Check the installed files are the pinned release's Windows asset
         if: steps.changes.outputs.opengrep == 'true'
         # The version above is what the binary says. This is what was
-        # downloaded: the sha256 GitHub lists for the pin's asset, read now, so
-        # a bump of the pin needs no edit here. Its own step because it is the
-        # only one that holds the token.
+        # installed: the asset is a zip (since 2.0.0) holding opengrep.exe and
+        # the DLLs it loads, so the zip is fetched again, checked against the
+        # sha256 GitHub lists for it, read now so a bump of the pin needs no
+        # edit here, and each file in it compared with the one in ~/.jmo/bin.
+        # A DLL left behind is an exe that cannot start. Its own step because
+        # it is the only one that holds the token.
         env:
           OPENGREP_VERSION: ${{ steps.pins.outputs.OPENGREP_VERSION }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $asset = 'opengrep_windows_x86.exe'
-          $exe = Join-Path $env:USERPROFILE '.jmo\bin\opengrep.exe'
+          $asset = 'opengrep_windows_x86.zip'
+          $bin = Join-Path $env:USERPROFILE '.jmo\bin'
           $uri = "https://api.github.com/repos/opengrep/opengrep/releases/tags/v$env:OPENGREP_VERSION"
           $headers = @{ Accept = 'application/vnd.github+json' }
           if ($env:GH_TOKEN) { $headers.Authorization = "Bearer $env:GH_TOKEN" }
@@ -2065,10 +2069,26 @@ jobs:
           if ($listed.Count -ne 1) { throw "release v$env:OPENGREP_VERSION lists $($listed.Count) assets named $asset" }
           if (-not $listed[0].digest) { throw "release v$env:OPENGREP_VERSION lists no digest for $asset" }
           $want = $listed[0].digest -replace '^sha256:', ''
-          $got = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLowerInvariant()
+          $zip = Join-Path $env:RUNNER_TEMP $asset
+          Invoke-WebRequest -Uri $listed[0].browser_download_url -OutFile $zip -MaximumRetryCount 3 -RetryIntervalSec 5
+          $got = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
           Write-Host "release v$env:OPENGREP_VERSION $asset ($($listed[0].size) bytes) sha256 $want"
-          Write-Host "installed $exe ($((Get-Item -LiteralPath $exe).Length) bytes) sha256 $got"
-          if ($got -ne $want) { throw "the installed file is not $asset of v$env:OPENGREP_VERSION" }
+          if ($got -ne $want) { throw "the download of $asset is not the one GitHub lists (sha256 $got)" }
+          $unpacked = Join-Path $env:RUNNER_TEMP 'opengrep-asset'
+          Expand-Archive -LiteralPath $zip -DestinationPath $unpacked -Force
+          # The exe and its DLLs are what the installer keeps; anything else a
+          # later zip adds (a licence, a readme) is not installed and not checked.
+          $files = @(Get-ChildItem -LiteralPath $unpacked -File -Recurse |
+            Where-Object { $_.Name -eq 'opengrep.exe' -or $_.Extension -eq '.dll' })
+          if (-not ($files | Where-Object { $_.Name -eq 'opengrep.exe' })) { throw "$asset holds no opengrep.exe" }
+          foreach ($file in $files) {
+            $installed = Join-Path $bin $file.Name
+            if (-not (Test-Path -LiteralPath $installed)) { throw "$($file.Name) from $asset is not in $bin" }
+            $a = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash
+            $b = (Get-FileHash -Algorithm SHA256 -LiteralPath $installed).Hash
+            Write-Host "$($file.Name) ($($file.Length) bytes): $(if ($a -eq $b) { 'installed, same bytes' } else { 'DIFFERS' })"
+            if ($a -ne $b) { throw "$installed is not $($file.Name) of $asset" }
+          }
 
       - name: Fetch the rule-bundle fixture
         if: steps.changes.outputs.opengrep == 'true'
@@ -2211,20 +2231,22 @@ jobs:
             throw "summaries/findings.json holds paths that are not repo-relative with forward slashes: $($unclean -join '; ')"
           }
 
-          # The debug log is in the scan's scratch, and opengrep loaded that
-          # drive-letter path and no other rule file.
+          # The log is in the scan's scratch, and opengrep loaded that
+          # drive-letter path and no other rule file. 2.0.0's log is the run's
+          # summary ("4 files · 177 rules"), not 1.x's debug lines naming each
+          # config, so the rule count is the evidence: it is the configured
+          # file's count in the bundle manifest, and any other file would add.
           $log = Join-Path $out '.opengrep/semgrep.log'
-          if (-not (Test-Path -LiteralPath $log)) { throw "no debug log at $log" }
+          if (-not (Test-Path -LiteralPath $log)) { throw "no log at $log" }
           $logText = Get-Content -Raw -LiteralPath $log
-          Write-Host "debug log: $log ($((Get-Item -LiteralPath $log).Length) bytes)"
-          Select-String -LiteralPath $log -Pattern 'Loading local config from', 'rules from \d+ config' |
-            ForEach-Object { Write-Host "  | $($_.Line)" }
-          $slashes = { param($text) $text.Replace('\', '/').ToLowerInvariant() }
-          $loaded = & $slashes $logText
-          if (-not $loaded.Contains((& $slashes $rules))) { throw "the debug log never names $rules" }
-          $named = @([regex]::Matches($loaded, 'jmo_rules/[a-z_]+\.yaml') | ForEach-Object { $_.Value } | Sort-Object -Unique)
-          Write-Host "bundle files the log names: $($named -join ', ')"
-          if ($named.Count -ne 1) { throw 'the log names a rule file other than the one configured' }
+          Write-Host "log: $log ($((Get-Item -LiteralPath $log).Length) bytes)"
+          $manifest = Get-Content -Raw -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'scripts/jmo_rules/SOURCES.json') | ConvertFrom-Json
+          $want = [int]$manifest.files.'javascript.yaml'.rules
+          $counted = [regex]::Match($logText, '(\d+) rules')
+          if (-not $counted.Success) { throw "the log reports no rule count: $logText" }
+          Write-Host "rules the log reports: $($counted.Groups[1].Value); javascript.yaml holds $want"
+          $loadedRules = [int]$counted.Groups[1].Value
+          if ($loadedRules -ne $want) { throw "opengrep loaded $loadedRules rules, not javascript.yaml's $want" }
 
           # No debug log under the profile gained content. A version probe may
           # create one or empty it (so absent and empty both count as nothing).

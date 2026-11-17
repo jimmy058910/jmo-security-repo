@@ -70,7 +70,7 @@ fi
 # 5) Minimal security scans on repo (fast and local)
 if command -v opengrep >/dev/null 2>&1; then
   log "opengrep scan (the bundled rules)"
-  opengrep scan --config scripts/jmo_rules --no-rewrite-rule-ids --disable-version-check . || true
+  opengrep scan --config scripts/jmo_rules --no-rewrite-rule-ids . || true
 else
   log "opengrep not installed; skipping"
 fi
