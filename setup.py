@@ -25,6 +25,14 @@ SHIPPED = {
     "docs/schemas/common_finding.v1.json": "scripts/core/schemas/common_finding.v1.json",
 }
 
+# repository glob -> directory inside the wheel. A glob, not a list of names, so
+# a policy added to policies/builtin/ ships without a second edit here.
+SHIPPED_GLOBS = {
+    # The built-in Rego policies `jmo report --policy` and `jmo policy` read;
+    # scripts/core/policy_engine.py's builtin_policies_dir() finds them here.
+    "policies/builtin/*.rego": "scripts/core/policies/builtin",
+}
+
 
 HERE = Path(__file__).resolve().parent
 
@@ -43,6 +51,16 @@ class BuildPy(build_py):
             target = Path(self.build_lib) / dest
             self.mkpath(str(target.parent))
             self.copy_file(str(source), str(target))
+        for pattern, dest_dir in SHIPPED_GLOBS.items():
+            sources = sorted(HERE.glob(pattern))
+            if not sources:
+                raise SystemExit(
+                    f"setup.py: nothing matches {pattern}, so the wheel would be broken"
+                )
+            target_dir = Path(self.build_lib) / dest_dir
+            self.mkpath(str(target_dir))
+            for source in sources:
+                self.copy_file(str(source), str(target_dir / source.name))
 
 
 setup(cmdclass={"build_py": BuildPy})

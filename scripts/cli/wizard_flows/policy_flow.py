@@ -14,7 +14,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-from scripts.core.policy_engine import PolicyEngine, PolicyResult
+from scripts.core.policy_engine import (
+    PolicyEngine,
+    PolicyResult,
+    builtin_policies_dir,
+)
 
 # Patterns for sensitive data truncation (Fix 3.3 - Issue #12)
 SENSITIVE_PATTERNS = [
@@ -33,25 +37,6 @@ SENSITIVE_PATTERNS = [
 ]
 
 logger = logging.getLogger(__name__)
-
-
-def _get_builtin_policies_dir() -> Path:
-    """Get path to built-in policies directory.
-
-    Uses project root detection (pyproject.toml or jmo.yml) for robustness,
-    falling back to relative path traversal if markers not found.
-
-    Returns:
-        Path to policies/builtin directory
-    """
-    # Find project root by looking for marker files
-    current = Path(__file__).resolve()
-    for parent in current.parents:
-        if (parent / "pyproject.toml").exists() or (parent / "jmo.yml").exists():
-            return parent / "policies" / "builtin"
-
-    # Fallback to relative path traversal (4 levels up from this file)
-    return Path(__file__).parent.parent.parent.parent / "policies" / "builtin"
 
 
 def _normalize_policy_name(name: str) -> str:
@@ -114,7 +99,7 @@ def policy_evaluation_menu(
         return {}
 
     # Discover built-in policies
-    builtin_dir = _get_builtin_policies_dir()
+    builtin_dir = builtin_policies_dir()
     builtin_policies = list(builtin_dir.glob("*.rego"))
 
     if not builtin_policies:

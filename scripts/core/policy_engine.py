@@ -42,6 +42,30 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def builtin_policies_dir() -> Path:
+    """The built-in Rego policies: beside this module in a wheel, else the repository's.
+
+    The policies are tracked at `policies/builtin/` in the repository root,
+    outside the `scripts` package, so an installed wheel has no such directory:
+    setup.py copies them in as `scripts/core/policies/builtin/`. A source
+    checkout, the editable install and the Docker image (an editable install of
+    the source tree) read `policies/builtin/` itself.
+
+    Every reader resolves the directory here. Four separate copies of this
+    lookup each walked up from their own `__file__` to a project root a wheel
+    does not have, so a pip-installed jmo listed no policy and enforced none.
+    """
+    packaged = Path(__file__).parent / "policies" / "builtin"
+    if packaged.is_dir():
+        return packaged
+    return Path(__file__).resolve().parents[2] / "policies" / "builtin"
+
+
+def user_policies_dir() -> Path:
+    """The user's own policies, which override a built-in one of the same name."""
+    return Path.home() / ".jmo" / "policies"
+
+
 @dataclass
 class PolicyResult:
     """Result of policy evaluation."""

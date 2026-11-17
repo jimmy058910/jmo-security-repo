@@ -39,6 +39,8 @@ PACKAGING_INPUTS = (
     "versions.yaml",
     "docs/schemas/common_finding.v1.json",
 )
+# setup.py's SHIPPED_GLOBS: copied by pattern, so a new policy needs no edit here.
+PACKAGING_GLOBS = ("policies/builtin/*.rego",)
 
 pytestmark = pytest.mark.slow
 
@@ -56,6 +58,11 @@ def wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
         if (REPO_ROOT / name).is_file():
             (src / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO_ROOT / name, src / name)
+    for pattern in PACKAGING_GLOBS:
+        for path in REPO_ROOT.glob(pattern):
+            rel = path.relative_to(REPO_ROOT)
+            (src / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, src / rel)
     shutil.copytree(
         REPO_ROOT / "scripts",
         src / "scripts",

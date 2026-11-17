@@ -434,18 +434,15 @@ def cmd_report(args, _log_fn) -> int:
                 write_policy_summary_md,
             )
 
-            builtin_dir = Path(__file__).parent.parent.parent / "policies" / "builtin"
-            user_dir = Path.home() / ".jmo" / "policies"
-
             _log_fn(
                 args,
                 "INFO",
                 f"Evaluating {len(policy_names)} policies: {', '.join(policy_names)}",
             )
 
-            policy_results = evaluate_policies(
-                findings, policy_names, builtin_dir, user_dir
-            )
+            # The built-in and user directories come from policy_engine's one
+            # resolver, which also works from an installed wheel.
+            policy_results = evaluate_policies(findings, policy_names)
 
             if policy_results:
                 write_policy_report(policy_results, out_dir / "POLICY_REPORT.md")
