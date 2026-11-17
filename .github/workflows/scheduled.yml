@@ -1271,6 +1271,14 @@ jobs:
         run: python3 scripts/dev/fetch_rule_fixture.py
 
       - name: Run tool contract tests
+        # Each pytest step here has its own limit, below the job's 90 minutes.
+        # A hang that reaches the job's timeout-minutes ends the job
+        # `cancelled`, and GitHub kept no log of the hung step (run
+        # 41627396139, BlobNotFound). A step limit ends it as a failed step
+        # instead, inside a job that still finishes (#1631). Sized from the six
+        # green runs before 2026-11-17: this step took 93-308 s, the golden
+        # re-capture 65-115 s, the answer keys 553-941 s.
+        timeout-minutes: 20
         run: |
           # Contract tests verify tool output formats match adapter expectations
           # This catches upstream breaking changes before they cause silent failures.
@@ -1302,6 +1310,7 @@ jobs:
         run: python3 scripts/dev/require_passed.py contract-junit.xml
 
       - name: Re-capture every golden fixture through jmo scan
+        timeout-minutes: 10
         # Each of the 14 tools runs on its sample as a user's scan runs it, and
         # its output must parse to at least one finding: what the deleted smoke
         # job was for (J6). A count that moved from the committed fixture's is
@@ -1335,6 +1344,7 @@ jobs:
           PY
 
       - name: Run the answer-key tests
+        timeout-minutes: 45
         # juice-shop's and WebGoat's baselines and juice-shop's marked lines
         # (one scan of each, at its pinned commit), sca-kitchen-sink's lockfile
         # formats, KICS's Dockerfile and Kubernetes line floors, vibeproof's
