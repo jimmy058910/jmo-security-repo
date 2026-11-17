@@ -938,15 +938,18 @@ def test_review_and_confirm_tsv_mode(mock_tool_manager_class, mock_yes_no):
 @patch("scripts.cli.wizard.scan_defaults", return_value=(3, 777))
 @patch("scripts.cli.tool_manager.ToolManager")
 def test_review_and_confirm_summary_uses_matrix_and_scan_defaults(
-    mock_tool_manager_class, mock_defaults, mock_yes_no, capsys
+    mock_tool_manager_class, mock_defaults, mock_yes_no, capsys, tmp_path, monkeypatch
 ):
     """Review shows the scan defaults and ready/total over the tool matrix.
 
     It used to print the chosen profile and profile-sized counts; now the
     denominator is the matrix summary's `total`, and unset threads/timeout
-    show what the scan will actually use.
+    show what the scan will actually use. Run with no jmo.yml, so no
+    per_tool timeout joins the minimums on screen.
     """
     from scripts.cli.wizard import review_and_confirm
+
+    monkeypatch.chdir(tmp_path)
 
     tm = _fake_tool_manager()
     tm.get_tool_summary.return_value = MagicMock(execution_ready=9, total=12)

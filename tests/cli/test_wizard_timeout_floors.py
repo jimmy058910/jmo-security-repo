@@ -105,16 +105,17 @@ def _scan_argvs(config: WizardConfig, route: str) -> list[list[str]]:
     return argvs
 
 
-def _resolved(argv: list[str]) -> tuple[int | None, dict[str, int]]:
-    """(--timeout as parsed, each floored tool's timeout) for one argv."""
+def _resolved(
+    argv: list[str], tools: list[str] = FLOORED
+) -> tuple[int | None, dict[str, int]]:
+    """(--timeout as parsed, each of `tools`' timeout) for one argv."""
     args = jmo.build_parser().parse_args(argv)
     eff = jmo._effective_scan_settings(args)
     per_tool = cli_timeout_over_floors(
         eff.get("per_tool", {}) or {}, eff["tools"], args.timeout
     )
     return args.timeout, {
-        tool: tool_timeout(per_tool, tool, int(eff["timeout"] or 600))
-        for tool in FLOORED
+        tool: tool_timeout(per_tool, tool, int(eff["timeout"] or 600)) for tool in tools
     }
 
 
@@ -185,10 +186,49 @@ def test_the_screen_shows_the_minimums_the_default_does_not_reach(tools, shown, 
     out = capsys.readouterr().out
     if shown:
         assert f"Timeout: 600s {shown}" in out
-        assert "Blank keeps the default, and these minimums" in out
+        assert f"Blank keeps the default, 600s {shown}" in out
     else:
         assert "Timeout: 600s\n" in out
-        assert "minimum" not in out
+        assert "Blank keeps" not in out
+
+
+def test_the_screen_matches_what_each_tool_gets_with_per_tool_timeouts(
+    tmp_path, capsys
+):
+    """A `per_tool.<tool>.timeout` wins over the default, the minimum and a
+    typed value alike. The screen says so, and says the same thing the scan
+    then resolves, tool by tool."""
+    (tmp_path / "jmo.yml").write_bytes(
+        b"timeout: 600\nper_tool:\n  zap:\n    timeout: 1800\n"
+        b"  yara-x:\n    timeout: 900\n"
+    )
+    tools = ["opengrep", "zap", "yara-x", "trivy"]
+    tm = MagicMock()
+    tm.get_tool_summary.return_value = MagicMock(execution_ready=1, total=1)
+    tm.check_matrix.return_value = {}
+    with (
+        patch.object(wizard, "_prompt_yes_no", return_value=True),
+        patch("builtins.input", side_effect=["", "300"]),
+        patch.object(wizard, "_prompt_choice", return_value=""),
+    ):
+        threads, timeout, fail_on = wizard.configure_advanced(tm, tools)
+        config = WizardConfig()
+        config.target.type = "repo"
+        config.target.repo_mode = "repo"
+        config.target.repo_path = "."
+        config.threads, config.timeout, config.fail_on = threads, timeout, fail_on
+        wizard.review_and_confirm(config, tm, tools)
+    out = capsys.readouterr().out
+
+    assert "Timeout: 600s (opengrep, yara-x: 900s; zap: 1800s)" in out
+    assert "applies to every tool but yara-x, zap, whose jmo.yml per_tool" in out
+    assert "Timeout: 300s (yara-x: 900s; zap: 1800s)" in out
+
+    (argv,) = _scan_argvs(config, "command")
+    assert _resolved(argv, tools) == (
+        300,
+        {"opengrep": 300, "zap": 1800, "yara-x": 900, "trivy": 300},
+    )
 
 
 @pytest.mark.parametrize("emit", ["workflow", "script"])

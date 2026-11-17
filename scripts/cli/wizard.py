@@ -366,26 +366,45 @@ def configure_k8s_target() -> TargetConfig:
     return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
-def _floors_above(default_timeout: int, tools: list[str] | None) -> str:
-    """The minimums the default timeout does not reach, for this scan's tools:
-    "opengrep, zap: 900s", or "" when it reaches them all. jmo.yml's timeout
-    cannot lower a minimum; a `--timeout` can (#1486)."""
-    from scripts.cli.scan_utils import TOOL_TIMEOUT_DEFAULTS
+def _own_timeouts(tools: list[str] | None) -> list[str]:
+    """This scan's tools with a `per_tool.<tool>.timeout` in jmo.yml, which
+    wins over any other timeout, a typed one included."""
+    from scripts.core.config import load_config
 
-    by_floor: dict[int, list[str]] = {}
-    for tool in TOOL_MATRIX if tools is None else tools:
-        floor = TOOL_TIMEOUT_DEFAULTS.get(tool, 0)
-        if floor > default_timeout:
-            by_floor.setdefault(floor, []).append(tool)
-    return "; ".join(
-        f"{', '.join(names)}: {floor}s" for floor, names in sorted(by_floor.items())
+    per_tool = load_config("jmo.yml").per_tool
+    return sorted(
+        tool
+        for tool in (TOOL_MATRIX if tools is None else tools)
+        if isinstance((per_tool.get(tool) or {}).get("timeout"), int)
+        and per_tool[tool]["timeout"] > 0
     )
 
 
-def _default_timeout_text(default_timeout: int, tools: list[str] | None) -> str:
-    """The default timeout as the scan applies it, minimums included."""
-    floors = _floors_above(default_timeout, tools)
-    return f"{default_timeout}s ({floors})" if floors else f"{default_timeout}s"
+def _timeout_text(seconds: int, tools: list[str] | None, typed: bool) -> str:
+    """A timeout as this scan's tools get it: "600s", or
+    "600s (opengrep, zap: 900s)" naming each tool that gets another value.
+
+    Resolved by the scan's own functions over jmo.yml's `per_tool`: a tool's
+    own timeout wins outright, a typed `--timeout` wins over a minimum (#1486),
+    and the default does not. The screen said `Timeout: 600s` while opengrep
+    and zap got 900 s (#1627)."""
+    from scripts.cli.scan_utils import cli_timeout_over_floors, tool_timeout
+    from scripts.core.config import load_config
+
+    names = list(TOOL_MATRIX if tools is None else tools)
+    per_tool = load_config("jmo.yml").per_tool
+    if typed:
+        per_tool = cli_timeout_over_floors(per_tool, names, seconds)
+    by_value: dict[int, list[str]] = {}
+    for tool in names:
+        value = tool_timeout(per_tool, tool, seconds)
+        if value != seconds:
+            by_value.setdefault(value, []).append(tool)
+    apart = "; ".join(
+        f"{', '.join(sorted(group))}: {value}s"
+        for value, group in sorted(by_value.items())
+    )
+    return f"{seconds}s ({apart})" if apart else f"{seconds}s"
 
 
 def configure_advanced(
@@ -415,7 +434,7 @@ def configure_advanced(
 
     print("\nDefaults:")
     print(f"  Threads: {default_threads}")
-    print(f"  Timeout: {_default_timeout_text(default_timeout, tools)}")
+    print(f"  Timeout: {_timeout_text(default_timeout, tools, typed=False)}")
     print(f"  Tools: {summary.total} ({summary.execution_ready} ready)")
     print(f"\nSystem: {cpu_count} CPU cores detected")
 
@@ -438,12 +457,13 @@ def configure_advanced(
     # The prompt reads `Timeout [N]: ` as before, with no default to fill in,
     # so a blank answer stays blank.
     print("\nPer-tool timeout in seconds")
-    floors = _floors_above(default_timeout, tools)
-    if floors:
-        print(
-            f"  Blank keeps the default, and these minimums ({floors}); "
-            "a number typed here applies to every tool"
-        )
+    kept = _timeout_text(default_timeout, tools, typed=False)
+    own = _own_timeouts(tools)
+    if kept != f"{default_timeout}s" or own:
+        hint = f"  Blank keeps the default, {kept}; a number typed here applies to every tool"
+        if own:
+            hint += f" but {', '.join(own)}, whose jmo.yml per_tool timeout wins"
+        print(hint)
     timeout_str = _prompt_text(f"Timeout [{default_timeout}]")
     timeout: int | None = None
     if timeout_str:
@@ -574,9 +594,9 @@ def review_and_confirm(
     threads = config.threads or default_threads
     print(f"  Threads: {threads}")
     if config.timeout is None:
-        print(f"  Timeout: {_default_timeout_text(default_timeout, tools)}")
+        print(f"  Timeout: {_timeout_text(default_timeout, tools, typed=False)}")
     else:
-        print(f"  Timeout: {config.timeout}s")
+        print(f"  Timeout: {_timeout_text(config.timeout, tools, typed=True)}")
 
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
