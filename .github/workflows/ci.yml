@@ -49,6 +49,10 @@ jobs:
   #   Test windows-2022 Shard 1/1  -- `continue-on-error: true`. It reports
   #     GREEN OVER EXIT CODE 1, so requiring it would add a check that cannot
   #     fail. Read its job LOG, never its tick, and diff the skip count too.
+  #     A green run that did not pass still carries a failure-level annotation
+  #     (a timeout, or "Process completed with exit code N"); a passing run has
+  #     none, though it can carry a notice. See testing.cross-platform.rules.md
+  #     (#1637).
   #   Test macos-latest Shard 1/1  -- cross-platform signal, not a gate, and as
   #     of 2026-08-30 it no longer runs on `pull_request` at all: see the
   #     matrix comment in test-sharded. It still runs on every `dev`/`main`
@@ -450,7 +454,12 @@ jobs:
       - name: Run tests (Windows, no coverage, no reruns)
         if: matrix.os == 'windows-2022'
         continue-on-error: true  # Windows has intermittent hangs; non-blocking until fully stabilized
-        timeout-minutes: 15
+        # The serial suite took 633-908 s of step time on 2026-11-16, and runner
+        # speed alone moved one tree from 633 s to 872 s. At 15 minutes slow
+        # runners cut the step off under a green tick in 7 of 111 jobs, with no
+        # `passed` line left to read (#1637). 25 minutes still fits the job's
+        # 30, which spends about 20 s outside this step.
+        timeout-minutes: 25
         env:
           CI: "true"
           PYTHONUTF8: "1"
