@@ -1070,7 +1070,7 @@ def run_wizard(
             content = generate_github_actions(config)
             gha_path = Path(emit_gha)
             gha_path.parent.mkdir(parents=True, exist_ok=True)
-            gha_path.write_text(content, encoding="utf-8")
+            gha_path.write_bytes(content.encode("utf-8"))  # LF, as above
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
             return 0
 

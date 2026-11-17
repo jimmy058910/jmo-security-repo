@@ -396,17 +396,19 @@ def test_run_wizard_emit_script(
     assert rc == 0
 
 
-@patch("scripts.cli.wizard.Path.write_text")
-@patch("scripts.cli.wizard.Path.mkdir")
 @patch("scripts.cli.tool_manager.ToolManager")
-def test_run_wizard_emit_gha(mock_tool_manager_class, mock_mkdir, mock_write):
-    """Test wizard with --emit-gha."""
+def test_run_wizard_emit_gha(mock_tool_manager_class, tmp_path, monkeypatch):
+    """Test wizard with --emit-gha (a real write inside tmp_path, as above).
+
+    This patched `Path.write_text` and `Path.mkdir` and passed a relative
+    path, so when the workflow moved to `write_bytes` a run wrote a real
+    .github/workflows/security.yml into the checkout.
+    """
+    monkeypatch.chdir(tmp_path)
     mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_gha=".github/workflows/security.yml")
 
-    mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
-    mock_write.assert_called_once()
-    content = mock_write.call_args[0][0]
+    content = (tmp_path / ".github/workflows/security.yml").read_bytes().decode()
     assert "name: Security Scan" in content
     assert "actions/checkout@v4" in content
     assert rc == 0
@@ -1481,6 +1483,42 @@ def test_review_says_where_tsv_credentials_come_from(
     out = capsys.readouterr().out
     assert "credential" in out
     assert ("public repositories" in out) is use_docker
+
+
+@pytest.mark.parametrize("emit", ["emit_make", "emit_script", "emit_gha"])
+def test_every_emitted_file_is_lf_where_text_writes_crlf(emit, tmp_path, monkeypatch):
+    """Each file `jmo wizard --emit-*` writes is LF, even where text mode
+    writes CRLF, as `Path.write_text` does on Windows.
+
+    `--emit-make` and `--emit-script` write bytes because a `\\r` breaks make
+    recipes and bash; `--emit-gha` used `write_text` and got CRLF on Windows.
+    The stub stands in for Windows, so this fails on Linux too.
+    """
+
+    def windows_write_text(self, data, encoding=None, errors=None, newline=None):
+        with open(self, "w", encoding=encoding, errors=errors, newline="\r\n") as f:
+            return f.write(data)
+
+    monkeypatch.setattr(Path, "write_text", windows_write_text)
+    out = tmp_path / "artifact"
+    with (
+        patch("scripts.cli.wizard.check_tools_for_matrix", return_value=(True, [])),
+        patch("scripts.cli.wizard._check_policy_tools", return_value=(True, False)),
+        patch("scripts.cli.tool_manager.ToolManager"),
+    ):
+        rc = run_wizard(
+            yes=True,
+            target_type="repo",
+            target=str(tmp_path),
+            emit_make=str(out) if emit == "emit_make" else None,
+            emit_script=str(out) if emit == "emit_script" else None,
+            emit_gha=str(out) if emit == "emit_gha" else None,
+        )
+
+    assert rc == 0
+    written = out.read_bytes()
+    assert b"jmo " in written
+    assert b"\r" not in written
 
 
 if __name__ == "__main__":
