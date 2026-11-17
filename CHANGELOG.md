@@ -635,6 +635,21 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **An installed JMo enforces its built-in policies, and an enforced policy that cannot
+  be evaluated fails the run.** The five built-in Rego policies live at
+  `policies/builtin/`, outside the `scripts` package, so no wheel carried one, v1.1.1
+  included, and four modules looked for them at a repository root a wheel does not have.
+  From an installed wheel, `jmo policy list` printed "No policies found", and
+  `jmo report --policy zero-secrets` with `policy.fail_on_violation` on reported a
+  verified secret, warned that the policy was missing and exited 0. The wheel and the sdist now
+  carry every `policies/builtin/*.rego`, and one resolver finds them in a wheel or a
+  checkout. With `--fail-on-policy-violation` or `policy.fail_on_violation` on, a
+  requested policy that produced no verdict now exits 2 with one error line naming the
+  policy and the reason: OPA not installed, no policy of that name, or an evaluation
+  error. It used to warn and exit 0, from a source checkout too. A policy that ran and
+  failed still exits 1. A policy report that cannot be written no longer drops a FAILED
+  verdict. Without enforcement the run still warns and exits 0 as before; a policy
+  report that cannot be written is now a warning rather than a debug line.
 - **The wizard asks for the target before it checks any tool, and then checks only the
   tools that target's scan runs, once (#1584).** Every step that read tool status built
   its own `ToolManager` and probed all 14 matrix tools again: twice before the second
