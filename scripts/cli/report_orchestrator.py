@@ -672,9 +672,12 @@ def cmd_report(args, _log_fn) -> int:
             encrypt_findings = getattr(args, "encrypt_findings", False)
             collect_metadata = getattr(args, "collect_metadata", False)
 
-            # Store scan in history database
+            # Store scan in history database: the findings this run reported,
+            # not whatever findings.json is on disk, which this run may not
+            # have written.
             scan_id = db_store_scan(
                 results_dir=results_dir,
+                findings=findings,
                 tools=tools,
                 db_path=history_db_path,
                 no_store_raw=no_store_raw,
@@ -693,15 +696,23 @@ def cmd_report(args, _log_fn) -> int:
             # a raw traceback -- and the exit code never saw it, so a scan
             # could report success having stored nothing (#903).
             store_error = e
+            # `jmo history store` reads <results>/summaries/findings.json,
+            # which this run wrote only with `json` in outputs and no --out.
+            rerecord = f"`jmo history store --results-dir {results_dir}`"
+            if not ("json" in cfg.outputs and out_dir == results_dir / "summaries"):
+                rerecord += (
+                    f" after `jmo report {results_dir}` with `json` in outputs "
+                    f"(it reads summaries/findings.json, which this run did "
+                    f"not write there)"
+                )
             _log_fn(
                 args,
                 "ERROR",
                 f"Scan results were NOT recorded in the history database "
                 f"({history_db_path}): {e}. The scan completed and its reports "
                 f"are valid, but `jmo history` will not show this run. "
-                f"Re-record it with `jmo history store --results-dir "
-                f"{results_dir}`, or pass --fail-on-store-error to make a "
-                f"failed history write exit non-zero.",
+                f"Re-record it with {rerecord}, or pass --fail-on-store-error "
+                f"to make a failed history write exit non-zero.",
             )
             # The traceback is a debugging detail, not a user-facing one: this
             # is a recoverable condition, and printing a stack trace into

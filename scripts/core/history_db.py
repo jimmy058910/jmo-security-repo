@@ -1182,6 +1182,7 @@ def store_scan(
     no_store_raw: bool = False,
     encrypt_findings: bool = False,
     collect_metadata: bool = False,
+    findings: list[dict[str, Any]] | None = None,
 ) -> str:
     """
     Store a completed scan in the history database.
@@ -1189,6 +1190,9 @@ def store_scan(
     Args:
         results_dir: Path to scan results directory (contains findings.json)
         tools: List of tool names that were run
+        findings: The findings to store. The report phase passes the ones it
+            reported; None reads `results_dir/summaries/findings.json`, which
+            is `jmo history store`'s job
         db_path: Path to SQLite database file
         commit_hash: Git commit hash (optional, auto-detected if None)
         branch: Git branch name (optional, auto-detected if None)
@@ -1229,8 +1233,13 @@ def store_scan(
     if duration_seconds is None:
         duration_seconds = _scan_duration_seconds(results_dir)
 
+    # The report phase passes the findings it reported. It used to leave this
+    # to the file below, which is written only when `outputs` has `json` and
+    # only under `results_dir`: a rerun asking for Markdown alone, or writing
+    # to `--out`, stored the previous run's findings.json as this scan, and a
+    # first such run stored nothing.
     findings_json = results_dir / "summaries" / "findings.json"
-    if not findings_json.exists():
+    if findings is None and not findings_json.exists():
         raise FileNotFoundError(f"findings.json not found: {findings_json}")
 
     # Validate encryption prerequisites (Phase 6 Step 6.2)
@@ -1241,21 +1250,21 @@ def store_scan(
                 "Set it to a secret key string to enable encryption."
             )
 
-    # Load findings
-    with open(findings_json, encoding="utf-8") as f:
-        findings_data = json.load(f)
+    if findings is None:
+        with open(findings_json, encoding="utf-8") as f:
+            findings_data = json.load(f)
 
-    # Handle both artifact shapes. The labels here used to be reversed:
-    # `summaries/findings.json` as written by the report phase is the
-    # DICT form, {"meta": ..., "findings": [...]}; the bare list is the
-    # older one. Nothing depended on the comment, but it sent readers to
-    # the wrong branch when `jmo history store` crashed on a real file.
-    if isinstance(findings_data, list):
-        findings = findings_data
-    elif isinstance(findings_data, dict):
-        findings = findings_data.get("findings", [])
-    else:
-        findings = []
+        # Handle both artifact shapes. The labels here used to be reversed:
+        # `summaries/findings.json` as written by the report phase is the
+        # DICT form, {"meta": ..., "findings": [...]}; the bare list is the
+        # older one. Nothing depended on the comment, but it sent readers to
+        # the wrong branch when `jmo history store` crashed on a real file.
+        if isinstance(findings_data, list):
+            findings = findings_data
+        elif isinstance(findings_data, dict):
+            findings = findings_data.get("findings", [])
+        else:
+            findings = []
 
     # Generate scan ID
     scan_id = str(uuid.uuid4())

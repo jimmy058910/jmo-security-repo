@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -221,3 +222,158 @@ def test_tool_output_without_scan_metadata_still_reports(tmp_path):
     rc = cmd_report(_args(results, _config(tmp_path, ["json"]), fail_on="LOW"), _Log())
 
     assert rc == 1, "the one LOW finding must reach the threshold"
+
+
+# ---------------------------------------------------------------------------
+# The history row holds this run's findings, whatever outputs were asked for
+# ---------------------------------------------------------------------------
+
+
+def _rows(db: Path) -> list[tuple[str, int]]:
+    """(scan id, total_findings) per stored scan, oldest first."""
+    conn = sqlite3.connect(db)
+    try:
+        return list(conn.execute("SELECT id, total_findings FROM scans ORDER BY rowid"))
+    finally:
+        conn.close()
+
+
+def _store(results: Path, db: Path, config: Path, **overrides) -> tuple[int, _Log]:
+    log = _Log()
+    rc = cmd_report(
+        _args(
+            results,
+            config,
+            store_history=True,
+            history_db=str(db),
+            fail_on_store_error=True,
+            **overrides,
+        ),
+        log,
+    )
+    return rc, log
+
+
+def test_a_markdown_only_rerun_stores_its_own_findings_not_the_last_json(tmp_path):
+    """The review's two-scan case, in one results directory.
+
+    Run 1 finds one issue and writes JSON and Markdown. The issue is fixed and
+    run 2 asks for Markdown alone. Before: SUMMARY.md said 0 while the new
+    row said 1, read from run 1's findings.json, and `--fail-on-store-error`
+    exited 0 because nothing failed.
+    """
+    results = _scan_results(tmp_path / "results", [SC2086])
+    db = tmp_path / "history.db"
+    rc1, _ = _store(results, db, _config(tmp_path, ["json", "md"]))
+
+    _scan_results(results, [])
+    rc2, log2 = _store(results, db, _config(tmp_path, ["md"]))
+
+    assert (rc1, rc2) == (0, 0), log2.records
+    summary = (results / "summaries" / "SUMMARY.md").read_text(encoding="utf-8")
+    assert "Total findings: 0" in summary
+    assert [total for _, total in _rows(db)] == [1, 0]
+
+
+def test_a_markdown_only_scan_is_stored_with_no_json_on_disk(tmp_path):
+    """Before: no findings.json, so the store raised and the row was missing."""
+    results = _scan_results(tmp_path / "results", [SC2086])
+    db = tmp_path / "history.db"
+
+    rc, log = _store(results, db, _config(tmp_path, ["md"]))
+
+    assert rc == 0, log.records
+    assert not (results / "summaries" / "findings.json").exists()
+    assert [total for _, total in _rows(db)] == [1]
+
+
+def test_reports_written_elsewhere_are_stored_from_this_run(tmp_path):
+    """`--out` elsewhere: the store read `<results>/summaries` whatever it said.
+
+    A stale findings.json left there by an earlier report is the trap.
+    """
+    results = _scan_results(tmp_path / "results", [SC2086])
+    db = tmp_path / "history.db"
+    _store(results, db, _config(tmp_path, ["json"]))
+
+    _scan_results(results, [])
+    rc, log = _store(results, db, _config(tmp_path, ["json"]), out=str(tmp_path / "o"))
+
+    assert rc == 0, log.records
+    assert [total for _, total in _rows(db)] == [1, 0]
+
+
+def test_the_stored_findings_are_the_ones_findings_json_reports(tmp_path):
+    """Every writer runs before the store, on the same finding objects.
+
+    A writer that changed a finding in place would put something in history
+    that no report shows. Compared field by field against findings.json, with
+    every output on. The dashboard strips the scan root from what it embeds
+    (#1007), so the raw output names the root and the metadata records it:
+    stripping in place would reach the stored `raw_finding`.
+    """
+    root = tmp_path / "repo"
+    absolute = {**SC2086, "file": str(root / "demo.sh")}
+    results = _scan_results(
+        tmp_path / "results", [absolute, {**absolute, "line": 5, "endLine": 5}]
+    )
+    meta_path = results / ".scan_metadata.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta_path.write_text(
+        json.dumps({**meta, "repo_paths": [str(root)]}), encoding="utf-8"
+    )
+    db = tmp_path / "history.db"
+    outputs = ["json", "md", "yaml", "html", "simple-html", "sarif", "csv"]
+    rc, log = _store(results, db, _config(tmp_path, outputs + ["compliance"]))
+    assert rc == 0, log.records
+
+    reported = json.loads(
+        (results / "summaries" / "findings.json").read_text(encoding="utf-8")
+    )["findings"]
+    conn = sqlite3.connect(db)
+    try:
+        stored = {
+            fp: (sev, rule, path, line, raw)
+            for fp, sev, rule, path, line, raw in conn.execute(
+                "SELECT fingerprint, severity, rule_id, path, start_line, "
+                "raw_finding FROM findings"
+            )
+        }
+    finally:
+        conn.close()
+
+    assert len(reported) == 2
+    # Compared as data: `json.dumps` doubles each backslash of a Windows path,
+    # so the path is never a substring of its own dumped text.
+    assert all(f["raw"]["file"] == str(root / "demo.sh") for f in reported)
+    assert stored == {
+        f["id"]: (
+            f["severity"],
+            f["ruleId"],
+            f["location"]["path"],
+            f["location"]["startLine"],
+            json.dumps(f["raw"]),
+        )
+        for f in reported
+    }
+
+
+@pytest.mark.parametrize(
+    ("outputs", "names_the_precondition"), [(["json"], False), (["md"], True)]
+)
+def test_a_failed_store_names_a_recovery_that_works(
+    tmp_path, monkeypatch, outputs, names_the_precondition
+):
+    """`jmo history store` reads summaries/findings.json; say so when absent."""
+    results = _scan_results(tmp_path / "results", [SC2086])
+
+    def fail(**_kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr("scripts.core.history_db.store_scan", fail)
+    rc, log = _store(results, tmp_path / "history.db", _config(tmp_path, outputs))
+
+    assert rc == 1
+    (error,) = log.at("ERROR")
+    assert f"jmo history store --results-dir {results}" in error
+    assert ("with `json` in outputs" in error) is names_the_precondition
