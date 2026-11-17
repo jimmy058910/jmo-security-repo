@@ -83,10 +83,12 @@ assert is_command_not_found_error(stderr)  # True if "not found" on Unix, "canno
   633-908 s of step time on 2026-11-16, and at 15 minutes slow runners cut it off under a
   green tick in 7 of the 111 most recent jobs (#1637). Size this limit from the slowest run
   plus the runner spread (about 240 s on one tree), not from the average.
-- **A green `windows-2022` check that did not pass carries an error annotation; a passing
-  one carries none.** `gh api repos/{owner}/{repo}/check-runs/<job id>/annotations` tells
-  them apart in one call: `has timed out after` is a cut-off, `Process completed with exit
-  code 1` is failing tests, `exit code 2` a collection error. A `cancelled` job annotated
+- **A green `windows-2022` check that did not pass carries a `failure`-level annotation; a
+  passing one carries none.** `gh api repos/{owner}/{repo}/check-runs/<job id>/annotations`
+  tells them apart in one call; read `annotation_level`, not the count, because a passing
+  job can carry a `notice` (every ubuntu-latest job carried a runner-image migration notice
+  on 2026-11-16). `has timed out after` is a cut-off, `Process completed with exit code 1`
+  is failing tests, `exit code 2` a collection error. A `cancelled` job annotated
   `Canceling since a higher priority waiting request` is the concurrency rule, not a
   failure. Measured 2026-11-16 over 111 jobs: 7 cut off, 4 exit 1, 2 exit 2, every one
   under a green tick. The annotation says only that it did not pass; the counts still come
