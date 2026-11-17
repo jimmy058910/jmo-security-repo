@@ -79,7 +79,18 @@ assert is_command_not_found_error(stderr)  # True if "not found" on Unix, "canno
 - `--timeout=60` per test (halved from 120s for faster failure detection).
 - `-m "not smoke and not requires_tools and not docker and not slow"`.
 - Post-test cleanup: `Stop-Process` kills orphan processes.
-- `timeout-minutes: 15` hard job-level safety net.
+- `timeout-minutes: 25` on the test step, inside the job's 30. The serial suite took
+  633-908 s of step time on 2026-11-16, and at 15 minutes slow runners cut it off under a
+  green tick in 7 of the 111 most recent jobs (#1637). Size this limit from the slowest run
+  plus the runner spread (about 240 s on one tree), not from the average.
+- **A green `windows-2022` check that did not pass carries an error annotation; a passing
+  one carries none.** `gh api repos/{owner}/{repo}/check-runs/<job id>/annotations` tells
+  them apart in one call: `has timed out after` is a cut-off, `Process completed with exit
+  code 1` is failing tests, `exit code 2` a collection error. A `cancelled` job annotated
+  `Canceling since a higher priority waiting request` is the concurrency rule, not a
+  failure. Measured 2026-11-16 over 111 jobs: 7 cut off, 4 exit 1, 2 exit 2, every one
+  under a green tick. The annotation says only that it did not pass; the counts still come
+  from the step's `N passed, N skipped` line.
 
 ## CRITICAL: Windows Test Hang Prevention
 
