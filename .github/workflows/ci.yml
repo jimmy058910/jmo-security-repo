@@ -161,13 +161,6 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
-      - name: Audit Python dependencies for vulnerabilities
-        # Ignored advisories and their reasoning live in the script -- one place,
-        # two callers (this job and the pip-audit pre-commit hook).
-        run: |
-          pip install pip-audit
-          bash scripts/dev/audit_deps.sh
-
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: bash scripts/dev/guardrails_check.sh
 
@@ -336,6 +329,20 @@ jobs:
               print(f'❌ SARIF validation failed: {e}')
               sys.exit(1)
           "
+
+      - name: Audit Python dependencies for vulnerabilities
+        # Ignored advisories and their reasoning live in the script -- one place,
+        # two callers (this job and the pip-audit pre-commit hook).
+        #
+        # Last, and run whatever failed before it. The audit is the one step
+        # here that needs pypi.org: as the fifth step, one read timeout there
+        # skipped the nine local checks after it, the secrets scan and lint
+        # among them (dev push 43664484350, #1642). The script retries an
+        # audit that did not finish; a finding still fails at once.
+        if: ${{ !cancelled() }}
+        run: |
+          pip install pip-audit
+          bash scripts/dev/audit_deps.sh
 
   # Sharded test execution across all platforms
   # Ubuntu: 4 parallel shards with coverage (primary CI target)

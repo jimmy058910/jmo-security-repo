@@ -39,7 +39,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 REQ_FILE="$(mktemp -t jmo-audit-XXXXXX.txt)"
-trap 'rm -f "$REQ_FILE"' EXIT
+LOG_FILE="$(mktemp -t jmo-audit-log-XXXXXX)"
+trap 'rm -f "$REQ_FILE" "$LOG_FILE"' EXIT
 
 # --frozen: audit the lock as committed. Lock freshness is a separate gate
 #           (`uv lock --check`), so this never double-reports a stale lock.
@@ -59,5 +60,34 @@ uv export \
   --no-hashes \
   --output-file "$REQ_FILE"
 
-pip-audit -r "$REQ_FILE" --progress-spinner=off \
-  --ignore-vuln PYSEC-2025-183
+# pip-audit exits 1 for a finding and for an audit that never finished alike.
+# One pypi.org read timeout (its default is 15 s) turned quick-checks red with
+# no advisory found or missed, and a rerun passed unchanged (dev push
+# 43664484350, #1642). So: a 60 s socket timeout, and an audit that did not
+# print its "Found N known vulnerabilities" summary is retried, up to
+# JMO_AUDIT_ATTEMPTS times. A finding fails at once, never retried. Kept to
+# bash 3.2, which macOS still ships.
+attempts="${JMO_AUDIT_ATTEMPTS:-3}"
+retry_delay_s="${JMO_AUDIT_RETRY_DELAY_S:-20}"
+attempt=1
+while :; do
+  rc=0
+  pip-audit -r "$REQ_FILE" --progress-spinner=off --timeout 60 \
+    --ignore-vuln PYSEC-2025-183 >"$LOG_FILE" 2>&1 || rc=$?
+  cat "$LOG_FILE"
+  if [ "$rc" -eq 0 ]; then
+    exit 0
+  fi
+  if grep -Eq 'Found [0-9]+ known vulnerabilit' "$LOG_FILE"; then
+    exit "$rc"
+  fi
+  if [ "$attempt" -ge "$attempts" ]; then
+    echo "pip-audit did not finish in ${attempts} attempts (exit ${rc})." >&2
+    exit "$rc"
+  fi
+  wait_s=$((retry_delay_s * attempt))
+  echo "pip-audit did not finish (exit ${rc}); attempt ${attempt} of ${attempts}," \
+    "retrying in ${wait_s} s." >&2
+  sleep "$wait_s"
+  attempt=$((attempt + 1))
+done
