@@ -151,11 +151,21 @@ directory as a CI artifact, treat it as you would the code itself.
 reads them.** That is `trufflehog.json`, `gitleaks.json` and, from git history,
 `trufflehog.git.json` and `gitleaks.git.json`, deleted secrets included. The report
 that `jmo scan`, `jmo ci` and `jmo report` each run then replaces each secret in them
-with a stand-in, `jmo-redacted:` and a digest keyed for that report alone. Equal
-secrets get equal stand-ins, so a later report still pairs each secret's tree and
+with a stand-in, `jmo-redacted:` and a digest keyed for that target and report alone.
+Equal secrets get equal stand-ins, so a later report still pairs each secret's tree and
 history findings. A run stopped before its report, interrupted or failed, leaves them
 as the tools wrote them. Upload `summaries/`,
 never the whole results directory.
+
+**A report that could not rewrite every output leaves its key behind.** Before its
+first rewrite in a target's folder, the report saves that target's key there as
+`.jmo-redaction-key` (mode 0600 on Linux and macOS; on Windows it takes the folder's
+permissions), and deletes it once every output is rewritten. When an output is locked,
+the disk is full or the run stops between two rewrites, the key stays, and a failed
+rewrite's warnings name the output and the key. The next report rewrites the rest with the same key before it
+reads them, so the secret's tree and history findings still pair, and then deletes the
+key. Until then, treat the key as a secret: with it, a guess at a secret can be checked
+against its stand-in. It stays only while an output beside it still holds raw secrets.
 
 **A finding whose rule matches a secret's value quotes no code.** For an opengrep rule
 listed in `scripts/core/secret_value_rules.py` as matching a credential's value (a
