@@ -1479,6 +1479,16 @@ All notable changes to JMo Security will be documented in this file.
   same findings, tree and history still paired. A file that cannot be rewritten is named
   at WARNING and the report goes on. A run stopped before its report, interrupted or
   failed, leaves the outputs as the tools wrote them.
+- **A secret's tree and history findings still pair after a report could not rewrite
+  both of its tool's outputs (#1593).** When a report rewrote `trufflehog.json` and not
+  `trufflehog.git.json` (a locked file, a full disk, a run stopped between the two;
+  gitleaks the same), every later report gave that secret a tree finding with no commit
+  beside its history finding, since the next report keyed it anew. A report now saves a
+  target's key as `.jmo-redaction-key` in its folder before the first rewrite (mode 0600
+  on Linux and macOS) and deletes it once every output there is rewritten; the next
+  report finishes with the same key before it reads, and pairs. The key can confirm a
+  guessed secret against a stand-in, so it stays only while an output beside it still
+  holds raw secrets, and a warning names it.
 - **The release's image scan runs a pinned `aquasecurity/trivy-action` (#1294).** It was
   `@master`, a branch that moves on every upstream push, of an action whose tags were
   hijacked on 2026-03-19; it is now v0.36.0 by commit SHA, which installs trivy v0.70.0. The
