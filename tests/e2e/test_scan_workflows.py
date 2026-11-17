@@ -17,14 +17,16 @@ import json
 import os
 import shutil
 from collections import Counter
-from pathlib import Path
 
 import pytest
 
 from scripts.core.tool_descriptors import DESCRIPTORS
 from scripts.core.tool_utils import find_tool
 from tests.conftest import scanner_states
+
+# E2E_FIXTURES is a copy out of the work tree (conftest says why).
 from tests.e2e.conftest import (
+    E2E_FIXTURES,
     current_platform,
     validate_basic_scan,
     validate_multi_target,
@@ -36,8 +38,6 @@ from tests.integration.targets import (
     clone_at_commit,
 )
 
-# Test fixture paths
-E2E_FIXTURES = Path(__file__).parent / "fixtures"
 IAC_FIXTURE = E2E_FIXTURES / "iac" / "aws-s3-public.tf"
 
 # Default test image (can be overridden via TEST_IMAGE). The repository default

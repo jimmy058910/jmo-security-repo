@@ -32,7 +32,11 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
+import threading
+import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -42,7 +46,6 @@ from scripts.cli.scan_jobs import tool_loop
 from scripts.core.adapters.common import normalize_finding_path
 from scripts.core.adapters.opengrep_adapter import OpengrepAdapter
 from scripts.core.scan_timings import State, ToolRun
-from scripts.core.tool_descriptors import OPENGREP_LOG
 from scripts.core.tool_runner import ToolResult, ToolRunner
 from scripts.dev import fetch_rule_fixture
 
@@ -62,12 +65,6 @@ EXPECTED = {
 }
 
 PROXY_VARS = ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")
-# What a refused connection looks like in what opengrep says (measured, 1.32.0:
-# `ProxyError ... host='127.0.0.1', port=9 ... Connection refused`). It says it on
-# stderr, but on STDOUT when `GITHUB_ACTIONS` is set, as it is on the CI runners
-# (measured: the same command, rc 2, with the variable stdout holds the error and
-# stderr is empty, without it the reverse). So a check for it reads both.
-CONNECTION_ERRORS = ("proxyerror", "connection", "refused", "max retries", "127.0.0.1")
 
 
 def _stored_files() -> dict[str, Path]:
@@ -217,88 +214,102 @@ def test_ids_do_not_depend_on_the_working_directory(
     assert from_root == from_target
 
 
-def _proxied(monkeypatch) -> dict[str, str]:
-    """Every proxy variable at a closed port, and no host exempt from it."""
+class _Proxy:
+    """A proxy that answers nobody: it records the first bytes of every connection
+    (an HTTPS request through a proxy opens with `CONNECT <host>:443`) and hangs
+    up. A refused port was the earlier proxy, and the evidence was the error text;
+    2.0.0 retries a refused proxy without a word for minutes (measured
+    2026-11-17: 1.32.0 failed in 25 s with `ProxyError`, 2.0.0 was still silent
+    at 90 s), so the evidence is now what reached the socket, the same on both."""
+
+    def __init__(self) -> None:
+        self.requests: list[str] = []
+        self._server = socket.create_server(("127.0.0.1", 0))
+        self.url = f"http://127.0.0.1:{self._server.getsockname()[1]}"
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def _serve(self) -> None:
+        while True:
+            try:
+                conn, _ = self._server.accept()
+            except OSError:  # closed: the test is over
+                return
+            with conn:
+                conn.settimeout(5)
+                try:
+                    self.requests.append(conn.recv(4096).decode("latin-1"))
+                except OSError as exc:
+                    self.requests.append(f"<nothing read: {exc}>")
+
+    def close(self) -> None:
+        self._server.close()
+
+
+@pytest.fixture
+def proxy(monkeypatch) -> Iterator[_Proxy]:
+    """Every proxy variable at the recording proxy, and no host exempt from it."""
+    recorder = _Proxy()
     for var in PROXY_VARS:
-        monkeypatch.setenv(var, "http://127.0.0.1:9")
+        monkeypatch.setenv(var, recorder.url)
     monkeypatch.setenv("NO_PROXY", "")
     monkeypatch.setenv("no_proxy", "")
-    return dict(os.environ)
+    yield recorder
+    recorder.close()
 
 
-def test_the_proxy_variables_reach_opengrep(tmp_path, monkeypatch) -> None:
-    """The control for the test below: a run that DOES ask for the network fails on
-    the dead proxy. If opengrep ever stopped honouring the variables, that test would
-    pass and prove nothing. The error is read from stdout and stderr together: which
-    one opengrep writes it to depends on the environment (`GITHUB_ACTIONS`)."""
+def test_the_proxy_variables_reach_opengrep(tmp_path, proxy) -> None:
+    """The control for the test below: a run that DOES ask for the network goes
+    through the proxy. If opengrep ever stopped honouring the variables, that test
+    would pass and prove nothing. opengrep is stopped once the request arrives:
+    what it does with a proxy that hangs up is not the question."""
     binary = shutil.which("opengrep")
     if binary is None:
         pytest.skip("opengrep is not on PATH")
-    env = _proxied(monkeypatch)
-    env["SEMGREP_LOG_FILE"] = str(tmp_path / "semgrep.log")
     work = tmp_path / "work"
     work.mkdir()
     (work / "a.py").write_text("x = 1\n", encoding="utf-8")
+    env = dict(os.environ, SEMGREP_LOG_FILE=str(tmp_path / "semgrep.log"))
 
-    done = subprocess.run(
-        [
-            binary,
-            "scan",
-            "--config",
-            "https://rules.invalid/rules.yaml",
-            "--disable-version-check",
-            ".",
-        ],
+    run = subprocess.Popen(
+        [binary, "scan", "--config", "https://rules.invalid/rules.yaml", "."],
         cwd=work,
         env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=300,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
+    try:
+        deadline = time.monotonic() + 120
+        while not proxy.requests and run.poll() is None:
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.1)
+    finally:
+        run.kill()
+        run.wait(timeout=60)
 
-    said = done.stdout + done.stderr
-    tail = said[-600:]
-    assert done.returncode != 0, tail
-    assert "port=9" in said and "refused" in said.lower(), tail
+    assert any("rules.invalid" in r for r in proxy.requests), proxy.requests
 
 
-def test_a_scan_makes_no_network_call(tmp_path, target, monkeypatch) -> None:
-    """Every proxy variable points at a closed port and nothing is exempt from it, so
-    a scan that fetched a rule configuration over HTTP(S) would fail: the control
-    above shows opengrep's client honours them, and a rule URL given as `--config` is
-    the one network path observed (rc 2, `ProxyError`). Measured on 1.32.0, and seen
-    NOT to use the network: a local config under `--enable-version-check` (rc 0, no
-    connection error; the row passes `--disable-version-check` regardless), and there
-    is no `--metrics` option to turn off (rc 2, "unknown option"). This scan ran,
-    exited 0, found the four findings and wrote no connection error.
-
-    The connection errors are looked for in everything the row keeps of what opengrep
-    says: its stdout and stderr (opengrep puts the error on stdout under
-    `GITHUB_ACTIONS`, see CONNECTION_ERRORS) and its debug log in the scan's scratch,
-    which holds the same error whichever stream it went to (measured: the control's
-    `port=9` is in the log with or without the variable). The row discards stdout
-    (the document goes to `--output`), so the log is the one place an error on that
-    stream would still be.
+def test_a_scan_makes_no_network_call(tmp_path, target, proxy) -> None:
+    """Every proxy variable points at the recording proxy and nothing is exempt from
+    it, so a scan that fetched a rule configuration over HTTP(S) would reach it: the
+    control above shows opengrep's client honours them, and a rule URL given as
+    `--config` is the one network path observed. Measured on 1.32.0, and seen NOT to
+    use the network: a local config under `--enable-version-check`, and there is no
+    `--metrics` option to turn off (rc 2, "unknown option"). 2.0.0 ignores both
+    version-check flags, and a local scan of the bundle sent the proxy nothing on
+    either version (2026-11-17). This scan ran, exited 0, found the four findings,
+    and nothing reached the proxy.
 
     This does NOT prove the absence of a raw socket, which ignores proxy variables.
     Task B8 step 3 proves the stronger claim: `unshare -rn` around the same
     `jmo scan` gives the same finding set as the networked run."""
-    _proxied(monkeypatch)
     out = tmp_path / "out"
 
     row, results = _scan(target, out)
 
     assert row.state is State.RAN, row
     (result,) = results
-    log = (out / OPENGREP_LOG).read_text(encoding="utf-8", errors="replace")
-    said = "\n".join((result.stdout, result.stderr, log))
-    assert result.returncode == 0, (result.stderr or log)[-600:]
-    seen = [
-        line[:300]
-        for line in said.splitlines()
-        if any(word in line.lower() for word in CONNECTION_ERRORS)
-    ]
-    assert not seen, seen[:3]
+    assert result.returncode == 0, result.stderr[-600:]
+    assert proxy.requests == []
     assert _triples(out) >= EXPECTED

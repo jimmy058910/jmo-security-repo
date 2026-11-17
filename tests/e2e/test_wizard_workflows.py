@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
-E2E_FIXTURES = Path(__file__).parent / "fixtures"
+# The fixtures, copied out of the work tree (conftest says why).
+from tests.e2e.conftest import E2E_FIXTURES
 
 
 @pytest.mark.e2e

@@ -67,7 +67,9 @@ LANGUAGE_PATTERNS: dict[str, tuple[str, ...]] = {
     # module. opengrep 1.32.0 reads with its Dockerfile rules `Dockerfile` and
     # any name ending `.Dockerfile`, `-Dockerfile` or `_Dockerfile`, and their
     # lowercase spellings, which a match that counts case does not fold into
-    # them. It reads none of `Dockerfile.dev`, `Dockerfile-dev`,
+    # them; 2.0.0 reads `Dockerfile`, `*.Dockerfile` and the two lowercase
+    # forms, and no longer `-Dockerfile` or `_Dockerfile` (measured 2026-11-17),
+    # which its generic rules still read. It reads none of `Dockerfile.dev`, `Dockerfile-dev`,
     # `Dockerfile_prod` or `Containerfile` (measured, #1410): they are listed
     # so that the two rows stay one definition, and opengrep's generic rules
     # read them.

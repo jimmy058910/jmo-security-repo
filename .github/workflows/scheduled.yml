@@ -562,7 +562,7 @@ jobs:
         run: |
           # Install opengrep for SAST testing (a static binary, no archive)
           curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
-            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_linux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
           # Install trufflehog for secrets testing
@@ -1020,7 +1020,7 @@ jobs:
         run: |
           # Opengrep - for SQL injection detection tests (a static binary, no archive)
           curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
-            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_linux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
 
@@ -1151,7 +1151,7 @@ jobs:
           # opengrep: a static binary, no archive; assets are named by flavour
           # and arch.
           curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
-            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_linux_x86" \
             -o /usr/local/bin/opengrep
           chmod +x /usr/local/bin/opengrep
 

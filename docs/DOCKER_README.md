@@ -625,7 +625,7 @@ docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp \
   scan --repo /scan --results /scan/results
 ```
 
-Keep `-e HOME=/tmp` with `--user`. With a uid other than 1000 the container's `HOME` is `/`, and opengrep cannot unpack itself there: it exits 2 with `failed to open '/.cache/opengrep/v1.32.0/opengrep.bin' for writing` (measured). Any writable directory will do.
+Keep `-e HOME=/tmp` with `--user`. With a uid other than 1000 the container's `HOME` is `/`, which that uid cannot write. Opengrep 1.32.0 exited 2 there, unable to unpack itself (`failed to open '/.cache/opengrep/v1.32.0/opengrep.bin' for writing`, measured); 2.0.0 unpacks nothing and ran with an unwritable `HOME` outside the image, but the image has not been measured that way. Any writable directory will do.
 
 ### Resource Limits
 

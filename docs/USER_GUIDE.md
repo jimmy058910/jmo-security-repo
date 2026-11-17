@@ -2465,7 +2465,6 @@ To skip the install step, run the job in the Docker image instead (`container: g
   with:
     path: |
       ~/.local/bin
-      ~/.cache/opengrep
       ~/.cache/trivy
     key: security-tools-${{ runner.os }}-${{ hashFiles('.tool-versions') }}
 ```

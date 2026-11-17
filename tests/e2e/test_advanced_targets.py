@@ -9,13 +9,14 @@ from __future__ import annotations
 import os
 import re
 import shutil
-from pathlib import Path
 
 import pytest
 
-from tests.e2e.conftest import validate_basic_scan
-
-E2E_FIXTURES = Path(__file__).parent / "fixtures"
+# The fixtures, copied out of the work tree (conftest says why).
+from tests.e2e.conftest import (
+    E2E_FIXTURES,
+    validate_basic_scan,
+)
 
 
 @pytest.mark.e2e

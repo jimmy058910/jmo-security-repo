@@ -170,3 +170,55 @@ def test_a_linux_tar_xz_is_extracted_to_a_bare_name(
     installed = tmp_path / "bin" / "shellcheck"
     assert installed.read_bytes() == BINARY
     assert not (tmp_path / "bin" / "shellcheck.exe").exists()
+
+
+def _opengrep_zip(*members: str) -> bytes:
+    """opengrep 2.0.0's Windows asset: opengrep.exe and the DLLs it loads."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("opengrep.exe", BINARY)
+        for name in members:
+            zf.writestr(name, f"dll {name}")
+    return buf.getvalue()
+
+
+def test_a_windows_zip_s_dlls_are_installed_beside_its_exe(
+    installer: ToolInstaller, tmp_path: Path
+) -> None:
+    """opengrep.exe imports libstdc++-6, libgmp-10, libpcre2-8-0 and libzstd-1
+    (read from its PE import table, 2.0.0), which its zip ships beside it.
+    Installed alone, the exe cannot start; Windows finds a DLL in the exe's
+    own directory, so the DLLs have to land in the same one."""
+    installer.platform = "windows"
+    dlls = ["libgmp-10.dll", "libstdc++-6.dll", "libwinpthread-1.dll"]
+    _serve(installer, "opengrep_windows_x86.zip", _opengrep_zip(*dlls), None)
+
+    result = _install(installer, "opengrep")
+
+    assert result.success, result.message
+    bin_dir = tmp_path / "bin"
+    assert (bin_dir / "opengrep.exe").read_bytes() == BINARY
+    for name in dlls:
+        assert (bin_dir / name).read_text(encoding="utf-8") == f"dll {name}"
+
+
+def test_dlls_are_kept_only_for_windows(
+    installer: ToolInstaller, tmp_path: Path
+) -> None:
+    """Off Windows a DLL is dead weight in ~/.jmo/bin: only the binary goes."""
+    installer.platform = "linux"
+    version = ToolRegistry().get_tool("shellcheck").version
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:xz") as tar:
+        for name, body in (("shellcheck", BINARY), ("helper.dll", b"dll")):
+            info = tarfile.TarInfo(f"shellcheck-v{version}/{name}")
+            info.size = len(body)
+            tar.addfile(info, io.BytesIO(body))
+    _serve(
+        installer, f"shellcheck-v{version}.linux.x86_64.tar.xz", buf.getvalue(), None
+    )
+
+    result = _install(installer, "shellcheck")
+
+    assert result.success, result.message
+    assert sorted(p.name for p in (tmp_path / "bin").iterdir()) == ["shellcheck"]

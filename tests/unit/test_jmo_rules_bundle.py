@@ -466,7 +466,10 @@ def test_every_file_validates() -> None:
             timeout=120,
         )
         said = result.stdout + result.stderr
-        want = f"found 0 configuration error(s), and {entry['rules']} rule(s)"
+        # 2.0.0's wording; 1.32.0 said "found 0 configuration error(s), and N".
+        want = (
+            f"found 0 fatal errors, 0 skippable error(s), and {entry['rules']} rule(s)"
+        )
         if result.returncode != 0 or want not in said:
             wrong.append(
                 f"{name}: rc {result.returncode}, wanted {want!r}:\n{said[-400:]}"

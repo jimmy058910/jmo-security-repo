@@ -1504,6 +1504,15 @@ class ToolInstaller:
                     dest = self.install_dir / tool_name
                 shutil.copy2(binary_path, dest)
                 dest.chmod(0o755)  # No-op on Windows, but harmless
+                # A Windows build that loads DLLs ships them beside its exe
+                # (opengrep 2.0.0's zip: six, four of them imported by the
+                # exe itself). Windows looks for them in the exe's own
+                # directory, so they go where the exe goes.
+                if self.platform == "windows" and binary_path.is_relative_to(
+                    extract_dir
+                ):
+                    for dll in binary_path.parent.glob("*.dll"):
+                        shutil.copy2(dll, self.install_dir / dll.name)
 
                 # Verify
                 status = self.manager.check_tool(tool_name)

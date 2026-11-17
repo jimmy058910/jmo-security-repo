@@ -25,8 +25,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -140,11 +142,17 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         # v1.32.0, 2026-10-29) and `result_item_keys` was never checked, so this
         # contract used to name the one file. Run this way both files are read
         # (2 scanned, 6 results). The command is the descriptor row's (the
-        # configs its languages select, `-j 2`, no version check) minus
+        # configs its languages select, `-j 2`, and `--no-git-ignore`, which it
+        # adds where git cannot list the files, as for this copy) minus
         # `--output`, since this harness reads stdout; TestContractInfrastructure
         # holds the two equal. Nothing is fetched: the rules are the committed
-        # bundle's.
+        # bundle's. 2.0.0 matches that ignore list against the path from the git
+        # root when the target is inside a work tree, so the sample, under this
+        # repository's `tests/`, scanned 0 files even named `.` (measured
+        # 2026-11-17): it is scanned as a copy outside any work tree, as a
+        # user's repository is.
         "cwd": "{target}",
+        "outside_git": True,
         "command": [
             "opengrep",
             "scan",
@@ -154,7 +162,7 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
             str(PROJECT_ROOT / "scripts" / "jmo_rules" / "python.yaml"),
             "--no-rewrite-rule-ids",
             "--json",
-            "--disable-version-check",
+            "--no-git-ignore",
             "-j",
             "2",
             "--timeout",
@@ -351,27 +359,32 @@ def run_tool_on_sample(
     if not sample_target.exists():
         raise FileNotFoundError(f"Sample target not found: {sample_target}")
 
-    command = resolved_command(contract, sample_target)
+    with tempfile.TemporaryDirectory() as scratch:
+        if contract.get("outside_git"):
+            sample_target = Path(
+                shutil.copytree(sample_target, Path(scratch) / sample_target.name)
+            )
+        command = resolved_command(contract, sample_target)
 
-    logger.info("Running contract test: %s", " ".join(command))
+        logger.info("Running contract test: %s", " ".join(command))
 
-    # Run the tool
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        # UTF-8, not the locale codec: on Windows a cp1252 decode error is
-        # swallowed in the reader thread and stdout comes back None.
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=180,  # 3 minute timeout
-        cwd=contract["cwd"].replace("{target}", str(sample_target))
-        if "cwd" in contract
-        else PROJECT_ROOT,
-        # Merged over the inherited environment, as ToolRunner merges a
-        # definition's (osv-scanner's database directory).
-        env={**os.environ, **contract["env"]} if "env" in contract else None,
-    )
+        # Run the tool
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            # UTF-8, not the locale codec: on Windows a cp1252 decode error is
+            # swallowed in the reader thread and stdout comes back None.
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,  # 3 minute timeout
+            cwd=contract["cwd"].replace("{target}", str(sample_target))
+            if "cwd" in contract
+            else PROJECT_ROOT,
+            # Merged over the inherited environment, as ToolRunner merges a
+            # definition's (osv-scanner's database directory).
+            env={**os.environ, **contract["env"]} if "env" in contract else None,
+        )
 
     # stdout only: every contract tool writes its report there. Falling back to
     # stderr parsed trufflehog's JSON log lines as findings whenever it found
@@ -682,12 +695,19 @@ class TestContractInfrastructure:
         from scripts.core.tool_descriptors import DESCRIPTORS, ScanContext
 
         contract = TOOL_CONTRACTS["opengrep"]
-        sample = SAMPLES_DIR / contract["sample_target"]
+        # The copy the harness scans (`outside_git`): no work tree holds it, so
+        # git cannot list it and the row adds `--no-git-ignore`, as it does run.
+        sample = Path(
+            shutil.copytree(
+                SAMPLES_DIR / contract["sample_target"],
+                tmp_path / "sample" / contract["sample_target"],
+            )
+        )
         ctx = ScanContext(
             tool="opengrep",
             target_type="repo",
             target=sample,
-            out_dir=tmp_path,
+            out_dir=tmp_path / "out",
             binary="opengrep",
             files=(str(sample / "vulnerable_app.py"),),
         )
