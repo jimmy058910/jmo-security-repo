@@ -75,8 +75,10 @@ else
   log "opengrep not installed; skipping"
 fi
 if command -v trufflehog >/dev/null 2>&1; then
-  log "trufflehog filesystem --results=verified"
-  trufflehog filesystem . --results=verified --json >/tmp/trufflehog-local.json 2>/dev/null || true
+  log "trufflehog filesystem --results=verified --no-update"
+  # --no-update: otherwise trufflehog replaces its own binary with the newest
+  # release before scanning (#1625).
+  trufflehog filesystem . --results=verified --json --no-update >/tmp/trufflehog-local.json 2>/dev/null || true
 fi
 
 ok "Local verification complete"

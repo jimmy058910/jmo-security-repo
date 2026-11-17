@@ -227,7 +227,9 @@ jobs:
           # scan. Found by sweeping for the pattern in chunk 21; fixed here rather
           # than filed because it is the same two lines in the same file.
           set +e
-          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt \
+          # --no-update keeps the pinned binary: without it trufflehog replaces
+          # itself with the newest release before scanning (#1625).
+          trufflehog filesystem . --json --no-update --exclude-paths .trufflehog-exclude.txt \
               --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt
           EXIT_CODE=$?
           set -e

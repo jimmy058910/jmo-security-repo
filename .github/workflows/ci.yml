@@ -203,7 +203,11 @@ jobs:
           gzip -t /tmp/trufflehog.tar.gz
           tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
           chmod +x /usr/local/bin/trufflehog
-          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt --only-verified > trufflehog-results.json || true
+          # --no-update: without it trufflehog replaces its own binary with the
+          # newest release before scanning, so the pin above stops describing
+          # what ran (measured 3.99.7 -> 3.99.9, #1625).
+          trufflehog filesystem . --json --no-update --exclude-paths .trufflehog-exclude.txt \
+            --only-verified > trufflehog-results.json || true
           # -c, not -r: trufflehog emits NDJSON, and `jq -r` pretty-prints each
           # matching object across ~40 lines, so `wc -l` counted *lines* rather
           # than secrets. Measured: 147 findings reported as "6090 verified
