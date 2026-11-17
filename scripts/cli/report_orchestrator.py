@@ -674,10 +674,11 @@ def cmd_report(args, _log_fn) -> int:
 
             # Store scan in history database: the findings this run reported,
             # not whatever findings.json is on disk, which this run may not
-            # have written.
-            scan_id = db_store_scan(
+            # have written, under the id its reports carry.
+            db_store_scan(
                 results_dir=results_dir,
                 findings=findings,
+                scan_id=scan_id,
                 tools=tools,
                 db_path=history_db_path,
                 no_store_raw=no_store_raw,

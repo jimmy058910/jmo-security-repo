@@ -377,3 +377,90 @@ def test_a_failed_store_names_a_recovery_that_works(
     (error,) = log.at("ERROR")
     assert f"jmo history store --results-dir {results}" in error
     assert ("with `json` in outputs" in error) is names_the_precondition
+
+
+# ---------------------------------------------------------------------------
+# One scan id: the report names the row history stored
+# ---------------------------------------------------------------------------
+
+
+def test_history_show_finds_the_row_by_the_reports_scan_id(tmp_path, capsys):
+    """Before: findings.json's meta.scan_id and scans.id were two UUIDs.
+
+    The review measured `jmo history show <report id>` -> "Scan not found".
+    """
+    from scripts.cli.history_commands import cmd_history_show
+
+    results = _scan_results(tmp_path / "results", [SC2086])
+    db = tmp_path / "history.db"
+    rc, log = _store(results, db, _config(tmp_path, ["json", "yaml"]))
+    assert rc == 0, log.records
+
+    summaries = results / "summaries"
+    report_id = json.loads((summaries / "findings.json").read_text("utf-8"))["meta"][
+        "scan_id"
+    ]
+    assert _rows(db) == [(report_id, 1)]
+    yaml = pytest.importorskip("yaml")
+    yaml_id = yaml.safe_load((summaries / "findings.yaml").read_text("utf-8"))["meta"][
+        "scan_id"
+    ]
+    assert yaml_id == report_id
+    assert any(report_id in m for m in log.at("INFO") if "Stored scan" in m)
+
+    capsys.readouterr()
+    show_rc = cmd_history_show(
+        argparse.Namespace(db=str(db), scan_id=report_id, json=True, findings=False)
+    )
+    shown = json.loads(capsys.readouterr().out)
+    assert show_rc == 0
+    assert shown["id"] == report_id and shown["total_findings"] == 1
+
+
+def _history_store(results: Path, db: Path) -> int:
+    from scripts.cli.history_commands import cmd_history_store
+
+    return cmd_history_store(
+        argparse.Namespace(
+            results_dir=str(results),
+            db=str(db),
+            tools=None,
+            commit=None,
+            branch=None,
+            tag=None,
+        )
+    )
+
+
+def test_history_store_records_the_report_under_its_own_scan_id(tmp_path):
+    """The recovery the ERROR line names: the stored row keeps the report's id."""
+    results = _scan_results(tmp_path / "results", [SC2086])
+    assert cmd_report(_args(results, _config(tmp_path, ["json"])), _Log()) == 0
+    report_id = json.loads(
+        (results / "summaries" / "findings.json").read_text("utf-8")
+    )["meta"]["scan_id"]
+    db = tmp_path / "history.db"
+
+    assert _history_store(results, db) == 0
+    assert _rows(db) == [(report_id, 1)]
+
+
+def test_storing_one_report_twice_still_stores_a_second_row(tmp_path):
+    """Its id is taken by then, so the second row gets a fresh one.
+
+    `jmo history store` has always accepted the same directory twice; a
+    primary-key collision must not turn that into an error.
+    """
+    results = _scan_results(tmp_path / "results", [SC2086])
+    db = tmp_path / "history.db"
+    rc, _ = _store(results, db, _config(tmp_path, ["json"]))
+    assert rc == 0
+
+    assert _history_store(results, db) == 0
+
+    (first, _), (second, _) = _rows(db)
+    report_id = json.loads(
+        (results / "summaries" / "findings.json").read_text("utf-8")
+    )["meta"]["scan_id"]
+    assert first == report_id
+    assert second != report_id

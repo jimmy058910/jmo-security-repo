@@ -1183,6 +1183,7 @@ def store_scan(
     encrypt_findings: bool = False,
     collect_metadata: bool = False,
     findings: list[dict[str, Any]] | None = None,
+    scan_id: str | None = None,
 ) -> str:
     """
     Store a completed scan in the history database.
@@ -1193,6 +1194,9 @@ def store_scan(
         findings: The findings to store. The report phase passes the ones it
             reported; None reads `results_dir/summaries/findings.json`, which
             is `jmo history store`'s job
+        scan_id: The row's id. The report phase passes the `meta.scan_id`
+            its reports carry, so `jmo history show <that id>` finds the row;
+            None generates one
         db_path: Path to SQLite database file
         commit_hash: Git commit hash (optional, auto-detected if None)
         branch: Git branch name (optional, auto-detected if None)
@@ -1266,8 +1270,9 @@ def store_scan(
         else:
             findings = []
 
-    # Generate scan ID
-    scan_id = str(uuid.uuid4())
+    # One id per scan, the report's when there is one: generated here as well,
+    # the row and findings.json's `meta.scan_id` were two different UUIDs.
+    scan_id = scan_id or str(uuid.uuid4())
 
     # Current timestamp
     now = int(time.time())

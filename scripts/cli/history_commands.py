@@ -104,6 +104,32 @@ def parse_time_delta(delta_str: str) -> int:
         return int(delta_str) * 86400
 
 
+def _unstored_report_id(findings_doc, db_path: Path) -> str | None:
+    """The report's `meta.scan_id`, unless a row already has that id.
+
+    Storing a report under its own id lets `jmo history show <meta.scan_id>`
+    find it. A report the scan already stored, or one stored before, keeps
+    its row; storing it again gets a fresh id rather than a key collision.
+    """
+    meta = findings_doc.get("meta") if isinstance(findings_doc, dict) else None
+    report_id = meta.get("scan_id") if isinstance(meta, dict) else None
+    if not isinstance(report_id, str) or not report_id:
+        return None
+    if not db_path.exists():
+        return report_id
+    conn = get_connection(db_path, read_only=True)
+    try:
+        taken = conn.execute(
+            "SELECT 1 FROM scans WHERE id = ?", (report_id,)
+        ).fetchone()
+    except sqlite3.Error:
+        # No scans table yet: nothing can hold the id.
+        return report_id
+    finally:
+        conn.close()
+    return None if taken else report_id
+
+
 def cmd_history_store(args) -> int:
     """Manually store a scan in history database."""
     results_dir = Path(args.results_dir)
@@ -114,38 +140,34 @@ def cmd_history_store(args) -> int:
         return 1
 
     try:
-        # Get tools from args or detect from results
+        findings_json = results_dir / "summaries" / "findings.json"
+        data = None
+        if findings_json.exists():
+            with open(findings_json, encoding="utf-8") as f:
+                data = json.load(f)
+
+        # Get tools from args or detect them from the findings. Both artifact
+        # shapes are accepted, as store_scan() does: `summaries/findings.json`
+        # is a dict of {"meta": ..., "findings": [...]}, but the bare-list
+        # form is also supported downstream -- and this used to be an
+        # unguarded `data.get(...)`, so a list crashed the command with an
+        # AttributeError and a traceback instead of storing the scan.
         tools = getattr(args, "tools", None)
         if not tools:
-            # Try to detect tools from results directory
-            tools_json = results_dir / "summaries" / "findings.json"
-            if tools_json.exists():
-                with open(tools_json, encoding="utf-8") as f:
-                    data = json.load(f)
-                    # Extract unique tools from findings
-                    tool_set = set()
-                    # Accept both artifact shapes, as store_scan() does.
-                    # `summaries/findings.json` is a dict of
-                    # {"meta": ..., "findings": [...]}, but the bare-list
-                    # form is also supported downstream -- and this line
-                    # used to be an unguarded `data.get(...)`, so a list
-                    # crashed the command with an AttributeError and a
-                    # traceback instead of storing the scan.
-                    if isinstance(data, list):
-                        entries = data
-                    elif isinstance(data, dict):
-                        entries = data.get("findings", [])
-                    else:
-                        entries = []
-                    for finding in entries:
-                        tool_info = finding.get("tool", {})
-                        if isinstance(tool_info, dict):
-                            tool_set.add(tool_info.get("name", "unknown"))
-                        else:
-                            tool_set.add(str(tool_info))
-                    tools = sorted(tool_set)
+            if isinstance(data, list):
+                entries = data
+            elif isinstance(data, dict):
+                entries = data.get("findings", [])
             else:
-                tools = []
+                entries = []
+            tool_set = set()
+            for finding in entries:
+                tool_info = finding.get("tool", {})
+                if isinstance(tool_info, dict):
+                    tool_set.add(tool_info.get("name", "unknown"))
+                else:
+                    tool_set.add(str(tool_info))
+            tools = sorted(tool_set)
 
         # Store scan
         scan_id = db_store_scan(
@@ -155,6 +177,7 @@ def cmd_history_store(args) -> int:
             commit_hash=getattr(args, "commit", None),
             branch=getattr(args, "branch", None),
             tag=getattr(args, "tag", None),
+            scan_id=_unstored_report_id(data, db_path),
         )
 
         safe_write(f"✅ Stored scan: {scan_id}\n")
