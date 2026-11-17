@@ -207,7 +207,7 @@ Combined scan + report for CI/CD pipelines. Supports all `jmo scan` flags plus:
 | `--fail-on SEV` | Exit non-zero at severity threshold |
 | `--profile` | Write `timings.json`: report-phase parse timing, as for `jmo report` |
 | `--policy NAME` | Policy to evaluate (repeatable: `--policy owasp-top-10 --policy zero-secrets`) |
-| `--fail-on-policy-violation` | Exit code 1 if any policy violations found |
+| `--fail-on-policy-violation` | Exit code 1 if any policy violations found; 2 if a requested policy could not be evaluated (OPA missing, unknown name, evaluation error) |
 | `--strict-versions` | Fail if tool versions don't match `versions.yaml` (for reproducible builds) |
 
 ---

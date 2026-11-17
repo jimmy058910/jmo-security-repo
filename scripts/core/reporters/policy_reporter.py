@@ -90,6 +90,8 @@ def evaluate_policies(
     policy_names: list[str],
     builtin_dir: Path | None = None,
     user_dir: Path | None = None,
+    *,
+    failures: dict[str, str] | None = None,
 ) -> dict[str, PolicyResult]:
     """
     Evaluate findings against specified policies.
@@ -100,6 +102,9 @@ def evaluate_policies(
         builtin_dir: Path to builtin policies directory (default:
             `builtin_policies_dir()`, which works from a wheel and a checkout)
         user_dir: Path to user policies directory (default: ~/.jmo/policies)
+        failures: If given, filled with policy name -> why it has no result
+            (not found, or its evaluation raised). A caller that enforces the
+            verdict needs the reason: a policy with no result did not pass.
 
     Returns:
         Dict mapping policy name to PolicyResult
@@ -126,6 +131,11 @@ def evaluate_policies(
             logger.warning(
                 f"Policy '{policy_name}' not found. Available: {', '.join(sorted(policies.keys()))}"
             )
+            if failures is not None:
+                failures[policy_name] = (
+                    f"no such policy in {builtin_dir} or {user_dir} "
+                    f"(available: {', '.join(sorted(policies)) or 'none'})"
+                )
             continue
 
         policy_path = policies[policy_name]
@@ -137,6 +147,8 @@ def evaluate_policies(
             Exception
         ) as e:  # Acceptable: individual policy failure — skip and continue with others
             logger.error(f"Failed to evaluate policy '{policy_name}': {e}")
+            if failures is not None:
+                failures[policy_name] = f"evaluation failed ({e})"
             continue
 
     return results

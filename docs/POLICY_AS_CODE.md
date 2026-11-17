@@ -70,7 +70,9 @@ jmo ci --repo . --policy zero-secrets --fail-on-policy-violation
 # Exit codes:
 #   0 = All policies passed
 #   1 = Policy violations found (when --fail-on-policy-violation set)
-#   2 = Errors occurred
+#   2 = Errors occurred, including a requested policy that could not be
+#       evaluated (OPA missing, unknown name, evaluation error) when
+#       --fail-on-policy-violation is set
 ```
 
 ## Built-in Policies

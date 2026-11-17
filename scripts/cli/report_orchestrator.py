@@ -426,6 +426,15 @@ def cmd_report(args, _log_fn) -> int:
         _log_fn(args, "DEBUG", "Policy evaluation disabled via config")
 
     if policy_names:
+        enforce = bool(
+            getattr(args, "fail_on_policy_violation", False)
+            or cfg.policy.fail_on_violation
+        )
+        policy_results: dict[str, Any] = {}
+        # Policy name -> why it has no verdict, as evaluate_policies saw it.
+        unevaluated: dict[str, str] = {}
+        # Why nothing at all was evaluated, when the whole evaluation failed.
+        block_reason = ""
         try:
             from scripts.core.reporters.policy_reporter import (
                 evaluate_policies,
@@ -442,13 +451,11 @@ def cmd_report(args, _log_fn) -> int:
 
             # The built-in and user directories come from policy_engine's one
             # resolver, which also works from an installed wheel.
-            policy_results = evaluate_policies(findings, policy_names)
+            policy_results = evaluate_policies(
+                findings, policy_names, failures=unevaluated
+            )
 
             if policy_results:
-                write_policy_report(policy_results, out_dir / "POLICY_REPORT.md")
-                write_policy_json(policy_results, out_dir / "policy_results.json")
-                write_policy_summary_md(policy_results, out_dir / "POLICY_SUMMARY.md")
-
                 passed = sum(1 for r in policy_results.values() if r.passed)
                 failed = len(policy_results) - passed
 
@@ -466,10 +473,7 @@ def cmd_report(args, _log_fn) -> int:
                 )
 
                 # Fail if violations and fail_on_violation=True (check both CLI and config)
-                cli_fail_on_violation = getattr(args, "fail_on_policy_violation", False)
-                if failed > 0 and (
-                    cli_fail_on_violation or cfg.policy.fail_on_violation
-                ):
+                if failed > 0 and enforce:
                     _log_fn(
                         args,
                         "ERROR",
@@ -477,22 +481,56 @@ def cmd_report(args, _log_fn) -> int:
                     )
                     policy_exit_code = 1
 
+                # Written after the verdict: a report that cannot be written
+                # used to skip the verdict above and exit 0 on a FAILED policy.
+                write_policy_report(policy_results, out_dir / "POLICY_REPORT.md")
+                write_policy_json(policy_results, out_dir / "policy_results.json")
+                write_policy_summary_md(policy_results, out_dir / "POLICY_SUMMARY.md")
+
         except ImportError as e:
+            block_reason = f"the policy reporter could not be imported ({e})"
             _log_fn(args, "DEBUG", f"Policy reporter unavailable: {e}")
             logger.debug(f"Policy reporter import error: {e}")
-        except (OSError, PermissionError) as e:
-            _log_fn(args, "DEBUG", f"Failed to write policy reports: {e}")
-            logger.debug(f"Policy report write failed: {e}")
         except OPANotFoundException as e:
-            # OPA not installed - graceful degradation with warning (not error)
-            _log_fn(args, "WARN", f"Policy evaluation skipped: {e}")
-            logger.warning("Policy evaluation skipped: OPA not installed")
+            block_reason = str(e)
+            if not enforce:
+                # OPA not installed - graceful degradation with warning (not error)
+                _log_fn(args, "WARN", f"Policy evaluation skipped: {e}")
+                logger.warning("Policy evaluation skipped: OPA not installed")
+        except OSError as e:
+            # Either the evaluation (OPA could not be started) or a report
+            # write; a write failure leaves every verdict in policy_results.
+            block_reason = f"an OS error ({e})"
+            _log_fn(args, "WARN", f"Policy evaluation or report write failed: {e}")
+            logger.debug(f"Policy evaluation or report write failed: {e}")
         except Exception as e:
+            block_reason = f"evaluation failed ({e})"
             _log_fn(args, "ERROR", f"Policy evaluation failed: {e}")
             logger.error(f"Policy evaluation error: {e}", exc_info=True)
-            cli_fail_on_violation = getattr(args, "fail_on_policy_violation", False)
-            if cli_fail_on_violation or cfg.policy.fail_on_violation:
-                policy_exit_code = 1
+
+        # Fail closed. With enforcement on, a requested policy that produced no
+        # verdict -- OPA missing, a name that matches no policy, an evaluation
+        # error -- is not a pass. Each of these used to log a warning and exit
+        # 0, so a gate that never ran read as a gate that passed. 2, not 1: the
+        # policy did not fail, it was not evaluated, as `jmo policy` reports an
+        # unknown name (#925). Without enforcement the warnings above stand.
+        missing = {
+            name: unevaluated.get(name) or block_reason or "it produced no result"
+            for name in policy_names
+            if name not in policy_results
+        }
+        if missing and enforce:
+            for name, reason in missing.items():
+                _log_fn(
+                    args, "ERROR", f"Policy '{name}' could not be evaluated: {reason}"
+                )
+            _log_fn(
+                args,
+                "ERROR",
+                f"{len(missing)} requested policies were not evaluated. Exiting 2 "
+                "due to fail_on_violation=True: an unevaluated policy cannot pass",
+            )
+            policy_exit_code = max(policy_exit_code, 2)
 
     # Write profiling data
     if args.profile:
