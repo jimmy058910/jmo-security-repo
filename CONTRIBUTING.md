@@ -733,12 +733,19 @@ git revert -m 1 HEAD
 - Write/update tests when changing behavior
 - Run `make fmt && make lint && make test` before pushing
 - Run `make pre-commit-run` to apply YAML linting and validate GitHub Actions workflows via actionlint
-- Open a PR and fill out the template (if present). Link related issues
+- Open the PR against `dev`, not `main`. GitHub's form offers `main` because it is the
+  default branch, so change the base before you create the PR. `main` only ever
+  fast-forwards to `dev`, so a PR against it is retargeted before review
+- Fill out the template and name the issue the PR fixes (`Closes #N`). On a PR to `dev`
+  that keyword does not close the issue by itself: the maintainer copies it into the
+  squash commit, and the issue closes when `dev` reaches `main`
   - CI runs on a matrix (OS/Python). Workflows use concurrency to cancel redundant runs and set 20-minute timeouts per job
+  - On a PR from a fork, CI waits until a maintainer approves the run, so a PR with no
+    checks yet has not failed
 
 ### Commit guidelines and pre-push validation
 
-**CRITICAL:** Before pushing to `main`, ensure all new Python modules are tracked in git. Untracked modules cause Dependabot PRs to fail with `ModuleNotFoundError`.
+**CRITICAL:** Before pushing, ensure all new Python modules are tracked in git. A commit that imports an untracked module fails on every branch built on it, Dependabot's PRs included, with `ModuleNotFoundError`.
 
 #### Pre-push hook (automatic validation)
 
@@ -789,7 +796,7 @@ python3 -c "import scripts.core.your_new_module"
 
 #### Why this matters
 
-**Scenario:** You create `scripts/core/new_feature.py` but forget to `git add` it. You commit and push to `main`. Later, Dependabot creates 13 PRs to update dependencies. **All 13 PRs fail** because they're based on `main`, which is missing `new_feature.py`.
+**Scenario:** You create `scripts/core/new_feature.py` but forget to `git add` it. You commit, and the commit reaches `dev`. Later, Dependabot creates 13 PRs to update dependencies. **All 13 PRs fail** because they're based on `dev`, which is missing `new_feature.py`.
 
 **Solution:** The pre-push hook catches this before it breaks Dependabot, preventing cascading failures.
 
