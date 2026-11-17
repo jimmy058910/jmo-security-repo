@@ -349,10 +349,11 @@ def test_github_actions_thread_override():
 
 
 def test_github_actions_uses_scan_defaults():
-    """Unset threads/timeout come from scan_defaults(), not a profile.
+    """Unset threads come from scan_defaults(), not a profile.
 
     A distinctive stub value proves the generator reads it rather than a
-    hardcoded pair that happens to match.
+    hardcoded pair that happens to match. An unset timeout writes no
+    `--timeout`: one would lower opengrep's and zap's minimum (#1627).
     """
     config = create_wizard_config(
         use_docker=False,
@@ -369,11 +370,11 @@ def test_github_actions_uses_scan_defaults():
         result = generate_github_actions(config)
 
     assert "--threads 5" in result
-    assert "--timeout 450" in result
+    assert "--timeout" not in result
 
 
 def test_github_actions_defaults_without_jmo_yml(tmp_path, monkeypatch):
-    """With no jmo.yml in the working directory the built-in 4 / 600 apply."""
+    """With no jmo.yml in the working directory the built-in 4 threads apply."""
     monkeypatch.chdir(tmp_path)
     config = create_wizard_config(
         use_docker=False,
@@ -386,11 +387,12 @@ def test_github_actions_defaults_without_jmo_yml(tmp_path, monkeypatch):
     result = generate_github_actions(config)
 
     assert "--threads 4" in result
-    assert "--timeout 600" in result
+    assert "--timeout" not in result
 
 
 def test_github_actions_defaults_read_the_top_level_of_jmo_yml(tmp_path, monkeypatch):
-    """jmo.yml's top-level threads/timeout are what an unset wizard value means."""
+    """jmo.yml's top-level threads is what an unset wizard value means; its
+    timeout is left for the scan to read (#1627)."""
     (tmp_path / "jmo.yml").write_bytes(b"threads: 6\ntimeout: 900\n")
     monkeypatch.chdir(tmp_path)
     config = create_wizard_config(
@@ -404,7 +406,7 @@ def test_github_actions_defaults_read_the_top_level_of_jmo_yml(tmp_path, monkeyp
     result = generate_github_actions(config)
 
     assert "--threads 6" in result
-    assert "--timeout 900" in result
+    assert "--timeout" not in result
 
 
 # ========== Test Category 8: Fail-On Threshold Variations ==========

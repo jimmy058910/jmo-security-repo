@@ -366,6 +366,28 @@ def configure_k8s_target() -> TargetConfig:
     return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
+def _floors_above(default_timeout: int, tools: list[str] | None) -> str:
+    """The minimums the default timeout does not reach, for this scan's tools:
+    "opengrep, zap: 900s", or "" when it reaches them all. jmo.yml's timeout
+    cannot lower a minimum; a `--timeout` can (#1486)."""
+    from scripts.cli.scan_utils import TOOL_TIMEOUT_DEFAULTS
+
+    by_floor: dict[int, list[str]] = {}
+    for tool in TOOL_MATRIX if tools is None else tools:
+        floor = TOOL_TIMEOUT_DEFAULTS.get(tool, 0)
+        if floor > default_timeout:
+            by_floor.setdefault(floor, []).append(tool)
+    return "; ".join(
+        f"{', '.join(names)}: {floor}s" for floor, names in sorted(by_floor.items())
+    )
+
+
+def _default_timeout_text(default_timeout: int, tools: list[str] | None) -> str:
+    """The default timeout as the scan applies it, minimums included."""
+    floors = _floors_above(default_timeout, tools)
+    return f"{default_timeout}s ({floors})" if floors else f"{default_timeout}s"
+
+
 def configure_advanced(
     manager: ToolManager | None = None, tools: list[str] | None = None
 ) -> tuple[int | None, int | None, str]:
@@ -393,7 +415,7 @@ def configure_advanced(
 
     print("\nDefaults:")
     print(f"  Threads: {default_threads}")
-    print(f"  Timeout: {default_timeout}s")
+    print(f"  Timeout: {_default_timeout_text(default_timeout, tools)}")
     print(f"  Tools: {summary.total} ({summary.execution_ready} ready)")
     print(f"\nSystem: {cpu_count} CPU cores detected")
 
@@ -410,14 +432,25 @@ def configure_advanced(
     except ValueError:
         threads = default_threads
 
-    # Timeout
+    # Timeout. Only a number the user types is returned: it becomes
+    # `--timeout`, which wins over a tool's minimum (#1486), so the default
+    # passed back as a number gave opengrep and zap 600 s, not 900 s (#1627).
+    # The prompt reads `Timeout [N]: ` as before, with no default to fill in,
+    # so a blank answer stays blank.
     print("\nPer-tool timeout in seconds")
-    timeout_str = _prompt_text("Timeout", default=str(default_timeout))
-    try:
-        timeout = int(timeout_str)
-        timeout = max(60, timeout)
-    except ValueError:
-        timeout = default_timeout
+    floors = _floors_above(default_timeout, tools)
+    if floors:
+        print(
+            f"  Blank keeps the default, and these minimums ({floors}); "
+            "a number typed here applies to every tool"
+        )
+    timeout_str = _prompt_text(f"Timeout [{default_timeout}]")
+    timeout: int | None = None
+    if timeout_str:
+        try:
+            timeout = max(60, int(timeout_str))
+        except ValueError:
+            print(f"  Not a number: keeping the default ({default_timeout}s)")
 
     # Fail-on severity
     print("\nFail on severity threshold (for CI/CD)")
@@ -539,9 +572,11 @@ def review_and_confirm(
     print(f"  Results: {config.results_dir}")
 
     threads = config.threads or default_threads
-    timeout = config.timeout or default_timeout
     print(f"  Threads: {threads}")
-    print(f"  Timeout: {timeout}s")
+    if config.timeout is None:
+        print(f"  Timeout: {_default_timeout_text(default_timeout, tools)}")
+    else:
+        print(f"  Timeout: {config.timeout}s")
 
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")

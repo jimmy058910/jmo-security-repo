@@ -784,7 +784,9 @@ def test_configure_advanced_prompts_and_falls_back_to_scan_defaults(
 
     The Threads/Timeout prompts show it as their default, and an unparseable
     answer for either falls back to it -- not to a profile's numbers, which
-    no longer exist.
+    no longer exist. For the timeout, falling back means returning None: the
+    default as a number became `--timeout`, which lowers opengrep's and zap's
+    minimum (#1627).
     """
     from scripts.cli.wizard import configure_advanced
 
@@ -795,7 +797,7 @@ def test_configure_advanced_prompts_and_falls_back_to_scan_defaults(
     assert any(p.startswith("Threads [7]") for p in prompts), prompts
     assert any(p.startswith("Timeout [1234]") for p in prompts), prompts
     assert threads == 7
-    assert timeout == 1234
+    assert timeout is None
 
 
 def test_scan_defaults_reads_the_top_level_of_jmo_yml(tmp_path):
@@ -963,12 +965,14 @@ def test_review_and_confirm_summary_uses_matrix_and_scan_defaults(
 
     out = capsys.readouterr().out
     assert "Threads: 3" in out
-    assert "Timeout: 777s" in out
+    # An unset timeout shows the minimums it does not reach (#1627)
+    assert "Timeout: 777s (opengrep, zap: 900s)" in out
     assert "9/12" in out
     assert "Profile" not in out
     # Only execution-ready tools feed the preview and the time estimate
-    assert "trivy" in out
-    assert "zap" not in out
+    preview = out.split("Tools:", 1)[1]
+    assert "trivy" in preview
+    assert "zap" not in preview
 
 
 def test_generate_command_targets_mode():

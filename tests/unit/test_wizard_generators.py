@@ -497,10 +497,12 @@ def test_generate_github_actions_native_mode_with_custom_timeout(mock_config):
 
 
 def test_generate_github_actions_uses_scan_defaults_when_unset(mock_config):
-    """With no threads/timeout from the wizard, the values come from scan_defaults().
+    """With no threads from the wizard, the value comes from scan_defaults().
 
-    That is the one source (jmo.yml top level, else 4 / 600); a sentinel pair
-    proves the generator reads it rather than carrying its own numbers.
+    That is the one source (jmo.yml top level, else 4); a sentinel pair proves
+    the generator reads it rather than carrying its own numbers. An unset
+    timeout writes no `--timeout` at all: one would win over opengrep's and
+    zap's 900 s minimum, where the scan's own jmo.yml cannot (#1627).
     """
     mock_config.use_docker = False
     mock_config.threads = None
@@ -513,7 +515,7 @@ def test_generate_github_actions_uses_scan_defaults_when_unset(mock_config):
         result = generate_github_actions(mock_config)
 
     assert "--threads 7" in result
-    assert "--timeout 777" in result
+    assert "--timeout" not in result
 
 
 def test_generate_github_actions_wizard_values_beat_scan_defaults(mock_config):
@@ -535,23 +537,24 @@ def test_generate_github_actions_wizard_values_beat_scan_defaults(mock_config):
 def test_generate_github_actions_defaults_read_jmo_yml(
     mock_config, tmp_path, monkeypatch
 ):
-    """End to end: the top-level threads/timeout of the jmo.yml in the cwd."""
+    """End to end: the top-level threads of the jmo.yml in the cwd. Its
+    timeout is the scan's to read, in CI, not the wizard's to copy (#1627)."""
     (tmp_path / "jmo.yml").write_bytes(b"threads: 6\ntimeout: 900\n")
     monkeypatch.chdir(tmp_path)
 
     result = generate_github_actions(mock_config)
 
     assert "--threads 6" in result
-    assert "--timeout 900" in result
+    assert "--timeout" not in result
 
 
 def test_generate_github_actions_defaults_without_jmo_yml(
     mock_config, tmp_path, monkeypatch
 ):
-    """No jmo.yml: the built-in 4 threads / 600 s, the shipped jmo.yml's values."""
+    """No jmo.yml: the built-in 4 threads, and no `--timeout` (#1627)."""
     monkeypatch.chdir(tmp_path)
 
     result = generate_github_actions(mock_config)
 
     assert "--threads 4" in result
-    assert "--timeout 600" in result
+    assert "--timeout" not in result
