@@ -759,9 +759,9 @@ def test_configure_advanced_invalid_inputs(
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
     threads, timeout, fail_on = configure_advanced()
-    # Invalid thread count falls back to the scan default (jmo.yml top level,
-    # else 4) -- a distinctive stub value proves it is read, not hardcoded
-    assert threads == 3
+    # An invalid thread count keeps the scan default, which is no --threads:
+    # the default passed back as a number overrode jmo.yml's `threads: auto`
+    assert threads is None
     # Invalid timeout 30 should be clamped to minimum 60
     assert timeout == 60  # max(60, 30)
 
@@ -784,9 +784,9 @@ def test_configure_advanced_prompts_and_falls_back_to_scan_defaults(
 
     The Threads/Timeout prompts show it as their default, and an unparseable
     answer for either falls back to it -- not to a profile's numbers, which
-    no longer exist. For the timeout, falling back means returning None: the
-    default as a number became `--timeout`, which lowers opengrep's and zap's
-    minimum (#1627).
+    no longer exist. Falling back means returning None for both: the default as
+    a number became `--timeout`, which lowers opengrep's and zap's minimum
+    (#1627), and `--threads`, which overrode `threads: auto`.
     """
     from scripts.cli.wizard import configure_advanced
 
@@ -796,7 +796,7 @@ def test_configure_advanced_prompts_and_falls_back_to_scan_defaults(
     prompts = [c.args[0] for c in mock_input.call_args_list]
     assert any(p.startswith("Threads [7]") for p in prompts), prompts
     assert any(p.startswith("Timeout [1234]") for p in prompts), prompts
-    assert threads == 7
+    assert threads is None
     assert timeout is None
 
 
@@ -810,28 +810,26 @@ def test_scan_defaults_reads_the_top_level_of_jmo_yml(tmp_path):
     assert scan_defaults(str(cfg)) == (6, 900)
 
 
-def test_scan_defaults_threads_auto_is_the_default_thread_count(tmp_path):
-    """`threads: auto` has no number to show, so it reads as DEFAULT_THREADS."""
-    from scripts.cli.wizard_flows.config_models import DEFAULT_THREADS, scan_defaults
+def test_scan_defaults_threads_auto_reads_auto(tmp_path):
+    """`threads: auto` reads as "auto": the scan sizes its pool from the CPU
+    count. It read 4, which the wizard showed and passed as `--threads 4`."""
+    from scripts.cli.wizard_flows.config_models import scan_defaults
 
     cfg = tmp_path / "jmo.yml"
     cfg.write_bytes(b"threads: auto\ntimeout: 900\n")
 
-    assert scan_defaults(str(cfg)) == (DEFAULT_THREADS, 900)
+    assert scan_defaults(str(cfg)) == ("auto", 900)
 
 
 def test_scan_defaults_without_a_config_file(tmp_path):
-    """No jmo.yml means the built-in constants, which are 4 threads / 600 s."""
-    from scripts.cli.wizard_flows.config_models import (
-        DEFAULT_THREADS,
-        DEFAULT_TIMEOUT,
-        scan_defaults,
-    )
+    """No jmo.yml means auto threads (what `jmo scan` does with none) and
+    DEFAULT_TIMEOUT, 600 s."""
+    from scripts.cli.wizard_flows.config_models import DEFAULT_TIMEOUT, scan_defaults
 
     missing = tmp_path / "no-such-jmo.yml"
 
-    assert scan_defaults(str(missing)) == (DEFAULT_THREADS, DEFAULT_TIMEOUT)
-    assert (DEFAULT_THREADS, DEFAULT_TIMEOUT) == (4, 600)
+    assert scan_defaults(str(missing)) == ("auto", DEFAULT_TIMEOUT)
+    assert DEFAULT_TIMEOUT == 600
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)

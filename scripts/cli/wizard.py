@@ -441,15 +441,18 @@ def configure_advanced(
     if not _prompt_yes_no("\nCustomize advanced settings?", default=False):
         return None, None, ""
 
-    # Threads
+    # Threads, on the timeout's rule below: only a number the user types is
+    # returned, so a kept default never becomes `--threads` and jmo.yml's
+    # `threads: auto` stays auto.
     print(f"\nThread count (1-{cpu_count * 2})")
     print("  Lower = more thorough, Higher = faster (if I/O bound)")
-    threads_str = _prompt_text("Threads", default=str(default_threads))
-    try:
-        threads = int(threads_str)
-        threads = max(1, min(threads, cpu_count * 2))
-    except ValueError:
-        threads = default_threads
+    threads_str = _prompt_text(f"Threads [{default_threads}]")
+    threads: int | None = None
+    if threads_str:
+        try:
+            threads = max(1, min(int(threads_str), cpu_count * 2))
+        except ValueError:
+            print(f"  Not a number: keeping the default ({default_threads})")
 
     # Timeout. Only a number the user types is returned: it becomes
     # `--timeout`, which wins over a tool's minimum (#1486), so the default

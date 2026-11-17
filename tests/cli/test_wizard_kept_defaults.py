@@ -1,4 +1,6 @@
-"""A wizard user who keeps the default timeout keeps opengrep's and zap's floor.
+"""A setting the wizard user leaves at its default never becomes a flag.
+
+Most cases are the timeout, where it mattered most.
 
 Since #1486 a `--timeout` on the command line wins over a tool's minimum
 (opengrep and zap: 900 s), where `jmo.yml`'s `timeout` cannot lower one. The
@@ -17,7 +19,12 @@ wizard writes from its answers, asks the real parser for the `--timeout` each
 code (`_effective_scan_settings`, `cli_timeout_over_floors`, `tool_timeout`)
 against a copy of the shipped `jmo.yml`. The resolving cases compare against
 `TOOL_TIMEOUT_DEFAULTS` rather than restating the floors; only the display
-test spells out the text the screen should show.
+tests spell out the text the screen should show.
+
+Threads follow the same rule. A kept `Threads [4]` wrote `--threads 4` over
+jmo.yml's `threads: auto` (which the wizard read as 4), and every workflow
+wrote `--threads`; those cases resolve the worker count through the scan's
+`_get_max_workers`.
 """
 
 from __future__ import annotations
@@ -41,6 +48,7 @@ from scripts.cli.wizard_generators import (
     generate_makefile_target,
     generate_shell_script,
 )
+from scripts.core.config import load_config
 from tests.unit.test_wizard_generated_commands_parse import extract_commands
 
 SHIPPED_JMO_YML = Path(__file__).resolve().parents[2] / "jmo.yml"
@@ -63,14 +71,18 @@ def _shipped_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
 
-def _answer_advanced(customize: bool, timeout_answer: str = "") -> WizardConfig:
-    """The wizard's step 4 with threads left blank and `timeout_answer` typed."""
+def _answer_advanced(
+    customize: bool, timeout_answer: str = "", threads_answer: str = ""
+) -> WizardConfig:
+    """The wizard's step 4 with `threads_answer` and `timeout_answer` typed
+    (blank by default), on a machine with 4 CPUs."""
     tm = MagicMock()
     tm.get_tool_summary.return_value = MagicMock(execution_ready=1, total=1)
     with (
         patch.object(wizard, "_prompt_yes_no", return_value=customize),
-        patch("builtins.input", side_effect=["", timeout_answer]),
+        patch("builtins.input", side_effect=[threads_answer, timeout_answer]),
         patch.object(wizard, "_prompt_choice", return_value=""),
+        patch.object(wizard, "get_cpu_count", return_value=4),
     ):
         threads, timeout, fail_on = wizard.configure_advanced(tm, ["opengrep", "zap"])
     config = WizardConfig()
@@ -265,3 +277,34 @@ def test_yes_mode_passes_only_a_given_timeout(emit, timeout, tmp_path):
     )
     for argv in argvs:
         assert _resolved(argv) == (timeout, expected), shlex.join(argv)
+
+
+@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize(
+    ("answer", "expected"), [("", None), ("not a number", None), ("2", 2)]
+)
+def test_threads_follow_the_same_rule(route, answer, expected, tmp_path, monkeypatch):
+    """A blank or unparseable thread count passes no `--threads`, so jmo.yml's
+    `threads: auto` stays auto; a typed count passes on every route.
+
+    Before, `scan_defaults()` read `auto` as 4, the prompt offered `[4]`, and
+    keeping it wrote `--threads 4`; every workflow wrote `--threads` as well.
+    """
+    monkeypatch.delenv("JMO_THREADS", raising=False)
+    (tmp_path / "jmo.yml").write_bytes(b"threads: auto\ntimeout: 600\n")
+    config = _answer_advanced(True, threads_answer=answer)
+    for argv in _scan_argvs(config, route):
+        args = jmo.build_parser().parse_args(argv)
+        eff = jmo._effective_scan_settings(args)
+        workers = jmo._get_max_workers(args, eff, load_config(args.config))
+        assert args.threads == expected, f"{route}: {shlex.join(argv)}"
+        auto = jmo._auto_detect_threads(args)
+        assert workers == (auto if expected is None else expected)
+
+
+def test_the_screen_says_auto_where_the_scan_is_auto(tmp_path, capsys):
+    """With `threads: auto` the defaults and the prompt say `auto`, not 4."""
+    (tmp_path / "jmo.yml").write_bytes(b"threads: auto\ntimeout: 600\n")
+    _answer_advanced(True)
+    out = capsys.readouterr().out
+    assert "Threads: auto" in out

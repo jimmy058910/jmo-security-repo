@@ -225,16 +225,12 @@ def generate_github_actions(config: Any) -> str:
     Returns:
         GitHub Actions YAML workflow content
     """
-    # Lazy: wizard_flows imports this module (command_builder), so a top-level
-    # import of the package from here would be circular.
-    from scripts.cli.wizard_flows.config_models import scan_defaults
-
-    default_threads, _ = scan_defaults()
-    threads = config.threads or default_threads
-    # Only a timeout the wizard was given: a `--timeout` wins over opengrep's
-    # and zap's 900 s minimum (#1486), and the default written in here cut
-    # both to 600 s in every workflow the wizard wrote (#1627). Without one the
-    # scan reads jmo.yml's, which cannot lower a minimum.
+    # Only a timeout and a thread count the wizard was given. A `--timeout`
+    # wins over opengrep's and zap's 900 s minimum (#1486), and the default
+    # written in here cut both to 600 s in every workflow the wizard wrote
+    # (#1627); a `--threads` from the default fixed a count where jmo.yml said
+    # `auto`. Without them the scan in CI reads the repository's jmo.yml.
+    threads_flag = [] if config.threads is None else [f"--threads {config.threads}"]
     timeout_flag = [] if config.timeout is None else [f"--timeout {config.timeout}"]
     # `jmo scan` defines no --fail-on (it abbreviates to --fail-on-store-error
     # and the severity is then an unrecognised argument); a threshold is what
@@ -275,7 +271,7 @@ def generate_github_actions(config: Any) -> str:
         scan_cmd_lines = [
             f"jmo {subcommand} --results-dir results",
             *_workflow_target_flags(config.target),
-            f"--threads {threads}",
+            *threads_flag,
             *timeout_flag,
         ]
 
@@ -321,7 +317,7 @@ jobs:
         scan_cmd_lines = [
             f"jmo {subcommand}",
             *_workflow_target_flags(config.target),
-            f"--threads {threads}",
+            *threads_flag,
             *timeout_flag,
             "--results-dir results",
         ]
