@@ -327,9 +327,13 @@ def test_median_seconds_with_setup_keeps_the_setup_off_the_clock() -> None:
     verified by mutation, which is how this test came to exist. The budgets
     cannot police the helper; only the helper's own contract can.
 
-    The margin is deliberately coarse: setup sleeps 20x longer than the
+    The margin is deliberately coarse: setup sleeps 80x longer than the
     operation, so a Windows `perf_counter` resolution of ~1 ms cannot explain
-    the difference either way.
+    the difference either way. The ceiling sits halfway to the setup's cost
+    rather than near the operation's, because a loaded macOS runner overshot
+    a 2.5 ms sleep to a 30.5 ms median (nightly 43696414857, 2026-11-15)
+    against the earlier 30 ms ceiling. A timed setup still reads at least
+    200 ms, so the separation the test asserts is unchanged.
     """
     import time as _time
 
@@ -340,7 +344,7 @@ def test_median_seconds_with_setup_keeps_the_setup_off_the_clock() -> None:
     def slow_setup() -> str:
         nonlocal setup_calls
         setup_calls += 1
-        _time.sleep(0.05)
+        _time.sleep(0.2)
         return "state"
 
     def quick_operation(state: str) -> None:
@@ -353,8 +357,8 @@ def test_median_seconds_with_setup_keeps_the_setup_off_the_clock() -> None:
         f"setup ran {setup_calls} times for 3 samples; it must be rebuilt per "
         "sample or the second sample measures the first one's leftovers"
     )
-    assert elapsed < 0.03, (
-        f"median was {elapsed * 1000:.1f}ms for a 2.5ms operation behind a 50ms "
+    assert elapsed < 0.1, (
+        f"median was {elapsed * 1000:.1f}ms for a 2.5ms operation behind a 200ms "
         "setup -- the setup is being timed, so the measurement reports the "
         "fixture rather than the code"
     )
