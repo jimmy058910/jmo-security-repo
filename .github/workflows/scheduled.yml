@@ -305,6 +305,17 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      # Reruns, as ci.yml's shards have them: on Ubuntu and macOS two reruns,
+      # and none on Windows, where ci.yml leaves them out on purpose (a hung
+      # test rerun multiplies the hang; testing.cross-platform.rules.md). Before
+      # this, one flaky test turned the nightly red and filed an issue: the
+      # nights of 2026-11-15 (#1634) and 2026-11-16 (#1623) were each one flake.
+      # Finding flakes is part of what the nightly is for, so a test that passed
+      # only on a rerun is not hidden: -rfER prints a `RERUN <id>` line for it,
+      # and the step after these lists each one as a warning (#1663).
+      #
+      # `shell: bash` is what fails a step on pytest's exit code through the
+      # pipe into tee: GitHub runs it as `bash -eo pipefail`.
       - name: Run unit tests
         shell: bash
         # Exclude `slow` to prevent perf-threshold flakes on slower GHA runners
@@ -312,18 +323,51 @@ jobs:
         # Replaces tactical `@pytest.mark.skipif(sys.platform == "win32", ...)` decorators
         # added in PR #362 with the broader marker-filter pattern documented in
         # .claude/rules/testing.cross-platform.rules.md "Workflow Marker Filter Convention".
+        env:
+          RERUN_FLAGS: ${{ matrix.os != 'windows-latest' && '--reruns 2 --reruns-delay 2 -p no:xdist' || '' }}
         run: |
+          read -ra rerun_flags <<< "$RERUN_FLAGS"
           pytest tests/unit/ \
             --cov=scripts \
             --cov-report=term-missing \
             -v \
+            -rfER \
+            "${rerun_flags[@]}" \
             --maxfail=20 \
-            -m "not slow"
+            -m "not slow" 2>&1 | tee -a nightly-pytest.log
 
       - name: Run CLI tests
         shell: bash
+        env:
+          RERUN_FLAGS: ${{ matrix.os != 'windows-latest' && '--reruns 2 --reruns-delay 2 -p no:xdist' || '' }}
         run: |
-          pytest tests/cli/ -v --maxfail=20 -m "not slow"
+          read -ra rerun_flags <<< "$RERUN_FLAGS"
+          pytest tests/cli/ -v -rfER "${rerun_flags[@]}" --maxfail=20 -m "not slow" \
+            2>&1 | tee -a nightly-pytest.log
+
+      - name: List the tests that passed only on a rerun
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f nightly-pytest.log ]; then
+            echo "No pytest log: the test steps did not run."
+            exit 0
+          fi
+          # grep exits 1 on no match, which `bash -e` would turn into a failure.
+          reruns=$(grep -E '^RERUN ' nightly-pytest.log | sed 's/^RERUN //' | sort -u || true)
+          if [ -z "$reruns" ]; then
+            echo "No test needed a rerun."
+            exit 0
+          fi
+          count=$(printf '%s\n' "$reruns" | wc -l | tr -d ' ')
+          {
+            echo "### ${count} test(s) needed a rerun"
+            echo ""
+            printf '%s\n' "$reruns" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r test_id; do
+            echo "::warning title=Flaky test (needed a rerun)::${test_id}"
+          done <<< "$reruns"
 
   nightly-security-regression:
     name: Security Regression Tests
