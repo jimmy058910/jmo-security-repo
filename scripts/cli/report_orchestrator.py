@@ -14,6 +14,7 @@ from typing import Any
 from scripts.core.config import load_config_with_env_overrides
 from scripts.core.exceptions import OPANotFoundException
 from scripts.core.normalize_and_report import (
+    TARGET_FOLDERS,
     collect_tool_diagnostics,
     gather_results,
     scan_roots,
@@ -136,6 +137,36 @@ def _warn_unknown_threshold(threshold, args, _log_fn) -> str | None:
     return bad
 
 
+def _nothing_to_report(results_dir: Path) -> str | None:
+    """Why `results_dir` holds no scan output to report, or None when it does.
+
+    A report of zero findings is the signal a CI gate reads as "scanned,
+    nothing found", so it must come from a scan. `jmo report <typo>` used to
+    create the path, write seven clean reports and exit 0.
+
+    Every `jmo scan` leaves `.scan_metadata.json` and a folder per target under
+    `individual-<type>/` - measured with a scan that found nothing and one
+    whose only tool failed. Results from before the metadata file existed have
+    the target folders. A directory with neither, including an empty one or
+    one holding only an earlier report's `summaries/`, has nothing to report.
+    """
+    if not results_dir.exists():
+        return f"Results directory not found: {results_dir}. Nothing was reported."
+    if not results_dir.is_dir():
+        return f"Results path is not a directory: {results_dir}. Nothing was reported."
+    if (results_dir / ".scan_metadata.json").is_file():
+        return None
+    for folder in TARGET_FOLDERS.values():
+        target_dir = results_dir / folder
+        if target_dir.is_dir() and any(p.is_dir() for p in target_dir.iterdir()):
+            return None
+    return (
+        f"No scan results in {results_dir}: it has no .scan_metadata.json and no "
+        f"target folder under {', '.join(sorted(TARGET_FOLDERS.values()))}. "
+        f"Run `jmo scan --results-dir {results_dir}` first. Nothing was reported."
+    )
+
+
 def cmd_report(args, _log_fn) -> int:
     """Run report command: aggregate findings and generate outputs.
 
@@ -163,6 +194,10 @@ def cmd_report(args, _log_fn) -> int:
         return 2
 
     results_dir = Path(rd)
+    refusal = _nothing_to_report(results_dir)
+    if refusal:
+        _log_fn(args, "ERROR", refusal)
+        return 2
     out_dir = Path(args.out) if args.out else results_dir / "summaries"
     out_dir.mkdir(parents=True, exist_ok=True)
 

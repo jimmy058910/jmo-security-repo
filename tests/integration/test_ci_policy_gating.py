@@ -79,6 +79,7 @@ def test_ci_mode_fails_on_policy_violation_with_flag(
     results_dir = tmp_path / "results"
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir(parents=True, exist_ok=True)
+    (results_dir / "individual-repos" / "repo").mkdir(parents=True)  # scan output
     (summaries_dir / "findings.json").write_text(
         json.dumps(sample_findings_with_violations), encoding="utf-8"
     )
@@ -149,6 +150,7 @@ def test_ci_mode_warns_on_policy_violation_without_flag(
     results_dir = tmp_path / "results"
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir(parents=True, exist_ok=True)
+    (results_dir / "individual-repos" / "repo").mkdir(parents=True)  # scan output
     (summaries_dir / "findings.json").write_text(
         json.dumps(sample_findings_with_violations), encoding="utf-8"
     )
@@ -219,6 +221,7 @@ def test_ci_mode_config_fail_on_violation_works(
     results_dir = tmp_path / "results"
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir(parents=True, exist_ok=True)
+    (results_dir / "individual-repos" / "repo").mkdir(parents=True)  # scan output
     (summaries_dir / "findings.json").write_text(
         json.dumps(sample_findings_with_violations), encoding="utf-8"
     )
@@ -287,6 +290,7 @@ def test_ci_mode_passes_when_policies_pass(tmp_path, sample_findings_no_violatio
     results_dir = tmp_path / "results"
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir(parents=True, exist_ok=True)
+    (results_dir / "individual-repos" / "repo").mkdir(parents=True)  # scan output
     (summaries_dir / "findings.json").write_text(
         json.dumps(sample_findings_no_violations), encoding="utf-8"
     )

@@ -109,6 +109,16 @@ def test_fail_code_case_insensitive():
 # =============================================================================
 
 
+def _a_scanned_dir(path):
+    """A results directory holding a target folder, as a scan leaves one.
+
+    `cmd_report` refuses a directory with no scan output (exit 2, nothing
+    written), so a bare `mkdir()` no longer reaches the code under test.
+    """
+    (path / "individual-repos" / "repo").mkdir(parents=True)
+    return path
+
+
 @pytest.fixture
 def mock_config():
     """Create mock configuration."""
@@ -190,10 +200,10 @@ def test_cmd_report_results_dir_normalization(tmp_path, mock_config, minimal_arg
     """Test cmd_report normalizes results_dir from different sources."""
     # Test results_dir_opt has priority over results_dir_pos
     results_dir_opt = tmp_path / "results-opt"
-    results_dir_opt.mkdir()
+    _a_scanned_dir(results_dir_opt)
 
     results_dir_pos = tmp_path / "results-pos"
-    results_dir_pos.mkdir()
+    _a_scanned_dir(results_dir_pos)
 
     minimal_args.results_dir_opt = str(results_dir_opt)
     minimal_args.results_dir_pos = str(results_dir_pos)
@@ -222,7 +232,7 @@ def test_cmd_report_results_dir_normalization(tmp_path, mock_config, minimal_arg
 def test_cmd_report_creates_output_directory(tmp_path, mock_config, minimal_args):
     """Test cmd_report creates output directory."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
 
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.out = str(tmp_path / "custom-out")
@@ -248,7 +258,7 @@ def test_cmd_report_creates_output_directory(tmp_path, mock_config, minimal_args
 def test_cmd_report_profiling_environment_setup(tmp_path, mock_config, minimal_args):
     """Test cmd_report sets profiling environment variables."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.profile = True
     minimal_args.threads = 8
@@ -304,7 +314,7 @@ def test_cmd_report_gathers_findings_and_applies_suppressions(
 ):
     """Test cmd_report gathers findings and applies suppressions."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     # Create suppression file
@@ -359,7 +369,7 @@ def test_cmd_report_gathers_findings_and_applies_suppressions(
 def test_cmd_report_writes_all_output_formats(tmp_path, mock_config, minimal_args):
     """Test cmd_report writes all configured output formats."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     # Enable all output formats
@@ -400,7 +410,7 @@ def test_cmd_report_writes_all_output_formats(tmp_path, mock_config, minimal_arg
 def test_cmd_report_yaml_runtime_error_handling(tmp_path, mock_config, minimal_args):
     """Test cmd_report handles YAML RuntimeError gracefully."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     mock_config.outputs = ["yaml"]
 
@@ -434,7 +444,7 @@ def test_cmd_report_yaml_runtime_error_handling(tmp_path, mock_config, minimal_a
 def test_cmd_report_writes_compliance_reports(tmp_path, mock_config, minimal_args):
     """Test cmd_report writes compliance framework reports."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     mock_log = MagicMock()
@@ -466,7 +476,7 @@ def test_cmd_report_compliance_report_error_handling(
 ):
     """Test cmd_report handles compliance report errors gracefully."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     mock_log = MagicMock()
@@ -494,7 +504,7 @@ def test_cmd_report_compliance_report_error_handling(
 def test_cmd_report_policy_evaluation_cli_args(tmp_path, mock_config, minimal_args):
     """Test cmd_report evaluates policies from CLI arguments."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.policies = ["no_high_severity", "require_cwe"]
 
@@ -532,7 +542,7 @@ def test_cmd_report_policy_evaluation_cli_args(tmp_path, mock_config, minimal_ar
 def test_cmd_report_policy_evaluation_config(tmp_path, mock_config, minimal_args):
     """Test cmd_report evaluates policies from config."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     # Enable policies in config
@@ -574,7 +584,7 @@ def test_cmd_report_policy_evaluation_config(tmp_path, mock_config, minimal_args
 def test_cmd_report_policy_fail_on_violation(tmp_path, mock_config, minimal_args):
     """Test cmd_report returns 1 when policies fail and fail_on_violation=True."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.policies = ["policy1"]
     minimal_args.fail_on_policy_violation = True
@@ -619,7 +629,7 @@ def test_cmd_report_policy_fail_on_violation(tmp_path, mock_config, minimal_args
 def test_cmd_report_severity_threshold_exit_code(tmp_path, mock_config, minimal_args):
     """Test cmd_report returns 1 when severity threshold exceeded."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.fail_on = "HIGH"
 
@@ -650,7 +660,7 @@ def test_cmd_report_severity_threshold_exit_code(tmp_path, mock_config, minimal_
 def test_cmd_report_history_database_storage(tmp_path, mock_config, minimal_args):
     """Test cmd_report stores scan in history database when requested."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.store_history = True
     minimal_args.history_db = str(tmp_path / "history.db")
@@ -680,7 +690,7 @@ def test_cmd_report_history_database_storage(tmp_path, mock_config, minimal_args
 def test_cmd_report_profiling_data_written(tmp_path, mock_config, minimal_args):
     """Test cmd_report writes profiling data when profile=True."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.profile = True
 
@@ -722,7 +732,7 @@ def test_cmd_report_drops_a_legacy_scan_metadata_profile(
     legacy key in the input is deliberate -- it is what this test exists for.
     """
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     scan_metadata = {
@@ -770,7 +780,7 @@ def test_cmd_report_reads_tools_from_scan_metadata(tmp_path, mock_config, minima
     not just tools that produced findings.
     """
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     # Create scan metadata with 4 tools
@@ -824,7 +834,7 @@ def test_cmd_report_reads_tools_from_scan_metadata(tmp_path, mock_config, minima
 def test_cmd_report_handles_corrupt_scan_metadata(tmp_path, mock_config, minimal_args):
     """Test cmd_report handles corrupt .scan_metadata.json gracefully."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     # Create corrupt scan metadata file
@@ -865,7 +875,7 @@ def test_cmd_report_infers_tools_from_findings_without_metadata(
 ):
     """Test cmd_report infers tools from findings when no scan metadata exists."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
 
     # No .scan_metadata.json file
@@ -913,7 +923,7 @@ def test_cmd_report_threads_auto_does_not_crash(
     """
     monkeypatch.delenv("JMO_THREADS", raising=False)
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
 
     minimal_args.results_dir_pos = str(results_dir)
     mock_config.threads = "auto"
@@ -938,7 +948,7 @@ def test_cmd_report_threads_int_sets_env(
     """An explicit integer `threads` is still exported to JMO_THREADS."""
     monkeypatch.delenv("JMO_THREADS", raising=False)
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
 
     minimal_args.results_dir_pos = str(results_dir)
     mock_config.threads = 8
@@ -969,7 +979,7 @@ def _report_with_store(
     successful store. Returns cmd_report's exit code.
     """
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.store_history = True
     minimal_args.history_db = str(tmp_path / "history.db")
@@ -1102,7 +1112,7 @@ def test_storage_disabled_is_unaffected(tmp_path, mock_config, minimal_args):
     """The store_error / history_db_path bindings must exist even when no store
     is attempted, or the exit-code check below them raises NameError."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.store_history = False
     minimal_args.fail_on_store_error = True
@@ -1163,7 +1173,7 @@ def test_summary_line_distinguishes_storage_being_off_from_failing(
 ):
     """--no-store-history is not a failure and must not read like one."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir()
+    _a_scanned_dir(results_dir)
     minimal_args.results_dir_pos = str(results_dir)
     minimal_args.store_history = False
 

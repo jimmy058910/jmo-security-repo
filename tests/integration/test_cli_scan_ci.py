@@ -103,9 +103,13 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
 
 
 def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):
-    # One dummy repo
+    # One repo, scanned by jmo-native: it is built in, so the scan runs with
+    # nothing installed. With a tool that is not installed the scan writes
+    # nothing, and the report now refuses a results directory a scan never
+    # wrote; this test used to pass on that empty report.
     repo = tmp_path / "repo"
     repo.mkdir()
+    (repo / "app.js").write_text("const x = 1;\n", encoding="utf-8")
 
     class Args:
         def __init__(self):
@@ -114,7 +118,7 @@ def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):
             self.targets = None
             self.results_dir = str(tmp_path / "results")
             self.config = str(tmp_path / "no.yml")
-            self.tools = ["trufflehog"]  # Updated from gitleaks (removed in v0.5.0)
+            self.tools = ["jmo-native"]
             self.timeout = 5
             self.threads = 1
             self.allow_missing_tools = True
