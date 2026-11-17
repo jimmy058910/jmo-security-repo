@@ -487,3 +487,206 @@ outputs:
 
 # ========== COVERAGE TARGET: ≥90% ====================
 # Run: pytest tests/unit/test_report_orchestrator_policy.py -v --cov=scripts.cli.report_orchestrator --cov-report=term-missing
+
+
+# --- Fail closed: an enforced policy with no verdict is not a pass ----------
+#
+# With enforcement on, every requested policy that produced no verdict used to
+# log a warning and exit 0: OPA missing, a name matching no policy, an
+# evaluation error. Measured from an installed v1.1.1 wheel, which shipped no
+# policy at all, a verified secret under `zero-secrets` exited 0. These run the
+# real `evaluate_policies` where they can, so the reason it records is the one
+# the user reads.
+
+
+def _policy_args(tmp_path, findings, *, enforce, policies):
+    jmo_yml = tmp_path / "jmo.yml"
+    jmo_yml.write_text(
+        "policy:\n  enabled: true\noutputs:\n  - json\n", encoding="utf-8"
+    )
+    results_dir = write_findings_json(tmp_path, findings)
+    return argparse.Namespace(
+        config=str(jmo_yml),
+        results_dir_pos=str(results_dir),
+        results_dir_opt=None,
+        results_dir=str(results_dir),
+        out=None,
+        profile=False,
+        threads=None,
+        fail_on=None,
+        policies=policies,
+        fail_on_policy_violation=enforce,
+        store_history=False,
+    )
+
+
+class _Log:
+    """A `_log_fn` that keeps what it was given."""
+
+    def __init__(self):
+        self.lines = []
+
+    def __call__(self, args, level, message):
+        self.lines.append((level, message))
+
+    def at(self, level):
+        return [m for lv, m in self.lines if lv == level]
+
+
+@pytest.fixture
+def no_user_policies(tmp_path, monkeypatch):
+    """Keep the developer's ~/.jmo/policies out of discovery."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+
+def _engine(evaluate):
+    """A PolicyEngine stand-in: OPA is not needed to reach the verdict logic."""
+    engine = MagicMock()
+    engine.evaluate.side_effect = evaluate
+    return MagicMock(return_value=engine)
+
+
+def test_enforced_report_fails_when_opa_is_missing(
+    tmp_path, sample_findings, no_user_policies
+):
+    from scripts.cli.report_orchestrator import cmd_report
+    from scripts.core.exceptions import OPANotFoundException
+
+    args = _policy_args(
+        tmp_path, sample_findings, enforce=True, policies=["zero-secrets"]
+    )
+    log = _Log()
+    with patch(
+        "scripts.core.reporters.policy_reporter.PolicyEngine",
+        side_effect=OPANotFoundException(),
+    ):
+        result = cmd_report(args, log)
+
+    assert result == 2
+    errors = log.at("ERROR")
+    assert any("'zero-secrets' could not be evaluated" in e for e in errors), errors
+    assert any("OPA not installed" in e for e in errors), errors
+
+
+def test_enforced_report_fails_on_a_policy_name_that_matches_nothing(
+    tmp_path, sample_findings, no_user_policies
+):
+    from scripts.cli.report_orchestrator import cmd_report
+
+    args = _policy_args(
+        tmp_path, sample_findings, enforce=True, policies=["zero-secret"]
+    )
+    log = _Log()
+    with patch("scripts.core.reporters.policy_reporter.PolicyEngine", _engine(None)):
+        result = cmd_report(args, log)
+
+    assert result == 2
+    errors = log.at("ERROR")
+    assert any(
+        "'zero-secret' could not be evaluated: no such policy" in e for e in errors
+    ), errors
+    # The reason lists what would have worked, so the missing "s" is visible.
+    assert any("zero-secrets" in e for e in errors), errors
+
+
+def test_enforced_report_fails_when_one_of_two_policies_errors(
+    tmp_path, sample_findings, no_user_policies
+):
+    """The other policy ran and passed; that must not carry the pair."""
+    from scripts.cli.report_orchestrator import cmd_report
+    from scripts.core.policy_engine import PolicyResult
+
+    def evaluate(findings, policy_path):
+        if policy_path.stem == "owasp-top-10":
+            raise RuntimeError("Policy evaluation error: rego_parse_error")
+        return PolicyResult(policy_name=policy_path.stem, passed=True)
+
+    args = _policy_args(
+        tmp_path,
+        sample_findings,
+        enforce=True,
+        policies=["zero-secrets", "owasp-top-10"],
+    )
+    log = _Log()
+    with patch(
+        "scripts.core.reporters.policy_reporter.PolicyEngine", _engine(evaluate)
+    ):
+        result = cmd_report(args, log)
+
+    assert result == 2
+    errors = log.at("ERROR")
+    assert any(
+        "'owasp-top-10' could not be evaluated" in e and "rego_parse_error" in e
+        for e in errors
+    ), errors
+    assert not any("'zero-secrets' could not" in e for e in errors), errors
+
+
+def test_enforced_failed_verdict_survives_a_report_that_cannot_be_written(
+    tmp_path, sample_findings, no_user_policies
+):
+    """The reports were written before the verdict was read, so an OSError on
+    the write skipped the verdict and a FAILED policy exited 0."""
+    from scripts.cli.report_orchestrator import cmd_report
+    from scripts.core.policy_engine import PolicyResult
+
+    def evaluate(findings, policy_path):
+        return PolicyResult(policy_name=policy_path.stem, passed=False)
+
+    args = _policy_args(
+        tmp_path, sample_findings, enforce=True, policies=["zero-secrets"]
+    )
+    with (
+        patch("scripts.core.reporters.policy_reporter.PolicyEngine", _engine(evaluate)),
+        patch(
+            "scripts.core.reporters.policy_reporter.write_policy_report",
+            side_effect=PermissionError("read-only summaries"),
+        ),
+    ):
+        result = cmd_report(args, _Log())
+
+    assert result == 1
+
+
+def test_without_enforcement_missing_opa_only_warns(
+    tmp_path, sample_findings, no_user_policies
+):
+    """The other half of the contract, kept from before: warn and exit 0."""
+    from scripts.cli.report_orchestrator import cmd_report
+    from scripts.core.exceptions import OPANotFoundException
+
+    args = _policy_args(
+        tmp_path, sample_findings, enforce=False, policies=["zero-secrets"]
+    )
+    log = _Log()
+    with patch(
+        "scripts.core.reporters.policy_reporter.PolicyEngine",
+        side_effect=OPANotFoundException(),
+    ):
+        result = cmd_report(args, log)
+
+    assert result == 0
+    assert any("Policy evaluation skipped" in w for w in log.at("WARN")), log.lines
+    assert not log.at("ERROR"), log.lines
+
+
+def test_without_enforcement_an_unknown_policy_name_only_warns(
+    tmp_path, sample_findings, no_user_policies, caplog
+):
+    from scripts.cli.report_orchestrator import cmd_report
+
+    args = _policy_args(
+        tmp_path, sample_findings, enforce=False, policies=["no-such-policy"]
+    )
+    log = _Log()
+    with (
+        caplog.at_level("WARNING"),
+        patch("scripts.core.reporters.policy_reporter.PolicyEngine", _engine(None)),
+    ):
+        result = cmd_report(args, log)
+
+    assert result == 0
+    assert "Policy 'no-such-policy' not found" in caplog.text
+    assert not log.at("ERROR"), log.lines
