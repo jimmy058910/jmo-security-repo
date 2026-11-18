@@ -227,7 +227,9 @@ jobs:
           # scan. Found by sweeping for the pattern in chunk 21; fixed here rather
           # than filed because it is the same two lines in the same file.
           set +e
-          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt \
+          # --no-update keeps the pinned binary: without it trufflehog replaces
+          # itself with the newest release before scanning (#1625).
+          trufflehog filesystem . --json --no-update --exclude-paths .trufflehog-exclude.txt \
               --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt
           EXIT_CODE=$?
           set -e
@@ -303,6 +305,17 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
+      # Reruns, as ci.yml's shards have them: on Ubuntu and macOS two reruns,
+      # and none on Windows, where ci.yml leaves them out on purpose (a hung
+      # test rerun multiplies the hang; testing.cross-platform.rules.md). Before
+      # this, one flaky test turned the nightly red and filed an issue: the
+      # nights of 2026-11-15 (#1634) and 2026-11-16 (#1623) were each one flake.
+      # Finding flakes is part of what the nightly is for, so a test that passed
+      # only on a rerun is not hidden: -rfER prints a `RERUN <id>` line for it,
+      # and the step after these lists each one as a warning (#1663).
+      #
+      # `shell: bash` is what fails a step on pytest's exit code through the
+      # pipe into tee: GitHub runs it as `bash -eo pipefail`.
       - name: Run unit tests
         shell: bash
         # Exclude `slow` to prevent perf-threshold flakes on slower GHA runners
@@ -310,18 +323,51 @@ jobs:
         # Replaces tactical `@pytest.mark.skipif(sys.platform == "win32", ...)` decorators
         # added in PR #362 with the broader marker-filter pattern documented in
         # .claude/rules/testing.cross-platform.rules.md "Workflow Marker Filter Convention".
+        env:
+          RERUN_FLAGS: ${{ matrix.os != 'windows-latest' && '--reruns 2 --reruns-delay 2 -p no:xdist' || '' }}
         run: |
+          read -ra rerun_flags <<< "$RERUN_FLAGS"
           pytest tests/unit/ \
             --cov=scripts \
             --cov-report=term-missing \
             -v \
+            -rfER \
+            "${rerun_flags[@]}" \
             --maxfail=20 \
-            -m "not slow"
+            -m "not slow" 2>&1 | tee -a nightly-pytest.log
 
       - name: Run CLI tests
         shell: bash
+        env:
+          RERUN_FLAGS: ${{ matrix.os != 'windows-latest' && '--reruns 2 --reruns-delay 2 -p no:xdist' || '' }}
         run: |
-          pytest tests/cli/ -v --maxfail=20 -m "not slow"
+          read -ra rerun_flags <<< "$RERUN_FLAGS"
+          pytest tests/cli/ -v -rfER "${rerun_flags[@]}" --maxfail=20 -m "not slow" \
+            2>&1 | tee -a nightly-pytest.log
+
+      - name: List the tests that passed only on a rerun
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f nightly-pytest.log ]; then
+            echo "No pytest log: the test steps did not run."
+            exit 0
+          fi
+          # grep exits 1 on no match, which `bash -e` would turn into a failure.
+          reruns=$(grep -E '^RERUN ' nightly-pytest.log | sed 's/^RERUN //' | sort -u || true)
+          if [ -z "$reruns" ]; then
+            echo "No test needed a rerun."
+            exit 0
+          fi
+          count=$(printf '%s\n' "$reruns" | wc -l | tr -d ' ')
+          {
+            echo "### ${count} test(s) needed a rerun"
+            echo ""
+            printf '%s\n' "$reruns" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r test_id; do
+            echo "::warning title=Flaky test (needed a rerun)::${test_id}"
+          done <<< "$reruns"
 
   nightly-security-regression:
     name: Security Regression Tests
@@ -1269,6 +1315,14 @@ jobs:
         run: python3 scripts/dev/fetch_rule_fixture.py
 
       - name: Run tool contract tests
+        # Each pytest step here has its own limit, below the job's 90 minutes.
+        # A hang that reaches the job's timeout-minutes ends the job
+        # `cancelled`, and GitHub kept no log of the hung step (run
+        # 41627396139, BlobNotFound). A step limit ends it as a failed step
+        # instead, inside a job that still finishes (#1631). Sized from the six
+        # green runs before 2026-11-17: this step took 93-308 s, the golden
+        # re-capture 65-115 s, the answer keys 553-941 s.
+        timeout-minutes: 20
         run: |
           # Contract tests verify tool output formats match adapter expectations
           # This catches upstream breaking changes before they cause silent failures.
@@ -1300,6 +1354,7 @@ jobs:
         run: python3 scripts/dev/require_passed.py contract-junit.xml
 
       - name: Re-capture every golden fixture through jmo scan
+        timeout-minutes: 10
         # Each of the 14 tools runs on its sample as a user's scan runs it, and
         # its output must parse to at least one finding: what the deleted smoke
         # job was for (J6). A count that moved from the committed fixture's is
@@ -1333,6 +1388,7 @@ jobs:
           PY
 
       - name: Run the answer-key tests
+        timeout-minutes: 45
         # juice-shop's and WebGoat's baselines and juice-shop's marked lines
         # (one scan of each, at its pinned commit), sca-kitchen-sink's lockfile
         # formats, KICS's Dockerfile and Kubernetes line floors, vibeproof's
@@ -1412,11 +1468,28 @@ jobs:
         github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
       )
     steps:
-      - name: Download all test results
+      # One download per suite, each into a directory of its own named as the
+      # summary below reads it. A single `pattern: e2e-*-results-*` download
+      # extracts into `path` itself when exactly one artifact matches
+      # (download-artifact@v8's `artifacts.length === 1` branch), so on a run
+      # where only one suite uploaded, test-results/*/pytest-report.json found
+      # nothing and the summary said no suite ran (run 43418732882, #1628).
+      # merge-multiple: true always extracts into `path`, whatever the count.
+      # A suite that uploaded nothing downloads nothing, without an error, and
+      # the gate below names it.
+      - name: Download the ubuntu suite's results
         uses: actions/download-artifact@v8
         with:
-          pattern: e2e-*-results-*
-          path: test-results
+          pattern: e2e-ubuntu-results-*
+          merge-multiple: true
+          path: test-results/e2e-ubuntu-results-${{ github.run_id }}
+
+      - name: Download the macos suite's results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: e2e-macos-results-*
+          merge-multiple: true
+          path: test-results/e2e-macos-results-${{ github.run_id }}
 
       - name: Aggregate results
         run: |
@@ -1506,9 +1579,8 @@ jobs:
       # which must not be indistinguishable from a clean pass. That is the same
       # mistake in a different costume.
       #
-      # TODO(issue-772): partial absence is not caught yet -- one report when
-      # two are expected still passes. Tightening that needs a count that
-      # survives adding a sixth e2e job; see the issue for the options.
+      # Partial absence fails too (#772, closed): one report where two are
+      # expected names the missing suite, read against EXPECTED_E2E_SUITES.
       - name: Fail the run if any e2e test failed
         env:
           # The suites that upload a pytest-report.json -- which is exactly the
@@ -1518,7 +1590,8 @@ jobs:
           # continue-on-error and fail the run natively.
           #
           # Add a job to that set and you must add it here, or its failures go
-          # unwatched exactly as #769's did.
+          # unwatched exactly as #769's did, and give it a download step of its
+          # own above (test_e2e_gate.py checks both).
           EXPECTED_E2E_SUITES: "ubuntu macos"
         run: |
           echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED} | errored: ${E2E_TOTAL_ERRORS}"

@@ -635,6 +635,21 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **CI steps that hid, cut short or misread a result.** The secrets scans in `ci.yml`'s
+  quick-checks, the nightly security audit and `scripts/dev/ci-local.sh` pass trufflehog
+  `--no-update`, which stops it replacing the pinned binary with its newest release before
+  it scans: a 3.99.7 pin ran as 3.99.9 (#1625). The dependency audit gives pip-audit a
+  60 s timeout and retries an audit that did not finish, up to three times, while a
+  finding still fails at once; it runs last in quick-checks, so one pypi.org timeout no
+  longer skips the nine local checks after it (#1642). Tool Output Contract Tests' three
+  long steps have limits of their own inside the job's 90 minutes, so a hang fails a
+  step instead of cancelling the job with no log kept (#1631). E2E Test Summary
+  downloads each suite's results into a directory of its own, so a run where only one
+  suite uploaded a report reads that report and names the missing suite, where it read 0
+  (#1628). The nightly Cross-Platform Tests rerun a failed test twice on Ubuntu and macOS,
+  as `ci.yml`'s shards do, and list every test that needed a rerun as a warning (#1663).
+  `tests/unit/test_fetch_rule_fixture.py` stubs `urlopen` and `os.replace` on the
+  script's own names, not on the modules every thread shares (#1664).
 - **Keeping the wizard's default timeout keeps opengrep's and zap's 900 s minimum
   (#1627).** Since #1486 a `--timeout` on the command line wins over that minimum. A user
   who opened "Customize advanced settings?" and pressed Enter at `Timeout [600]` got

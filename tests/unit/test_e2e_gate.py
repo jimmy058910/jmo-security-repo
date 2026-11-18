@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -58,11 +59,25 @@ def _run(step: dict, tmp_path: Path, env: dict[str, str]):
     )
 
 
+def _downloads() -> dict[str, str]:
+    """Each suite's download step: the suite its pattern names -> its `path`."""
+    found = {}
+    for step in _jobs()["e2e-summary"]["steps"]:
+        if not str(step.get("uses", "")).startswith("actions/download-artifact@"):
+            continue
+        match = re.fullmatch(r"e2e-([a-z-]+)-results-\*", step["with"]["pattern"])
+        assert match, step
+        found[match[1]] = step["with"]["path"]
+    return found
+
+
 def _gate(tmp_path: Path, reports: dict[str, dict]):
-    """Write one pytest-report.json per suite, run the summary step, then the
-    gate with what the summary wrote to GITHUB_ENV."""
+    """Write one pytest-report.json per suite where its download step puts it,
+    run the summary step, then the gate with what the summary wrote to
+    GITHUB_ENV."""
+    paths = _downloads()
     for suite, summary in reports.items():
-        out = tmp_path / "test-results" / f"e2e-{suite}-results-1"
+        out = tmp_path / paths[suite].replace("${{ github.run_id }}", "1")
         out.mkdir(parents=True)
         (out / "pytest-report.json").write_bytes(
             json.dumps({"summary": summary}).encode()
@@ -110,6 +125,31 @@ def test_a_suite_with_no_report_fails_the_run(tmp_path) -> None:
     done = _gate(tmp_path, {"ubuntu": CLEAN})
     assert done.returncode == 1
     assert "macos" in done.stdout
+    # #1628: with one artifact the summary used to find 0 reports and say no
+    # suite ran. It reads the one that did, and the gate names the other.
+    assert "reports found: 1" in done.stdout
+    assert "suites reporting: ubuntu" in done.stdout
+    assert "No pytest-report.json from: macos" in done.stdout
+
+
+def test_every_expected_suite_downloads_into_its_own_directory() -> None:
+    """download-artifact@v8 extracts into `path` itself when one artifact
+    matches its pattern (#1628). merge-multiple: true does so whatever the
+    count, so each suite needs a step, and a path the summary's glob reads."""
+    gate = _step("Fail the run if any e2e test failed")
+    expected = set(gate["env"]["EXPECTED_E2E_SUITES"].split())
+    downloads = _downloads()
+    assert set(downloads) == expected, (downloads, expected)
+    steps = [
+        s
+        for s in _jobs()["e2e-summary"]["steps"]
+        if str(s.get("uses", "")).startswith("actions/download-artifact@")
+    ]
+    assert all(s["with"]["merge-multiple"] is True for s in steps), steps
+    for suite, path in downloads.items():
+        # The summary reads test-results/*/pytest-report.json and names the
+        # suite from the directory, so the path is one level under it.
+        assert re.fullmatch(rf"test-results/e2e-{suite}-results-[^/]+", path), path
 
 
 # A job that hits its timeout-minutes ends `cancelled`, which the notify job's

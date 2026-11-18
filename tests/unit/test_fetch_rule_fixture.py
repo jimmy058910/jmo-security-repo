@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import time
 import urllib.error
+import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -173,6 +174,34 @@ def test_a_network_failure_names_the_path_and_exits_non_zero(
     assert not any(p.is_file() for p in tmp_path.rglob("*"))
 
 
+def _stub_urlopen(monkeypatch, urlopen) -> None:
+    """Replace urlopen for `fetch_rule_fixture` alone (#1664).
+
+    `frf.urllib.request` is the one `urllib.request` module every importer
+    shares, so setting `urlopen` on it replaced it for the whole process while
+    the test ran: the class testing.rules.md records for `time.sleep` (#1617).
+    Swapping the module's own `urllib` name keeps the stub here. It carries
+    what the module reads, so a new read fails loudly with AttributeError.
+    """
+    monkeypatch.setattr(
+        frf,
+        "urllib",
+        SimpleNamespace(
+            request=SimpleNamespace(Request=urllib.request.Request, urlopen=urlopen),
+            error=urllib.error,
+        ),
+    )
+
+
+def test_the_urlopen_stub_is_for_this_module_alone(monkeypatch) -> None:
+    real_urlopen = urllib.request.urlopen
+
+    _stub_urlopen(monkeypatch, lambda request, timeout=None: None)
+
+    assert urllib.request.urlopen is real_urlopen, "the stub reached every importer"
+    assert frf.urllib.request.urlopen is not real_urlopen
+
+
 def test_every_request_has_a_timeout(monkeypatch) -> None:
     seen: dict = {}
 
@@ -187,7 +216,7 @@ def test_every_request_has_a_timeout(monkeypatch) -> None:
         seen["timeout"] = timeout
         return Response(b"x")
 
-    monkeypatch.setattr(frf.urllib.request, "urlopen", fake_urlopen)
+    _stub_urlopen(monkeypatch, fake_urlopen)
 
     assert frf.fetch_bytes("https://raw.githubusercontent.com/x/y/z/p") == b"x"
     assert isinstance(seen["timeout"], (int, float)) and 0 < seen["timeout"] <= 120
@@ -259,7 +288,7 @@ def _script_urlopen(monkeypatch, outcomes):
             raise outcome
         return _Body(outcome)
 
-    monkeypatch.setattr(frf.urllib.request, "urlopen", urlopen)
+    _stub_urlopen(monkeypatch, urlopen)
     _stub_retry_wait(monkeypatch, slept.append)
     return calls, slept
 
@@ -311,7 +340,7 @@ def test_a_flaky_server_still_gives_the_files_and_exit_0(tmp_path, monkeypatch) 
             raise _http_error(503)
         return _Body(next(d for p, d in GOOD.items() if url.endswith("/" + p)))
 
-    monkeypatch.setattr(frf.urllib.request, "urlopen", urlopen)
+    _stub_urlopen(monkeypatch, urlopen)
 
     assert frf.main(["--dest", str(tmp_path)]) == 0
 
@@ -347,7 +376,9 @@ def test_a_write_that_fails_part_way_removes_its_temporary_file(
         part_existed.append(Path(src).is_file())
         raise OSError("no space left on device")
 
-    monkeypatch.setattr(frf.os, "replace", full_disk)
+    # The module's own `os` name, not `os.replace` itself: that is the one
+    # function every thread in the session renames files with (#1664).
+    monkeypatch.setattr(frf, "os", SimpleNamespace(replace=full_disk))
 
     code = frf.main(["--dest", str(tmp_path)])
 
