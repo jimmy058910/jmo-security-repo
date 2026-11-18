@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+import scripts.core.secret_output_redaction as sor
 from scripts.core.adapters.common import safe_load_ndjson_file
 from scripts.core.normalize_and_report import gather_results
 from scripts.core.secret_output_redaction import (
@@ -293,6 +294,28 @@ def test_an_output_that_cannot_be_rewritten_is_named_and_the_report_runs(
     assert any("trufflehog.git.json" in message for message in warned)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX directory modes")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root searches any directory",
+)
+def test_a_target_folder_that_cannot_be_searched_does_not_end_the_report(
+    tmp_path: Path,
+) -> None:
+    """Python 3.12's `Path.is_file()` raises inside a folder that cannot be
+    searched, and looking for an unfinished pass's key there ended the report
+    (a review of #1593's fix). The report reads nothing from that folder, as
+    before."""
+    target = _target(tmp_path)
+    target.chmod(0)
+    try:
+        findings = gather_results(tmp_path)
+    finally:
+        target.chmod(0o755)
+
+    assert findings == []
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -370,3 +393,180 @@ def test_an_empty_output_is_left_without_a_warning(
         redact_secret_outputs(sorted(tmp_path.glob("*.json")))
 
     assert caplog.records == []
+
+
+# A tool's tree and history outputs rewritten in two passes (#1593) --------
+
+
+def _failing_rewrite(
+    monkeypatch: pytest.MonkeyPatch, name: str, error: BaseException
+) -> None:
+    """Make the rewrite of the output called `name` raise `error`, as a file
+    locked on Windows, a full disk or a stopped run does."""
+    real = sor._replace
+
+    def replace(path: Path, data: bytes) -> None:
+        if path.name == name:
+            raise error
+        real(path, data)
+
+    monkeypatch.setattr(sor, "_replace", replace)
+
+
+def _tool_shape(results: Path, tool: str) -> list[tuple[str, str | None]]:
+    return sorted(
+        (
+            (path, commit)
+            for _, name, path, commit in _shape(gather_results(results))
+            if name == tool
+        ),
+        key=str,
+    )
+
+
+#: Each tool's findings in `_target`, its tree key paired with its history.
+_PAIRED = sorted(
+    [
+        ("keys/live.pem", C1),
+        ("config.py", None),
+        ("old/gone.pem", C2),
+        ("keys/rot.pem", None),
+        ("keys/rot.pem", C3),
+    ],
+    key=str,
+)
+
+
+@pytest.mark.parametrize("tool", ["trufflehog", "gitleaks"])
+def test_a_history_output_rewritten_a_report_late_still_pairs(
+    tmp_path: Path,
+    tool: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The first report rewrites the tree output and not the history one. The
+    next reports must pair the two again: before #1593 the next pass keyed the
+    history output's secrets anew, and `keys/live.pem` read as a tree finding
+    with no commit beside a history finding, in this report and every later
+    one."""
+    _target(tmp_path)
+    with monkeypatch.context() as m, caplog.at_level(logging.WARNING):
+        _failing_rewrite(m, f"{tool}.git.json", PermissionError(13, "locked"))
+        assert _tool_shape(tmp_path, tool) == _PAIRED  # read before any rewrite
+
+    # Said, by file, and never by secret.
+    assert any(
+        f"{tool}.git.json could not be rewritten" in r.getMessage()
+        for r in caplog.records
+    )
+    assert not [r for r in caplog.records if any(s in r.getMessage() for s in SECRETS)]
+    assert list(_leaks(tmp_path)) == [f"individual-repos/app/{tool}.git.json"]
+
+    assert _tool_shape(tmp_path, tool) == _PAIRED  # the report that finishes it
+    assert _leaks(tmp_path) == {}
+    assert _tool_shape(tmp_path, tool) == _PAIRED  # and the next
+
+
+@pytest.mark.parametrize("tool", ["trufflehog", "gitleaks"])
+def test_a_report_stopped_between_the_rewrites_pairs_in_the_next(
+    tmp_path: Path, tool: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run stopped (Ctrl-C) between a tool's two rewrites has no chance to
+    save anything on its way out, so the key has to be on disk before the
+    first. The outputs go in sorted order, history first."""
+    target = _target(tmp_path)
+    with monkeypatch.context() as m:
+        _failing_rewrite(m, f"{tool}.json", KeyboardInterrupt())
+        with pytest.raises(KeyboardInterrupt):
+            gather_results(tmp_path)
+    # Meta: the pair is split, one output rewritten and the other not.
+    leaks = _leaks(tmp_path)
+    assert f"individual-repos/app/{tool}.json" in leaks
+    assert f"individual-repos/app/{tool}.git.json" not in leaks
+
+    assert _tool_shape(tmp_path, tool) == _PAIRED
+    assert _leaks(tmp_path) == {}
+    assert not sor.has_unfinished_pass(target)
+
+
+def test_the_key_stays_only_while_an_output_is_unrewritten(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The key confirms a guessed secret against a stand-in. It is kept only
+    while a raw secret sits beside it, readable by its owner alone, and under
+    a name no adapter reads."""
+    target = _target(tmp_path)
+    gather_results(tmp_path)
+    assert not (target / sor.KEY_FILE).exists()
+
+    target = _target(tmp_path, name="second")
+    with monkeypatch.context() as m:
+        _failing_rewrite(m, "gitleaks.git.json", PermissionError(13, "locked"))
+        gather_results(tmp_path)
+    key_file = target / sor.KEY_FILE
+    assert key_file.read_bytes() and not key_file.match("*.json")
+    if sys.platform != "win32":
+        assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
+    # No temporary file is left beside it.
+    assert sorted(p.name for p in target.iterdir() if p.name.startswith(".")) == [
+        sor.KEY_FILE
+    ]
+
+    gather_results(tmp_path)
+    assert not key_file.exists()
+
+
+def test_an_output_that_never_parses_keeps_no_key(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A later pass cannot redact what does not parse, so keeping the key for
+    it would keep the key for good."""
+    target = _target(tmp_path)
+    with (target / "trufflehog.git.json").open("ab") as handle:
+        handle.write(b"{not json\n")
+
+    with caplog.at_level(logging.WARNING):
+        redact_secret_outputs(sorted(target.glob("*.json")))
+
+    assert any("do not parse" in r.getMessage() for r in caplog.records)
+    assert not sor.has_unfinished_pass(target)
+
+
+@pytest.mark.parametrize(
+    "bad_key",
+    [b"", b"short", b"x" * 64],
+    ids=["empty", "short", "long"],
+)
+def test_a_key_file_that_is_not_a_key_is_named_and_replaced(
+    tmp_path: Path, bad_key: bytes, caplog: pytest.LogCaptureFixture
+) -> None:
+    target = _target(tmp_path)
+    (target / sor.KEY_FILE).write_bytes(bad_key)
+
+    with caplog.at_level(logging.WARNING):
+        gather_results(tmp_path)
+
+    assert any("is not a redaction key" in r.getMessage() for r in caplog.records)
+    assert _leaks(tmp_path) == {}
+    assert not (target / sor.KEY_FILE).exists()
+
+
+def test_a_key_that_cannot_be_saved_does_not_stop_the_redaction(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Skipping the redaction for want of a key would leave every secret on
+    disk because of the fix. A directory in the key's place can be neither
+    read nor replaced, on any platform."""
+    target = _target(tmp_path)
+    (target / sor.KEY_FILE).mkdir()
+
+    with caplog.at_level(logging.WARNING):
+        findings = gather_results(tmp_path)
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("could not be saved" in m for m in messages), messages
+    assert _leaks(tmp_path) == {}
+    assert len(findings) == 10
+    assert sorted(p.name for p in target.iterdir() if p.name.startswith(".")) == [
+        sor.KEY_FILE
+    ]

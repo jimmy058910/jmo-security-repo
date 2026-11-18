@@ -50,7 +50,10 @@ from scripts.core.scan_timings import (
     ToolRun,
     read_scan_root,
 )
-from scripts.core.secret_output_redaction import redact_secret_outputs
+from scripts.core.secret_output_redaction import (
+    has_unfinished_pass,
+    redact_secret_outputs,
+)
 from scripts.core.tool_diagnostics import (
     ToolDiagnostic,
     extract_tool_diagnostics,
@@ -693,6 +696,18 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
 
     # Scan all target type directories: repos, images, IaC, web, gitlab, k8s
     target_dirs = _target_dirs(results_dir)
+
+    # A redaction stopped part-way left its folder's key (#1593): finish it
+    # before the adapters read, or this report would read one file's stand-in
+    # beside the other's secret, and the two findings would not pair.
+    redact_secret_outputs(
+        path
+        for target_dir in target_dirs
+        if target_dir.is_dir()
+        for target in sorted(p for p in target_dir.iterdir() if p.is_dir())
+        if has_unfinished_pass(target)
+        for path in sorted(target.glob("*.json"))
+    )
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         for target_dir in target_dirs:

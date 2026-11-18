@@ -247,6 +247,23 @@ because nothing verified them.
 and `zero-secrets` then blocks the live ones. `--only-verified`, or `--results`
 naming `verified`, in TruffleHog's flags counts as asking to verify.
 
+### A secret's findings stay split while one of its tool's outputs cannot be rewritten
+
+A report replaces the secrets in TruffleHog's and Gitleaks' raw outputs with
+stand-ins, and pairs a secret's working-tree finding with its git-history one through
+them. If one of a tool's two outputs cannot be rewritten (a file another program holds
+open on Windows, a full disk), the report keeps the target's key in
+`.jmo-redaction-key` so the next report can finish with the same stand-ins. Each report
+that still cannot rewrite it reads one output's stand-in beside the other's raw secret,
+so that secret is reported twice, as a tree finding with no commit and a history
+finding, and the folder keeps both the raw secret and the key. A warning names the
+file each time. The first report that can rewrite it pairs the findings again and
+deletes the key. Real Windows file locks have not been exercised; the tests simulate
+the failure.
+
+**What to do:** close whatever holds the named file and run `jmo report` again. Do not
+upload the results directory while the warning stands.
+
 ### Most of the rule bundle is a frozen snapshot, JavaScript and TypeScript included
 
 JMo's code scanner, opengrep, reads the rule bundle in `scripts/jmo_rules/`

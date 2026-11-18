@@ -14,10 +14,21 @@ digest that is equal for equal secrets, and the Lob records the adapter drops
 would pair each with every other at its path and rule: the trap gitleaks' own
 `--redact` sets (#1323).
 
-The key is random and lives for one pass, so a stand-in cannot be compared with
-another run's or guessed from a dictionary of likely secrets. Equal secrets in
-one pass get one stand-in, which is all the pairing needs: a tool's tree and
-history outputs come from one scan, and one pass rewrites both.
+The key is random, one per target folder and pass, so a stand-in cannot be
+compared with another run's or guessed from a dictionary of likely secrets.
+Equal secrets in one pass get one stand-in, which is all the pairing needs: a
+tool's tree and history outputs come from one scan, and one pass rewrites both.
+
+Unless one of them cannot be rewritten (locked, a full disk, the run stopped
+between the two). Then the next pass would give the other file's secrets a new
+key's stand-ins, and that secret's two findings would never pair again (#1593).
+So before its first rewrite a pass saves its key in the folder (`KEY_FILE`),
+and removes it once every output there is rewritten. A pass that finds a key
+reuses it, and the report finishes such a pass before it reads the folder
+(`has_unfinished_pass`). The key can confirm a guessed secret against a
+stand-in, so it stays only while the folder holds a raw secret anyway.
+Writing both files and then replacing both would not do: the second replace
+can still fail, and undoing the first would put the secret back.
 """
 
 from __future__ import annotations
@@ -170,6 +181,74 @@ def _replace(path: Path, data: bytes) -> None:
         raise
 
 
+#: A target folder's redaction key, kept while a pass there is unfinished
+#: (#1593). Not `*.json`, so no adapter reads it as a tool's output.
+KEY_FILE = ".jmo-redaction-key"
+_KEY_BYTES = 32
+
+
+def has_unfinished_pass(folder: Path) -> bool:
+    """Whether a pass over `folder` stopped before it rewrote every output.
+    False when the folder cannot be searched: Python 3.12's `is_file()` raises
+    there, and the report goes on without its outputs, as it did before."""
+    try:
+        return (folder / KEY_FILE).is_file()
+    except OSError:
+        return False
+
+
+def _stored_key(folder: Path) -> bytes | None:
+    """The key an unfinished pass left in `folder`, or None. One that cannot be
+    read or is not a key is named and treated as absent: its pass's stand-ins
+    and the next one's then differ, as they did before #1593."""
+    key_file = folder / KEY_FILE
+    try:
+        key = key_file.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        logger.warning(
+            "%s could not be read, so a new key redacts this folder: %s: %s",
+            key_file,
+            type(e).__name__,
+            e,
+        )
+        return None
+    if len(key) != _KEY_BYTES:
+        logger.warning(
+            "%s is not a redaction key, so a new key redacts this folder", key_file
+        )
+        return None
+    return key
+
+
+def _save_key(folder: Path, key: bytes) -> bool:
+    """Save `key` in `folder` before a pass rewrites anything there, readable
+    by its owner alone (mkstemp's 0o600), and on disk before the first
+    rewrite. False, named, when it cannot be: the pass still redacts."""
+    key_file = folder / KEY_FILE
+    name = None
+    try:
+        fd, name = tempfile.mkstemp(dir=folder, prefix=f"{KEY_FILE}.", suffix=".tmp")
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(key)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(name, key_file)
+    except OSError as e:
+        if name is not None:
+            Path(name).unlink(missing_ok=True)
+        logger.warning(
+            "%s could not be saved, so if an output here is not rewritten, its "
+            "secrets will not pair with the others: %s: %s",
+            key_file,
+            type(e).__name__,
+            e,
+        )
+        return False
+    return True
+
+
 #: opengrep's debug log, beside its output in a target's folder
 #: (`tool_descriptors.OPENGREP_LOG`): it records the text of every match.
 OPENGREP_LOG = Path(".opengrep") / "semgrep.log"
@@ -259,7 +338,27 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
     that cannot be read, parsed or rewritten is named at WARNING and left as it
     is: the report it belongs to still runs. Returns how many fields changed.
     """
-    key = os.urandom(32)
+    by_folder: dict[Path, list[Path]] = {}
+    for path in outputs:
+        by_folder.setdefault(path.parent, []).append(path)
+    total = sum(_redact_folder(folder, paths) for folder, paths in by_folder.items())
+    if total:
+        logger.info(
+            "Replaced %d secret field(s) in the secret scanners' raw outputs", total
+        )
+    return total
+
+
+def _redact_folder(folder: Path, outputs: list[Path]) -> int:
+    """One pass over the outputs of one target folder, under the key an
+    unfinished pass left there or a new one (#1593)."""
+    key = _stored_key(folder)
+    saved = key is not None
+    key = key or os.urandom(_KEY_BYTES)
+    tried_to_save = saved
+    # An output a later pass can still finish: one that could not be read or
+    # rewritten. One that does not parse never will be, so it keeps no key.
+    unfinished = False
 
     def stand_in(secret: str) -> str:
         digest = hmac.new(key, secret.encode("utf-8"), "sha256")
@@ -282,6 +381,7 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
             logger.warning(
                 "%s could not be read, so it may still hold secrets: %s", path, e
             )
+            unfinished = True
             continue
         if not text.strip():
             # A tool stopped after creating its file: nothing to hold.
@@ -305,6 +405,10 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
             )
         if not changed:
             continue
+        if not tried_to_save:
+            # Before the first rewrite, so a run stopped after it leaves the key.
+            saved = _save_key(folder, key)
+            tried_to_save = True
         try:
             _replace(path, new_text.encode("utf-8"))
         except OSError as e:
@@ -316,10 +420,25 @@ def redact_secret_outputs(outputs: Iterable[Path]) -> int:
                 type(e).__name__,
                 e,
             )
+            unfinished = True
             continue
         total += changed
-    if total:
-        logger.info(
-            "Replaced %d secret field(s) in the secret scanners' raw outputs", total
+    if saved and unfinished:
+        logger.warning(
+            "%s is kept until a report rewrites every output here, so their "
+            "secrets keep pairing; it can confirm a guessed secret, so treat it "
+            "as one",
+            folder / KEY_FILE,
         )
+    elif saved:
+        try:
+            (folder / KEY_FILE).unlink(missing_ok=True)
+        except OSError as e:
+            logger.warning(
+                "%s could not be removed; it can confirm a guessed secret, so "
+                "treat it as one: %s: %s",
+                folder / KEY_FILE,
+                type(e).__name__,
+                e,
+            )
     return total
