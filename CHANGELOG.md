@@ -635,6 +635,29 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`jmo report` refuses a path that holds no scan output (#1670).** On a path that did not
+  exist, `jmo report <path> --fail-on LOW` created it, wrote seven reports of zero
+  findings and exited 0, which a CI gate reads as "scanned, nothing found"; a file
+  crashed with `NotADirectoryError`. It now exits 2 with one ERROR line and creates
+  nothing, `--out` included, when the path does not exist, is not a directory, or has
+  neither `.scan_metadata.json` nor a target folder under an `individual-*` directory.
+  Every `jmo scan` leaves both, including one that found nothing or whose only tool
+  failed, so an empty directory, or one holding only an earlier report's `summaries/`,
+  is refused. `jmo ci` reached the same defect when its scan found no installed tool.
+- **History stores the findings the report produced, whatever `outputs` asks for
+  (#1669).**
+  The report phase stored a scan by rereading `<results>/summaries/findings.json`,
+  which it writes only for `json` without `--out`. A rerun into the same results
+  directory that asked for Markdown alone stored the previous run's file: a fixed
+  ShellCheck issue read 0 in SUMMARY.md and 1 in the new row, and
+  `--fail-on-store-error` exited 0, since the write itself succeeded. A first
+  Markdown-only scan stored nothing. `jmo history store <dir>` still reads
+  findings.json, and a failed write's ERROR line now says so when this run wrote none.
+- **A report and its history row share one scan id (#1671).** findings.json's `meta.scan_id`
+  (and findings.yaml's) and the row's id were two UUIDs, so
+  `jmo history show <report id>` said "Scan not found". The row now takes the report's
+  id. `jmo history store <dir>` uses it too when no row has it yet, and a fresh one
+  when the directory was already stored.
 - **An installed JMo enforces its built-in policies, and an enforced policy that cannot
   be evaluated fails the run.** The five built-in Rego policies live at
   `policies/builtin/`, outside the `scripts` package, so no wheel carried one, v1.1.1
