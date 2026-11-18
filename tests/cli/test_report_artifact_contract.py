@@ -109,6 +109,10 @@ class TestUnknownOutputFormats:
 
 
 def _args(tmp_path: Path, out: Path):
+    # A target folder, as a scan leaves: `cmd_report` refuses a directory
+    # holding no scan output, and every test here would then pass on a report
+    # that never ran.
+    (tmp_path / "individual-repos" / "repo").mkdir(parents=True, exist_ok=True)
     return SimpleNamespace(
         config=None,
         results_dir=str(tmp_path),

@@ -14,6 +14,7 @@ from typing import Any
 from scripts.core.config import load_config_with_env_overrides
 from scripts.core.exceptions import OPANotFoundException
 from scripts.core.normalize_and_report import (
+    TARGET_FOLDERS,
     collect_tool_diagnostics,
     gather_results,
     scan_roots,
@@ -136,6 +137,36 @@ def _warn_unknown_threshold(threshold, args, _log_fn) -> str | None:
     return bad
 
 
+def _nothing_to_report(results_dir: Path) -> str | None:
+    """Why `results_dir` holds no scan output to report, or None when it does.
+
+    A report of zero findings is the signal a CI gate reads as "scanned,
+    nothing found", so it must come from a scan. `jmo report <typo>` used to
+    create the path, write seven clean reports and exit 0.
+
+    Every `jmo scan` leaves `.scan_metadata.json` and a folder per target under
+    `individual-<type>/` - measured with a scan that found nothing and one
+    whose only tool failed. Results from before the metadata file existed have
+    the target folders. A directory with neither, including an empty one or
+    one holding only an earlier report's `summaries/`, has nothing to report.
+    """
+    if not results_dir.exists():
+        return f"Results directory not found: {results_dir}. Nothing was reported."
+    if not results_dir.is_dir():
+        return f"Results path is not a directory: {results_dir}. Nothing was reported."
+    if (results_dir / ".scan_metadata.json").is_file():
+        return None
+    for folder in TARGET_FOLDERS.values():
+        target_dir = results_dir / folder
+        if target_dir.is_dir() and any(p.is_dir() for p in target_dir.iterdir()):
+            return None
+    return (
+        f"No scan results in {results_dir}: it has no .scan_metadata.json and no "
+        f"target folder under {', '.join(sorted(TARGET_FOLDERS.values()))}. "
+        f"Run `jmo scan --results-dir {results_dir}` first. Nothing was reported."
+    )
+
+
 def cmd_report(args, _log_fn) -> int:
     """Run report command: aggregate findings and generate outputs.
 
@@ -163,6 +194,10 @@ def cmd_report(args, _log_fn) -> int:
         return 2
 
     results_dir = Path(rd)
+    refusal = _nothing_to_report(results_dir)
+    if refusal:
+        _log_fn(args, "ERROR", refusal)
+        return 2
     out_dir = Path(args.out) if args.out else results_dir / "summaries"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -637,9 +672,13 @@ def cmd_report(args, _log_fn) -> int:
             encrypt_findings = getattr(args, "encrypt_findings", False)
             collect_metadata = getattr(args, "collect_metadata", False)
 
-            # Store scan in history database
-            scan_id = db_store_scan(
+            # Store scan in history database: the findings this run reported,
+            # not whatever findings.json is on disk, which this run may not
+            # have written, under the id its reports carry.
+            db_store_scan(
                 results_dir=results_dir,
+                findings=findings,
+                scan_id=scan_id,
                 tools=tools,
                 db_path=history_db_path,
                 no_store_raw=no_store_raw,
@@ -658,15 +697,23 @@ def cmd_report(args, _log_fn) -> int:
             # a raw traceback -- and the exit code never saw it, so a scan
             # could report success having stored nothing (#903).
             store_error = e
+            # `jmo history store` reads <results>/summaries/findings.json,
+            # which this run wrote only with `json` in outputs and no --out.
+            rerecord = f"`jmo history store --results-dir {results_dir}`"
+            if not ("json" in cfg.outputs and out_dir == results_dir / "summaries"):
+                rerecord += (
+                    f" after `jmo report {results_dir}` with `json` in outputs "
+                    f"(it reads summaries/findings.json, which this run did "
+                    f"not write there)"
+                )
             _log_fn(
                 args,
                 "ERROR",
                 f"Scan results were NOT recorded in the history database "
                 f"({history_db_path}): {e}. The scan completed and its reports "
                 f"are valid, but `jmo history` will not show this run. "
-                f"Re-record it with `jmo history store --results-dir "
-                f"{results_dir}`, or pass --fail-on-store-error to make a "
-                f"failed history write exit non-zero.",
+                f"Re-record it with {rerecord}, or pass --fail-on-store-error "
+                f"to make a failed history write exit non-zero.",
             )
             # The traceback is a debugging detail, not a user-facing one: this
             # is a recoverable condition, and printing a stack trace into

@@ -59,7 +59,9 @@ def mock_log_fn():
 def write_findings_json(tmp_path: Path, findings: list):
     """Helper to write findings.json for testing."""
     results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    # A target folder, as a scan leaves: `cmd_report` refuses a directory
+    # holding no scan output.
+    (results_dir / "individual-repos" / "repo").mkdir(parents=True, exist_ok=True)
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir(parents=True, exist_ok=True)
 

@@ -184,7 +184,7 @@ Generate reports from completed scan results.
 
 | Flag | Description |
 |------|-------------|
-| `RESULTS_DIR` | Directory with `individual-repos/*` tool outputs (positional) |
+| `RESULTS_DIR` | Directory a scan wrote: it holds `.scan_metadata.json` or a target folder under `individual-repos/` (or another `individual-*` folder). A path that does not exist, is not a directory, or holds neither exits 2 and writes nothing (positional) |
 | `--results-dir DIR` | Same as positional argument (optional form) |
 | `--out DIR` | Output directory (default: `<results_dir>/summaries`) |
 | `--config FILE` | Config file (default: `jmo.yml`) |
