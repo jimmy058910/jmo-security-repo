@@ -16,7 +16,7 @@ Tests focus on:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from scripts.cli.wizard_flows.config_models import TargetConfig
 from scripts.cli.wizard_generators import (
@@ -348,49 +348,9 @@ def test_github_actions_thread_override():
     assert "--timeout 1200" in result
 
 
-def test_github_actions_uses_scan_defaults():
-    """Unset threads/timeout come from scan_defaults(), not a profile.
-
-    A distinctive stub value proves the generator reads it rather than a
-    hardcoded pair that happens to match.
-    """
-    config = create_wizard_config(
-        use_docker=False,
-        threads=None,
-        timeout=None,
-    )
-    config.target.type = "repo"
-    config.target.repo_mode = "repo"
-
-    with patch(
-        "scripts.cli.wizard_flows.config_models.scan_defaults",
-        return_value=(5, 450),
-    ):
-        result = generate_github_actions(config)
-
-    assert "--threads 5" in result
-    assert "--timeout 450" in result
-
-
-def test_github_actions_defaults_without_jmo_yml(tmp_path, monkeypatch):
-    """With no jmo.yml in the working directory the built-in 4 / 600 apply."""
-    monkeypatch.chdir(tmp_path)
-    config = create_wizard_config(
-        use_docker=False,
-        threads=None,
-        timeout=None,
-    )
-    config.target.type = "repo"
-    config.target.repo_mode = "repo"
-
-    result = generate_github_actions(config)
-
-    assert "--threads 4" in result
-    assert "--timeout 600" in result
-
-
-def test_github_actions_defaults_read_the_top_level_of_jmo_yml(tmp_path, monkeypatch):
-    """jmo.yml's top-level threads/timeout are what an unset wizard value means."""
+def test_github_actions_writes_no_unset_value(tmp_path, monkeypatch):
+    """Unset threads and timeout write neither flag, whatever the generating
+    machine's jmo.yml says: the scan in CI reads the repository's own (#1627)."""
     (tmp_path / "jmo.yml").write_bytes(b"threads: 6\ntimeout: 900\n")
     monkeypatch.chdir(tmp_path)
     config = create_wizard_config(
@@ -403,8 +363,8 @@ def test_github_actions_defaults_read_the_top_level_of_jmo_yml(tmp_path, monkeyp
 
     result = generate_github_actions(config)
 
-    assert "--threads 6" in result
-    assert "--timeout 900" in result
+    assert "--threads" not in result
+    assert "--timeout" not in result
 
 
 # ========== Test Category 8: Fail-On Threshold Variations ==========

@@ -16,29 +16,29 @@ from typing import Any
 
 from scripts.core.history_db import DEFAULT_DB_PATH
 
-# What a scan uses when neither the wizard nor jmo.yml sets threads/timeout.
-# The same values as the shipped jmo.yml's top level.
-DEFAULT_THREADS = 4
+# The timeout a scan uses when neither the wizard nor jmo.yml sets one: the
+# same value as the shipped jmo.yml's top level and `jmo scan`'s own fallback.
 DEFAULT_TIMEOUT = 600
 
 
-def scan_defaults(config_path: str = "jmo.yml") -> tuple[int, int]:
+def scan_defaults(config_path: str = "jmo.yml") -> tuple[int | str, int]:
     """Threads and per-tool timeout a scan gets when the wizard sets neither.
 
-    Read from the top level of jmo.yml (what `jmo scan` itself falls back to),
-    else DEFAULT_THREADS / DEFAULT_TIMEOUT. `threads: auto` has no number to
-    show, so it reads as the default too.
+    Read from the top level of jmo.yml (what `jmo scan` itself falls back to).
+    Threads is jmo.yml's number, else "auto": with `threads: auto`, or none,
+    the scan sizes its pool from the CPU count. This read 4 for both, which
+    the wizard then showed and, kept at its prompt, passed as `--threads 4`.
 
     Args:
         config_path: jmo.yml to read; a missing file means the defaults.
 
     Returns:
-        (threads, timeout_seconds)
+        (threads or "auto", timeout_seconds)
     """
     from scripts.core.config import load_config
 
     cfg = load_config(config_path)
-    threads = cfg.threads if isinstance(cfg.threads, int) else DEFAULT_THREADS
+    threads: int | str = cfg.threads if isinstance(cfg.threads, int) else "auto"
     timeout = cfg.timeout or DEFAULT_TIMEOUT
     return threads, timeout
 

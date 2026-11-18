@@ -366,6 +366,47 @@ def configure_k8s_target() -> TargetConfig:
     return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
+def _own_timeouts(tools: list[str] | None) -> list[str]:
+    """This scan's tools with a `per_tool.<tool>.timeout` in jmo.yml, which
+    wins over any other timeout, a typed one included."""
+    from scripts.core.config import load_config
+
+    per_tool = load_config("jmo.yml").per_tool
+    return sorted(
+        tool
+        for tool in (TOOL_MATRIX if tools is None else tools)
+        if isinstance((per_tool.get(tool) or {}).get("timeout"), int)
+        and per_tool[tool]["timeout"] > 0
+    )
+
+
+def _timeout_text(seconds: int, tools: list[str] | None, typed: bool) -> str:
+    """A timeout as this scan's tools get it: "600s", or
+    "600s (opengrep, zap: 900s)" naming each tool that gets another value.
+
+    Resolved by the scan's own functions over jmo.yml's `per_tool`: a tool's
+    own timeout wins outright, a typed `--timeout` wins over a minimum (#1486),
+    and the default does not. The screen said `Timeout: 600s` while opengrep
+    and zap got 900 s (#1627)."""
+    from scripts.cli.scan_utils import cli_timeout_over_floors, tool_timeout
+    from scripts.core.config import load_config
+
+    names = list(TOOL_MATRIX if tools is None else tools)
+    per_tool = load_config("jmo.yml").per_tool
+    if typed:
+        per_tool = cli_timeout_over_floors(per_tool, names, seconds)
+    by_value: dict[int, list[str]] = {}
+    for tool in names:
+        value = tool_timeout(per_tool, tool, seconds)
+        if value != seconds:
+            by_value.setdefault(value, []).append(tool)
+    apart = "; ".join(
+        f"{', '.join(sorted(group))}: {value}s"
+        for value, group in sorted(by_value.items())
+    )
+    return f"{seconds}s ({apart})" if apart else f"{seconds}s"
+
+
 def configure_advanced(
     manager: ToolManager | None = None, tools: list[str] | None = None
 ) -> tuple[int | None, int | None, str]:
@@ -393,31 +434,46 @@ def configure_advanced(
 
     print("\nDefaults:")
     print(f"  Threads: {default_threads}")
-    print(f"  Timeout: {default_timeout}s")
+    print(f"  Timeout: {_timeout_text(default_timeout, tools, typed=False)}")
     print(f"  Tools: {summary.total} ({summary.execution_ready} ready)")
     print(f"\nSystem: {cpu_count} CPU cores detected")
 
     if not _prompt_yes_no("\nCustomize advanced settings?", default=False):
         return None, None, ""
 
-    # Threads
+    # Threads, on the timeout's rule below: only a number the user types is
+    # returned, so a kept default never becomes `--threads` and jmo.yml's
+    # `threads: auto` stays auto.
     print(f"\nThread count (1-{cpu_count * 2})")
     print("  Lower = more thorough, Higher = faster (if I/O bound)")
-    threads_str = _prompt_text("Threads", default=str(default_threads))
-    try:
-        threads = int(threads_str)
-        threads = max(1, min(threads, cpu_count * 2))
-    except ValueError:
-        threads = default_threads
+    threads_str = _prompt_text(f"Threads [{default_threads}]")
+    threads: int | None = None
+    if threads_str:
+        try:
+            threads = max(1, min(int(threads_str), cpu_count * 2))
+        except ValueError:
+            print(f"  Not a number: keeping the default ({default_threads})")
 
-    # Timeout
+    # Timeout. Only a number the user types is returned: it becomes
+    # `--timeout`, which wins over a tool's minimum (#1486), so the default
+    # passed back as a number gave opengrep and zap 600 s, not 900 s (#1627).
+    # The prompt reads `Timeout [N]: ` as before, with no default to fill in,
+    # so a blank answer stays blank.
     print("\nPer-tool timeout in seconds")
-    timeout_str = _prompt_text("Timeout", default=str(default_timeout))
-    try:
-        timeout = int(timeout_str)
-        timeout = max(60, timeout)
-    except ValueError:
-        timeout = default_timeout
+    kept = _timeout_text(default_timeout, tools, typed=False)
+    own = _own_timeouts(tools)
+    if kept != f"{default_timeout}s" or own:
+        hint = f"  Blank keeps the default, {kept}; a number typed here applies to every tool"
+        if own:
+            hint += f" but {', '.join(own)}, whose jmo.yml per_tool timeout wins"
+        print(hint)
+    timeout_str = _prompt_text(f"Timeout [{default_timeout}]")
+    timeout: int | None = None
+    if timeout_str:
+        try:
+            timeout = max(60, int(timeout_str))
+        except ValueError:
+            print(f"  Not a number: keeping the default ({default_timeout}s)")
 
     # Fail-on severity
     print("\nFail on severity threshold (for CI/CD)")
@@ -539,9 +595,11 @@ def review_and_confirm(
     print(f"  Results: {config.results_dir}")
 
     threads = config.threads or default_threads
-    timeout = config.timeout or default_timeout
     print(f"  Threads: {threads}")
-    print(f"  Timeout: {timeout}s")
+    if config.timeout is None:
+        print(f"  Timeout: {_timeout_text(default_timeout, tools, typed=False)}")
+    else:
+        print(f"  Timeout: {_timeout_text(config.timeout, tools, typed=True)}")
 
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
@@ -1012,7 +1070,7 @@ def run_wizard(
             content = generate_github_actions(config)
             gha_path = Path(emit_gha)
             gha_path.parent.mkdir(parents=True, exist_ok=True)
-            gha_path.write_text(content, encoding="utf-8")
+            gha_path.write_bytes(content.encode("utf-8"))  # LF, as above
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
             return 0
 

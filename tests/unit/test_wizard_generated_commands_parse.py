@@ -155,15 +155,22 @@ def generated_artifacts() -> list[tuple[str, str]]:
                 generate_shell_script(cfg, _wizard_command(fail_on)),
             )
         )
+    # A workflow writes --threads and --timeout only when the wizard was given
+    # them (#1627), so it is generated both ways: with them, their flags reach
+    # the parser too.
     for use_docker in (False, True):
         for fail_on in (None, "HIGH"):
-            c = _Config(use_docker=use_docker, fail_on=fail_on)
-            artifacts.append(
-                (
-                    f"github-actions:docker={use_docker}:fail_on={fail_on}",
-                    generate_github_actions(c),
+            for given in (False, True):
+                c = _Config(use_docker=use_docker, fail_on=fail_on)
+                if given:
+                    c.threads, c.timeout = 4, 300
+                artifacts.append(
+                    (
+                        f"github-actions:docker={use_docker}:fail_on={fail_on}"
+                        f":given={given}",
+                        generate_github_actions(c),
+                    )
                 )
-            )
     return artifacts
 
 
@@ -211,10 +218,13 @@ def test_extractor_meta_guard():
         assert expected in subcommands, f"extractor found no `{expected}` invocation"
 
     # The scan step only: the native workflow also runs `jmo tools install --yes`.
+    # --threads sits on a continuation line, in a workflow given a thread count.
     gha = [
         cmd
         for label, cmd in ALL_COMMANDS
-        if label.startswith("github-actions") and cmd[0] in ("scan", "ci")
+        if label.startswith("github-actions")
+        and label.endswith(":given=True")
+        and cmd[0] in ("scan", "ci")
     ]
     assert gha and all("--threads" in cmd for cmd in gha), (
         f"continuation lines of the GitHub Actions `run:` block were not joined: {gha}"

@@ -396,17 +396,19 @@ def test_run_wizard_emit_script(
     assert rc == 0
 
 
-@patch("scripts.cli.wizard.Path.write_text")
-@patch("scripts.cli.wizard.Path.mkdir")
 @patch("scripts.cli.tool_manager.ToolManager")
-def test_run_wizard_emit_gha(mock_tool_manager_class, mock_mkdir, mock_write):
-    """Test wizard with --emit-gha."""
+def test_run_wizard_emit_gha(mock_tool_manager_class, tmp_path, monkeypatch):
+    """Test wizard with --emit-gha (a real write inside tmp_path, as above).
+
+    This patched `Path.write_text` and `Path.mkdir` and passed a relative
+    path, so when the workflow moved to `write_bytes` a run wrote a real
+    .github/workflows/security.yml into the checkout.
+    """
+    monkeypatch.chdir(tmp_path)
     mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_gha=".github/workflows/security.yml")
 
-    mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
-    mock_write.assert_called_once()
-    content = mock_write.call_args[0][0]
+    content = (tmp_path / ".github/workflows/security.yml").read_bytes().decode()
     assert "name: Security Scan" in content
     assert "actions/checkout@v4" in content
     assert rc == 0
@@ -759,9 +761,9 @@ def test_configure_advanced_invalid_inputs(
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
     threads, timeout, fail_on = configure_advanced()
-    # Invalid thread count falls back to the scan default (jmo.yml top level,
-    # else 4) -- a distinctive stub value proves it is read, not hardcoded
-    assert threads == 3
+    # An invalid thread count keeps the scan default, which is no --threads:
+    # the default passed back as a number overrode jmo.yml's `threads: auto`
+    assert threads is None
     # Invalid timeout 30 should be clamped to minimum 60
     assert timeout == 60  # max(60, 30)
 
@@ -784,7 +786,9 @@ def test_configure_advanced_prompts_and_falls_back_to_scan_defaults(
 
     The Threads/Timeout prompts show it as their default, and an unparseable
     answer for either falls back to it -- not to a profile's numbers, which
-    no longer exist.
+    no longer exist. Falling back means returning None for both: the default as
+    a number became `--timeout`, which lowers opengrep's and zap's minimum
+    (#1627), and `--threads`, which overrode `threads: auto`.
     """
     from scripts.cli.wizard import configure_advanced
 
@@ -794,8 +798,8 @@ def test_configure_advanced_prompts_and_falls_back_to_scan_defaults(
     prompts = [c.args[0] for c in mock_input.call_args_list]
     assert any(p.startswith("Threads [7]") for p in prompts), prompts
     assert any(p.startswith("Timeout [1234]") for p in prompts), prompts
-    assert threads == 7
-    assert timeout == 1234
+    assert threads is None
+    assert timeout is None
 
 
 def test_scan_defaults_reads_the_top_level_of_jmo_yml(tmp_path):
@@ -808,28 +812,26 @@ def test_scan_defaults_reads_the_top_level_of_jmo_yml(tmp_path):
     assert scan_defaults(str(cfg)) == (6, 900)
 
 
-def test_scan_defaults_threads_auto_is_the_default_thread_count(tmp_path):
-    """`threads: auto` has no number to show, so it reads as DEFAULT_THREADS."""
-    from scripts.cli.wizard_flows.config_models import DEFAULT_THREADS, scan_defaults
+def test_scan_defaults_threads_auto_reads_auto(tmp_path):
+    """`threads: auto` reads as "auto": the scan sizes its pool from the CPU
+    count. It read 4, which the wizard showed and passed as `--threads 4`."""
+    from scripts.cli.wizard_flows.config_models import scan_defaults
 
     cfg = tmp_path / "jmo.yml"
     cfg.write_bytes(b"threads: auto\ntimeout: 900\n")
 
-    assert scan_defaults(str(cfg)) == (DEFAULT_THREADS, 900)
+    assert scan_defaults(str(cfg)) == ("auto", 900)
 
 
 def test_scan_defaults_without_a_config_file(tmp_path):
-    """No jmo.yml means the built-in constants, which are 4 threads / 600 s."""
-    from scripts.cli.wizard_flows.config_models import (
-        DEFAULT_THREADS,
-        DEFAULT_TIMEOUT,
-        scan_defaults,
-    )
+    """No jmo.yml means auto threads (what `jmo scan` does with none) and
+    DEFAULT_TIMEOUT, 600 s."""
+    from scripts.cli.wizard_flows.config_models import DEFAULT_TIMEOUT, scan_defaults
 
     missing = tmp_path / "no-such-jmo.yml"
 
-    assert scan_defaults(str(missing)) == (DEFAULT_THREADS, DEFAULT_TIMEOUT)
-    assert (DEFAULT_THREADS, DEFAULT_TIMEOUT) == (4, 600)
+    assert scan_defaults(str(missing)) == ("auto", DEFAULT_TIMEOUT)
+    assert DEFAULT_TIMEOUT == 600
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
@@ -936,15 +938,18 @@ def test_review_and_confirm_tsv_mode(mock_tool_manager_class, mock_yes_no):
 @patch("scripts.cli.wizard.scan_defaults", return_value=(3, 777))
 @patch("scripts.cli.tool_manager.ToolManager")
 def test_review_and_confirm_summary_uses_matrix_and_scan_defaults(
-    mock_tool_manager_class, mock_defaults, mock_yes_no, capsys
+    mock_tool_manager_class, mock_defaults, mock_yes_no, capsys, tmp_path, monkeypatch
 ):
     """Review shows the scan defaults and ready/total over the tool matrix.
 
     It used to print the chosen profile and profile-sized counts; now the
     denominator is the matrix summary's `total`, and unset threads/timeout
-    show what the scan will actually use.
+    show what the scan will actually use. Run with no jmo.yml, so no
+    per_tool timeout joins the minimums on screen.
     """
     from scripts.cli.wizard import review_and_confirm
+
+    monkeypatch.chdir(tmp_path)
 
     tm = _fake_tool_manager()
     tm.get_tool_summary.return_value = MagicMock(execution_ready=9, total=12)
@@ -963,12 +968,14 @@ def test_review_and_confirm_summary_uses_matrix_and_scan_defaults(
 
     out = capsys.readouterr().out
     assert "Threads: 3" in out
-    assert "Timeout: 777s" in out
+    # An unset timeout shows the minimums it does not reach (#1627)
+    assert "Timeout: 777s (opengrep, zap: 900s)" in out
     assert "9/12" in out
     assert "Profile" not in out
     # Only execution-ready tools feed the preview and the time estimate
-    assert "trivy" in out
-    assert "zap" not in out
+    preview = out.split("Tools:", 1)[1]
+    assert "trivy" in preview
+    assert "zap" not in preview
 
 
 def test_generate_command_targets_mode():
@@ -1476,6 +1483,42 @@ def test_review_says_where_tsv_credentials_come_from(
     out = capsys.readouterr().out
     assert "credential" in out
     assert ("public repositories" in out) is use_docker
+
+
+@pytest.mark.parametrize("emit", ["emit_make", "emit_script", "emit_gha"])
+def test_every_emitted_file_is_lf_where_text_writes_crlf(emit, tmp_path, monkeypatch):
+    """Each file `jmo wizard --emit-*` writes is LF, even where text mode
+    writes CRLF, as `Path.write_text` does on Windows.
+
+    `--emit-make` and `--emit-script` write bytes because a `\\r` breaks make
+    recipes and bash; `--emit-gha` used `write_text` and got CRLF on Windows.
+    The stub stands in for Windows, so this fails on Linux too.
+    """
+
+    def windows_write_text(self, data, encoding=None, errors=None, newline=None):
+        with open(self, "w", encoding=encoding, errors=errors, newline="\r\n") as f:
+            return f.write(data)
+
+    monkeypatch.setattr(Path, "write_text", windows_write_text)
+    out = tmp_path / "artifact"
+    with (
+        patch("scripts.cli.wizard.check_tools_for_matrix", return_value=(True, [])),
+        patch("scripts.cli.wizard._check_policy_tools", return_value=(True, False)),
+        patch("scripts.cli.tool_manager.ToolManager"),
+    ):
+        rc = run_wizard(
+            yes=True,
+            target_type="repo",
+            target=str(tmp_path),
+            emit_make=str(out) if emit == "emit_make" else None,
+            emit_script=str(out) if emit == "emit_script" else None,
+            emit_gha=str(out) if emit == "emit_gha" else None,
+        )
+
+    assert rc == 0
+    written = out.read_bytes()
+    assert b"jmo " in written
+    assert b"\r" not in written
 
 
 if __name__ == "__main__":
