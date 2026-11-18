@@ -29,7 +29,8 @@ v1.0.0 Metadata Wrapper:
 
 Policy Discovery:
     Policies are loaded from two directories (user policies override builtin):
-    1. Builtin: policies/ (shipped with JMo Security)
+    1. Builtin: `builtin_policies_dir()` -- policies/builtin/ in a checkout,
+       scripts/core/policies/builtin/ in an installed wheel
     2. User: ~/.jmo/policies/ (custom user policies)
 
 Rego Policy Interface:
@@ -48,9 +49,7 @@ Usage:
     >>> # Evaluate findings against policies
     >>> results = evaluate_policies(
     ...     findings,
-    ...     policy_names=["no-critical-in-prod", "sla-compliance"],
-    ...     builtin_dir=Path("policies"),
-    ...     user_dir=Path.home() / ".jmo" / "policies",
+    ...     policy_names=["zero-secrets", "owasp-top-10"],
     ... )
     >>> # Generate reports
     >>> write_policy_report(results, Path("results/summaries/POLICY_REPORT.md"))
@@ -65,7 +64,7 @@ Functions:
 See Also:
     - docs/POLICY_AS_CODE.md for policy authoring guide
     - scripts/core/policy_engine.py for OPA integration
-    - policies/*.rego for example policy definitions
+    - policies/builtin/*.rego for the built-in policy definitions
 
 Author: JMo Security
 License: MIT
@@ -76,7 +75,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from scripts.core.policy_engine import PolicyEngine, PolicyResult
+from scripts.core.policy_engine import (
+    PolicyEngine,
+    PolicyResult,
+    builtin_policies_dir,
+    user_policies_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +88,10 @@ logger = logging.getLogger(__name__)
 def evaluate_policies(
     findings: list[dict[str, Any]],
     policy_names: list[str],
-    builtin_dir: Path,
-    user_dir: Path,
+    builtin_dir: Path | None = None,
+    user_dir: Path | None = None,
+    *,
+    failures: dict[str, str] | None = None,
 ) -> dict[str, PolicyResult]:
     """
     Evaluate findings against specified policies.
@@ -93,12 +99,20 @@ def evaluate_policies(
     Args:
         findings: List of CommonFinding dictionaries
         policy_names: List of policy names to evaluate (without .rego extension)
-        builtin_dir: Path to builtin policies directory
-        user_dir: Path to user policies directory (~/.jmo/policies)
+        builtin_dir: Path to builtin policies directory (default:
+            `builtin_policies_dir()`, which works from a wheel and a checkout)
+        user_dir: Path to user policies directory (default: ~/.jmo/policies)
+        failures: If given, filled with policy name -> why it has no result
+            (not found, or its evaluation raised). A caller that enforces the
+            verdict needs the reason: a policy with no result did not pass.
 
     Returns:
         Dict mapping policy name to PolicyResult
     """
+    if builtin_dir is None:
+        builtin_dir = builtin_policies_dir()
+    if user_dir is None:
+        user_dir = user_policies_dir()
     engine = PolicyEngine()
     results = {}
 
@@ -117,6 +131,11 @@ def evaluate_policies(
             logger.warning(
                 f"Policy '{policy_name}' not found. Available: {', '.join(sorted(policies.keys()))}"
             )
+            if failures is not None:
+                failures[policy_name] = (
+                    f"no such policy in {builtin_dir} or {user_dir} "
+                    f"(available: {', '.join(sorted(policies)) or 'none'})"
+                )
             continue
 
         policy_path = policies[policy_name]
@@ -128,6 +147,8 @@ def evaluate_policies(
             Exception
         ) as e:  # Acceptable: individual policy failure — skip and continue with others
             logger.error(f"Failed to evaluate policy '{policy_name}': {e}")
+            if failures is not None:
+                failures[policy_name] = f"evaluation failed ({e})"
             continue
 
     return results

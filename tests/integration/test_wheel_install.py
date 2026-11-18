@@ -39,6 +39,8 @@ PACKAGING_INPUTS = (
     "versions.yaml",
     "docs/schemas/common_finding.v1.json",
 )
+# setup.py's SHIPPED_GLOBS: copied by pattern, so a new policy needs no edit here.
+PACKAGING_GLOBS = ("policies/builtin/*.rego",)
 
 pytestmark = pytest.mark.slow
 
@@ -56,6 +58,11 @@ def wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
         if (REPO_ROOT / name).is_file():
             (src / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO_ROOT / name, src / name)
+    for pattern in PACKAGING_GLOBS:
+        for path in REPO_ROOT.glob(pattern):
+            rel = path.relative_to(REPO_ROOT)
+            (src / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, src / rel)
     shutil.copytree(
         REPO_ROOT / "scripts",
         src / "scripts",
@@ -225,3 +232,140 @@ def test_a_bare_install_runs_and_names_the_extra_yara_x_needs(
     assert "Traceback" not in install.stderr, install.stderr
     assert 'install "jmo-security[yara]"' in install.stdout + install.stderr
     assert not (home / ".jmo" / "yara-rules").exists(), "rules fetched with no engine"
+
+
+def _tracked_policies() -> dict[str, bytes]:
+    policies = {
+        p.name: p.read_bytes()
+        for p in sorted((REPO_ROOT / "policies" / "builtin").glob("*.rego"))
+    }
+    assert "zero-secrets.rego" in policies, sorted(policies)
+    return policies
+
+
+def test_the_wheel_carries_every_builtin_policy(wheel: Path) -> None:
+    """Every tracked policies/builtin/*.rego ships, byte for byte. v1.1.1 and
+    dev at a4445b52 shipped none, so an installed jmo enforced no policy."""
+    prefix = "scripts/core/policies/builtin/"
+    with zipfile.ZipFile(wheel) as zf:
+        packaged = {
+            n[len(prefix) :]: zf.read(n)
+            for n in zf.namelist()
+            if n.startswith(prefix) and n.endswith(".rego")
+        }
+    tracked = _tracked_policies()
+    assert sorted(packaged) == sorted(tracked)
+    differing = sorted(n for n in tracked if packaged[n] != tracked[n])
+    assert not differing, f"packaged policies differ from the tracked ones: {differing}"
+
+
+def test_an_installed_wheel_resolves_its_builtin_policies(
+    installed_jmo: Path, tmp_path: Path
+) -> None:
+    """The resolver finds the packaged copy, not a checkout: the probe runs
+    isolated (-I) from a directory outside any repository."""
+    python = installed_jmo.with_name("python.exe" if os.name == "nt" else "python")
+    probe = subprocess.run(
+        [
+            str(python),
+            "-I",
+            "-c",
+            "from scripts.core.policy_engine import builtin_policies_dir as d; "
+            "print(d()); print(*sorted(p.name for p in d().glob('*.rego')))",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
+    assert probe.returncode == 0, probe.stderr
+    where, names = probe.stdout.splitlines()
+    assert "site-packages" in where, where
+    assert names.split() == sorted(_tracked_policies())
+
+
+def _report_one_verified_secret(
+    jmo: Path, root: Path, *, opa: str | None
+) -> subprocess.CompletedProcess[str]:
+    """`jmo report --policy zero-secrets` with enforcement on, over one
+    verified trufflehog secret, run where no repository is. OPA is found only
+    where this puts it: a scratch HOME's .jmo/bin, and PATH is the venv's."""
+    home = root / "home"
+    (home / ".jmo" / "bin").mkdir(parents=True)
+    if opa:
+        shutil.copy2(opa, home / ".jmo" / "bin" / Path(opa).name)
+    results = root / "results"
+    (results / "individual-repos" / "demo").mkdir(parents=True)
+    (results / "individual-repos" / "demo" / "trufflehog.json").write_text(
+        json.dumps(
+            [
+                {
+                    "DetectorName": "Example",
+                    "Verified": True,
+                    "SourceMetadata": {
+                        "Data": {"Filesystem": {"file": "demo.txt", "line": 1}}
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cfg = root / "jmo.yml"
+    cfg.write_text(
+        "outputs: [json]\npolicy:\n  enabled: true\n  fail_on_violation: true\n",
+        encoding="utf-8",
+    )
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "PATH": str(jmo.parent),
+    }
+    return subprocess.run(
+        [str(jmo), "report", str(results), "--config", str(cfg)]
+        + ["--policy", "zero-secrets"],
+        cwd=home,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+    )
+
+
+def test_an_installed_wheel_fails_closed_without_opa(
+    installed_jmo: Path, tmp_path: Path
+) -> None:
+    """Enforcement on and no OPA: the policy was not evaluated, so exit 2 and
+    say which policy and why, instead of a warning and exit 0."""
+    run = _report_one_verified_secret(installed_jmo, tmp_path, opa=None)
+    assert run.returncode == 2, run.stdout + run.stderr
+    out = run.stdout + run.stderr
+    assert "'zero-secrets' could not be evaluated" in out, out
+    assert "OPA not installed" in out, out
+
+
+@pytest.mark.requires_tools
+def test_an_installed_wheel_enforces_zero_secrets(
+    installed_jmo: Path, tmp_path: Path
+) -> None:
+    """The measurement the defect was found with: OPA present, enforcement on,
+    one verified secret. The source checkout exited 1; the wheel exited 0."""
+    from scripts.core.tool_utils import find_tool
+
+    opa = find_tool("opa")
+    if opa is None:
+        pytest.skip("opa is not installed (jmo tools install opa)")
+    run = _report_one_verified_secret(installed_jmo, tmp_path, opa=opa)
+    assert run.returncode == 1, run.stdout + run.stderr
+    verdict = json.loads(
+        (tmp_path / "results" / "summaries" / "policy_results.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert [(p["name"], p["passed"]) for p in verdict["policies"]] == [
+        ("zero-secrets", False)
+    ], verdict

@@ -24,7 +24,11 @@ from pathlib import Path
 from typing import Any, cast
 
 from scripts.core.exceptions import OPANotFoundException
-from scripts.core.policy_engine import PolicyEngine
+from scripts.core.policy_engine import (
+    PolicyEngine,
+    builtin_policies_dir,
+    user_policies_dir,
+)
 
 # This module used to define its own _safe_print, deciding from the encoding's
 # NAME whether output was safe. cp437 and cp850 - the OEM codepages a real
@@ -71,15 +75,13 @@ def _report_policy_not_found(policy_name: str, available: list[str]) -> int:
 
 
 def get_builtin_policies_dir() -> Path:
-    """Get builtin policies directory."""
-    # From project root: policies/builtin/
-    project_root = Path(__file__).parent.parent.parent
-    return project_root / "policies" / "builtin"
+    """Get builtin policies directory (one resolver for checkout and wheel)."""
+    return builtin_policies_dir()
 
 
 def get_user_policies_dir() -> Path:
     """Get user policies directory."""
-    return Path.home() / ".jmo" / "policies"
+    return user_policies_dir()
 
 
 def discover_policies() -> dict[str, Path]:
