@@ -214,9 +214,14 @@ class EPSSClient:
         if uncached_cves:
             try:
                 bulk_scores = self._fetch_bulk_from_api(uncached_cves)
-                for cve, score in bulk_scores.items():
-                    self._cache_score(score)
-                    scores[cve] = score
+                # One transaction for every score found (#1673). Committing
+                # each one separately cost a disk flush per CVE: 100 commits
+                # for a 100-CVE fetch, which made the wall time a measure of
+                # the disk's sync latency. Written before `scores` is filled,
+                # so a cache that cannot be written loses the bulk result as
+                # it did when each score was written first.
+                self._cache_scores(list(bulk_scores.values()))
+                scores.update(bulk_scores)
                 # Every CVE we asked about and did not get back is one EPSS
                 # does not score. Recording that is what stops the per-finding
                 # request storm on the next pass (#849). Written in one
@@ -342,26 +347,24 @@ class EPSSClient:
         Args:
             score: EPSSScore object to cache
         """
+        self._cache_scores([score])
+
+    def _cache_scores(self, scores: list[EPSSScore]) -> None:
+        """Record several found scores in one connection and one transaction."""
+        if not scores:
+            return
+        now = datetime.now().isoformat()
         conn = sqlite3.connect(self.cache_path)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO epss_scores
-                (cve, epss, percentile, date, cached_at, found)
-            VALUES (?, ?, ?, ?, ?, 1)
-        """,
-            (
-                score.cve,
-                score.epss,
-                score.percentile,
-                score.date,
-                datetime.now().isoformat(),
-            ),
-        )
-
-        conn.commit()
-        conn.close()
+        try:
+            conn.executemany(
+                "INSERT OR REPLACE INTO epss_scores "
+                "(cve, epss, percentile, date, cached_at, found) "
+                "VALUES (?, ?, ?, ?, ?, 1)",
+                [(s.cve, s.epss, s.percentile, s.date, now) for s in scores],
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def _is_cache_valid(self, score: EPSSScore) -> bool:
         """Check if cached score is still valid (within TTL).
