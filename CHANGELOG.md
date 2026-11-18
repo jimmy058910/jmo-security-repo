@@ -635,6 +635,23 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **Keeping the wizard's default timeout keeps opengrep's and zap's 900 s minimum
+  (#1627).** Since #1486 a `--timeout` on the command line wins over that minimum. A user
+  who opened "Customize advanced settings?" and pressed Enter at `Timeout [600]` got
+  `--timeout 600` on the command, the Makefile target and the script, so opengrep and zap
+  ran with 600 s; for zap that is its whole plan's budget. `--emit-gha` wrote
+  `--timeout 600` (or `jmo.yml`'s timeout) into every workflow, customized or not. Now a
+  blank or unparseable answer passes no `--timeout`, and a number the user types, 600
+  included, passes it on every route. The wizard's defaults, prompt and summary show each
+  tool that gets another timeout, as the scan resolves it with `jmo.yml`'s `per_tool`:
+  `Timeout: 600s (opengrep, yara-x, zap: 900s)` with the shipped `jmo.yml`. The prompt
+  also names the tools a typed value does not reach, because their `per_tool` timeout wins.
+- **A kept thread count in the wizard passes no `--threads`.** The wizard read
+  `threads: auto`, or no `jmo.yml`, as 4, offered `Threads [4]`, and keeping it wrote
+  `--threads 4` over auto; every `--emit-gha` workflow wrote `--threads` too. It now shows
+  `auto`, and only a count the user types becomes `--threads`.
+- **`--emit-gha` writes its workflow as LF on Windows,** as `--emit-make` and
+  `--emit-script` already did; it used text mode and wrote CRLF there.
 - **`jmo report` refuses a path that holds no scan output (#1670).** On a path that did not
   exist, `jmo report <path> --fail-on LOW` created it, wrote seven reports of zero
   findings and exited 0, which a CI gate reads as "scanned, nothing found"; a file
