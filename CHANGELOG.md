@@ -635,6 +635,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A bulk EPSS fetch writes its scores to the cache in one transaction (#1673).** Each
+  score a bulk call returned was cached with its own commit, and each commit is a disk
+  flush: a 100-CVE fetch made 100 of them, so report enrichment ran at the speed of the
+  disk's sync latency. Measured on ext4 with the API mocked, the call went from 289-628 ms
+  to 7 ms, and beside four processes writing to the same disk from 970 ms to 14 ms. The
+  cache holds the same rows.
 - **CI steps that hid, cut short or misread a result.** The secrets scans in `ci.yml`'s
   quick-checks, the nightly security audit and `scripts/dev/ci-local.sh` pass trufflehog
   `--no-update`, which stops it replacing the pinned binary with its newest release before

@@ -320,6 +320,90 @@ def test_recording_many_misses_uses_one_connection(tmp_path: Path):
     assert len(conns) == 1, f"{len(conns)} connections for one batch of misses"
 
 
+class CommitCounter:
+    """A `sqlite3.connect` stand-in that counts connections and commits.
+
+    A commit is a disk flush, so the commit count, not wall time, is what makes
+    a bulk fetch slow on a busy disk (#1673). Counting it measures the code
+    rather than the machine.
+    """
+
+    def __init__(self):
+        self.connections = 0
+        self.commits = 0
+        counter = self
+
+        class CountingConnection(sqlite3.Connection):
+            def commit(self):
+                counter.commits += 1
+                return super().commit()
+
+        self._factory = CountingConnection
+
+    def __call__(self, *a, **kw):
+        self.connections += 1
+        return REAL_CONNECT(*a, factory=self._factory, **kw)
+
+
+@pytest.mark.parametrize(
+    ("found", "missed"),
+    [(250, 0), (100, 150)],
+    ids=["all-found", "found-and-missed"],
+)
+def test_a_bulk_fetch_commits_once_per_kind_of_row(
+    tmp_path: Path, found: int, missed: int
+):
+    """#1673: the found scores were cached with one commit each.
+
+    A 100-CVE fetch made 100 commits, one disk flush per score, while the misses
+    from the same call were already one transaction. 250 CVEs span three API
+    chunks, so a count that grew with rows or with chunks would show here.
+    """
+    from datetime import datetime, timedelta
+
+    cves = _cves(found + missed)
+    known = {cve: round(0.001 * (i + 1), 3) for i, cve in enumerate(cves[:found])}
+    client = EPSSClient(cache_dir=tmp_path)
+    counter = CommitCounter()
+
+    with patch("scripts.core.epss_integration.requests.get", RequestSpy(known)):
+        with patch.object(sqlite3, "connect", counter):
+            scores = client.get_scores_bulk(cves)
+
+    expected = 1 + (1 if missed else 0)
+    assert counter.commits == expected, (
+        f"{counter.commits} commits for {found} found and {missed} missed CVEs; "
+        f"expected {expected} (one per kind of row). 0 means the writes no "
+        "longer go through Connection.commit, so this counter cannot see them."
+    )
+    assert set(scores) == set(known)
+
+    # The rows a reader of the cache sees are the same as before the batching.
+    conn = REAL_CONNECT(client.cache_path)
+    try:
+        rows = {
+            row[0]: row[1:]
+            for row in conn.execute(
+                "SELECT cve, epss, percentile, date, cached_at, found FROM epss_scores"
+            )
+        }
+    finally:
+        conn.close()
+    assert set(rows) == set(cves)
+    for cve in cves:
+        epss, percentile, date, cached_at, row_found = rows[cve]
+        assert datetime.now() - datetime.fromisoformat(cached_at) < timedelta(minutes=5)
+        if cve in known:
+            assert (epss, percentile, date, row_found) == (
+                known[cve],
+                0.5,
+                "2026-01-01",
+                1,
+            )
+        else:
+            assert (epss, percentile, date, row_found) == (None, None, None, 0)
+
+
 def test_an_expired_negative_entry_is_asked_about_again(tmp_path: Path):
     """A miss is remembered, not remembered forever.
 
