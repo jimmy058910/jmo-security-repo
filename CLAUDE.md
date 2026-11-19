@@ -2,10 +2,7 @@
 
 Guidance for Claude Code when working with the JMo Security Audit Tool Suite repository.
 
-> **Path-scoped rules** live in [`.claude/rules/`](.claude/rules/). They load
-> automatically when Claude touches files matching their `paths:` frontmatter —
-> this is measured, not aspirational. Keep `paths:` narrow: a rule scoped to
-> `scripts/**/*.py` loads on every source file in the product.
+> **Path-scoped rules** in [`.claude/rules/`](.claude/rules/) load when Claude touches files matching their `paths:`; keep `paths:` narrow, since a rule scoped to `scripts/**/*.py` loads on every source file.
 
 ## Project Overview
 
@@ -18,7 +15,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 14 scanner
 
 1. **One formatter:** `ruff format` (Black left with #1179). The `ruff` lint hook runs before `ruff-format` in `.pre-commit-config.yaml`; never add a second formatter
 2. **Test Coverage:** CI's only enforced floor is **85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`, so there is still no *local* gate. Cite the step, never a line number: it has moved three times (#756). Measure current coverage rather than quoting a figure from this file
-3. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`. **No AI-attribution markers of any kind, in commit messages or PR bodies** — not `Co-Authored-By: Claude`, not `Generated with Claude Code`, and **not a `Claude-Session:` link**. Decided 2026-09-11, and it applies to every repo in the workspace, not only this public one. **This has to be stated here, in the repo's own `CLAUDE.md`, or it does not hold**: Claude Code's harness injects an instruction to append the trailer **every single session** and defers only to a `CLAUDE.md`, so the workspace-level ban in `C:\Projects\CLAUDE.md` sat one directory above this repo and lost silently — **0 trailers in the ~250 commits before 2026-09-02, near-universal after**, with that prohibition unchanged the whole time. A rule that competes with something re-injected on every turn has to live where the harness reads it
+3. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`. No AI-attribution markers in commit messages or PR bodies: no `Co-Authored-By: Claude`, no `Generated with Claude Code`, no `Claude-Session:` link (decided 2026-09-11). The ban is stated here because this repo is public and some sessions read this file but no user settings: a contributor's clone, cloud sessions, the weekly maintenance routine's fresh clone
 4. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). Ask before modifying identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`). **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
 
 Subprocess safety (never `shell=True`), path-traversal validation, and cross-platform
@@ -94,12 +91,6 @@ nothing ever closed it:
 > they could not see — and by the end it was 95 lines carrying a stale "Last
 > Updated", a RESOLVED entry, and an obsolete one for a tool deleted six months
 > earlier. A log with no close mechanism only accumulates.
-
-### Artifact Guardrails (CI blocks these)
-
-- No `venv/`, `__pycache__/`, `build/`, `dist/` in git
-- No files >10MB (`check-added-large-files` hook)
-- No secrets (detect-private-key pre-commit hook + TruffleHog CI scan)
 
 ### Plan Mode Format
 
@@ -185,9 +176,6 @@ copying the repo between machines can strip it; `graphify hook install` keeps th
 mode of a hook it updates, so check `ls -l .git/hooks/post-commit` and `chmod +x`
 it. Re-run `graphify install --platform claude` after **every** upgrade, or the
 installed skill keeps its old `.graphify_version` stamp while the binary moves on.
-On Windows under Git Bash the hook can also fail to find a Python with graphify;
-the fix there is a gitignored `graphify-out/.graphify_python` holding the absolute
-interpreter path.
 
 ## Architecture Overview
 
@@ -237,16 +225,16 @@ The shipped `jmo.yml` and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) are the key r
 | Tests failing | `make test` (already carries `--maxfail=1` via `TEST_FLAGS`). No local coverage gate exists — CI's floor is 85%, in `coverage-aggregate`'s "Verify coverage threshold" step (#756) |
 | Tool not found, or tool startup crash | `jmo tools check`, then `jmo tools install`; for a crash, `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |
-| `No module named pytest` when the venv demonstrably has it | You are on a different interpreter. On Windows the venv is `.venv/Scripts/python.exe`, never `.venv/bin/python`, and `chmod +x` is a no-op there — so `[ -x .venv/bin/python ]` is false *whatever* exists, and PATH `python3` wins. Use `.venv/Scripts/python.exe -m pytest` or `uv run pytest` (resolves the project venv everywhere — note it syncs against `uv.lock` first). `Makefile:6` probes both layouts as of #722 |
+| `No module named pytest` when the venv demonstrably has it | You are on a different interpreter. On Windows the venv is `.venv/Scripts/python.exe`, never `.venv/bin/python`, and `chmod +x` is a no-op there — so `[ -x .venv/bin/python ]` is false *whatever* exists, and PATH `python3` wins. Use `.venv/Scripts/python.exe -m pytest` or `uv run pytest` (resolves the project venv everywhere — note it syncs against `uv.lock` first). The Makefile's `PY` probe tries both layouts (#722) |
 | `uv.lock needs to be updated, but --check was provided` | Deps changed in `pyproject.toml` without relocking. `make deps-lock && git add uv.lock`. Local `uv sync` refreshes a stale lock silently; CI and pre-commit hard-fail — that asymmetry is deliberate |
 | SQLite locked | `jmo history optimize` (runs VACUUM + ANALYZE; there is no `vacuum` subcommand) |
 | Docker persistence | Mount `.jmo/` volume |
-| Daily nightly fails, and the visible failure count is exactly 5 | `--maxfail=5` truncation. Fix the visible 5, re-dispatch with `gh workflow run scheduled.yml --ref main -f task=nightly`, repeat. See [testing.rules.md](.claude/rules/testing.rules.md) "Bug Archeology" |
+| Daily nightly fails, and the visible failure count is exactly 20 | `--maxfail=20` truncation. The run's Summary tab lists every caught failure; fix them, re-dispatch with `gh workflow run scheduled.yml --ref main -f task=nightly`, repeat. See [testing.rules.md](.claude/rules/testing.rules.md) "Bug Archeology" |
 | Code on main works but Docker images don't | Container code is whatever shipped in the last release tag. `scripts/cli/` and `scripts/core/` fixes don't propagate until the next `v*` tag triggers `release.yml` and rebuilds GHCR images. `tests/` fixes ARE effective immediately — pytest runs on the host |
 | `PermissionError: [Errno 13]` from `Path.exists()` inside a container | Python 3.12 propagates it instead of returning False. UID mismatch on a bind mount (host 1001 vs container `USER jmo` 1000). In a test: `os.chmod(tmp_path, 0o777)` before `docker run`. In code: wrap in `try/except OSError`. See [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md) |
-| `expected_tools` count off by one after a `TOOL_MATRIX` change | Don't edit a number: `tests/e2e/test_docker_workflows.py` and `.github/workflows/scheduled.yml`'s `validate-image` job both derive `expected_tools` from `len(TOOL_MATRIX)`. A mismatch means the image and the matrix disagree, so add or remove the tool in `Dockerfile` (versions via `update_versions.py`) |
+| `expected_tools` count off by one after a `TOOL_MATRIX` change | Don't edit a number: `tests/e2e/test_docker_workflows.py` and `.github/workflows/scheduled.yml`'s `validate-image` job both ask the image for the `TOOL_MATRIX` it was built with. A mismatch means the image and the matrix disagree, so add or remove the tool in `Dockerfile` (versions via `update_versions.py`) |
 | Docker build fails with `tar: not in gzip format` / `gzip: stdin: not in gzip format` | A binary download returned an HTML error page or partial body — `curl -sSL` exits 0 on HTTP errors. Every download in `Dockerfile` MUST use `curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600`, plus a `gzip -t`/`xz -t`/`unzip -t` integrity check before extraction. See [docker.rules.md](.claude/rules/docker.rules.md) |
-| `UnicodeEncodeError` / `UnicodeDecodeError` locally on Windows but CI is green | CI sets `PYTHONUTF8: "1"` (`ci.yml:299,318,343`), forcing UTF-8 for `open()`, `read_text()` **and** stdio — an environment no real user has. Reproduce with `PYTHONUTF8` unset. See [windows-encoding.rules.md](.claude/rules/windows-encoding.rules.md) |
+| `UnicodeEncodeError` / `UnicodeDecodeError` locally on Windows but CI is green | CI's test steps set `PYTHONUTF8: "1"` (`ci.yml`), forcing UTF-8 for `open()`, `read_text()` **and** stdio — an environment no real user has. Reproduce with `PYTHONUTF8` unset. See [windows-encoding.rules.md](.claude/rules/windows-encoding.rules.md) |
 | `ruff --select PLW1514` says "All checks passed" on a file that demonstrably fails to decode | It flags `p.read_text()` only when it can prove the receiver is a `Path`; it cannot type `(tmp_path / "x").read_text()` — the dominant pytest idiom. 153 flagged vs 1198 real sites. Treat the lint count as a **lower bound**, never the sole guard |
 | A commit shows thousands of changed lines for a small edit | `Path.write_text()` on Windows translates `\n` → `\r\n` (`newline=None` → `os.linesep`), converting a whole LF file. Use `write_bytes()`. A file the Write tool or a script *creates* is LF, so a renamed or recreated CRLF file flips too. `scripts/dev/check_eol_flips.py` catches both (the `eol-flips` pre-commit hook and CI job; by hand, `--base origin/dev`); it diffs the whole tree because a per-file `-- "$f"` check cannot pair a rename. `grep -c $'\r'` is NOT reliable under MSYS |
 | CI failures generally | Check matrix tests, coverage, pre-commit. Release-specific: [release.rules.md](.claude/rules/release.rules.md) (~25 entries). Contributor-facing: [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) |
