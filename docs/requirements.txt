@@ -3,7 +3,7 @@
 
 # MkDocs and theme
 mkdocs>=1.6.1
-mkdocs-material>=9.8.0
+mkdocs-material>=9.8.1
 
 # Markdown extensions
 pymdown-extensions>=12.3
