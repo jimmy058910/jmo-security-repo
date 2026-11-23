@@ -1505,7 +1505,7 @@ class TestDockerBasicScan:
 
     The class-level timeout overrides pyproject.toml's 120s default, for the
     reason ``TestDockerImage`` gives. The scan alone took 107.03s in the
-    2026-11-22 nightly (run 45007345970) and passed 120s on 2026-11-21 (run
+    2026-11-22 nightly (run 45007345970) and exceeded 120s on 2026-11-21 (run
     44888633119). With both limits at 120s, pytest-timeout's thread method
     fired first and ended the whole Nightly Extended session, not just this
     test. 960s covers a cold ``ensure_image`` pull (``PULL_TIMEOUT``, 600s)
