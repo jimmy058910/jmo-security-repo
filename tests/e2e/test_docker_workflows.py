@@ -1495,12 +1495,21 @@ class TestDockerNamedToolPresence:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+@pytest.mark.timeout(960)
 class TestDockerBasicScan:
     """Basic scan functionality test using the /repo mount pattern.
 
     Merged from tests/integration/test_docker_variants.py
     (test_docker_full_basic_scan). Uses a /repo volume mount rather than the
     working-directory approach.
+
+    The class-level timeout overrides pyproject.toml's 120s default, for the
+    reason ``TestDockerImage`` gives. The scan alone took 107.03s in the
+    2026-11-22 nightly (run 45007345970) and passed 120s on 2026-11-21 (run
+    44888633119). With both limits at 120s, pytest-timeout's thread method
+    fired first and ended the whole Nightly Extended session, not just this
+    test. 960s covers a cold ``ensure_image`` pull (``PULL_TIMEOUT``, 600s)
+    plus the scan's 300s, so the scan's own ``TimeoutExpired`` fires first.
     """
 
     @pytest.fixture(autouse=True)
@@ -1534,7 +1543,7 @@ class TestDockerBasicScan:
             ],
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,
         )
 
         assert result.returncode in (
