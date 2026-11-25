@@ -68,6 +68,7 @@ assert is_command_not_found_error(stderr)  # True if "not found" on Unix, "canno
 | TEMP directory | Uses `%TEMP%` | `Path.home() / "AppData" / "Local" / "Temp"` |
 | Directory listing order | NTFS lists sorted, ext4 by hash, tmpfs newest first, so CI's order is not yours. #1633 installed the checksum file as the binary: the first `rglob` match, on CI only | Never take the first match of `rglob`/`glob`/`iterdir`/`listdir`; sort it or select by exact name. `make platform-check` forces both orders |
 | Long `--basetemp` | git object paths pass 260 chars: `test_clone_from_tsv.py`'s two push tests failed at a 238-char basetemp, 66 passed at a short one (2026-10-17) | Keep `--basetemp` short |
+| A path searched for inside serialized text | `json.dumps` escapes each `\` as `\\`, so `str(path) in text` is False for every Windows path. On #1676 windows-2022 showed a green tick over that one failure (2026-11-18); `make platform-check` does not cover path separators | Parse the text and compare `Path` values, or search for `json.dumps(str(path))[1:-1]` |
 
 ## Windows CI Architecture
 

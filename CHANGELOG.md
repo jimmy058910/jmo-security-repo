@@ -710,7 +710,7 @@ All notable changes to JMo Security will be documented in this file.
   error. It used to warn and exit 0, from a source checkout too. A policy that ran and
   failed still exits 1. A policy report that cannot be written no longer drops a FAILED
   verdict. Without enforcement the run still warns and exits 0 as before; a policy
-  report that cannot be written is now a warning rather than a debug line.
+  report that cannot be written is now a warning rather than a debug line (#1668).
 - **The wizard asks for the target before it checks any tool, and then checks only the
   tools that target's scan runs, once (#1584).** Every step that read tool status built
   its own `ToolManager` and probed all 14 matrix tools again: twice before the second
