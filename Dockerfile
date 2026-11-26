@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - working tree and git history)
-RUN TRUFFLEHOG_VERSION="3.99.7" && \
+RUN TRUFFLEHOG_VERSION="3.100.0" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -37,7 +37,7 @@ RUN GITLEAKS_VERSION="8.30.1" && \
     chmod +x /usr/local/bin/gitleaks
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.55.0" && \
+RUN SYFT_VERSION="1.57.2" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -87,7 +87,7 @@ RUN NUCLEI_VERSION="3.11.1" && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
 # Download OPA (Policy-as-Code engine)
-RUN OPA_VERSION="1.21.4" && \
+RUN OPA_VERSION="1.22.4" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
     -o /usr/local/bin/opa && \
@@ -201,7 +201,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # replace a Debian-packaged dependency, which pip cannot uninstall: an Ubuntu
 # 26.04 base failed here on `packaging` ("no RECORD file"). A venv never has to.
 RUN python3 -m venv /opt/checkov && \
-    /opt/checkov/bin/pip install --no-cache-dir checkov==3.3.30 && \
+    /opt/checkov/bin/pip install --no-cache-dir checkov==3.4.6 && \
     ln -s /opt/checkov/bin/checkov /usr/local/bin/checkov && \
     checkov --version && \
     echo "✓ checkov installed"
