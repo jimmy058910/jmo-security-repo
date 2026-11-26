@@ -195,9 +195,11 @@ def validate_every_target_found_something(results_dir: Path) -> None:
     """
     planned = {(r["target_type"], r["target"]) for r in tool_runs(results_dir)}
     _, findings = _read_summary(results_dir)
+    # A finding without a target names none, so it cannot stand for one.
     found = {
-        ((f.get("target") or {}).get("type"), (f.get("target") or {}).get("name"))
+        (f["target"].get("type"), f["target"].get("name"))
         for f in findings
+        if isinstance(f.get("target"), dict) and f["target"].get("name")
     }
     assert len(found) >= len(planned), (
         f"{len(planned)} target(s) scanned, {len(found)} with findings: "
