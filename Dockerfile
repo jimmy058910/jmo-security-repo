@@ -206,7 +206,7 @@ RUN python3 -m venv /opt/checkov && \
     checkov --version && \
     echo "✓ checkov installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.17.2 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.17.6 && \
     echo "✓ ruff installed"
 
 # Clean up build dependencies to reduce image size
