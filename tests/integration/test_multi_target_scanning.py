@@ -12,11 +12,13 @@ Note: These tests require external security tools (trivy, syft, checkov, etc.).
 They are marked with requires_tools and excluded from default CI test runs.
 """
 
+import json
 from pathlib import Path
 
 import pytest
 
 from scripts.cli.jmo import cmd_ci, cmd_scan
+from tests.conftest import scanner_states
 
 # Mark all tests in this module as requiring external tools
 pytestmark = pytest.mark.requires_tools
@@ -57,9 +59,11 @@ def test_container_image_scan_creates_output(tmp_path: Path, monkeypatch):
     # resolves `Path.home()` with no injection point -- redirect it so this
     # in-process call can't write the real ~/.jmo/config.yml.
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
-    # This test requires trivy/syft installed; skip if missing
     rc = cmd_scan(Args())
     assert rc in (0, 1)  # 0 for success, 1 for findings
+    # Every check below sits behind an `if` that is false when no tool ran, so
+    # without this the test passed with trivy and syft missing.
+    assert scanner_states(Args.results_dir) == {"trivy": "ran", "syft": "ran"}
 
     # Verify output structure
     results_dir = Path(Args.results_dir)
@@ -130,6 +134,8 @@ resource "aws_s3_bucket" "test" {
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     rc = cmd_scan(Args())
     assert rc in (0, 1)
+    # As above: the checks below pass when no tool ran.
+    assert scanner_states(Args.results_dir) == {"checkov": "ran", "trivy": "ran"}
 
     # Verify output structure
     results_dir = Path(Args.results_dir)
@@ -155,9 +161,10 @@ resource "aws_s3_bucket" "test" {
 
 def test_multi_target_combined_scan(tmp_path: Path, monkeypatch):
     """Test scanning multiple target types in one command."""
-    # Create repo
+    # Create repo. An empty one is refused: no file is left to scan.
     repo = tmp_path / "repo"
     repo.mkdir()
+    (repo / "app.py").write_text("import os\nos.system('ls ' + input())\n")
 
     # Create IaC file
     tf_file = tmp_path / "test.tf"
@@ -193,7 +200,7 @@ resource "aws_s3_bucket" "test" {
         config = str(tmp_path / "no.yml")
         tools = [
             "trufflehog",
-            "semgrep",
+            "opengrep",  # semgrep was removed in v2.0.0
             "trivy",
             "syft",
             "checkov",
@@ -213,6 +220,12 @@ resource "aws_s3_bucket" "test" {
 
     # Verify all target directories exist
     results_dir = Path(Args.results_dir)
+    # Each tool ran on a target it reads (a tool that reads none of a target's
+    # files is skipped there, not failed), and none failed: the checks below
+    # are all behind an `if` and pass when nothing ran.
+    rows = json.loads((results_dir / ".scan_metadata.json").read_bytes())["tool_runs"]
+    assert {r["tool"] for r in rows if r["state"] == "ran"} == set(Args.tools), rows
+    assert not [r for r in rows if r["state"] == "failed"], rows
 
     # Repos directory should exist
     assert (results_dir / "individual-repos").exists()
@@ -221,7 +234,7 @@ resource "aws_s3_bucket" "test" {
         # At least one repo tool output should exist (if tools were available)
         repo_tool_outputs = [
             repo_dir / "trufflehog.json",
-            repo_dir / "semgrep.json",
+            repo_dir / "opengrep.json",
         ]
         has_any_output = any(f.exists() for f in repo_tool_outputs)
         assert has_any_output, "Expected at least one repo scanner output"
@@ -338,6 +351,13 @@ busybox:latest
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     rc = cmd_scan(Args())
     assert rc in (0, 1)
+    rows = json.loads((Path(Args.results_dir) / ".scan_metadata.json").read_bytes())[
+        "tool_runs"
+    ]
+    assert sorted(r["target"] for r in rows if r["state"] == "ran") == [
+        "alpine:latest",
+        "busybox:latest",
+    ], rows
 
     # Verify multiple image directories created
     results_dir = Path(Args.results_dir)
@@ -365,7 +385,10 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     test_repo.mkdir()
     (test_repo / "requirements.txt").write_text("requests==2.25.0")  # Known CVE
 
-    # Scan repo + image (both will find same CVE in requests package)
+    # Scan repo + image. alpine:3.19, not python:3.9: by 2026-11 python:3.9
+    # gave 15,138 findings, and `jmo report` on them took 81-95 s against the
+    # 60 s this allows (measured). The check is that no fingerprint repeats
+    # across the two targets, which any image with findings exercises.
     cmd = [
         sys.executable,
         "-m",
@@ -374,7 +397,7 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
         "--repo",
         str(test_repo),
         "--image",
-        "python:3.9",  # Contains packages with CVEs
+        "alpine:3.19",
         "--tools",
         "trivy",
         "--results-dir",
@@ -393,6 +416,13 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env)
     assert result.returncode in [0, 1], f"Scan failed: {result.stderr}"
+    rows = json.loads((tmp_path / "results" / ".scan_metadata.json").read_bytes())[
+        "tool_runs"
+    ]
+    assert [(r["target_type"], r["state"]) for r in rows] == [
+        ("repo", "ran"),
+        ("image", "ran"),
+    ], rows
 
     # Generate report
     cmd_report = [
@@ -402,7 +432,7 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
         "report",
         str(tmp_path / "results"),
     ]
-    subprocess.run(cmd_report, check=True, timeout=60)
+    subprocess.run(cmd_report, check=True, timeout=300, env=env, cwd=str(tmp_path))
 
     # Verify deduplication
     findings_json = tmp_path / "results" / "summaries" / "findings.json"
@@ -446,7 +476,7 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
         "nginx:latest",
         "--tools",
         "trivy",
-        "semgrep",
+        "opengrep",  # semgrep was removed in v2.0.0
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
@@ -472,21 +502,23 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
         "report",
         str(tmp_path / "results"),
     ]
-    subprocess.run(cmd_report, check=True, timeout=60)
+    subprocess.run(cmd_report, check=True, timeout=60, env=env, cwd=str(tmp_path))
+    rows = json.loads((tmp_path / "results" / ".scan_metadata.json").read_bytes())[
+        "tool_runs"
+    ]
+    assert {(r["tool"], r["target_type"]) for r in rows if r["state"] == "ran"} >= {
+        ("trivy", "image"),
+        ("opengrep", "repo"),
+    }, rows
 
-    # Verify compliance summary includes all frameworks
+    # Verify compliance summary includes all frameworks. Every report writes it.
     compliance_md = tmp_path / "results" / "summaries" / "COMPLIANCE_SUMMARY.md"
-
-    # Compliance file may not exist if no CWE mappings found
-    if compliance_md.exists():
-        content = compliance_md.read_text(encoding="utf-8")
-
-        # Check for framework headers
-        assert (
-            "OWASP Top 10" in content
-            or "CWE Top 25" in content
-            or "CIS Controls" in content
-        )
+    content = compliance_md.read_text(encoding="utf-8")
+    assert (
+        "OWASP Top 10" in content
+        or "CWE Top 25" in content
+        or "CIS Controls" in content
+    )
 
 
 def test_triple_target_scan(tmp_path: Path):

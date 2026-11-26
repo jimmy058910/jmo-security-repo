@@ -16,6 +16,23 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import _share_scanner_caches
+
+
+@pytest.fixture(autouse=True)
+def _one_trivy_database(monkeypatch: pytest.MonkeyPatch, real_home: Path) -> None:
+    """Point trivy at the developer's own database for every integration test.
+
+    trivy keeps its database (1.8 GB) under the home, and many of these tests
+    give a scan a home of its own (HOME=tmp_path for a subprocess, or a patched
+    Path.home) without `jmo_runner`, which sets this for its own callers. Each
+    trivy scan in such a test then fetched the whole database into its tmp
+    directory: one run of the requires_tools tests here wrote 25 GB and filled
+    the workstation's disk (2026-11-25), the #1517 class outside jmo_runner.
+    """
+    _share_scanner_caches(real_home, monkeypatch)
+
+
 # Path to fixtures
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 BASELINES_DIR = PROJECT_ROOT / "tests" / "integration" / "baselines"

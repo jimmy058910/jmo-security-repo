@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from scripts.cli import jmo
+from tests.conftest import scanner_states
 
 
 def _write_yaml(p: Path, data: dict) -> None:
@@ -344,16 +345,13 @@ per_tool:
     # Should complete successfully
     assert result.returncode in [0, 1]
 
-    # Verify opengrep ran (check logs for tool execution OR stub file created)
-    output = result.stdout + result.stderr
-    opengrep_stub = (
-        tmp_path / "results" / "individual-repos" / "test-repo" / "opengrep.json"
-    )
-
-    # Either opengrep logged (tool installed) OR stub file exists (tool missing)
-    assert "opengrep" in output.lower() or opengrep_stub.exists(), (
-        "opengrep should be logged in tool execution OR stub file created"
-    )
+    # opengrep ran under the overridden config. This read "opengrep" in the
+    # log OR a stub, which held whether or not it ran: the log names every
+    # requested tool. What timeout it ran under is not recorded anywhere a
+    # test can read, so the override itself is unverified here.
+    assert scanner_states(tmp_path / "results") == {"opengrep": "ran"}, result.stderr[
+        -2000:
+    ]
 
 
 def test_per_tool_flags_override(tmp_path: Path):
