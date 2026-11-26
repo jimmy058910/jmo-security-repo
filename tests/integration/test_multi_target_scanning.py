@@ -576,6 +576,12 @@ resource "aws_s3_bucket" "test" {
     assert (results_dir / "individual-repos").exists()
     assert (results_dir / "individual-images").exists()
     assert (results_dir / "individual-iac").exists()
+    # The directories exist when every tool failed. Under -n 4 on 2026-11-25
+    # trivy's image row here read "no output" and this passed (one run of 5).
+    rows = json.loads((results_dir / ".scan_metadata.json").read_bytes())["tool_runs"]
+    assert not [r for r in rows if r["state"] == "failed"], rows
+    ran = {(r["tool"], r["target_type"]) for r in rows if r["state"] == "ran"}
+    assert {("trivy", "image"), ("trivy", "iac"), ("checkov", "iac")} <= ran, rows
 
 
 # ========== Test Category: Error Handling (Added Oct 19 2025) ==========
