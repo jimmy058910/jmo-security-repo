@@ -2,7 +2,7 @@
 
 zizmor's `crates/zizmor/tests/integration/audit/*.rs` hold insta snapshots of
 its text output on inputs under `test-data/`. They are the answer key here,
-pinned at zizmor's v1.31.1 tag and fetched, never committed:
+pinned at zizmor's v1.32.0 tag and fetched, never committed:
 
     python scripts/dev/fetch_answer_keys.py zizmor
 
@@ -25,6 +25,9 @@ snapshot's.
 Measured at v1.31.1 (2026-11-05): 279 snapshots, 72 comparable, 199 findings.
 JMo read 69 of the inputs, holding 192 findings, until it handed zizmor
 pre-commit configs too (#1592); the three pre-commit inputs hold the other 7.
+At v1.32.0 (2026-11-25): 286 snapshots, 75 comparable, 202 findings, all
+read. zizmor's own `insecure-url-scheme` input moved from
+`.pre-commit-config.yml` to `.yaml` there, the one name pre-commit reads.
 """
 
 from __future__ import annotations
@@ -257,8 +260,8 @@ def test_zizmor_reports_its_own_snapshots_through_jmo_scan(
         shutil.copyfile(file, repo / where)
         placed[where] = case
     # A parser that found nothing would pass everything below.
-    assert len(placed) >= 72, len(placed)
-    assert sum(sum(c.findings.values()) for c in placed.values()) >= 199
+    assert len(placed) >= 75, len(placed)
+    assert sum(sum(c.findings.values()) for c in placed.values()) >= 202
 
     results = tmp_path / "results"
     run = jmo_runner(
