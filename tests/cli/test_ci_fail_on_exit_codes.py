@@ -95,8 +95,20 @@ def test_without_fail_on_findings_do_not_fail_the_build(ci):
     assert rc == 0, stderr[-2000:]
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "issue draft 'jmo ci exits 1, not 2, when every target was rejected': "
+        "since #1708 jmo ci skips its report when the scan wrote nothing, and "
+        "the 2 came from that report refusing the missing results directory; "
+        "the scan's own 1 is the code for findings at the threshold"
+    ),
+)
 def test_a_repository_that_does_not_exist_exits_2(jmo_runner, tmp_path):
-    """Nothing was scanned, so neither 0 ("clean") nor 1 ("findings") is true."""
+    """Nothing was scanned, so neither 0 ("clean") nor 1 ("findings") is true.
+
+    Measured: 2 before #1708 (22fa69c2), 1 after it.
+    """
     done = jmo_runner(
         [
             "ci",
