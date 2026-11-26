@@ -635,6 +635,20 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`jmo tools check` says what a tool's version probe saw when it got no version
+  (#1667).** A timeout, a failure to start, no output and an answer with no version in it
+  all read "is installed but did not report a version". The warning now names which, as
+  "its probe timed out after 30 s" or "its probe exited 1 printing ...", and
+  `tools check --json` carries it in each tool's new `execution_warning` field. A
+  docker-smoke run had read zap as not ready with only its name to go on.
+- **The release workflow's GitHub CLI keyring download retries for two minutes**, as every
+  other workflow download does (#1629). It was the one with no retry at all, where a
+  transient failure costs a tag. It also no longer pipes into `dd`, where a retried
+  transfer would have appended to a partial file.
+- **The markdownlint pre-commit hook installs again.** nodejs.org now lists a v27 alpha
+  first, and nodeenv 1.10.0 took it for the latest node and crashed parsing it, so on a
+  machine where pre-commit finds no system node outside the home directory (nvm's does not
+  count), every hook install failed. `uv.lock` moves nodeenv to 1.12.0, which skips it.
 - **A bulk EPSS fetch writes its scores to the cache in one transaction (#1673).** Each
   score a bulk call returned was cached with its own commit, and each commit is a disk
   flush: a 100-CVE fetch made 100 of them, so report enrichment ran at the speed of the
