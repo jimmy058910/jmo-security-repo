@@ -29,6 +29,17 @@ File granularity is deliberate: the defect is a *path scope* gap, and a
 per-test check would collect the whole suite to answer a question about
 directories.
 
+## Per test, too (2026-11-25)
+
+File granularity let 46 tests go unselected for months. The nightly
+integration job runs `-m "integration and not slow"` over `tests/integration/`,
+which can select a test marked both, so every file there counted as covered,
+while 45 of its `requires_tools` tests carried no `integration` marker and ran
+nowhere; an `--ignore=tests/...` path counted as selected, too. So the last
+test here collects every `requires_tools` test with its markers (about 3 s)
+and asks, per test, whether some invocation names its file, does not ignore
+it, and has a `-m` expression true for that test's own markers.
+
 ## What it cannot assert
 
 Whether the job actually runs (`if:` conditions, path filters, cron gating) or
@@ -42,8 +53,13 @@ silently.
 from __future__ import annotations
 
 import ast
+import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 import yaml
@@ -85,6 +101,7 @@ def _files_with_marker() -> set[Path]:
 # ---------------------------------------------------------------------------
 
 _PYTEST_PATH = re.compile(r"(?<![\w/.-])tests/[\w/.-]*")
+_IGNORE = re.compile(r"--ignore[= ]\s*(tests/[\w/.-]*)")
 _MARKER_EXPR = re.compile(r"-m\s+[\"']([^\"']+)[\"']")
 
 
@@ -101,17 +118,26 @@ def _run_blocks() -> list[str]:
     return blocks
 
 
-def _invocations() -> list[tuple[set[str], str | None]]:
-    """(paths, marker expression) for each pytest command found."""
-    out: list[tuple[set[str], str | None]] = []
+class Invocation(NamedTuple):
+    paths: set[str]
+    ignored: set[str]
+    expr: str | None
+
+
+def _invocations() -> list[Invocation]:
+    """The paths, the --ignore paths and the marker expression of each pytest
+    command found. An ignored path is not a selected one: before 2026-11-25
+    `--ignore=tests/e2e/test_linux_specific.py` counted as selecting it."""
+    out: list[Invocation] = []
     for block in _run_blocks():
         for line in block.split("pytest ")[1:]:
             # Stop at the next shell command boundary so a later `&&` or a
             # following step's paths are not folded into this invocation.
             segment = re.split(r"&&|\|\||;|\n\s*\w+=", line)[0]
-            paths = set(_PYTEST_PATH.findall(segment))
+            ignored = set(_IGNORE.findall(segment))
+            paths = set(_PYTEST_PATH.findall(_IGNORE.sub(" ", segment)))
             expr = _MARKER_EXPR.search(segment)
-            out.append((paths, expr.group(1) if expr else None))
+            out.append(Invocation(paths, ignored, expr.group(1) if expr else None))
     return out
 
 
@@ -159,7 +185,7 @@ def _covers(scope: str, file: Path) -> bool:
 
 def _selecting_scopes() -> set[str]:
     scopes: set[str] = set()
-    for paths, expr in _invocations():
+    for paths, _ignored, expr in _invocations():
         if _expression_can_select_requires_tools(expr):
             scopes |= paths
     return scopes
@@ -231,4 +257,112 @@ def test_tests_security_is_still_the_uncovered_directory() -> None:
     assert not covered, (
         f"tests/security/ is now selected by {covered}; #1028's trap is gone. "
         "Delete this test and say so."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per test: the test's own markers against each invocation's expression
+# ---------------------------------------------------------------------------
+
+# requires_tools tests no workflow runs, each with why. Exact: the test below
+# fails on an entry that some invocation does select, as well as on a test
+# missing from here. Empty on 2026-11-25: test_tool_runner.py's Windows-only
+# launcher test, listed as run nowhere by that day's audit, is selected by
+# nightly-cross-platform's `pytest tests/unit/ -m "not slow"` on windows-latest.
+KNOWN_UNSELECTED: dict[str, str] = {}
+
+
+_DUMP_PLUGIN = """
+import json, os
+
+def pytest_collection_finish(session):
+    with open(os.environ["JMO_MARKER_DUMP"], "w", encoding="utf-8") as out:
+        for item in session.items:
+            names = sorted({m.name for m in item.iter_markers()})
+            out.write(json.dumps([item.nodeid, names]) + "\\n")
+"""
+
+
+def _marked_tests(tmp_path: Path) -> dict[str, set[str]]:
+    """Every requires_tools test, collected by pytest, with its marker names."""
+    (tmp_path / "jmo_marker_dump.py").write_bytes(_DUMP_PLUGIN.encode())
+    dump = tmp_path / "markers.jsonl"
+    files = sorted(f.relative_to(REPO_ROOT).as_posix() for f in _files_with_marker())
+    env = {
+        **os.environ,
+        "JMO_MARKER_DUMP": str(dump),
+        "PYTHONPATH": os.pathsep.join([str(tmp_path), str(REPO_ROOT)]),
+    }
+    done = subprocess.run(
+        [sys.executable, "-m", "pytest", *files, "-m", MARKER, "--collect-only", "-q"]
+        + ["-p", "jmo_marker_dump", "-p", "no:randomly", "-p", "no:cacheprovider"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-3000:]
+    rows = [json.loads(line) for line in dump.read_text(encoding="utf-8").splitlines()]
+    return {node: set(names) for node, names in rows}
+
+
+def _evaluates_true(expr: str | None, markers: set[str]) -> bool:
+    """pytest's `-m`: each name is true when the test carries that marker."""
+    if expr is None:
+        return True
+    names = set(re.findall(r"[A-Za-z_]\w*", expr)) - {"not", "and", "or"}
+    return bool(eval(expr, {"__builtins__": {}}, {n: n in markers for n in names}))
+
+
+def _selects(invocation: Invocation, node: str, markers: set[str]) -> bool:
+    file = REPO_ROOT / node.split("::")[0]
+    return (
+        any(_covers(p, file) for p in invocation.paths)
+        and not any(_covers(i, file) for i in invocation.ignored)
+        and _evaluates_true(invocation.expr, markers)
+    )
+
+
+def test_the_per_test_reading_counts_an_ignore_and_a_marker() -> None:
+    """The two holes the file-level check had, each shown to bite."""
+    node = "tests/e2e/test_linux_specific.py::TestX::test_y"
+    marks = {"requires_tools", "slow"}
+    assert _selects(Invocation({"tests/e2e/"}, set(), "requires_tools"), node, marks)
+    ignoring = Invocation(
+        {"tests/e2e/"}, {"tests/e2e/test_linux_specific.py"}, "requires_tools"
+    )
+    assert not _selects(ignoring, node, marks)
+    assert not _selects(
+        Invocation({"tests/"}, set(), "integration and not slow"), node, marks
+    )
+    parsed = [
+        i for i in _invocations() if "tests/e2e/test_linux_specific.py" in i.ignored
+    ]
+    assert parsed, "no invocation's --ignore was read"
+    assert all("tests/e2e/test_linux_specific.py" not in i.paths for i in parsed)
+
+
+# slow: the collection took 12-25 s here, and the Windows shard, which skips
+# slow tests, allows 60 s a test; reading workflows is the same on every OS.
+@pytest.mark.slow
+def test_every_requires_tools_test_is_selected_by_some_invocation(tmp_path) -> None:
+    tests = _marked_tests(tmp_path)
+    # Meta-guard: a collection that found nothing would pass the assertion.
+    assert len(tests) >= 150, f"collected only {len(tests)} requires_tools tests"
+    assert all(MARKER in marks for marks in tests.values())
+    invocations = _invocations()
+    unselected = {
+        node
+        for node, marks in tests.items()
+        if not any(_selects(inv, node, marks) for inv in invocations)
+    }
+    missing = sorted(unselected - set(KNOWN_UNSELECTED))
+    assert not missing, (
+        f"{len(missing)} requires_tools test(s) are selected by no CI pytest "
+        "invocation, so they run nowhere:\n  " + "\n  ".join(missing)
+    )
+    selected_now = sorted(set(KNOWN_UNSELECTED) - unselected)
+    assert not selected_now, (
+        f"now selected, so remove from KNOWN_UNSELECTED: {selected_now}"
     )

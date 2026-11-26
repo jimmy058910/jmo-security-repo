@@ -1,0 +1,42 @@
+# The tests each scheduled e2e suite may skip, by pytest node id, and why.
+#
+# scripts/dev/check_skip_set.py reads this after the suite runs (the
+# "Fail if the skipped tests are not the expected ones" step of e2e-ubuntu and
+# e2e-macos in .github/workflows/scheduled.yml). It fails on a skip not listed
+# here and on a listed test that did not skip, so this stays exactly the set
+# that skipped. Add an entry only with the reason a runner cannot run the test;
+# when a test starts to run, delete its entry.
+#
+# Measured against run 45625803839 (2026-11-25, main at 8628e5cc) and the
+# changes of the branch that added this file.
+
+ubuntu:
+  tests/e2e/test_advanced_targets.py::TestAdvancedTargets::test_gitlab_repo_scan: >-
+    needs GITLAB_TOKEN, which the scheduled workflow does not set
+  tests/e2e/test_advanced_targets.py::TestAdvancedTargets::test_k8s_cluster_scan: >-
+    the runner has kubectl and no cluster
+  tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_macos_full_scan: macOS only
+  tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_windows_wsl_full_scan: WSL only
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[M1-repo-native-macos]: macOS case
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[M2-image-native-macos]: macOS case
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[M3-iac-native-macos]: macOS case
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[W1-repo-native-windows]: Windows case
+  tests/e2e/test_wizard_workflows.py::TestWizardWorkflows::test_wizard_emit_script_macos: macOS only
+  tests/e2e/test_wizard_workflows.py::TestWizardWorkflows::test_wizard_emit_script_windows: Windows only
+
+macos:
+  tests/e2e/test_advanced_targets.py::TestAdvancedTargets::test_gitlab_repo_scan: >-
+    needs GITLAB_TOKEN, which the scheduled workflow does not set
+  tests/e2e/test_advanced_targets.py::TestAdvancedTargets::test_k8s_cluster_scan: the runner has no kubectl
+  tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_linux_full_scan: Linux only
+  tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_windows_wsl_full_scan: WSL only
+  tests/e2e/test_jmo_runner.py::test_trivy_uses_the_developers_database: Linux only
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[U1-repo-native]: Linux case
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[U2-image-native]: Linux case, and no Docker on the runner
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[U3-iac-native]: Linux case
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[U5-multi-target]: Linux case, and no Docker on the runner
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[M2-image-native-macos]: no Docker on the runner
+  tests/e2e/test_scan_workflows.py::test_scan_workflow[W1-repo-native-windows]: Windows case
+  tests/e2e/test_scan_workflows.py::test_url_dast_scan: Linux only (U4)
+  tests/e2e/test_scan_workflows.py::test_batch_images_file: Linux case (U6), and no Docker on the runner
+  tests/e2e/test_wizard_workflows.py::TestWizardWorkflows::test_wizard_emit_script_windows: Windows only
