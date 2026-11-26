@@ -466,9 +466,13 @@ class TestDockerImage:
             if not (status.get("installed") and status.get("execution_ready"))
         )
         unexpected = [name for name in not_ready if name not in KNOWN_NOT_READY]
+        # Each whole entry, `execution_warning` included: it says what the
+        # version probe saw. zap read as not ready once with only its name
+        # printed, so that run could not say whether its probe timed out (#1667).
         assert not unexpected, (
             f"{len(unexpected)} of {len(tools)} scanner(s) in the image are not "
-            f"installed or not able to run: {unexpected}"
+            f"installed or not able to run: {unexpected}; "
+            f"{ {name: tools[name] for name in unexpected} }"
         )
         # A known exception that has started working must go, or it would hide
         # the tool's next regression.
