@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.cli.scan_session import SESSION_FILE
+
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32", reason="POSIX process groups and signals"
 )
@@ -139,4 +141,4 @@ def test_ctrl_c_stops_the_scan_and_leaves_no_process(scan) -> None:
     assert left, [pid for pid in stopped if _alive(pid)]
     # No report for a stopped scan; the session is kept for --resume.
     assert not (tmp_path / "results" / "summaries").exists()
-    assert (tmp_path / ".jmo" / "scan-session.json").exists()
+    assert (tmp_path / "results" / SESSION_FILE).exists()
