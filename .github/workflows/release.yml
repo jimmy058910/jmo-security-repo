@@ -370,11 +370,14 @@ jobs:
       - name: Install GitHub CLI (for CI status checks)
         run: |
           type -p curl >/dev/null || sudo apt install curl -y
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
-            sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-          ARCH=$(dpkg --print-architecture)
+          # To a file, not piped into dd: --retry-all-errors restarts a broken
+          # transfer, and the restart's bytes would append to what dd already wrote.
           KEYRING=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            -o /tmp/githubcli-archive-keyring.gpg
+          sudo install -m 644 /tmp/githubcli-archive-keyring.gpg "$KEYRING"
+          ARCH=$(dpkg --print-architecture)
           echo "deb [arch=$ARCH signed-by=$KEYRING] https://cli.github.com/packages stable main" | \
             sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
           sudo apt update
