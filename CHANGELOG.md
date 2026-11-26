@@ -650,6 +650,10 @@ All notable changes to JMo Security will be documented in this file.
   first, and nodeenv 1.10.0 took it for the latest node and crashed parsing it, so on a
   machine where pre-commit finds no system node outside the home directory (nvm's does not
   count), every hook install failed. `uv.lock` moves nodeenv to 1.12.0, which skips it.
+- **The tool contract test no longer lets trufflehog replace itself.** It ran
+  `trufflehog filesystem` with no `--no-update`, so trufflehog installed its newest
+  release over the binary under test: a developer's `~/.jmo/bin` moved off the pin, and
+  in CI every later test in the job ran upstream-latest instead of the pinned version.
 - **`jmo ci` no longer reports and stores an earlier scan when its own scan wrote nothing
   (#1699).** When the scan stopped before writing this run's results (no target,
   every target rejected, every tool missing under `--allow-missing-tools`, the install
