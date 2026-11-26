@@ -118,11 +118,20 @@ def disk_floor_setting() -> float | None:
 def disk_floor_shortfall(
     floor_gib: float | None, paths: tuple[Path, ...], usage=shutil.disk_usage
 ) -> str | None:
-    """Why the run must stop, or None while each path's filesystem has room."""
+    """Why the run must stop, or None while each path's filesystem has room.
+
+    A filesystem that cannot be measured counts as having room: the floor is
+    never the reason a test errors.
+    """
+    if floor_gib == 0:
+        return None
     for path in paths:
-        # A basetemp is made on first use, so measure what exists above it.
-        measured = next(p for p in (path, *path.parents) if p.exists())
-        total, _used, free = usage(measured)
+        try:
+            # A basetemp is made on first use, so measure what exists above it.
+            measured = next(p for p in (path, *path.parents) if p.exists())
+            total, _used, free = usage(measured)
+        except (OSError, StopIteration):
+            continue
         if floor_gib is None:
             floor = min(DEFAULT_MIN_FREE_GIB * _GIB, total / 10)
         else:

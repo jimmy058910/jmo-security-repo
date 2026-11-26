@@ -18,6 +18,8 @@ import pytest
 from tests.conftest import MIN_FREE_ENV, disk_floor_setting, disk_floor_shortfall
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Eight passing tests, in a file no ordinary run collects.
+PROBES = Path(__file__).with_name("disk_floor_probes.py")
 GIB = 1024**3
 
 
@@ -94,23 +96,37 @@ def test_the_floor_asked_for(
     assert disk_floor_setting() == floor
 
 
-@pytest.mark.parametrize("number", range(8))
-def test_probe(number: int):
-    """Passes. The child sessions below run these eight and nothing else."""
+def test_off_measures_nothing(tmp_path: Path):
+    def usage(_path: Path):
+        raise AssertionError("measured with the floor off")
+
+    assert disk_floor_shortfall(0.0, (tmp_path,), usage) is None
+
+
+def test_a_filesystem_that_cannot_be_measured_does_not_stop_a_run(tmp_path: Path):
+    def usage(path: Path):
+        raise PermissionError(path)
+
+    assert disk_floor_shortfall(None, (tmp_path,), usage) is None
 
 
 def _run_probes(
     tmp_path: Path, floor: str, workers: list[str]
 ) -> subprocess.CompletedProcess:
-    # Not the parent's PYTEST_ADDOPTS, which may name its basetemp (#1501).
-    environment = {k: v for k, v in os.environ.items() if k != "PYTEST_ADDOPTS"}
+    # Not the parent's PYTEST_ADDOPTS, which may name its basetemp (#1501),
+    # nor the variables that mark this process as one of its xdist workers.
+    environment = {
+        k: v
+        for k, v in os.environ.items()
+        if k != "PYTEST_ADDOPTS" and not k.startswith("PYTEST_XDIST_")
+    }
     environment[MIN_FREE_ENV] = floor
     return subprocess.run(
         [
             sys.executable,
             "-m",
             "pytest",
-            f"{Path(__file__)}::test_probe",
+            str(PROBES),
             "-q",
             "-p",
             "no:cacheprovider",

@@ -113,6 +113,8 @@ work). In a worktree, run `uv sync --frozen --group dev` once and use its own
   ends the session below 10 GiB free, or below a tenth of a smaller filesystem.
   `JMO_TEST_MIN_FREE_GIB` sets the floor, and `0` turns it off. Unless that
   variable is set, the floor is off when `CI` is.
+- A tmpfs `/tmp` is such a smaller filesystem. When other files crowd it, name
+  a `--basetemp` on a larger disk (and delete it afterwards).
 - The floor is checked between tests, so one test that writes more than the
   room left still fills the disk.
 
