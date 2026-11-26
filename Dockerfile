@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - working tree and git history)
-RUN TRUFFLEHOG_VERSION="3.99.7" && \
+RUN TRUFFLEHOG_VERSION="3.100.0" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -37,7 +37,7 @@ RUN GITLEAKS_VERSION="8.30.1" && \
     chmod +x /usr/local/bin/gitleaks
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.55.0" && \
+RUN SYFT_VERSION="1.57.2" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -87,7 +87,7 @@ RUN NUCLEI_VERSION="3.11.1" && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
 # Download OPA (Policy-as-Code engine)
-RUN OPA_VERSION="1.21.4" && \
+RUN OPA_VERSION="1.22.4" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
     -o /usr/local/bin/opa && \
@@ -104,7 +104,7 @@ RUN SHELLCHECK_VERSION="0.11.0" && \
     chmod +x /usr/local/bin/shellcheck
 
 # Download zizmor (GitHub Actions); assets are named by target triple, no version
-RUN ZIZMOR_VERSION="1.31.1" && \
+RUN ZIZMOR_VERSION="1.32.0" && \
     ZIZMOR_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-${ZIZMOR_ARCH}-unknown-linux-gnu.tar.gz" \
     -o /tmp/zizmor.tar.gz && \
@@ -124,7 +124,7 @@ RUN OPENGREP_VERSION="2.0.0" && \
 # Download osv-scanner (dependency lockfiles); a raw binary, so it is checked
 # against the release's SHA256SUMS before use. The image carries no offline
 # database: `jmo tools update` fetches it into ~/.jmo/osv-db
-RUN OSV_SCANNER_VERSION="2.7.0" && \
+RUN OSV_SCANNER_VERSION="2.7.1" && \
     OSV_SCANNER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     OSV_SCANNER_ASSET="osv-scanner_linux_${OSV_SCANNER_ARCH}" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/${OSV_SCANNER_ASSET}" \
@@ -201,12 +201,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # replace a Debian-packaged dependency, which pip cannot uninstall: an Ubuntu
 # 26.04 base failed here on `packaging` ("no RECORD file"). A venv never has to.
 RUN python3 -m venv /opt/checkov && \
-    /opt/checkov/bin/pip install --no-cache-dir checkov==3.3.30 && \
+    /opt/checkov/bin/pip install --no-cache-dir checkov==3.4.6 && \
     ln -s /opt/checkov/bin/checkov /usr/local/bin/checkov && \
     checkov --version && \
     echo "✓ checkov installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.17.2 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.17.6 && \
     echo "✓ ruff installed"
 
 # Clean up build dependencies to reduce image size

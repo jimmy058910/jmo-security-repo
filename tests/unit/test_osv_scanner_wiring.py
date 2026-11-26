@@ -974,16 +974,17 @@ def test_an_earlier_scans_report_is_not_kept(tmp_path, monkeypatch, caplog) -> N
     assert "did NOT contribute findings" in caplog.text
 
 
-# --- npm packages osv-scanner reads as local (#1472) ---------------------------
+# --- npm packages with no `resolved` (#1472) ------------------------------------
 #
-# From 2.7.0 osv-scanner reads a package-lock.json entry with no `resolved` as a
-# local package and never matches it: rc 0, no word of it. npm leaves `resolved`
-# out of a bundled dependency, and of every registry entry under its
-# `omit-lockfile-registry-resolved` setting. Measured with 2.6.0 and 2.7.0
-# against the frozen database: 2.7.0 reported nothing for an omitted, bundled,
-# lockfile-v1 or shrinkwrap entry, and still found one whose same version has
-# `resolved` elsewhere, or a non-npm registry URL. A workspace's own source is
-# local in fact (2.6.0's finding there was the false positive the change fixed).
+# osv-scanner 2.7.0 read a package-lock.json entry with no `resolved` as a local
+# package and never matched it: rc 0, no word of it. npm leaves `resolved` out
+# of a bundled dependency, and of every registry entry under its
+# `omit-lockfile-registry-resolved` setting. JMo named such lockfiles on the row
+# as partly audited until 2.7.1 checked those packages again (upstream #3216,
+# "Scan npm registry packages with omitted `resolved` URLs while skipping local
+# workspace and `file:`/`link:` packages"). Measured 2026-11-25 against the
+# frozen database: each shape in NO_RESOLVED gave no finding on 2.7.0 and the
+# advisory on 2.7.1, and each in LOCAL gave none on either.
 
 REGISTRY = "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz"
 PARENT = {
@@ -1004,207 +1005,77 @@ def _lock(packages=None, *, v1=None) -> bytes:
     return json.dumps(doc).encode()
 
 
-def _partly_warnings(caplog) -> list[str]:
-    return [
-        r.getMessage()
-        for r in caplog.records
-        if r.levelno == logging.WARNING and "partly audited" in r.getMessage()
-    ]
+# Registry packages npm wrote no `resolved` for: checked from 2.7.1.
+NO_RESOLVED = {
+    "omitted": ("package-lock.json", _lock(OMITTED)),
+    "shrinkwrap": ("npm-shrinkwrap.json", _lock(OMITTED)),
+    "bundled": (
+        "package-lock.json",
+        _lock(
+            {
+                "node_modules/parent": PARENT,
+                "node_modules/parent/node_modules/left-pad": {
+                    "version": "1.0.0",
+                    "inBundle": True,
+                },
+            }
+        ),
+    ),
+    "lockfile-v1": (
+        "package-lock.json",
+        _lock(v1={"left-pad": {"version": "1.0.0", "integrity": "sha512-x"}}),
+    ),
+    "lockfile-v1-nested": (
+        "package-lock.json",
+        _lock(
+            v1={
+                "parent": PARENT
+                | {"dependencies": {"left-pad": {"version": "1.0.0", "bundled": True}}}
+            }
+        ),
+    ),
+}
+# Packages that are local in fact: checked by no version.
+LOCAL = {
+    "workspace": _lock(
+        {
+            "packages/left-pad": {"name": "left-pad", "version": "1.0.0"},
+            "node_modules/left-pad": {"resolved": "packages/left-pad", "link": True},
+        }
+    ),
+    "file-tarball": _lock(
+        {
+            "node_modules/left-pad": {
+                "version": "1.0.0",
+                "resolved": "file:vendor/left-pad-1.0.0.tgz",
+            }
+        }
+    ),
+    "lockfile-v1-file": _lock(v1={"left-pad": {"version": "file:../left-pad"}}),
+}
 
 
-@pytest.mark.parametrize(
-    ("name", "lockfile", "unchecked"),
-    [
-        pytest.param("package-lock.json", _lock(OMITTED), 1, id="omitted"),
-        pytest.param("npm-shrinkwrap.json", _lock(OMITTED), 1, id="shrinkwrap"),
-        pytest.param(
-            "package-lock.json",
-            _lock(
-                {
-                    "node_modules/parent": PARENT,
-                    "node_modules/parent/node_modules/left-pad": {
-                        "version": "1.0.0",
-                        "inBundle": True,
-                    },
-                }
-            ),
-            1,
-            id="bundled",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(v1={"left-pad": {"version": "1.0.0", "integrity": "sha512-x"}}),
-            1,
-            id="lockfile-v1",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(
-                v1={
-                    "parent": PARENT
-                    | {
-                        "dependencies": {
-                            "left-pad": {"version": "1.0.0", "bundled": True}
-                        }
-                    }
-                }
-            ),
-            1,
-            id="lockfile-v1-nested",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(
-                {
-                    "node_modules/left-pad": {"version": "1.0.0", "resolved": REGISTRY},
-                    "node_modules/parent": PARENT,
-                    "node_modules/parent/node_modules/left-pad": {
-                        "version": "1.0.0",
-                        "inBundle": True,
-                    },
-                }
-            ),
-            0,
-            id="same-version-resolved-elsewhere",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(
-                {
-                    "node_modules/@s/a": {"version": "1.0.0"},
-                    "node_modules/b/node_modules/@s/a": {
-                        "version": "1.0.0",
-                        "resolved": "https://registry.npmjs.org/@s/a/-/a-1.0.0.tgz",
-                    },
-                }
-            ),
-            0,
-            id="scoped-name-resolved-elsewhere",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(
-                {
-                    "node_modules/left-pad": {
-                        "version": "1.0.0",
-                        "resolved": "https://registry.yarnpkg.com/left-pad/-/left-pad-1.0.0.tgz",
-                    }
-                }
-            ),
-            0,
-            id="another-registry",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(
-                {
-                    "packages/left-pad": {"name": "left-pad", "version": "1.0.0"},
-                    "node_modules/left-pad": {
-                        "resolved": "packages/left-pad",
-                        "link": True,
-                    },
-                }
-            ),
-            0,
-            id="workspace",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(
-                {
-                    "node_modules/left-pad": {
-                        "version": "1.0.0",
-                        "resolved": "file:vendor/left-pad-1.0.0.tgz",
-                    }
-                }
-            ),
-            0,
-            id="file-tarball",
-        ),
-        pytest.param(
-            "package-lock.json",
-            _lock(v1={"left-pad": {"version": "file:../left-pad"}}),
-            0,
-            id="lockfile-v1-file",
-        ),
-        pytest.param("package-lock.json", _lock(OMITTED)[:40], 0, id="truncated"),
-    ],
-)
-def test_npm_packages_it_reads_as_local_are_named_and_the_row_still_ran(
-    tmp_path, monkeypatch, caplog, name, lockfile, unchecked
-) -> None:
-    _cache(tmp_path, monkeypatch, "npm")
-    repo = tmp_path / "repo"
-    (repo / "app").mkdir(parents=True)
-    (repo / "app" / name).write_bytes(lockfile)
+def _noting(monkeypatch, note: str) -> None:
+    """osv-scanner's row with a `partly_read` of its own, so the scan loop's
+    joining of that note can be read beside osv-scanner's other details. zap's
+    row is the one with a real `partly_read`; osv-scanner's went with #1472."""
+    from dataclasses import replace
 
-    with caplog.at_level(logging.WARNING):
-        row = _run(repo, tmp_path, Scripted())["osv-scanner"]
-
-    # The lockfile was read, and what it holds besides was checked.
-    assert row.state is State.RAN, row
-    if not unchecked:
-        assert row.detail is None
-        assert _partly_warnings(caplog) == []
-        return
-    said = (
-        f"app/{name} is only partly audited: {unchecked} npm package has no `resolved`"
-    )
-    (warning,) = _partly_warnings(caplog)
-    assert warning.startswith(f"osv-scanner: {said}"), warning
-    assert "MISSING from this scan" in warning
-    assert row.detail.startswith(f"partly audited: app/{name} ({unchecked} npm"), row
-
-
-def test_each_package_is_counted_once_however_many_copies_it_has(
-    tmp_path, monkeypatch, caplog
-) -> None:
-    """osv-scanner checks a name and version once, so the count is of those."""
-    _cache(tmp_path, monkeypatch, "npm")
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    packages = {
-        "node_modules/a": {"version": "1.0.0"},
-        "node_modules/x/node_modules/a": {"version": "1.0.0", "inBundle": True},
-        "node_modules/y/node_modules/a": {"version": "2.0.0"},
-        "node_modules/@s/b": {"version": "1.0.0"},
-        "node_modules/c": {
-            "version": "1.0.0",
-            "resolved": "https://registry.npmjs.org/c/-/c-1.0.0.tgz",
-        },
-    }
-    (repo / "package-lock.json").write_bytes(_lock(packages))
-
-    with caplog.at_level(logging.WARNING):
-        row = _run(repo, tmp_path, Scripted())["osv-scanner"]
-
-    assert row.detail.startswith(
-        "partly audited: package-lock.json (3 npm packages have"
+    monkeypatch.setitem(
+        DESCRIPTORS,
+        "osv-scanner",
+        replace(
+            DESCRIPTORS["osv-scanner"],
+            partly_read=lambda ctx: {"package-lock.json": note},
+        ),
     )
 
 
-def test_a_lockfile_its_database_is_missing_for_is_not_read_for_this(
-    tmp_path, monkeypatch, caplog
-) -> None:
-    """Kept out of the run, it is the shortfall's to name, not this check's."""
-    _cache(tmp_path, monkeypatch, "PyPI")
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / "package-lock.json").write_bytes(_lock(OMITTED))
-    (repo / "requirements.txt").write_bytes(b"x==1.0\n")
-
-    with caplog.at_level(logging.WARNING):
-        row = _run(repo, tmp_path, Scripted())["osv-scanner"]
-
-    assert row.label == "failed:offline database missing"
-    assert "partly audited" not in row.detail
-    assert _partly_warnings(caplog) == []
-
-
-def test_a_shortfall_and_a_partly_audited_lockfile_are_both_on_the_row(
+def test_a_shortfall_and_a_partly_read_note_are_both_on_the_row(
     tmp_path, monkeypatch
 ) -> None:
     _cache(tmp_path, monkeypatch, "npm")
+    _noting(monkeypatch, "left this out")
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "package-lock.json").write_bytes(_lock(OMITTED))
@@ -1214,13 +1085,14 @@ def test_a_shortfall_and_a_partly_audited_lockfile_are_both_on_the_row(
 
     assert row.label == "failed:offline database missing"
     assert "crates.io (Cargo.lock)" in row.detail
-    assert "partly audited: package-lock.json (1 npm package" in row.detail
+    assert "partly audited: package-lock.json (left this out)" in row.detail
 
 
-def test_a_failed_run_keeps_its_own_detail_beside_the_partly_audited_one(
+def test_a_failed_run_keeps_its_own_detail_beside_the_partly_read_note(
     tmp_path, monkeypatch
 ) -> None:
     _cache(tmp_path, monkeypatch, "npm")
+    _noting(monkeypatch, "left this out")
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "package-lock.json").write_bytes(_lock(OMITTED))
@@ -1233,7 +1105,13 @@ def test_a_failed_run_keeps_its_own_detail_beside_the_partly_audited_one(
     # The run's own failure first, named by its lockfile; then what it left out.
     failure, partial = row.detail.split("; partly audited: ")
     assert failure == "package-lock.json: Return code 127 not in (0, 1)"
-    assert partial.startswith("package-lock.json (1 npm package has no `resolved`")
+    assert partial == "package-lock.json (left this out)"
+
+
+def test_osv_scanners_row_reads_no_lockfile_before_the_run() -> None:
+    """Nothing it reads is left unchecked by the pinned osv-scanner, so the row
+    has nothing to say before the run (#1472's note went with 2.7.0)."""
+    assert DESCRIPTORS["osv-scanner"].partly_read is None
 
 
 # --- the frozen database and the real binary ----------------------------------
@@ -1431,20 +1309,35 @@ def test_real_osv_scanner_reads_what_has_a_database_and_names_the_rest(
 
 
 @pytest.mark.requires_tools
-def test_real_osv_scanner_does_not_check_an_npm_package_with_no_resolved(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize("shape", sorted(NO_RESOLVED))
+def test_real_osv_scanner_checks_an_npm_package_with_no_resolved(
+    tmp_path, monkeypatch, shape
 ) -> None:
-    """The pinned osv-scanner (2.7.0) reads it as a local package: rc 0, no
-    finding, nothing said (#1472). So the row names it. If this fails because
-    the advisory is found, osv-scanner checks such packages again, and the
-    warning (`_osv_partly_read`) is no longer true."""
-    row, out, _ = _real_scan(
-        tmp_path, monkeypatch, {"package-lock.json": _lock(OMITTED)}
-    )
+    """2.7.0 read each of these as a local package: rc 0, no finding, nothing
+    said (#1472), so JMo named the lockfile on the row. If this fails because
+    the advisory is missing, osv-scanner skips such packages again, and no row
+    says so any more."""
+    name, lockfile = NO_RESOLVED[shape]
+    row, out, _ = _real_scan(tmp_path, monkeypatch, {name: lockfile})
+
+    assert row.state is State.RAN, row
+    assert _rule_ids(out / "osv-scanner.json") == ["JMO-TEST-2026-0001"]
+    assert row.detail is None
+
+
+@pytest.mark.requires_tools
+@pytest.mark.parametrize("shape", sorted(LOCAL))
+def test_real_osv_scanner_does_not_check_a_package_that_is_local(
+    tmp_path, monkeypatch, shape
+) -> None:
+    """A workspace's own source and a `file:` package are local in fact: no
+    registry version to match (2.6.0's finding on a workspace was the false
+    positive 2.7.0 fixed)."""
+    row, out, _ = _real_scan(tmp_path, monkeypatch, {"package-lock.json": LOCAL[shape]})
 
     assert row.state is State.RAN, row
     assert _rule_ids(out / "osv-scanner.json") == []
-    assert row.detail.startswith("partly audited: package-lock.json (1 npm package")
+    assert row.detail is None
 
 
 @pytest.mark.requires_tools

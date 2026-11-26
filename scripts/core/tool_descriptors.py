@@ -516,7 +516,8 @@ class ToolDescriptor:
     unread_inputs: UnreadInputs | None = None
     # Which of the files it will be handed it reads only in part, decided
     # before it runs: file -> what it leaves out. Each is a WARNING, and the
-    # row says it (osv-scanner: npm packages it reads as local, #1472).
+    # row says it (zap: a site its scope leaves out; osv-scanner's npm note,
+    # #1472, went when 2.7.1 checked those packages again).
     partly_read: Callable[[ScanContext], dict[str, str]] | None = None
     # Files in the scanned repository's root that the tool reads as its own
     # configuration. The repository then decides part of its own audit, so the
@@ -1686,80 +1687,6 @@ def _osv_databases(ctx: ScanContext) -> Shortfall | None:
     )
 
 
-# The names osv-scanner reads with its package-lock.json extractor.
-_NPM_LOCKFILES = frozenset({"package-lock.json", "npm-shrinkwrap.json"})
-
-
-def _npm_unchecked(path: Path) -> int:
-    """How many packages of an npm lockfile osv-scanner reads as local, and so
-    never checks, though npm installed them from a registry (#1472).
-
-    From 2.7.0 osv-scanner takes an entry's source from its `resolved` field:
-    an http(s) or git source is checked, anything else is local and is not.
-    npm leaves `resolved` out of a bundled dependency, and out of every
-    registry entry under its `omit-lockfile-registry-resolved` setting. So an
-    entry installed under `node_modules/`, not a link, with a version and no
-    `resolved` is counted, unless another copy of the same name and version
-    has one: osv-scanner checks a name and version once, from its best source.
-    A workspace's own source and a `file:` package are local in fact. A
-    lockfile with no `packages` (lockfileVersion 1) is read from its nested
-    `dependencies`, as osv-scanner reads it. One that does not parse counts 0:
-    osv-scanner fails on it, and the row says so. All measured, 2.6.0 against
-    2.7.0."""
-    document = _load(path)
-    if not isinstance(document, dict):
-        return 0
-    resolved: dict[str, bool] = {}  # name@version -> a copy has `resolved`
-
-    def add(name: str, entry: Any) -> None:
-        if not isinstance(entry, dict) or not isinstance(entry.get("version"), str):
-            return
-        key = f"{name}@{entry['version']}"
-        resolved[key] = resolved.get(key, False) or bool(entry.get("resolved"))
-
-    def nested(dependencies: Any) -> None:
-        if not isinstance(dependencies, dict):
-            return
-        for name, entry in dependencies.items():
-            if isinstance(entry, dict):
-                nested(entry.get("dependencies"))
-                if not str(entry.get("version", "")).startswith("file:"):
-                    add(name, entry)
-
-    packages = document.get("packages")
-    if isinstance(packages, dict):
-        for location, entry in packages.items():
-            parts = location.split("/")
-            if "node_modules" not in parts[:-1] or not isinstance(entry, dict):
-                continue
-            if entry.get("link"):
-                continue
-            # The name after the last `node_modules/`, its scope included.
-            at = len(parts) - 1 - parts[::-1].index("node_modules")
-            add(entry.get("name") or "/".join(parts[at + 1 :]), entry)
-    else:
-        nested(document.get("dependencies"))
-    return sum(not has for has in resolved.values())
-
-
-def _osv_partly_read(ctx: ScanContext) -> dict[str, str]:
-    """Each npm lockfile with packages osv-scanner will read as local and not
-    check (`_npm_unchecked`), with how many."""
-    root, lockfiles = _relative_to_target(ctx)
-    partly: dict[str, str] = {}
-    for lockfile in lockfiles:
-        if lockfile.rsplit("/", 1)[-1] not in _NPM_LOCKFILES:
-            continue
-        n = _npm_unchecked(root / lockfile)
-        if n:
-            partly[lockfile] = (
-                f"{n} npm {'package has' if n == 1 else 'packages have'} no "
-                "`resolved` URL, which osv-scanner reads as a local package "
-                "and does not check"
-            )
-    return partly
-
-
 def _yara_x_repo(ctx: ScanContext) -> list[Invocation]:
     # yara-x's engine is a library of JMo's, not a CLI: the binary is this
     # interpreter and scripts/core/yara_runner.py supplies the command line
@@ -2578,7 +2505,10 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # (6 `dependabot-cooldown` findings at 3098c766 without it), and
             # every pre-commit config, whose hook repositories zizmor audits
             # (`archived-uses`, `typosquat-uses`, `insecure-url-scheme`: 7
-            # findings on its own 3 test inputs, #1592).
+            # findings on its own 3 test inputs, #1592). `.yaml` only: that is
+            # the one name pre-commit reads, and from 1.32.0 zizmor treats a
+            # `.pre-commit-config.yml` it is handed as a workflow, fails to
+            # validate it and audits nothing in it (measured).
             file_patterns=(
                 ".github/workflows/*.yml",
                 ".github/workflows/*.yaml",
@@ -2587,7 +2517,6 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 ".github/dependabot.yml",
                 ".github/dependabot.yaml",
                 "**/.pre-commit-config.yaml",
-                "**/.pre-commit-config.yml",
             ),
             no_files_reason=Reason.NO_WORKFLOWS,
             # rc 3 with "no inputs collected": every file handed over was
@@ -2681,7 +2610,6 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             accepts_name=_osv_reads,
             no_files_reason=Reason.NO_LOCKFILE,
             precheck=_osv_databases,
-            partly_read=_osv_partly_read,
             # Read beside each lockfile it is handed, and nowhere else; it has
             # no flag that stops it (measured, 2.6.0), so it is announced.
             own_config=("osv-scanner.toml",),
