@@ -531,8 +531,9 @@ def test_each_zizmor_file_is_asked_for_by_the_pinned_commit(keys_dir, served) ->
 
 
 def test_the_zizmor_pins_are_its_audit_tests_and_their_inputs() -> None:
-    """zizmor v1.31.1: the 28 audit test files holding a test run as JMo runs
-    zizmor, and the 72 inputs those tests name (measured 2026-11-05)."""
+    """zizmor v1.32.0: the 28 audit test files holding a test run as JMo runs
+    zizmor, and the 75 inputs those tests name (measured 2026-11-25; v1.31.1
+    had 72, and the same derivation reproduced its table exactly)."""
     assert re.fullmatch(r"[0-9a-f]{40}", fak.ZIZMOR_COMMIT)
     prefix = "crates/zizmor/tests/integration/"
     for path, digest in fak.ZIZMOR_FILES.items():
@@ -540,7 +541,7 @@ def test_the_zizmor_pins_are_its_audit_tests_and_their_inputs() -> None:
         assert fak.relative_path_problem(path) is None, path
         assert path.startswith((prefix + "audit/", prefix + "test-data/")), path
     assert sum(p.endswith(".rs") for p in fak.ZIZMOR_FILES) == 28
-    assert sum("/test-data/" in p for p in fak.ZIZMOR_FILES) == 72
+    assert sum("/test-data/" in p for p in fak.ZIZMOR_FILES) == 75
 
 
 def test_zizmor_is_registered_under_the_name_the_command_takes() -> None:

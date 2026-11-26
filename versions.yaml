@@ -92,7 +92,7 @@ binary_tools:
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
   zizmor:
-    version: 1.31.1
+    version: 1.32.0
     github_repo: zizmorcore/zizmor
     description: GitHub Actions auditor (workflows, composite actions, Dependabot config)
     # Named by target triple, no version in the name, no checksum file.
@@ -188,6 +188,14 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-11-26'
+  action: Updated zizmor
+  tools_updated:
+  - tool: zizmor
+    old_version: 1.31.1
+    new_version: 1.32.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-11-17'
   action: Updated opengrep
   tools_updated:

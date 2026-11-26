@@ -2578,7 +2578,10 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # (6 `dependabot-cooldown` findings at 3098c766 without it), and
             # every pre-commit config, whose hook repositories zizmor audits
             # (`archived-uses`, `typosquat-uses`, `insecure-url-scheme`: 7
-            # findings on its own 3 test inputs, #1592).
+            # findings on its own 3 test inputs, #1592). `.yaml` only: that is
+            # the one name pre-commit reads, and from 1.32.0 zizmor treats a
+            # `.pre-commit-config.yml` it is handed as a workflow, fails to
+            # validate it and audits nothing in it (measured).
             file_patterns=(
                 ".github/workflows/*.yml",
                 ".github/workflows/*.yaml",
@@ -2587,7 +2590,6 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 ".github/dependabot.yml",
                 ".github/dependabot.yaml",
                 "**/.pre-commit-config.yaml",
-                "**/.pre-commit-config.yml",
             ),
             no_files_reason=Reason.NO_WORKFLOWS,
             # rc 3 with "no inputs collected": every file handed over was

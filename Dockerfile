@@ -104,7 +104,7 @@ RUN SHELLCHECK_VERSION="0.11.0" && \
     chmod +x /usr/local/bin/shellcheck
 
 # Download zizmor (GitHub Actions); assets are named by target triple, no version
-RUN ZIZMOR_VERSION="1.31.1" && \
+RUN ZIZMOR_VERSION="1.32.0" && \
     ZIZMOR_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-${ZIZMOR_ARCH}-unknown-linux-gnu.tar.gz" \
     -o /tmp/zizmor.tar.gz && \
