@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from scripts.cli import jmo
+from scripts.cli.scan_session import SESSION_FILE
 
 
 @pytest.mark.skipif(
@@ -123,5 +124,5 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         "signal handling"
     )
     assert not (out_base / "summaries").exists()
-    assert (tmp_path / ".jmo" / "scan-session.json").exists()
+    assert (out_base / SESSION_FILE).exists()
     # Because of stop flag, at least one repo may not be scanned; ensure no crash

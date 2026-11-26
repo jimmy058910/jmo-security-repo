@@ -3335,6 +3335,7 @@ def cmd_scan(args) -> int:
     # --- Session checkpointing ---
     from scripts.cli.scan_jobs.iac_scanner import iac_target_name
     from scripts.cli.scan_session import (
+        SESSION_FILE,
         ScanSession,
         compute_config_hash,
         delete_session,
@@ -3344,7 +3345,7 @@ def cmd_scan(args) -> int:
         validate_session_results,
     )
 
-    session_path = Path(args.results_dir).parent / ".jmo" / "scan-session.json"
+    session_path = results_dir / SESSION_FILE
     config_path = Path(getattr(args, "config", "jmo.yml"))
     config_hash = compute_config_hash(config_path)
     scan_session: ScanSession | None = None
