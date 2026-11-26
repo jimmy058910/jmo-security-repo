@@ -283,6 +283,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **A test run stops before it fills the disk.** The test suite ends the session when a
+  filesystem it writes to has less than 10 GiB free, or less than a tenth of a smaller
+  one (`JMO_TEST_MIN_FREE_GIB` sets the floor, `0` turns it off; unset, it is off on CI).
+  A passing test's `tmp_path` is now removed when it ends; pass
+  `-o tmp_path_retention_policy=all` to keep them. A `--basetemp` you name still stays.
+
 - **opengrep 2.0.0 (#1622).** Its release renamed the Linux binary
   (`opengrep_linux_<arch>`, now static), dropped the musl builds, and ships Windows as a
   zip of `opengrep.exe` and the six DLLs it loads, which `jmo tools install` now keeps
