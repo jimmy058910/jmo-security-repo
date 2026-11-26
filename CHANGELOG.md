@@ -224,8 +224,9 @@ All notable changes to JMo Security will be documented in this file.
   on GHCR stay there, frozen at v1.x, so pulling `:balanced` keeps working and keeps
   giving you v1: switch to `:latest`. `jmo validate` was caught by exactly that. It ran
   `:balanced --help`, which validated the frozen image, and it now checks `:latest`.
-  Built locally the image is 1,220.6 MiB, against 2,033 MiB for v1.0.8's published
-  `:latest`.
+  Built from `dev` and measured the way a registry reports it (the compressed layers of
+  its linux/amd64 manifest), the image is 1,127.4 MiB, against 2,033 MiB for v1.0.8's
+  published `:latest` (#48).
 - **Breaking. gosec leaves the matrix; a scan runs 15 scanners.** It loads Go packages
   through the go command, which neither the Docker image nor `jmo tools install` provides,
   so it examined 0 files on every run and no scan ever got a finding from it. Naming it in
@@ -321,9 +322,9 @@ All notable changes to JMo Security will be documented in this file.
   Debian-packaged dependency, which pip cannot uninstall, so an Ubuntu 26.04 base failed
   the build on `packaging`. `checkov` on the image's `PATH` is a link to the venv's.
 - **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
-  publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
-  dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
-  macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
+  publishes wheels only for Linux with glibc 2.28+, macOS 14+ and Windows x64 (since
+  1.23.0 also a source package, whose build needs a C toolchain), so as a dependency it
+  failed the whole install on Alpine, Windows ARM64, older glibc and macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
   image includes it, and the dev environment pulls it in through its group. Without it,
   JMo installs and runs everywhere, and `jmo tools check`, `jmo tools install yara-x` and a
   scan's yara-x row say the engine is missing and name the extra, where they said "See JMo
