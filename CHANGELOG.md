@@ -283,6 +283,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **zizmor 1.32.0, osv-scanner 2.7.1, checkov 3.4.6, trufflehog 3.100.0, syft 1.57.2,
+  opa 1.22.4 and ruff 0.17.6** (#1683, #1684, #1685). zizmor is handed only
+  `.pre-commit-config.yaml`, the one name pre-commit reads: given a
+  `.pre-commit-config.yml`, 1.32.0 validates it as a workflow and audits nothing in it.
+  osv-scanner 2.7.1 checks npm packages whose lockfile entry has no `resolved` URL again
+  (a bundled dependency, or every registry package under npm's
+  `omit-lockfile-registry-resolved`), which 2.7.0 took for local packages and never
+  matched, so the scan no longer needs to name such lockfiles as partly audited.
 - **opengrep 2.0.0 (#1622).** Its release renamed the Linux binary
   (`opengrep_linux_<arch>`, now static), dropped the musl builds, and ships Windows as a
   zip of `opengrep.exe` and the six DLLs it loads, which `jmo tools install` now keeps
@@ -1351,15 +1359,6 @@ All notable changes to JMo Security will be documented in this file.
   without saying it suppresses findings). zizmor's announcement of its own `zizmor.yml` moves from
   INFO to WARNING for the same reason, so there is one level for all three. Neither file is overridden:
   honouring a repository's own settings is each tool's documented behaviour (#1414).
-- **A scan names the npm packages osv-scanner does not check.** From osv-scanner 2.7.0, a
-  `package-lock.json` or `npm-shrinkwrap.json` entry with no `resolved` URL is taken for a
-  local package and never matched, with rc 0 and nothing said: a bundled dependency, or
-  every registry package of a lockfile npm wrote under `omit-lockfile-registry-resolved`
-  (a real one for `lodash@4.17.20`: 5 findings on 2.6.0, none on 2.7.0). JMo now reads each
-  npm lockfile first and names one holding such packages, with how many, at WARNING; the
-  row stays `ran` and its detail says `partly audited` ([Known
-  limitations](docs/KNOWN_LIMITATIONS.md#osv-scanner-does-not-check-an-npm-package-whose-lockfile-entry-has-no-resolved-url),
-  #1472).
 - **yara_runner's crash exits 2, and never leaves an earlier run's output behind.** It
   exited 1, which is also "matches found", so a crash read as findings over the previous
   scan's file. It now removes that file first and exits 2 (#1382).
