@@ -201,7 +201,9 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         # contract is "output is NDJSON we can json.loads() line-by-line".
         "result_item_keys": [],
         "sample_target": "credential-patterns",
-        "command": ["trufflehog", "filesystem", "{target}", "--json"],
+        # `--no-update`: without it trufflehog installs the newest release over
+        # the binary it was started from, and every later test reads that one.
+        "command": ["trufflehog", "filesystem", "{target}", "--json", "--no-update"],
         "is_ndjson": True,
         "ok_return_codes": (0,),
         "may_be_empty": (
@@ -800,6 +802,14 @@ class TestSanityCheckBites:
         output, returncode = run_tool_on_sample("hadolint", contract)
 
         assert check_run("hadolint", contract, output, returncode) == []
+
+    def test_the_trufflehog_contract_never_lets_it_update_itself(self):
+        """Run with no `--no-update`, `trufflehog filesystem` replaced a 3.99.7
+        binary with 3.100.1 and left `trufflehog-updates.lock` beside it
+        (measured 2026-11-25; `--version` does not update). This contract ran
+        that way, so on a developer's machine it moved `~/.jmo/bin`'s pin, and
+        in tool-contract-tests every later test read another version."""
+        assert "--no-update" in TOOL_CONTRACTS["trufflehog"]["command"]
 
     def test_an_empty_report_is_a_violation_unless_the_contract_allows_it(self):
         assert check_run("syft", TOOL_CONTRACTS["syft"], {"artifacts": []}, 0)
