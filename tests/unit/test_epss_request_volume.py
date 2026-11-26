@@ -31,6 +31,7 @@ Four separate defects fall out of that:
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 from unittest.mock import patch
@@ -140,7 +141,7 @@ def test_a_repeat_run_asks_nothing_at_all(tmp_path: Path):
 def test_get_score_remembers_a_miss_on_its_own(tmp_path: Path):
     """The single-CVE path caches a miss too, not only the bulk path.
 
-    A mutation that removed `_cache_miss` from `get_score` survived every other
+    A mutation that removed the miss write from `get_score` survived every other
     test here: they all reach the bulk path, and the run merely got *slower*
     (10.4s against a 4.9s baseline) rather than failing.
     """
@@ -402,6 +403,55 @@ def test_a_bulk_fetch_commits_once_per_kind_of_row(
             )
         else:
             assert (epss, percentile, date, row_found) == (None, None, None, 0)
+
+
+def _unwritable(*_a, **_k):
+    raise sqlite3.OperationalError("attempt to write a readonly database")
+
+
+@pytest.mark.parametrize("failing", ["_cache_scores", "_cache_misses"])
+def test_a_cache_that_cannot_be_written_keeps_the_bulk_scores(
+    tmp_path: Path, failing: str, caplog
+):
+    """The cache write sat inside the fetch's `try`, before the scores were
+    kept. Measured with the cache file and folder read-only: a bulk call that
+    fetched 99 scores returned 0. The write raises here rather than through
+    file permissions: Windows has none to set, and root ignores them."""
+    cves = _cves(100)
+    known = dict.fromkeys(cves[:99], 0.5)
+    client = EPSSClient(cache_dir=tmp_path)
+
+    with (
+        patch("scripts.core.epss_integration.requests.get", RequestSpy(known)),
+        patch.object(EPSSClient, failing, _unwritable),
+        caplog.at_level(logging.WARNING),
+    ):
+        scores = client.get_scores_bulk(cves)
+
+    assert set(scores) == set(known)
+    assert "could not be written" in caplog.text
+
+
+def test_a_cache_that_cannot_be_written_keeps_a_single_score(tmp_path: Path, caplog):
+    """`get_score` had the same order: measured, None for a CVE it had just
+    fetched. An unknown CVE still answers None, without raising."""
+    known_cve, unknown_cve = _cves(2)
+    client = EPSSClient(cache_dir=tmp_path)
+
+    with (
+        patch(
+            "scripts.core.epss_integration.requests.get", RequestSpy({known_cve: 0.5})
+        ),
+        patch.object(EPSSClient, "_cache_scores", _unwritable),
+        patch.object(EPSSClient, "_cache_misses", _unwritable),
+        caplog.at_level(logging.WARNING),
+    ):
+        score = client.get_score(known_cve)
+        missing = client.get_score(unknown_cve)
+
+    assert score is not None and score.epss == 0.5
+    assert missing is None
+    assert caplog.text.count("could not be written") == 2
 
 
 def test_an_expired_negative_entry_is_asked_about_again(tmp_path: Path):
