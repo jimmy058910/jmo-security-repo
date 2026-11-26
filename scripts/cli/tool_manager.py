@@ -430,6 +430,12 @@ class ToolManager:
         # instance; `invalidate_status_cache()` covers the one case where the
         # answer legitimately changes mid-process (a tool was just installed).
         self._status_cache: dict[str, ToolStatus] = {}
+        # Why a version probe got no version, by tool, for the status warning.
+        # `_get_tool_version` returns (None, None) for a timeout, a crash to
+        # start, no output and an unparsed answer alike, and logs which at
+        # DEBUG only, which `tools check` cannot show: zap read as not ready
+        # in a docker-smoke run with nothing to say why (#1667).
+        self._probe_failures: dict[str, str] = {}
 
     @property
     def registry(self) -> ToolRegistry:
@@ -527,9 +533,10 @@ class ToolManager:
                 # no version -- cdxgen under load, in #1164's reproduction --
                 # printed OK at exit 0 as well.
                 execution_ready = False
+                seen = self._probe_failures.get(tool_name)
                 execution_warning = (
-                    f"{tool_name} is installed but did not report a version; it "
-                    "may not run. Try: "
+                    f"{tool_name} is installed but did not report a version"
+                    f"{f' ({seen})' if seen else ''}; it may not run. Try: "
                     f"jmo tools install {tool_name} --force"
                 )
             else:
@@ -951,7 +958,10 @@ class ToolManager:
             - (version, None) - success, version extracted
             - (None, None) - version couldn't be parsed (normal case)
             - (None, error) - startup crash detected (Phase 4)
+
+        A (None, None) leaves what the probe saw in `_probe_failures`.
         """
+        self._probe_failures.pop(tool_name, None)
         # Check if this is an isolated venv tool - use special execution
         from scripts.core.install_config import ISOLATED_TOOLS
         from scripts.core.paths import get_isolated_tool_path, get_isolated_venv_path
@@ -1106,6 +1116,9 @@ class ToolManager:
                         f"Version command failed for {tool_name} "
                         f"(exit code {result.returncode}), no output"
                     )
+                self._probe_failures[tool_name] = (
+                    f"its probe printed nothing, exit code {result.returncode}"
+                )
                 return (None, None)
 
             # Parse version from output
@@ -1116,6 +1129,9 @@ class ToolManager:
                 logger.debug(
                     f"Could not parse version for {tool_name} from output: {sample!r}"
                 )
+                self._probe_failures[tool_name] = (
+                    f"its probe exited {result.returncode} printing {sample[:120]!r}"
+                )
 
             return (version, None)
         except subprocess.TimeoutExpired:
@@ -1123,16 +1139,24 @@ class ToolManager:
                 f"Timeout ({timeout}s) getting version for {tool_name}. "
                 f"Try running '{' '.join(cmd)}' manually."
             )
+            self._probe_failures[tool_name] = f"its probe timed out after {timeout} s"
             return (None, None)
         except FileNotFoundError:
             logger.debug(f"Binary not found at {binary_path} for {tool_name}")
+            self._probe_failures[tool_name] = "its probe could not start: not found"
             return (None, None)
         except PermissionError:
             logger.debug(f"Permission denied executing {binary_path} for {tool_name}")
+            self._probe_failures[tool_name] = (
+                "its probe could not start: permission denied"
+            )
             return (None, None)
         except (OSError, subprocess.SubprocessError) as e:
             logger.debug(
                 f"Error getting version for {tool_name}: {type(e).__name__}: {e}"
+            )
+            self._probe_failures[tool_name] = (
+                f"its probe could not start: {type(e).__name__}"
             )
             return (None, None)
 
