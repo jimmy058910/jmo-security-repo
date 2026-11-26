@@ -43,7 +43,12 @@ import yaml
 
 from scripts.cli import jmo, tool_commands
 from scripts.cli.installers.models import InstallProgress, InstallResult
-from scripts.cli.scan_session import ScanSession, compute_config_hash, save_session
+from scripts.cli.scan_session import (
+    SESSION_FILE,
+    ScanSession,
+    compute_config_hash,
+    save_session,
+)
 from scripts.cli.terminal import stream_is_tty
 from scripts.core.scan_timings import State, ToolRun
 
@@ -270,7 +275,7 @@ def resumable_scan(tmp_path: Path, home: Path, monkeypatch):
     )
     session.register_target("repo", "proj", ["trufflehog"])
     session.mark_target_complete("repo", "proj", row)
-    save_session(session, tmp_path / ".jmo" / "scan-session.json")
+    save_session(session, results_dir / SESSION_FILE)
 
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
     monkeypatch.setattr(

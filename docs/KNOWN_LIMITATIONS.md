@@ -357,12 +357,15 @@ needs it. JMo then adds none of its own.
 
 ### The yara-x scanner runs only where YARA-X has a wheel
 
-YARA-X, the engine behind the yara-x scanner, is published only as prebuilt wheels:
+YARA-X, the engine behind the yara-x scanner, publishes prebuilt wheels only for
 Linux with glibc 2.28 or newer on x86_64 and arm64, macOS 14 or newer, and Windows
-x64. There is no source package, so it is the optional extra `jmo-security[yara]`,
-which the documented install includes. On any other platform that install fails:
-Alpine and other musl-based Linux, Python running natively on Windows ARM64, Linux
-with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and macOS 13 or older. Python's
+x64, so it is the optional extra `jmo-security[yara]`, which the documented install
+includes. On any other platform that install fails: Alpine and other musl-based
+Linux, Python running natively on Windows ARM64, Linux with glibc older than 2.28
+(Ubuntu 18.04, RHEL 7) and macOS 13 or older. Since 1.23.0 YARA-X also publishes a
+source package, so pip and uv try to build it there instead. The build fetches Rust
+by itself but needs a C toolchain, and on a stock Alpine 3.22 it failed for want of
+one (`libgcc_s.so.1`), with uv and with pip alike (measured 2026-11-25). Python's
 platform markers cannot tell musl from glibc, nor one glibc or macOS version from
 another, so the extra cannot be skipped there automatically. Installed without it,
 `jmo-security` works on those platforms: `jmo tools check`, `jmo tools install

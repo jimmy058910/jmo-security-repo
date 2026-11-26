@@ -224,8 +224,9 @@ All notable changes to JMo Security will be documented in this file.
   on GHCR stay there, frozen at v1.x, so pulling `:balanced` keeps working and keeps
   giving you v1: switch to `:latest`. `jmo validate` was caught by exactly that. It ran
   `:balanced --help`, which validated the frozen image, and it now checks `:latest`.
-  Built locally the image is 1,220.6 MiB, against 2,033 MiB for v1.0.8's published
-  `:latest`.
+  Built from `dev` and measured the way a registry reports it (the compressed layers of
+  its linux/amd64 manifest), the image is 1,127.4 MiB, against 2,033 MiB for v1.0.8's
+  published `:latest` (#48).
 - **Breaking. gosec leaves the matrix; a scan runs 15 scanners.** It loads Go packages
   through the go command, which neither the Docker image nor `jmo tools install` provides,
   so it examined 0 files on every run and no scan ever got a finding from it. Naming it in
@@ -321,9 +322,9 @@ All notable changes to JMo Security will be documented in this file.
   Debian-packaged dependency, which pip cannot uninstall, so an Ubuntu 26.04 base failed
   the build on `packaging`. `checkov` on the image's `PATH` is a link to the venv's.
 - **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
-  publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
-  dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
-  macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
+  publishes wheels only for Linux with glibc 2.28+, macOS 14+ and Windows x64 (since
+  1.23.0 also a source package, whose build needs a C toolchain), so as a dependency it
+  failed the whole install on Alpine, Windows ARM64, older glibc and macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
   image includes it, and the dev environment pulls it in through its group. Without it,
   JMo installs and runs everywhere, and `jmo tools check`, `jmo tools install yara-x` and a
   scan's yara-x row say the engine is missing and name the extra, where they said "See JMo
@@ -649,6 +650,25 @@ All notable changes to JMo Security will be documented in this file.
   first, and nodeenv 1.10.0 took it for the latest node and crashed parsing it, so on a
   machine where pre-commit finds no system node outside the home directory (nvm's does not
   count), every hook install failed. `uv.lock` moves nodeenv to 1.12.0, which skips it.
+- **`jmo ci` no longer reports and stores an earlier scan when its own scan wrote nothing
+  (#1699).** When the scan stopped before writing this run's results (no target,
+  every target rejected, every tool missing under `--allow-missing-tools`, the install
+  prompt cancelled, the scan raising), `jmo ci` still ran its report over the results
+  directory. If an earlier run had filled it, that run's findings went into the summaries
+  and into history as a new scan. Measured: a `--repo` that does not exist exited 1,
+  stored a second history row and rewrote `summaries/`. The exit codes are unchanged.
+- **A scan no longer leaves an empty `.jmo/` in the working directory (#1700).**
+  The checkpoint `jmo scan --resume` reads was kept at `<results dir's parent>/.jmo/`,
+  the working directory with the default `--results-dir results`, and only the file was
+  removed when the scan ended. It is now `.scan_session.json` inside the results
+  directory. A checkpoint an interrupted earlier version left at the old path is not
+  read, so that scan starts fresh.
+- **EPSS keeps the scores it fetched when its cache cannot be written, and checks the
+  cache on one connection (#1701, #1702).** With a read-only cache, a
+  bulk lookup that fetched 99 scores returned none, and a single lookup returned none
+  for a CVE it had just fetched. Both now keep the scores and name the cache at WARNING.
+  A bulk lookup opened one SQLite connection per CVE to check the cache, 100 for 100
+  CVEs; it now opens one, at any count.
 - **A bulk EPSS fetch writes its scores to the cache in one transaction (#1673).** Each
   score a bulk call returned was cached with its own commit, and each commit is a disk
   flush: a 100-CVE fetch made 100 of them, so report enrichment ran at the speed of the
@@ -724,7 +744,7 @@ All notable changes to JMo Security will be documented in this file.
   error. It used to warn and exit 0, from a source checkout too. A policy that ran and
   failed still exits 1. A policy report that cannot be written no longer drops a FAILED
   verdict. Without enforcement the run still warns and exits 0 as before; a policy
-  report that cannot be written is now a warning rather than a debug line.
+  report that cannot be written is now a warning rather than a debug line (#1668).
 - **The wizard asks for the target before it checks any tool, and then checks only the
   tools that target's scan runs, once (#1584).** Every step that read tool status built
   its own `ToolManager` and probed all 14 matrix tools again: twice before the second
@@ -1505,6 +1525,15 @@ All notable changes to JMo Security will be documented in this file.
   none. The report rewrites `opengrep.json` the same way and replaces the secrets in
   `.opengrep/semgrep.log`, and a later report reads the same findings. A secret no listed
   rule matched can still appear in a nearby finding's snippet.
+- **A secret trivy finds in an image reaches no report, raw output or history through the
+  image's build metadata (#1624).** trivy masks the secret it matched, but copies the
+  command that built each secret's layer (`Layer.CreatedBy`) and the image's whole
+  configuration (`Metadata.ImageConfig`: its history, `Env`, `Cmd`, labels). Measured
+  with a token set by a `RUN` line: three copies in `trivy.json`, and through the
+  findings' raw records copies in `findings.json`, `findings.yaml`, the dashboard and two
+  history rows. One set by `ENV` left two in `trivy.json`. An image output with a secret
+  finding now loses both fields, in its findings and when the report rewrites
+  `trivy.json`. An image output with no secret finding keeps them.
 - **A report takes the secrets out of the secret scanners' raw outputs once it has read
   them (#1329).** `trufflehog.json`, `gitleaks.json` and their `.git.json` history files
   held every secret found, deleted ones included. The report `jmo scan`, `jmo ci` and

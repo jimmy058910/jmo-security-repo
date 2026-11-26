@@ -62,6 +62,8 @@ Field mapping (measured on trivy 0.74.0's own JSON, #1221):
   v4.0 over v2.0, whatever the numbers (#1356). Omitted (not even an empty
   ``cvss``) when the block is absent or empty, or holds no numeric score under
   any key.
+- raw: the trivy item, without the image build metadata that can repeat a
+  secret trivy found (``redact_image_metadata``, #1624).
 - risk: a vulnerability's ``CweIDs``; a secret's CWE-798, in the dict
   gitleaks and trufflehog write (trivy's secret records carry no CWE); none
   for a misconfiguration.
@@ -210,6 +212,56 @@ def _tool_version(data: dict[str, Any]) -> str:
     return str(version or data.get("Version") or "unknown")
 
 
+def _has_secret_result(data: dict[str, Any]) -> bool:
+    results = data.get("Results")
+    return isinstance(results, list) and any(
+        isinstance(r, dict) and isinstance(r.get("Secrets"), list) and r["Secrets"]
+        for r in results
+    )
+
+
+def _drop_created_by(node: Any) -> int:
+    """Remove every ``CreatedBy`` under ``node``; return how many."""
+    removed = 0
+    if isinstance(node, dict):
+        if "CreatedBy" in node:
+            del node["CreatedBy"]
+            removed += 1
+        removed += sum(_drop_created_by(value) for value in node.values())
+    elif isinstance(node, list):
+        removed += sum(_drop_created_by(item) for item in node)
+    return removed
+
+
+def redact_image_metadata(data: Any) -> int:
+    """Take an image's build metadata out of a trivy output that found a secret
+    (#1624); return how many fields went. Changes ``data`` in place.
+
+    trivy masks the secret it matched in ``Match`` and ``Code.Lines``, but
+    copies the image's own build metadata verbatim: each secret's
+    ``Layer.CreatedBy`` (the command that built its layer) and
+    ``Metadata.ImageConfig`` (the history's ``created_by`` lines, ``Env``,
+    ``Cmd``, labels). Measured on trivy 0.74.0: a token planted by a ``RUN``
+    line reached ``trivy.json`` three times and, through ``raw``, the
+    summaries, the dashboard and history; one set by ``ENV`` reached
+    ``trivy.json`` twice.
+
+    The secret is not known here, only its masked form, so the fields that
+    can repeat it go whole rather than being searched for it. Nothing in JMo
+    reads them. A vulnerability's ``Layer`` carries no ``CreatedBy`` in 0.74.0
+    (measured), and any that a later trivy adds goes too. An output with no
+    secret result keeps its metadata, so redacting twice changes nothing.
+    """
+    if not isinstance(data, dict) or not _has_secret_result(data):
+        return 0
+    removed = _drop_created_by(data.get("Results"))
+    metadata = data.get("Metadata")
+    if isinstance(metadata, dict) and "ImageConfig" in metadata:
+        del metadata["ImageConfig"]
+        removed += 1
+    return removed
+
+
 @adapter_plugin(
     PluginMetadata(
         name="trivy",
@@ -242,6 +294,8 @@ class TrivyAdapter(AdapterPlugin):
         data = safe_load_json_file(output_path, default=None)
         if not isinstance(data, dict):
             return []
+        # Before any item becomes a finding's `raw` (#1624).
+        redact_image_metadata(data)
 
         results = data.get("Results")
         if not isinstance(results, list):

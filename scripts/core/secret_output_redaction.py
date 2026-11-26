@@ -29,6 +29,11 @@ reuses it, and the report finishes such a pass before it reads the folder
 stand-in, so it stays only while the folder holds a raw secret anyway.
 Writing both files and then replacing both would not do: the second replace
 can still fail, and undoing the first would put the secret back.
+
+trivy's image scan finds secrets too. It masks each one itself, but copies the
+image's build metadata, which can hold the secret it masked, so a trivy output
+that found one loses that metadata (#1624). Nothing pairs on it, so it needs no
+key.
 """
 
 from __future__ import annotations
@@ -51,6 +56,7 @@ from scripts.core.adapters.opengrep_adapter import (
     redact_results,
     secret_texts,
 )
+from scripts.core.adapters.trivy_adapter import redact_image_metadata
 from scripts.core.adapters.trufflehog_adapter import (
     SECRET_BEARING_FIELDS,
     _is_pytest_name_matched_as_lob_key,
@@ -329,10 +335,39 @@ def _redact_opengrep_output(path: Path) -> int:
     return changed
 
 
+def _redact_trivy_output(path: Path) -> int:
+    """Remove the image build metadata from a `trivy.json` that found a
+    secret, as the adapter removes it from its findings (#1624): trivy masks
+    the secret it matched but copies the commands and environment that set it.
+    Returns how many fields went."""
+    try:
+        document = json.loads(path.read_bytes().decode("utf-8", "ignore"))
+    except (OSError, ValueError, RecursionError) as e:
+        logger.warning(
+            "%s could not be read, so it may still hold secrets: %s", path, e
+        )
+        return 0
+    removed = redact_image_metadata(document)
+    if not removed:
+        return 0
+    try:
+        _replace(path, json.dumps(document, indent=2).encode("utf-8"))
+    except OSError as e:
+        logger.warning(
+            "%s could not be rewritten, so it may still hold secrets: %s: %s",
+            path,
+            type(e).__name__,
+            e,
+        )
+        return 0
+    return removed
+
+
 def redact_secret_outputs(outputs: Iterable[Path]) -> int:
     """Replace the secrets in every trufflehog, gitleaks and opengrep output
     among `outputs` (opengrep's: the results of rules that match a secret's
-    value, and its log).
+    value, and its log), and remove the image build metadata from a trivy
+    output that found a secret.
 
     Other outputs are skipped. A file already redacted is not rewritten. A file
     that cannot be read, parsed or rewritten is named at WARNING and left as it
@@ -369,6 +404,9 @@ def _redact_folder(folder: Path, outputs: list[Path]) -> int:
         tool = path.name.split(".", 1)[0]
         if tool == "opengrep":
             total += _redact_opengrep_output(path)
+            continue
+        if tool == "trivy":
+            total += _redact_trivy_output(path)
             continue
         redact = _REDACTORS.get(tool)
         if redact is None:

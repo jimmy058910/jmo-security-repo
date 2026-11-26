@@ -16,6 +16,7 @@ import os
 import time
 
 from scripts.cli.scan_session import (
+    SESSION_FILE,
     SESSION_VERSION,
     ScanSession,
     TargetRecord,
@@ -695,3 +696,45 @@ class TestSessionLifecycle:
         restored = load_session(session_path)
         assert restored is not None
         assert restored.config_hash != hash2  # Config changed
+
+
+class TestWhereTheCheckpointLives:
+    def test_a_scan_leaves_nothing_beside_its_results(self, tmp_path, monkeypatch):
+        """The checkpoint sat at `<results dir's parent>/.jmo/`, and only the
+        file was removed when the scan ended. Measured: `jmo scan` with the
+        default `--results-dir results` and `--history-db` pointed elsewhere
+        left an empty `.jmo/` in the working directory after every run."""
+        import sys
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from scripts.cli import jmo
+        from scripts.cli.tool_manager import ToolManager, ToolStatus
+
+        work = tmp_path / "work"
+        work.mkdir()
+        project = tmp_path / "proj"
+        project.mkdir()
+        (project / "README.md").write_bytes(b"# proj\n")
+        monkeypatch.setattr(
+            ToolManager,
+            "check_tool",
+            lambda _self, name, *_a, **_k: ToolStatus(name=name, installed=True),
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.tool_loop.find_tool", lambda *_a, **_k: None
+        )
+        monkeypatch.chdir(work)
+        monkeypatch.setenv("CI", "true")
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "home"))
+        argv = ["jmo", "scan", "--repo", str(project), "--tools", "trivy"]
+        argv += ["--history-db", str(tmp_path / "db" / "history.db")]
+
+        with patch.object(sys, "argv", argv):
+            jmo.cmd_scan(jmo.parse_args())
+
+        assert sorted(os.listdir(work)) == ["results"]
+        assert (work / "results" / ".scan_metadata.json").is_file(), (
+            "the scan did not get as far as writing its results"
+        )
+        assert not (work / "results" / SESSION_FILE).exists()

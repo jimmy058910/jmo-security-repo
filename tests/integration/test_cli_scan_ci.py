@@ -172,6 +172,15 @@ def test_ci_runs_the_report_phase_exactly_once(tmp_path: Path, monkeypatch):
         return original(args, log_fn)
 
     monkeypatch.setattr(jmo_mod, "_cmd_report_impl", spy)
+    # The scan must write results of its own, or `cmd_ci` rightly reports
+    # nothing. With trufflehog hidden by the home above, `--allow-missing-tools`
+    # found nothing to scan with, and this test passed only because `cmd_ci`
+    # then reported the empty results directory anyway. Pre-flight passes, and
+    # the tool is still not found, so the target fails and the scan writes.
+    monkeypatch.setattr(jmo_mod, "_check_scan_tools", lambda _a, tools: (tools, []))
+    monkeypatch.setattr(
+        "scripts.cli.scan_jobs.tool_loop.find_tool", lambda *_a, **_k: None
+    )
 
     class Args:
         def __init__(self):
