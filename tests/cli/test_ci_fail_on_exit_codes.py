@@ -98,7 +98,7 @@ def test_without_fail_on_findings_do_not_fail_the_build(ci):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "issue draft 'jmo ci exits 1, not 2, when every target was rejected': "
+        "#1718, jmo ci exits 1, not 2, when every target was rejected: "
         "since #1708 jmo ci skips its report when the scan wrote nothing, and "
         "the 2 came from that report refusing the missing results directory; "
         "the scan's own 1 is the code for findings at the threshold"
