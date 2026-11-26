@@ -15,7 +15,9 @@ Target Coverage: >= 85%
 
 import os
 import re
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1523,6 +1525,72 @@ class TestInstalledToolWithoutAVersionIsNotOK:
     def test_hadolint_is_among_the_newly_guarded_tools(self):
         """The #1164 reproduction's shape: a binary tool never isolated."""
         assert "hadolint" in _NON_ISOLATED_INSTALLED_TOOLS
+
+
+class TestAProbeWithNoVersionSaysWhatItSaw:
+    """#1667: zap read as not ready in one docker-smoke run, and nothing said
+    why. A timeout, a failure to start, no output and an unparsed answer all
+    gave the same warning, and `tools check --json` carried no warning at all.
+    The real probe runs here; only the process it starts is replaced."""
+
+    @staticmethod
+    def _zap(monkeypatch, run):
+        from scripts.cli import tool_manager
+
+        monkeypatch.setattr(
+            tool_manager,
+            "subprocess",
+            SimpleNamespace(
+                run=run,
+                TimeoutExpired=subprocess.TimeoutExpired,
+                SubprocessError=subprocess.SubprocessError,
+            ),
+        )
+        manager = tool_manager.ToolManager()
+        # A directory with no ZAP_VERSION file, so the probe starts zap.sh.
+        monkeypatch.setattr(manager, "_find_binary", lambda name: "/fake/zap/zap.sh")
+        monkeypatch.setattr(manager, "_verify_execution", lambda name: (True, None, []))
+        return manager
+
+    def test_a_timeout_is_named_with_its_budget(self, monkeypatch):
+        from scripts.cli.tool_commands import _status_json
+        from scripts.cli.tool_manager import VERSION_TIMEOUTS
+
+        def run(cmd, **kwargs):
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+        status = self._zap(monkeypatch, run).check_tool("zap")
+
+        assert status.execution_ready is False
+        said = f"its probe timed out after {VERSION_TIMEOUTS['zap']} s"
+        assert said in status.execution_warning
+        # The entry the docker test prints when a tool is not ready.
+        assert said in _status_json(status)["execution_warning"]
+
+    def test_an_answer_with_no_version_in_it_is_quoted(self, monkeypatch):
+        def run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 1, "Error: no java\n", "")
+
+        status = self._zap(monkeypatch, run).check_tool("zap")
+
+        assert "its probe exited 1 printing 'Error: no java" in status.execution_warning
+
+    def test_a_probe_that_later_answers_drops_the_earlier_note(self, monkeypatch):
+        answers = iter(
+            [
+                subprocess.CompletedProcess(["zap.sh"], 0, "", ""),
+                subprocess.CompletedProcess(["zap.sh"], 0, "2.17.0\n", ""),
+            ]
+        )
+        manager = self._zap(monkeypatch, lambda cmd, **kwargs: next(answers))
+
+        first = manager.check_tool("zap")
+        manager.invalidate_status_cache("zap")
+        second = manager.check_tool("zap")
+
+        assert "its probe printed nothing, exit code 0" in first.execution_warning
+        assert second.installed_version == "2.17.0"
+        assert second.execution_warning is None
 
 
 def test_checkov_version_probe_budget_exceeds_its_measured_startup():

@@ -125,6 +125,8 @@ def _status_json(status: ToolStatus) -> dict:
         "is_outdated": status.is_outdated,
         "is_critical": status.is_critical,
         "execution_ready": status.execution_ready,
+        # Why it is not ready, as the table prints it; None when it is.
+        "execution_warning": status.execution_warning,
         "binary_path": status.binary_path,
     }
 
