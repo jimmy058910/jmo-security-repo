@@ -668,7 +668,8 @@ All notable changes to JMo Security will be documented in this file.
   prompt cancelled, the scan raising), `jmo ci` still ran its report over the results
   directory. If an earlier run had filled it, that run's findings went into the summaries
   and into history as a new scan. Measured: a `--repo` that does not exist exited 1,
-  stored a second history row and rewrote `summaries/`. The exit codes are unchanged.
+  stored a second history row and rewrote `summaries/`. Each case now exits 2, the code
+  for a run that checked nothing; `jmo scan`'s own exit codes are unchanged (#1718).
 - **A scan no longer leaves an empty `.jmo/` in the working directory (#1700).**
   The checkpoint `jmo scan --resume` reads was kept at `<results dir's parent>/.jmo/`,
   the working directory with the default `--results-dir results`, and only the file was
