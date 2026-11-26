@@ -124,7 +124,7 @@ RUN OPENGREP_VERSION="2.0.0" && \
 # Download osv-scanner (dependency lockfiles); a raw binary, so it is checked
 # against the release's SHA256SUMS before use. The image carries no offline
 # database: `jmo tools update` fetches it into ~/.jmo/osv-db
-RUN OSV_SCANNER_VERSION="2.7.0" && \
+RUN OSV_SCANNER_VERSION="2.7.1" && \
     OSV_SCANNER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     OSV_SCANNER_ASSET="osv-scanner_linux_${OSV_SCANNER_ARCH}" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/${OSV_SCANNER_ASSET}" \

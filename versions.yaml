@@ -101,7 +101,7 @@ binary_tools:
     critical: false
     notes: 'no Windows arm64 build upstream: jmo tools install fetches the x86_64 one there'
   osv-scanner:
-    version: 2.7.0
+    version: 2.7.1
     github_repo: google/osv-scanner
     description: Dependency vulnerability scanner (lockfiles, offline OSV databases)
     # Raw binaries named by OS and arch, no version in the name; checksums in
@@ -188,6 +188,14 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-11-26'
+  action: Updated osv-scanner
+  tools_updated:
+  - tool: osv-scanner
+    old_version: 2.7.0
+    new_version: 2.7.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-11-26'
   action: Updated zizmor
   tools_updated:
