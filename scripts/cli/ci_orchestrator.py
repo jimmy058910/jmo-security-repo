@@ -36,6 +36,14 @@ _REPORT_REQUIRED: dict[str, object] = {
     "threads": None,
 }
 
+#: Set on the namespace `cmd_scan` is given: False when it starts, True once it
+#: has written this run's `.scan_metadata.json`. An exit code cannot say
+#: whether the scan wrote anything: `cmd_scan` returns 1 both for a scan whose
+#: targets failed, which `jmo ci` must still report, and from exits taken before
+#: it writes (no target, every tool missing, the install prompt cancelled, the
+#: scan raising), where the results directory still holds an earlier run.
+SCAN_WROTE_RESULTS = "_scan_wrote_results"
+
 
 def _phase_args(a, required: dict[str, object], **overrides):
     """Return the caller's namespace, adapted for one phase.
@@ -131,13 +139,17 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
     # all 14 artifacts twice -- and stored *two* history rows plus a doubled
     # findings table for one scan (measured: 2 rows / 34 findings where
     # `jmo scan` produced 1 / 17).
-    scan_rc = int(cmd_scan_fn(_phase_args(args, _SCAN_REQUIRED, skip_auto_report=True)))
-    if scan_rc in (2, 130):
+    scan_args = _phase_args(args, _SCAN_REQUIRED, skip_auto_report=True)
+    scan_rc = int(cmd_scan_fn(scan_args))
+    if scan_rc in (2, 130) or not getattr(scan_args, SCAN_WROTE_RESULTS, True):
         # 2: a usage error, raised before anything was scanned (an unknown
-        # name in jmo.yml's `tools:`, `--dest` without `--tsv`). The report
-        # would read an earlier run's results/ and store them as a new scan.
+        # name in jmo.yml's `tools:`, `--dest` without `--tsv`).
         # 130: Ctrl-C stopped the scan, and its runs' output is partial.
         # Decided 2026-11-05: no report after Ctrl-C.
+        # No results written: the scan stopped before this run's metadata.
+        # In each case the report would read an earlier run's results/ and
+        # store them in history as a new scan (measured: a rejected --repo
+        # exited 1, stored a second row and rewrote summaries/).
         return scan_rc
 
     # Import _log here to avoid circular dependency
