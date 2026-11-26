@@ -75,6 +75,11 @@ class EPSSClient:
     # unbounded URL is the request storm above, at full scale.
     BULK_CHUNK_SIZE = 100
 
+    # The most CVEs one cache query names. SQLite limits a statement's host
+    # parameters to 999 before 3.32.0 and to 32766 since, so this stays under
+    # both.
+    LOOKUP_CHUNK_SIZE = 500
+
     def __init__(self, cache_dir: Path | None = None):
         """Initialize EPSS client.
 
@@ -116,27 +121,45 @@ class EPSSClient:
         conn.close()
 
     def _lookup(self, cve: str) -> tuple[bool, EPSSScore | None]:
-        """One query, one connection: `(cache_answered, score)`.
+        """`(cache_answered, score)` for one CVE: one query, one connection."""
+        return self._lookup_many([cve])[cve]
 
-        Replaces the `_get_cached_score` + `_is_cache_valid` pair, which each
-        opened their own `sqlite3.connect` and each re-read the same row -- two
-        connections per lookup, measured at 100 for 50 CVEs (#849).
+    def _lookup_many(self, cves: list[str]) -> dict[str, tuple[bool, EPSSScore | None]]:
+        """`(cache_answered, score)` for each CVE, from one connection.
+
+        The bulk path called `_lookup` once per CVE, a connection each: 100 for
+        100 CVEs on a warm cache, measured. `_lookup` had replaced the
+        `_get_cached_score` + `_is_cache_valid` pair, which opened two per CVE
+        (#849).
+        """
+        if not cves:
+            return {}
+        rows: dict[str, tuple[Any, ...]] = {}
+        conn = sqlite3.connect(self.cache_path)
+        try:
+            for start in range(0, len(cves), self.LOOKUP_CHUNK_SIZE):
+                chunk = cves[start : start + self.LOOKUP_CHUNK_SIZE]
+                marks = ",".join("?" * len(chunk))
+                query = (
+                    "SELECT cve, epss, percentile, date, cached_at, found "
+                    f"FROM epss_scores WHERE cve IN ({marks})"  # nosec B608 - only "?"
+                )
+                for cve, *row in conn.execute(query, chunk):
+                    rows[cve] = tuple(row)
+        finally:
+            conn.close()
+        return {cve: self._answer(cve, rows.get(cve)) for cve in cves}
+
+    def _answer(
+        self, cve: str, row: tuple[Any, ...] | None
+    ) -> tuple[bool, EPSSScore | None]:
+        """What one cache row says about a CVE.
 
         `cache_answered` is True for a valid **negative** entry too, where
         `score` is None. That distinction is the whole point: "we asked and EPSS
         does not know" and "we have not asked" are different states, and
         collapsing them is what produced one HTTP request per finding per run.
         """
-        conn = sqlite3.connect(self.cache_path)
-        try:
-            row = conn.execute(
-                "SELECT epss, percentile, date, cached_at, found "
-                "FROM epss_scores WHERE cve = ?",
-                (cve,),
-            ).fetchone()
-        finally:
-            conn.close()
-
         if not row:
             return (False, None)
 
@@ -203,8 +226,9 @@ class EPSSClient:
 
         # Check cache first
         uncached_cves = []
+        cache = self._lookup_many(cves)
         for cve in cves:
-            answered, cached = self._lookup(cve)
+            answered, cached = cache[cve]
             if answered:
                 if cached:
                     scores[cve] = cached

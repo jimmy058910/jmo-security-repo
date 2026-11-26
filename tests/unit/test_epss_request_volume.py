@@ -405,6 +405,33 @@ def test_a_bulk_fetch_commits_once_per_kind_of_row(
             assert (epss, percentile, date, row_found) == (None, None, None, 0)
 
 
+@pytest.mark.parametrize("count", [100, 1000])
+def test_a_bulk_lookup_checks_the_cache_on_one_connection(tmp_path: Path, count: int):
+    """The cache check opened one connection per CVE. Measured: 102 for 100
+    CVEs on a cold cache (100 lookups and the two writes), 100 on a warm one.
+    1000 CVEs also span two of the lookup's chunks; the count must not grow
+    with either."""
+    cves = _cves(count)
+    known = dict.fromkeys(cves[: count // 2], 0.5)
+    client = EPSSClient(cache_dir=tmp_path)
+    spy = RequestSpy(known)
+    cold, warm = CommitCounter(), CommitCounter()
+
+    with patch("scripts.core.epss_integration.requests.get", spy):
+        with patch.object(sqlite3, "connect", cold):
+            first = client.get_scores_bulk(cves)
+        asked = len(spy.urls)
+        with patch.object(sqlite3, "connect", warm):
+            second = client.get_scores_bulk(cves)
+
+    assert cold.connections == 3, (
+        "one cache check, one write for scores, one for misses"
+    )
+    assert warm.connections == 1, f"{warm.connections} connections for a warm lookup"
+    assert set(first) == set(second) == set(known)
+    assert len(spy.urls) == asked, "a warm lookup asked the API again"
+
+
 def _unwritable(*_a, **_k):
     raise sqlite3.OperationalError("attempt to write a readonly database")
 
