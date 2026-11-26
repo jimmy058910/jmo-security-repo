@@ -518,8 +518,8 @@ class TestTheSeededDashboard:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "issue draft 'The dashboard template meta lands inside the inlined "
-            "JS bundle, not the document head': _mark_template_source inserts "
+            "#1711, the dashboard template meta lands inside the inlined JS "
+            "bundle, not the document head: _mark_template_source inserts "
             "it before the first '</head>', which in the React build is inside "
             "ExportButton's HTML template string"
         ),
@@ -563,8 +563,8 @@ class TestTheCleanDashboard:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "issue draft 'A scan with no findings writes a dashboard that says "
-            "Loading Failed': useFindings reads an empty window.__FINDINGS__ as "
+            "#1710, a scan with no findings writes a dashboard that says "
+            "Loading Failed: useFindings reads an empty window.__FINDINGS__ as "
             "external mode and fetches a dashboard-data.json no report writes"
         ),
     )

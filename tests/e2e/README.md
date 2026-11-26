@@ -109,7 +109,7 @@ directories seeded with 18 findings of known severity, then reads the pages in
 Chromium. It asserts the counts, the rows, what each severity chip, the tool
 filter and the search leave, the compliance and analytics tabs, a 1001-finding
 report served over HTTP (and the `file://` hint for it), and the diff page's
-summary and severity filter. Two known defects are `xfail(strict=True)`.
+summary and severity filter. Two known defects, #1710 and #1711, are `xfail(strict=True)`.
 
 Requires installation before use:
 

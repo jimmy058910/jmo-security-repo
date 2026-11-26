@@ -1546,7 +1546,7 @@ jobs:
       # The tests run `jmo report` and `jmo diff` on seeded results and read the
       # pages in Chromium. Without playwright the module skips on import and
       # pytest exits 5, and a skipped test checked nothing, so every skip fails
-      # the job: 21 passed and 3 strict xfails (two defects awaiting a fix) on
+      # the job: 21 passed and 3 strict xfails (#1710, #1711, awaiting a fix) on
       # 2026-11-25.
       - name: Run visual tests
         run: |
