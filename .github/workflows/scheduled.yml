@@ -883,7 +883,7 @@ jobs:
           mkdir -p "$RESULTS_DIR"
           # test_dashboard_visual.py is e2e-visual's: without playwright here it
           # skipped at import, one skip no test id names.
-          python -m pytest tests/e2e/ -v --timeout=300 \
+          python -m pytest tests/e2e/ -v --timeout=300 -o tmp_path_retention_policy=failed \
             --ignore=tests/e2e/test_dashboard_visual.py \
             --ignore=tests/e2e/test_linux_specific.py \
             --ignore=tests/e2e/test_macos_specific.py \
@@ -921,7 +921,7 @@ jobs:
             tests/integration/test_zap_scans.py \
             tests/e2e/test_linux_specific.py \
             -m "requires_tools" \
-            -v -rs -p no:xdist --timeout=1200 \
+            -v -rs -p no:xdist --timeout=1200 -o tmp_path_retention_policy=failed \
             --junitxml="/tmp/jmo-e2e-results-${{ github.run_id }}/integration-junit.xml"
 
       - name: Upload test results
@@ -1074,7 +1074,7 @@ jobs:
         run: |
           RESULTS_DIR="/tmp/jmo-e2e-results-${{ github.run_id }}"
           mkdir -p "$RESULTS_DIR"
-          python -m pytest tests/e2e/ -v --timeout=300 \
+          python -m pytest tests/e2e/ -v --timeout=300 -o tmp_path_retention_policy=failed \
             --ignore=tests/e2e/test_dashboard_visual.py \
             --ignore=tests/e2e/test_linux_specific.py \
             --ignore=tests/e2e/test_windows_specific.py \
@@ -1196,6 +1196,7 @@ jobs:
           # These tests validate real tool detection (SQL injection, CVEs, secrets)
           pytest tests/e2e/test_real_tool_scans.py \
             -v \
+            -o tmp_path_retention_policy=failed \
             -m "requires_tools" \
             --tb=short \
             --maxfail=3 \
@@ -1549,7 +1550,7 @@ jobs:
       # 2026-11-25.
       - name: Run visual tests
         run: |
-          python -m pytest tests/e2e/test_dashboard_visual.py -v -rsxX --timeout=120 \
+          python -m pytest tests/e2e/test_dashboard_visual.py -v -rsxX --timeout=120 -o tmp_path_retention_policy=failed \
             --screenshot=only-on-failure --output=test-results \
             --junitxml=visual-junit.xml
 

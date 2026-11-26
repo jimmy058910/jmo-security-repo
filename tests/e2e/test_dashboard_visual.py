@@ -79,7 +79,8 @@ META_HEADER_CONSOLE_ERRORS = (
 
 # The history panel asks for scans.json and treats a refusal as "no history";
 # from a file:// page Chromium refuses the fetch and logs it. No report writes
-# scans.json, so every dashboard makes this request.
+# scans.json, so every dashboard makes this request, and the history, trends
+# and compare views it would feed never appear (#1483).
 SCAN_HISTORY_FETCH = re.compile(r"Fetch API cannot load file:.*/scans\.json\. ")
 
 SHOWING = re.compile(r"Showing \d+ of \d+")
