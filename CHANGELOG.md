@@ -711,8 +711,8 @@ All notable changes to JMo Security will be documented in this file.
   compliance and analytics tabs, 1001 findings served over HTTP, and the diff summary.
   It used to pass 18 synthetic findings to the HTML writer and check for words the
   filter chips print with no data at all. `jmo ci --fail-on` runs through the real CLI
-  on every PR: 1 at the threshold and 0 below it, while the 2 a scan of nothing should
-  give is an expected failure, since it reads 1 after #1708 (#1718). The image,
+  on every PR: 1 at the threshold, 0 below it, and 2 for a repository that does not
+  exist (#1718). The image,
   IaC, CI-gating and Kubernetes cases assert that their scanners ran and found
   something, where an `if` or `--allow-missing-tools` let them pass having run nothing.
   The scheduled E2E suites fail unless the tests they skip are exactly the listed ones
