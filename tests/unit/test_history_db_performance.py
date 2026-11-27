@@ -260,10 +260,14 @@ def test_single_scan_insert_performance(tmp_path):
 # "always". 20 minutes restores headroom while the job's own `timeout-minutes:
 # 30` stays the backstop for a genuinely hung test.
 #
-# The cost is intrinsic, not incidental: it is 10 000 separate `store_scan`
-# transactions. Measured alternatives that do **not** work -- reusing one results
-# directory instead of 10 000 saves only **7%**, and WAL is already the default
-# that `init_database` sets, so neither is the lever it looks like.
+# Most of that cost was device flushes, not the 10 000 transactions. Each
+# `store_scan` opens and closes two connections (`init_database`'s, then its
+# own), and in WAL mode the last connection to close checkpoints and fsyncs: 6
+# flushes per scan, 60 000 for the loop, which on a disk shared with other work
+# stalled every process on it. Holding one connection open for the loop means no
+# close is the last, and WAL checkpoints every 1000 pages instead. Measured on a
+# virtual disk, 300 scans: 1800 flushes -> 29, 3.4 -> 1.0 ms per scan. Reusing
+# one results directory saves only 7%, and WAL was already on.
 @pytest.mark.timeout(1200)
 @pytest.mark.skipif(
     sys.platform == "win32",
@@ -280,22 +284,28 @@ def test_history_list_performance_10k_scans(perf_db, tmp_path):
     Note: This test inserts 10k scans first, which is the bulk of the time.
     The query itself is fast, but platform I/O variance affects total time.
     """
-    # Insert 10,000 minimal scans
-    for i in range(10000):
-        results_dir = tmp_path / f"results_{i}"
-        summaries = results_dir / "summaries"
-        summaries.mkdir(parents=True)
+    # Insert 10,000 minimal scans, with a connection held open so that none of
+    # store_scan's own closes checkpoints (see the comment above the test).
+    keeper = sqlite3.connect(perf_db)
+    keeper.execute("SELECT count(*) FROM scans").fetchone()  # joins the WAL
+    try:
+        for i in range(10000):
+            results_dir = tmp_path / f"results_{i}"
+            summaries = results_dir / "summaries"
+            summaries.mkdir(parents=True)
 
-        findings_file = summaries / "findings.json"
-        findings_file.write_text('{"findings": []}')
+            findings_file = summaries / "findings.json"
+            findings_file.write_text('{"findings": []}')
 
-        store_scan(
-            results_dir=results_dir,
-            tools=["trivy"],
-            db_path=perf_db,
-            commit_hash=f"commit_{i}",
-            branch="main" if i % 2 == 0 else "dev",
-        )
+            store_scan(
+                results_dir=results_dir,
+                tools=["trivy"],
+                db_path=perf_db,
+                commit_hash=f"commit_{i}",
+                branch="main" if i % 2 == 0 else "dev",
+            )
+    finally:
+        keeper.close()
 
     # Measure query time
     conn = sqlite3.connect(perf_db)
