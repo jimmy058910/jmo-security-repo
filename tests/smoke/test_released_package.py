@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import run_container
+
 # Tests that invoke `jmo` directly require it on PATH (only after PyPI install)
 _JMO_ON_PATH = shutil.which("jmo") is not None
 _skip_no_jmo = pytest.mark.skipif(
@@ -150,6 +152,7 @@ class TestPyPIPackage:
 
 
 @pytest.mark.smoke
+@pytest.mark.docker
 class TestDockerImages:
     """Smoke tests for Docker images."""
 
@@ -174,17 +177,8 @@ class TestDockerImages:
     )
     def test_docker_image_help_works(self):
         """Test Docker image runs and --help works."""
-        result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "ghcr.io/jimmy058910/jmo-security:latest",
-                "--help",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
+        result = run_container(
+            ["ghcr.io/jimmy058910/jmo-security:latest", "--help"], timeout=60
         )
 
         # Should succeed
@@ -199,18 +193,8 @@ class TestDockerImages:
     )
     def test_docker_scan_help_works(self):
         """Test Docker image scan --help works."""
-        result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "ghcr.io/jimmy058910/jmo-security:latest",
-                "scan",
-                "--help",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
+        result = run_container(
+            ["ghcr.io/jimmy058910/jmo-security:latest", "scan", "--help"], timeout=60
         )
 
         assert result.returncode == 0, f"Docker scan --help failed: {result.stderr}"

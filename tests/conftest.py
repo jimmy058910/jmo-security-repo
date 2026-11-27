@@ -12,10 +12,13 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import uuid
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -91,6 +94,11 @@ def pytest_configure(config: pytest.Config) -> None:
             Path(config.option.basetemp or tempfile.gettempdir()).absolute(),
         ),
     )
+    # One id for the whole run, read by `run_container`. xdist workers inherit
+    # it from the controller, which sets it before it starts them; a pytest
+    # started from inside a test run is a controller too, and gets its own.
+    if not hasattr(config, "workerinput"):
+        os.environ[_DOCKER_RUN_ENV] = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
 
 # ============================================================================
@@ -609,6 +617,198 @@ def docker_available() -> bool:
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+# ============================================================================
+# Containers started by tests
+# ============================================================================
+#
+# Every JMo container a test starts goes through `run_container`, which names it
+# and labels it with the run, so nothing a run creates outlives it:
+#
+# - `--rm` removes a container when it exits. A container whose `docker run`
+#   client is killed between create and start (a subprocess timeout, Ctrl-C)
+#   never exits: it stays "created", holding its anonymous volumes, until
+#   someone removes it. `run_container` removes it by name on any exception.
+# - pytest-timeout's thread method and SIGTERM end the process with no
+#   `finally`. The controller removes the run's containers and volumes when the
+#   session finishes, and the first Docker test of any later run removes those
+#   of runs whose process is gone.
+#
+# Containers share one cache volume per run, on the image user's cache
+# directory, where trivy (and grype, in an image that carries it) keeps its
+# database. Without it each scan container downloaded trivy's database into its
+# own layer and threw it away (measured: one download per scan container, one
+# per run with the volume). One Docker test runs at a
+# time on the machine (`pytest_runtest_protocol` below), so no two scans write
+# the cache, or the disk, at once.
+
+_DOCKER_RUN_ENV = "JMO_DOCKER_TEST_RUN"  # "<controller pid>-<random>"
+DOCKER_RUN_LABEL = "jmo-security.test.run"
+DOCKER_HOST_LABEL = "jmo-security.test.host"
+DOCKER_CACHE_MOUNT = "/home/jmo/.cache"  # the image user's XDG cache
+_DOCKER_TEST_LOCK = Path(tempfile.gettempdir()) / (
+    f"jmo-docker-tests-{os.getuid()}.lock"
+    if hasattr(os, "getuid")
+    else "jmo-docker-tests.lock"
+)
+_docker_cache_volumes_created: set[str] = set()
+_docker_dead_runs_reaped = False
+_docker_tests_reported = False
+
+
+def _docker_run_id() -> str:
+    return os.environ[_DOCKER_RUN_ENV]
+
+
+def docker_test_labels() -> list[str]:
+    """`--label` options naming this run, for anything a test creates in
+    Docker: the sweeps below remove what carries them."""
+    return [
+        "--label",
+        f"{DOCKER_RUN_LABEL}={_docker_run_id()}",
+        "--label",
+        f"{DOCKER_HOST_LABEL}={socket.gethostname()}",
+    ]
+
+
+def _docker_quiet(*args: str, timeout: int = 120) -> str:
+    """stdout of a docker housekeeping command; empty when docker cannot answer."""
+    try:
+        return subprocess.run(
+            ["docker", *args], capture_output=True, text=True, timeout=timeout
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _remove_docker_objects(containers: list[str], volumes: list[str]) -> None:
+    """Containers first, with their anonymous volumes: a volume in use cannot go."""
+    if containers:
+        _docker_quiet("rm", "--force", "--volumes", *containers)
+    if volumes:
+        _docker_quiet("volume", "rm", "--force", *volumes)
+
+
+def _labelled_docker_objects(*filters: str) -> tuple[list[str], list[str]]:
+    """IDs of the containers and names of the volumes carrying every filter."""
+    options = [arg for f in filters for arg in ("--filter", f"label={f}")]
+    containers = _docker_quiet("ps", "--all", "--quiet", *options).split()
+    volumes = _docker_quiet("volume", "ls", "--quiet", *options).split()
+    return containers, volumes
+
+
+def docker_cache_volume() -> str:
+    """This run's cache volume, created with its labels on first use: one a
+    container creates by mounting it would carry none."""
+    name = f"jmo-test-cache-{_docker_run_id()}"
+    if name not in _docker_cache_volumes_created:
+        _docker_quiet("volume", "create", *docker_test_labels(), name)
+        _docker_cache_volumes_created.add(name)
+    return name
+
+
+def run_container(
+    args: Sequence[str], *, timeout: float, cache: bool = True, **kwargs
+) -> subprocess.CompletedProcess:
+    """`docker run --rm <args>` for a test, with output captured as text.
+
+    The container gets a name and this run's labels, and is removed by name if
+    anything interrupts the run, a `TimeoutExpired` included. With `cache`, this
+    run's cache volume is mounted on `DOCKER_CACHE_MOUNT`; a test that mounts
+    something of its own under that directory passes ``cache=False``. Call it
+    from a `docker`-marked test: that marker takes the lock, and the sweep at
+    the end of the run looks for one.
+    """
+    name = f"jmo-test-{uuid.uuid4().hex[:12]}"
+    argv = ["docker", "run", "--rm", "--name", name, *docker_test_labels()]
+    if cache:
+        argv += ["-v", f"{docker_cache_volume()}:{DOCKER_CACHE_MOUNT}"]
+    kwargs.setdefault("capture_output", True)
+    if "encoding" not in kwargs:
+        kwargs.setdefault("text", True)
+    try:
+        return subprocess.run([*argv, *args], timeout=timeout, **kwargs)
+    except BaseException:
+        _remove_docker_objects([name], [])
+        raise
+
+
+def _pid_alive(pid: int) -> bool:
+    if IS_WINDOWS:
+        return True  # os.kill(pid, 0) there terminates the process: never reap
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # exists, another user's
+    return True
+
+
+def _reap_dead_docker_runs() -> None:
+    """Remove what earlier runs on this host left behind, once their process is
+    gone. A run that is still going keeps everything: its pid answers."""
+    host = socket.gethostname()
+    stale_runs = set()
+    for kind in ("ps --all", "volume ls"):
+        listed = _docker_quiet(
+            *kind.split(),
+            "--filter",
+            f"label={DOCKER_HOST_LABEL}={host}",
+            "--format",
+            f'{{{{.Label "{DOCKER_RUN_LABEL}"}}}}',
+        )
+        for run in set(listed.split()):
+            owner = run.split("-", 1)[0]
+            if owner.isdigit() and not _pid_alive(int(owner)):
+                stale_runs.add(run)
+    for run in sorted(stale_runs):
+        _remove_docker_objects(
+            *_labelled_docker_objects(
+                f"{DOCKER_RUN_LABEL}={run}", f"{DOCKER_HOST_LABEL}={host}"
+            )
+        )
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item, nextitem):
+    """Run `docker`-marked tests one at a time on this machine.
+
+    Parallel scans each write the whole image's worth of scanner work to one
+    disk, and on a shared machine that stalled every process on it. xdist
+    groups would need `--dist loadgroup`, which nothing passes; a lock holds
+    under any `-n`, and across concurrent runs. It is taken outside
+    pytest-timeout's timer (tryfirst makes this the outer wrapper), so waiting
+    for another run's test does not count against this one's limit. Windows
+    has no fcntl and takes no lock; its CI jobs select no Docker test.
+    """
+    global _docker_dead_runs_reaped
+    if fcntl is None or item.get_closest_marker("docker") is None:
+        return (yield)
+    with open(_DOCKER_TEST_LOCK, "ab") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not _docker_dead_runs_reaped:
+            _docker_dead_runs_reaped = True
+            _reap_dead_docker_runs()
+        return (yield)
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    global _docker_tests_reported
+    if "docker" in report.keywords:
+        _docker_tests_reported = True
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """The controller removes the run's containers and volumes, once every
+    worker is done with them. Only after a Docker test, so a run without one
+    never calls docker."""
+    if hasattr(session.config, "workerinput") or not _docker_tests_reported:
+        return
+    _remove_docker_objects(
+        *_labelled_docker_objects(f"{DOCKER_RUN_LABEL}={_docker_run_id()}")
+    )
 
 
 # ---------------------------------------------------------------------------
