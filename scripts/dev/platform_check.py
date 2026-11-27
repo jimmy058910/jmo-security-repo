@@ -540,11 +540,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("paths", nargs="*", help="test files or node ids to run")
     parser.add_argument("--base", default="origin/dev", help="default: origin/dev")
     parser.add_argument("--rev", default="HEAD", help="commit to check (HEAD)")
+    # The system temp directory: the clones borrow the source's objects
+    # (`--shared`), so each holds only a working tree, and every run removes its
+    # own unless --keep. The basetemps the five runs write go there too.
     parser.add_argument(
         "--workdir",
         type=Path,
-        default=Path.home() / ".cache" / "jmo-platform-check",
-        help="scratch root (default ~/.cache/jmo-platform-check)",
+        default=Path(tempfile.gettempdir()) / "jmo-platform-check",
+        help="scratch root (default <system temp dir>/jmo-platform-check)",
     )
     parser.add_argument("--keep", action="store_true", help="keep the clones")
     parser.add_argument("--json", type=Path, help="also write the result here")

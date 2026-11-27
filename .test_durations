@@ -5081,7 +5081,7 @@
   "tests/unit/test_history_db_performance.py::test_batch_vs_optimized_performance_comparison": 0.2845894999918528,
   "tests/unit/test_history_db_performance.py::test_export_pagination_for_large_datasets": 26.440180500008864,
   "tests/unit/test_history_db_performance.py::test_finding_deduplication_across_scans": 0.11412600000039674,
-  "tests/unit/test_history_db_performance.py::test_history_list_performance_10k_scans": 305.48,
+  "tests/unit/test_history_db_performance.py::test_history_list_performance_10k_scans": 13.13,
   "tests/unit/test_history_db_performance.py::test_large_scan_storage_performance": 0.0004363000043667853,
   "tests/unit/test_history_db_performance.py::test_recalculate_scan_counts_performance": 0.24852979998104274,
   "tests/unit/test_history_db_performance.py::test_single_scan_insert_performance": 0.000511500024003908,
