@@ -705,6 +705,24 @@ All notable changes to JMo Security will be documented in this file.
   as `ci.yml`'s shards do, and list every test that needed a rerun as a warning (#1663).
   `tests/unit/test_fetch_rule_fixture.py` stubs `urlopen` and `os.replace` on the
   script's own names, not on the modules every thread shares (#1664).
+- **The end-to-end tests check what a user sees, and can fail.** The browser test runs
+  `jmo report` and `jmo diff` on results seeded with 18 findings of known severity and
+  reads the pages in Chromium: the counts, the rows, what each filter leaves, the
+  compliance and analytics tabs, 1001 findings served over HTTP, and the diff summary.
+  It used to pass 18 synthetic findings to the HTML writer and check for words the
+  filter chips print with no data at all. `jmo ci --fail-on` runs through the real CLI
+  on every PR: 1 at the threshold and 0 below it, while the 2 a scan of nothing should
+  give is an expected failure, since it reads 1 after #1708 (#1718). The image,
+  IaC, CI-gating and Kubernetes cases assert that their scanners ran and found
+  something, where an `if` or `--allow-missing-tools` let them pass having run nothing.
+  The scheduled E2E suites fail unless the tests they skip are exactly the listed ones
+  (`tests/e2e/expected-skips.yml`), and 48 `requires_tools` tests no job selected now
+  run in E2E Ubuntu, six of them repaired; `test_requires_tools_reachable.py` checks
+  each such test, not each file. Nightly Extended Tests reruns a flaky test and names
+  it, as Cross-Platform Tests does (#1663). Tests that scan with trivy read one shared
+  database from a cache per test process, where each used to fetch 1.8 GB or wait on
+  another's lock. The browser test marks two dashboard defects it found, #1710 and
+  #1711, as expected failures until they are fixed.
 - **Keeping the wizard's default timeout keeps opengrep's and zap's 900 s minimum
   (#1627).** Since #1486 a `--timeout` on the command line wins over that minimum. A user
   who opened "Customize advanced settings?" and pressed Enter at `Timeout [600]` got

@@ -104,16 +104,23 @@ tests/e2e/
 
 ### Dashboard Visual Tests
 
-`test_dashboard_visual.py` — Playwright visual tests for the HTML dashboard:
+`test_dashboard_visual.py` runs `jmo report` and `jmo diff` on results
+directories seeded with 18 findings of known severity, then reads the pages in
+Chromium. It asserts the counts, the rows, what each severity chip, the tool
+filter and the search leave, the compliance and analytics tabs, a 1001-finding
+report served over HTTP (and the `file://` hint for it), and the diff page's
+summary and severity filter. Two known defects, #1710 and #1711, are `xfail(strict=True)`.
 
 Requires installation before use:
 
 ```bash
-pip install pytest-playwright
-playwright install chromium
+uv sync --group dev --extra visual
+uv run playwright install chromium
 ```
 
-Run via `make test-e2e-visual` or `pytest tests/e2e/test_dashboard_visual.py -v`. Tests are automatically skipped if Playwright is not installed.
+Run via `make test-e2e-visual` or `pytest tests/e2e/test_dashboard_visual.py -v`.
+Without Playwright the module skips at import; the scheduled `e2e-visual` job
+fails on any skip.
 
 ### Docker Workflows (U9-U11, M5-M6, W3-W4)
 
@@ -164,8 +171,19 @@ Each test validates:
 4. **Scanned something:** `meta.target_count` >= 1 for every scan, and >= 1
    finding for a repository target, whether `--repo` or `--gitlab-repo` (a scan
    that rejected every target exits 1 and writes empty outputs, so existing
-   files prove nothing)
+   files prove nothing). An image or IaC case also asserts that each tool it
+   names ran on every target and found something, and that every target has
+   a finding (`validate_scanners_found`, `validate_every_target_found_something`):
+   `--allow-missing-tools` exits 0 with every tool missing
 5. **Performance:** Within the test's time limit
+
+## Expected skips
+
+The scheduled Ubuntu and macOS suites may skip only the tests listed for them
+in [expected-skips.yml](expected-skips.yml), each with its reason.
+`scripts/dev/check_skip_set.py` fails a suite on a skip the file does not list
+and on a listed test that did not skip, so the file is exactly what skipped.
+When a test starts to run on a runner, delete its entry.
 
 ## CI/CD Integration
 
@@ -175,6 +193,14 @@ See [.github/workflows/scheduled.yml](../../.github/workflows/scheduled.yml)
 
 - Schedule: 4AM UTC weekdays (e2e-ubuntu, e2e-macos jobs)
 - Manual workflow dispatch with `task: e2e` or `task: all`
+
+No pull request runs these jobs. Verify a change to them by dispatching on the
+branch: `gh workflow run scheduled.yml --ref <branch> -f task=e2e`.
+
+e2e-ubuntu also runs the `requires_tools` integration tests that need its
+scanners (`tests/integration/` and `test_linux_specific.py`, without xdist),
+and fails on any skip among them. `tests/unit/test_requires_tools_reachable.py`
+fails a PR that leaves a `requires_tools` test selected by no workflow.
 
 ## Success Criteria
 

@@ -5,6 +5,8 @@ Provides:
 - e2e_fixtures_dir: Path to e2e test fixtures
 - validate_basic_scan: Helper to assert a scan scanned a target and wrote valid output
 - validate_multi_target: Helper to assert multi-target scan output
+- validate_scanners_found: Helper to assert named tools ran on every target and found something
+- validate_every_target_found_something: Helper to assert each scanned target has a finding
 - current_platform: Return current platform as linux/darwin/win32
 
 Note: ``jmo_scan_runner`` is intentionally named differently from the root-level
@@ -19,6 +21,7 @@ import json
 import shutil
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -152,6 +155,56 @@ def validate_basic_scan(results_dir: Path) -> None:
 
     dashboard_file = summaries / "dashboard.html"
     assert dashboard_file.exists(), f"dashboard.html not found in {summaries}"
+
+
+def tool_runs(results_dir: Path) -> list[dict]:
+    """Every (tool, target) row of `.scan_metadata.json`."""
+    metadata = json.loads((results_dir / ".scan_metadata.json").read_bytes())
+    return metadata["tool_runs"]
+
+
+def validate_scanners_found(results_dir: Path, tools: tuple[str, ...]) -> None:
+    """Each named tool ran on every target it was given, and found something.
+
+    `validate_basic_scan` asks a target that is not a repository only for
+    ``meta.target_count``, and a scan under ``--allow-missing-tools`` exits 0
+    with every tool missing, so an image or IaC case passed having run nothing:
+    the gap #1550 closed for U4 alone. Rows are read per target, since
+    `scanner_states` keeps only the last row of a tool. A finding count is a
+    floor of one, not a number: the image's CVEs and the scanners' rules move.
+    """
+    rows = tool_runs(results_dir)
+    _, findings = _read_summary(results_dir)
+    found_by = Counter(f["tool"]["name"] for f in findings)
+    for tool in tools:
+        mine = [r for r in rows if r["tool"] == tool]
+        assert mine, f"{tool} has no row in .scan_metadata.json: it was not planned"
+        not_ran = {r["target"]: r["state"] for r in mine if r["state"] != "ran"}
+        assert not not_ran, f"{tool} did not run on every target: {not_ran}"
+        assert found_by[tool] >= 1, (
+            f"{tool} ran and contributed no finding; findings by tool: {dict(found_by)}"
+        )
+
+
+def validate_every_target_found_something(results_dir: Path) -> None:
+    """Every target the scan planned produced at least one finding.
+
+    A finding names its target in a sanitized form (``alpine_3.19`` for the
+    row's ``alpine:3.19``), so this compares how many targets have findings
+    with how many the scan ran, rather than the names themselves.
+    """
+    planned = {(r["target_type"], r["target"]) for r in tool_runs(results_dir)}
+    _, findings = _read_summary(results_dir)
+    # A finding without a target names none, so it cannot stand for one.
+    found = {
+        (f["target"].get("type"), f["target"].get("name"))
+        for f in findings
+        if isinstance(f.get("target"), dict) and f["target"].get("name")
+    }
+    assert len(found) >= len(planned), (
+        f"{len(planned)} target(s) scanned, {len(found)} with findings: "
+        f"planned {sorted(planned)}, found {sorted(found, key=str)}"
+    )
 
 
 def validate_multi_target(results_dir: Path) -> None:
