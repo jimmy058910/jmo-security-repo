@@ -104,9 +104,10 @@ def extract_changelog_section(
 def get_contributors_since_last_release() -> list[str]:
     """Get list of unique contributors since last release tag."""
     try:
-        # Get the previous release tag
+        # Get the previous release tag. Only a v* tag is a release: answer keys
+        # are assets of releases with tags of their own (#1722).
         result = subprocess.run(
-            ["git", "describe", "--tags", "--abbrev=0", "HEAD^"],
+            ["git", "describe", "--tags", "--abbrev=0", "--match", "v*", "HEAD^"],
             capture_output=True,
             text=True,
             encoding="utf-8",
