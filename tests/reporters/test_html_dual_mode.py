@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from scripts.core.reporters.html_reporter import INLINE_THRESHOLD, write_html
+from scripts.core.reporters.html_reporter import (
+    INLINE_MARK,
+    INLINE_THRESHOLD,
+    write_html,
+)
 
 
 def test_inline_mode_small_dataset(tmp_path: Path):
@@ -265,23 +269,34 @@ def test_external_mode_findings_json_formatting(tmp_path: Path):
 
 
 def test_empty_dataset_uses_inline(tmp_path: Path):
+    """A scan with no findings is an inline page the dashboard can read (#1710).
+
+    `window.__FINDINGS__ = []` is what external mode leaves in the page too, so
+    that text alone cannot say which mode this is: this test asserted only it,
+    and passed while the page showed "Loading Failed" over a fetch of a
+    dashboard-data.json no report writes. The mark is what useFindings reads.
     """
-    Test that empty datasets use inline mode (performance optimization).
-    """
-    findings = []
+    out_path = tmp_path / "dashboard.html"
+    write_html([], out_path)
+
+    html_content = out_path.read_text(encoding="utf-8")
+
+    assert f"{INLINE_MARK}; window.__FINDINGS__ = []" in html_content
+    assert not (tmp_path / "dashboard-data.json").exists()
+
+
+def test_only_inline_mode_marks_the_page(tmp_path: Path):
+    """The mark must be absent above the threshold, or the dashboard would read
+    the [] left in the page as the findings and never fetch the real ones."""
+    findings = [
+        {"id": f"m-{i}", "severity": "LOW"} for i in range(INLINE_THRESHOLD + 1)
+    ]
 
     out_path = tmp_path / "dashboard.html"
     write_html(findings, out_path)
 
-    html_content = out_path.read_text(encoding="utf-8")
-
-    # React implementation: empty dataset embedded, placeholder replaced
-    # Look for the replaced placeholder with empty array
-    assert "window.__FINDINGS__ = []" in html_content
-
-    # No external file needed
-    findings_json = tmp_path / "dashboard-data.json"
-    assert not findings_json.exists()
+    assert INLINE_MARK not in out_path.read_text(encoding="utf-8")
+    assert (tmp_path / "dashboard-data.json").exists()
 
 
 def test_html_escaping_in_inline_mode(tmp_path: Path):

@@ -43,6 +43,7 @@ from pathlib import Path
 import pytest
 
 from scripts.core.reporters.html_reporter import (
+    INLINE_MARK,
     PROVENANCE_META_NAME,
     TEMPLATE_FALLBACK,
     TEMPLATE_REACT_BUILD,
@@ -280,6 +281,29 @@ def test_the_shipped_bundle_satisfies_the_placeholder_contract():
         f"{SHIPPED_BUNDLE} no longer contains the placeholder write_html "
         "replaces; every dashboard would fall back to the static page"
     )
+    # str.replace rewrites every occurrence, so a second copy of the
+    # placeholder (a string literal in the app, say) would get the findings too.
+    assert bundle.count("window.__FINDINGS__ = []") == 1
+
+
+def test_the_shipped_bundle_reads_the_inline_mark_write_html_writes():
+    """The reporter and the hook must name the same global (#1710).
+
+    useFindings reads the findings from the page only when write_html has
+    marked it; if the two spellings drift, every inline dashboard fetches a
+    dashboard-data.json that was never written and shows "Loading Failed".
+    The browser tests would catch that, but PR CI does not run them.
+    """
+    name = INLINE_MARK.split("=", 1)[0].strip()
+    assert name.startswith("window.__"), f"unexpected mark shape: {INLINE_MARK!r}"
+    bundle = SHIPPED_BUNDLE.read_text(encoding="utf-8")
+    assert name in bundle, (
+        f"{SHIPPED_BUNDLE} never reads {name}, the mark write_html sets in "
+        "inline mode; rebuild it with 'npm run build' in scripts/dashboard/"
+    )
+    # The unrendered bundle only reads the mark. If it also set it, external
+    # mode would read the empty placeholder as the findings.
+    assert INLINE_MARK not in bundle
 
 
 def test_rendering_from_the_shipped_bundle_declares_the_real_build(tmp_path):

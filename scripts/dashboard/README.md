@@ -87,37 +87,39 @@ scripts/dashboard/
 **Python controls which mode via template injection:**
 
 ```python
-# scripts/core/reporters/html_reporter_react.py (future implementation)
+# scripts/core/reporters/html_reporter.py (write_html, simplified)
 INLINE_THRESHOLD = 1000
+INLINE_MARK = "window.__FINDINGS_INLINE__ = true"
 
 if len(findings) <= INLINE_THRESHOLD:
-    # Inline mode: embed JSON in HTML
-    injected_html = template.replace(
+    # Inline mode: mark the page, then embed the findings
+    doc = template.replace(
         'window.__FINDINGS__ = []',
-        f'window.__FINDINGS__ = {json.dumps(findings)}'
+        f'{INLINE_MARK}; window.__FINDINGS__ = {data_json}'
     )
 else:
-    # External mode: write findings.json separately
-    (out_path.parent / "findings.json").write_text(json.dumps(findings))
-    injected_html = template  # Load via fetch()
+    # External mode: leave the placeholder, write dashboard-data.json beside the page
+    (out_path.parent / "dashboard-data.json").write_text(json.dumps(findings))
 ```
 
-**React automatically detects mode:**
+**React reads the mark, never the array's length:**
 
 ```typescript
 // src/hooks/useFindings.ts
 const embedded = (window as any).__FINDINGS__
 
-if (embedded && Array.isArray(embedded) && embedded.length > 0) {
-  // Inline mode: instant load
+if ((window as any).__FINDINGS_INLINE__ === true && Array.isArray(embedded)) {
+  // Inline mode, including a scan with no findings (embedded is [])
   setFindings(embedded)
 } else {
-  // External mode: fetch findings.json
-  const response = await fetch('findings.json')
-  const json = await response.json()
-  setFindings(json.findings)  // v1.0.0 metadata wrapper supported
+  // External mode: fetch dashboard-data.json
+  const response = await fetch('dashboard-data.json')
+  // ...
 }
 ```
+
+A scan with no findings embeds `[]`, the same value external mode leaves in
+the page, so the length cannot tell the two apart (#1710).
 
 ## Bundle Size
 
@@ -266,8 +268,8 @@ npm run build -- --mode analyze  # Visualize bundle composition
 **Findings not loading:**
 
 1. Check browser console for errors
-2. Verify `window.__FINDINGS__` is populated (inline mode)
-3. Verify `findings.json` exists (external mode)
+2. Inline mode (up to 1000 findings): the page sets `window.__FINDINGS_INLINE__ = true` before `window.__FINDINGS__`
+3. External mode: `dashboard-data.json` sits beside `dashboard.html`, and the page is served over HTTP (browsers block `fetch()` from `file://`)
 4. Check CSP headers allow `fetch()` to `self`
 
 **Performance issues:**
