@@ -9,14 +9,29 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import subprocess
 
 import pytest
 
 # The fixtures, copied out of the work tree (conftest says why).
 from tests.e2e.conftest import (
     E2E_FIXTURES,
+    tool_runs,
     validate_basic_scan,
 )
+
+
+def _cluster_answers(context: str) -> bool:
+    """Whether kubectl reaches a cluster through `context`."""
+    try:
+        done = subprocess.run(
+            ["kubectl", "--context", context, "cluster-info", "--request-timeout=10s"],
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return done.returncode == 0
 
 
 @pytest.mark.e2e
@@ -85,7 +100,15 @@ class TestAdvancedTargets:
         reason="kubectl not installed",
     )
     def test_k8s_cluster_scan(self, jmo_scan_runner):
-        """A2: Kubernetes cluster scan (requires kubectl + running cluster)."""
+        """A2: Kubernetes cluster scan (requires kubectl + running cluster).
+
+        The Ubuntu runner has kubectl and no cluster, and this asserted only
+        `rc in (0, 1)`, so it passed there in 0.7 s having scanned nothing (run
+        45625803839). It now skips unless the context answers, and when it
+        runs, trivy must have run on the cluster.
+        """
+        if not _cluster_answers("default"):
+            pytest.skip("kubectl context 'default' has no reachable cluster")
         rc, stdout, stderr, results_dir = jmo_scan_runner(
             [
                 "ci",
@@ -99,6 +122,9 @@ class TestAdvancedTargets:
             ]
         )
         assert rc in (0, 1), f"K8s scan failed: {stderr[:500]}"
+        validate_basic_scan(results_dir)
+        trivy = {r["target"]: r["state"] for r in tool_runs(results_dir)}
+        assert trivy and set(trivy.values()) == {"ran"}, trivy
 
     @pytest.mark.timeout(4500)
     def test_full_matrix_scan(self, jmo_scan_runner):

@@ -1,10 +1,12 @@
-"""The nightly Cross-Platform Tests rerun a flaky test and still name it (#1663).
+"""The nightly test jobs rerun a flaky test and still name it (#1663).
 
 ci.yml's Ubuntu and macOS shards pass `--reruns 2 --reruns-delay 2`; the
 nightly passed none, so one flaky test turned it red and filed an issue (the
 nights of 2026-11-15, #1634, and 2026-11-16, #1623, were one flake each). It
 now reruns as the shards do, Windows still excepted, and a step lists every
 test that needed a rerun as a warning, so a flake shows on a green run.
+Nightly Extended Tests, the Ubuntu job that runs all of `tests/`, was left
+without reruns (found 2026-11-18) and now has the same pair of steps.
 
 These read the job from scheduled.yml and run its listing step's own script,
 fed by a real pytest-rerunfailures run, as GitHub runs a step.
@@ -25,6 +27,11 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "scheduled.yml"
 LOG = "nightly-pytest.log"
 LISTING = "List the tests that passed only on a rerun"
+# Each job with reruns, and the name of its last test step.
+JOBS = {
+    "nightly-cross-platform": "Run CLI tests",
+    "nightly-extended-tests": "Run full test suite (including slow tests)",
+}
 
 needs_bash = pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None,
@@ -32,9 +39,9 @@ needs_bash = pytest.mark.skipif(
 )
 
 
-def _steps() -> list[dict]:
+def _steps(job: str = "nightly-cross-platform") -> list[dict]:
     jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
-    return jobs["nightly-cross-platform"]["steps"]
+    return jobs[job]["steps"]
 
 
 def _pytest_steps() -> list[dict]:
@@ -58,12 +65,35 @@ def test_both_test_steps_rerun_off_windows_and_keep_their_exit_code() -> None:
         assert step["shell"] == "bash", step["name"]
 
 
-def test_the_listing_step_runs_after_the_tests_whatever_they_did() -> None:
-    names = [s.get("name") for s in _steps()]
-    listing = _steps()[names.index(LISTING)]
-    assert names.index(LISTING) > names.index("Run CLI tests")
+def test_the_extended_suite_reruns_and_keeps_its_exit_code() -> None:
+    job = "nightly-extended-tests"
+    (step,) = [s for s in _steps(job) if s.get("name") == JOBS[job]]
+    # One runner, Ubuntu, so the flags are written out rather than chosen by OS.
+    assert "--reruns 2 --reruns-delay 2 -p no:xdist" in step["run"]
+    assert "-rfER" in step["run"], "without R a rerun has no id in the log"
+    assert f"| tee -a {LOG}" in step["run"]
+    assert step["shell"] == "bash"
+
+
+@pytest.mark.parametrize("job,last_test_step", JOBS.items())
+def test_the_listing_step_runs_after_the_tests_whatever_they_did(
+    job: str, last_test_step: str
+) -> None:
+    names = [s.get("name") for s in _steps(job)]
+    listing = _steps(job)[names.index(LISTING)]
+    assert names.index(LISTING) > names.index(last_test_step)
     assert listing["if"] == "always()"
     assert listing["shell"] == "bash"  # it runs on windows-latest too
+
+
+def test_both_jobs_list_reruns_with_the_same_script() -> None:
+    """The behavioural tests below run the cross-platform job's copy; this
+    keeps the extended job's copy the same script."""
+    scripts = {
+        job: next(s["run"] for s in _steps(job) if s.get("name") == LISTING)
+        for job in JOBS
+    }
+    assert len(set(scripts.values())) == 1, scripts
 
 
 def _list(tmp_path: Path, log: bytes | None) -> subprocess.CompletedProcess:
