@@ -30,23 +30,26 @@ def _exited_pid() -> int:
 @skip_on_windows  # no reaper there: os.kill(pid, 0) would end the process
 def test_the_reaper_removes_only_runs_whose_process_is_gone(monkeypatch):
     """Containers and volumes go for a run whose owner has exited. A live
-    owner's stay, whoever owns them, and so does a label naming no pid."""
+    owner's stay, and so do another host's under the same run id (a pid there
+    says nothing here), and a label naming no pid."""
     dead, live = _exited_pid(), os.getpid()
     calls: list[tuple[str, ...]] = []
+
+    host_filter = f"label={conftest.DOCKER_HOST_LABEL}={socket.gethostname()}"
 
     def docker(*args: str, timeout: int = 120) -> str:
         calls.append(args)
         if "--format" in args:  # the run labels on this host
             return f"{dead}-aa\n{live}-bb\nnot-a-pid\n"
-        if "--quiet" in args:  # the objects of one run
-            run = args[-1].rsplit("=", 1)[1]
-            return f"obj-{run}\n"
+        if "--quiet" in args:  # the objects of one run, on this host only
+            run_filter = next(a for a in args if conftest.DOCKER_RUN_LABEL in a)
+            run = run_filter.rsplit("=", 1)[1]
+            return f"obj-{run}\n" if host_filter in args else f"elsewhere-{run}\n"
         return ""
 
     monkeypatch.setattr(conftest, "_docker_quiet", docker)
     conftest._reap_dead_docker_runs()
 
-    host_filter = f"label={conftest.DOCKER_HOST_LABEL}={socket.gethostname()}"
     listings = [c for c in calls if "--format" in c]
     assert len(listings) == 2, calls  # containers, then volumes
     assert all(host_filter in c for c in listings), listings

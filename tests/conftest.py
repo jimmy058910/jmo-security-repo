@@ -762,7 +762,11 @@ def _reap_dead_docker_runs() -> None:
             if owner.isdigit() and not _pid_alive(int(owner)):
                 stale_runs.add(run)
     for run in sorted(stale_runs):
-        _remove_docker_objects(*_labelled_docker_objects(f"{DOCKER_RUN_LABEL}={run}"))
+        _remove_docker_objects(
+            *_labelled_docker_objects(
+                f"{DOCKER_RUN_LABEL}={run}", f"{DOCKER_HOST_LABEL}={host}"
+            )
+        )
 
 
 @pytest.hookimpl(wrapper=True, tryfirst=True)
