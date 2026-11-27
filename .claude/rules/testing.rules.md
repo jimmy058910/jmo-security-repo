@@ -77,9 +77,10 @@ is *worse than no entry*, and it hits exactly the tests that matter —
 **305 s** (measured with the `skipif` bypassed), so its entry was hand-corrected
 to that value. Since its seeding stopped checkpointing on every connection close
 it takes **13 s** under coverage (measured on Linux, 2026-11-27), and the entry
-says so. Correct such an entry by hand whenever the test's cost changes. The three `tests/e2e/test_cross_platform.py` entries are
-Linux/macOS-only and still carry placeholder durations; regenerating on Linux
-is the durable fix if the shards drift again.
+says so. Correct such an entry by hand whenever the test's cost changes. The
+three `tests/e2e/test_cross_platform.py` entries are Linux/macOS-only and still
+carry placeholder durations; regenerating on Linux is the durable fix if the
+shards drift again.
 
 ## Running Tests Locally
 

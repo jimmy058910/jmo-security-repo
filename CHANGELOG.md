@@ -684,11 +684,9 @@ All notable changes to JMo Security will be documented in this file.
   own subprocess budgets: pyproject's 120 s default sat below most of them and ended the
   process before any cleanup could run. Measured in one serial run each against the
   published image: 216 s where it took 439 s, and a pytest killed mid-scan left a running
-  container and its cache volume that the next run's first Docker test removed.
-  The e2e fixtures copy and the GitLab cleanup
-  test's clone directory moved under pytest's basetemp: an interrupted run left one
-  fixtures directory per xdist worker in the system temp directory, and the cleanup test
-  left a clone directory there on every run.
+  container and its cache volume that the next run's first Docker test removed. The GitLab
+  cleanup test's clone directory moved under `tmp_path`: the test makes its removal fail
+  on purpose, and it left one in the system temp directory on every run.
 - **The history tests that seed hundreds of scans no longer fsync on every one.**
   `store_scan` opens and closes two connections per call, and in WAL mode the last one to
   close checkpoints and fsyncs: 4 fsync calls per scan. A test now holds a connection open
