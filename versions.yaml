@@ -114,7 +114,7 @@ binary_tools:
     critical: false
     notes: v2.0.0 - reads lockfiles against offline databases; a scan never downloads
   opengrep:
-    version: 2.0.0
+    version: 2.1.0
     github_repo: opengrep/opengrep
     description: Multi-language SAST scanner (runs JMo's offline rule bundle)
     # No version in the asset name. Linux and macOS get a bare binary (the
@@ -188,6 +188,14 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-11-27'
+  action: Updated opengrep
+  tools_updated:
+  - tool: opengrep
+    old_version: 2.0.0
+    new_version: 2.1.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-11-26'
   action: Updated opa
   tools_updated:

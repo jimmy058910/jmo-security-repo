@@ -284,6 +284,11 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **A test run stops before it fills the disk.** The test suite ends the session when a
+  filesystem it writes to has less than 10 GiB free, or less than a tenth of a smaller
+  one (`JMO_TEST_MIN_FREE_GIB` sets the floor, `0` turns it off; unset, it is off on CI).
+  A passing test's `tmp_path` is now removed when it ends; pass
+  `-o tmp_path_retention_policy=all` to keep them. A `--basetemp` you name still stays.
 - **zizmor 1.32.0, osv-scanner 2.7.1, checkov 3.4.6, trufflehog 3.100.0, syft 1.57.2,
   opa 1.22.4 and ruff 0.17.6** (#1683, #1684, #1685). zizmor is handed only
   `.pre-commit-config.yaml`, the one name pre-commit reads: given a
@@ -292,21 +297,27 @@ All notable changes to JMo Security will be documented in this file.
   (a bundled dependency, or every registry package under npm's
   `omit-lockfile-registry-resolved`), which 2.7.0 took for local packages and never
   matched, so the scan no longer needs to name such lockfiles as partly audited.
-- **opengrep 2.0.0 (#1622).** Its release renamed the Linux binary
+- **opengrep 2.1.0 (#1622).** Its 2.0.0 release renamed the Linux binary
   (`opengrep_linux_<arch>`, now static), dropped the musl builds, and ships Windows as a
   zip of `opengrep.exe` and the six DLLs it loads, which `jmo tools install` now keeps
-  beside the exe; the image, CI and the devcontainer fetch the new names. 2.0.0 lists a
-  git repository's files with `git ls-files` and fails the whole run when git cannot (git
-  not installed, or refusing a repository another user owns), where 1.32.0 walked the
-  files: JMo now tries `git ls-files` first and passes `--no-git-ignore` when it fails.
-  With the same files, 2.0.0 found what 1.32.0 found on juice-shop, and one more on this
-  repository; it writes no match text to its log, unpacks nothing on first run, and
-  scanned juice-shop about a third faster. It skips tracked files a `.gitignore` pattern
-  matches (re-included with `!`, or added with `git add -f`: 27 of juice-shop's 212
-  findings), its Dockerfile rules no longer read `*-Dockerfile` or `*_Dockerfile`, and a
-  folder scanned inside a git repository under `tests/` or `build/` examines 0 files
+  beside the exe; the image, CI and the devcontainer fetch the new names. In a git
+  repository it reads the files `git ls-files` lists: the repository's `.gitignore` keeps
+  out what it ignores, and every file git tracks is read, one a `.gitignore` pattern
+  matches included. Where git cannot list the files (git not installed, or refusing a
+  repository another user owns) it walks the folder, with a warning. It writes no match
+  text to its log and unpacks nothing on first run; its Dockerfile rules no longer read
+  `*-Dockerfile` or `*_Dockerfile`; and `--disable-version-check` is no longer passed,
+  since it is ignored. Inside a repository it matches JMo's exclusions and a rule's
+  `paths:` against a file's path from the repository's root, so a folder scanned under
+  `vendor/`, `node_modules/`, `venv/` or `.venv/` examines 0 files, and a bundle rule that
+  leaves out test paths stays silent under `tests/`
   ([KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md#opengrep-also-skips-tests-build-output-and-vendored-code)).
-  `--disable-version-check` is no longer passed: 2.0.0 ignores it.
+  2.0.0 failed the whole run where git could not list the files, skipped tracked files a
+  `.gitignore` pattern matched, and read nothing in a folder under `tests/` or `build/`
+  inside a repository; JMo worked around the first with its own `git ls-files` check,
+  which 2.1.0 made unnecessary. On juice-shop, 2.1.0 reads 1,142 files and reports 223
+  findings where 2.0.0 read 708 and reported 197. A machine with opengrep 2.0.0 installed
+  needs `jmo tools update opengrep`.
 - **Breaking. A finding's NIST CSF 2.0 mappings name CSF 2.0 subcategories, in CSF 2.0's
   words (#1572).** They carried CSF 1.1: `PR.AC-1`, `PR.IP-1`, `PR.PT-3` and `DE.CM-8` do
   not exist in CSF 2.0, and `GV.SC-3` quoted 1.1's ID.SC-1. Checked against NIST CSWP 29
@@ -644,6 +655,21 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A scan with several targets no longer loses Trivy rows to Trivy's own cache (#1717).**
+  Every Trivy run uses one cache directory. An image or Kubernetes run holds a lock on its
+  `fanal/`, and a run that waited on that lock for about 5 s exited 1 with no output
+  ("cache may be in use by another process: timeout"). A run on a cache with no checks
+  bundle could also read one another run was still unpacking. `jmo scan --images-file`
+  with six images, `--tools trivy --threads 6` and a cold cache lost 5 of the 6 rows and
+  exited 1. A scan now runs Trivy on one target at a time, as it does zap; the other tools
+  still run side by side. The same scan then gave six rows and exit 0 in five cold runs of
+  six, three in a row; the other lost one row to Trivy's own five-minute `--timeout`
+  while another process kept the Docker daemon busy (an 11 MB export took 119 s a few
+  minutes later). The cost is the overlap given up: on a cold cache the six images took
+  35 to 46 s, as long as the old scan that lost five rows; on a warm cache 10 to 17 s
+  against 7 s, and four small repositories 7 s against 5 s. A failed row's `detail` in
+  `scan-timings.json` now ends with the tail of the tool's stderr, the text its log line
+  already printed. It read only "no output" before, so the row never said why.
 - **A report on a scan with no findings opens to an empty dashboard, not "Loading
   Failed" (#1710).** Up to 1,000 findings `dashboard.html` carries them inline. The
   dashboard took an empty list there to mean the findings were in a separate
@@ -674,7 +700,10 @@ All notable changes to JMo Security will be documented in this file.
   prompt cancelled, the scan raising), `jmo ci` still ran its report over the results
   directory. If an earlier run had filled it, that run's findings went into the summaries
   and into history as a new scan. Measured: a `--repo` that does not exist exited 1,
-  stored a second history row and rewrote `summaries/`. The exit codes are unchanged.
+  stored a second history row and rewrote `summaries/`. Each case now exits 2, the code
+  for a run that checked nothing, except the scan raising: a runtime error, which exits 1
+  as it does without `--allow-missing-tools`. `jmo scan`'s own exit codes are unchanged
+  (#1718).
 - **A scan no longer leaves an empty `.jmo/` in the working directory (#1700).**
   The checkpoint `jmo scan --resume` reads was kept at `<results dir's parent>/.jmo/`,
   the working directory with the default `--results-dir results`, and only the file was
@@ -714,8 +743,8 @@ All notable changes to JMo Security will be documented in this file.
   compliance and analytics tabs, 1001 findings served over HTTP, and the diff summary.
   It used to pass 18 synthetic findings to the HTML writer and check for words the
   filter chips print with no data at all. `jmo ci --fail-on` runs through the real CLI
-  on every PR: 1 at the threshold and 0 below it, while the 2 a scan of nothing should
-  give is an expected failure, since it reads 1 after #1708 (#1718). The image,
+  on every PR: 1 at the threshold, 0 below it, and 2 for a repository that does not
+  exist (#1718). The image,
   IaC, CI-gating and Kubernetes cases assert that their scanners ran and found
   something, where an `if` or `--allow-missing-tools` let them pass having run nothing.
   The scheduled E2E suites fail unless the tests they skip are exactly the listed ones

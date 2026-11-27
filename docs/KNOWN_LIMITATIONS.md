@@ -297,7 +297,7 @@ name: Go test files (`*_test.go`) and minified JavaScript (`*.min.js`). JMo's ow
 exclusions are passed on top of it, so a flaw that lives only in test code is not
 reported by opengrep.
 
-Measured with opengrep 1.32.0 and again with 2.0.0 on a fixture with one Python file
+Measured with opengrep 1.32.0, 2.0.0 and 2.1.0 on a fixture with one Python file
 in each of `tests/`, `test/`, `deep/tests/`, `build/`, `dist/` and `node_modules/` and
 two others (`src/`, `docs/`): it scanned the two others and none of these. Given
 `main.go`, `main_test.go`, `app.js`, `app.min.js`, `x_test.py` and `test_x.py`, it
@@ -311,49 +311,56 @@ path opengrep is handed, so JMo runs it from inside the target and names the tar
 `.`: a repository checked out under a directory called `build/` or `tests/` is scanned
 all the same.
 
-One exception, new in opengrep 2.0.0: when the target is a folder *inside* a git
-repository, the list is matched against the folder's path from that repository's root.
-A scan of `<repository>/build/app` or `<repository>/tests/fixtures/app` examines 0 files
-and its row reads `failed:examined 0 files`, where 1.32.0 read the folder. The same
-folder outside any repository is scanned. Measured with 2.0.0 on 2026-11-17.
+When the target is a folder *inside* a git repository, opengrep 2.1.0 no longer applies
+the list to the folder itself: it is scanned even under `tests/`, `test/`, `build/` or
+`dist/`, and the list still applies to the folders below it. Two other kinds of pattern
+are matched against a file's path from the repository's root, not from the folder, so
+they reach it from above:
+
+- JMo's own exclusions. A folder under a directory named `vendor/`, `node_modules/`,
+  `venv/` or `.venv/`, such as `<repository>/vendor/app`, examines 0 files and its row
+  reads `failed:examined 0 files`.
+- A rule's `paths:` filter. A rule that leaves out a path does not report in a folder
+  whose path from the root matches it. In the rule bundle, five Apex rules exclude
+  `*test*`, which matches any directory whose name holds `test` (`tests/`, `latest/`),
+  and one Android rule excludes `sources/`.
+
+The same folder outside any repository is scanned in full. Measured with 2.1.0 on
+2026-11-27: the folders through JMo's scan loop, and the `paths:` filter with a rule of
+the same shape, which reported outside the repository and not under its `tests/`.
+(opengrep 2.0.0 examined 0 files in a folder under any of the eight names.)
 
 JMo leaves the list on: it does not pass the flag that turns it off.
 
-When the scanned directory lies inside a git work tree, opengrep also honours that
-repository's `.gitignore`. A target that is itself gitignored, such as a `dist/` or
-`vendor/` folder scanned on its own, examines 0 files, and its row reads
-`failed:examined 0 files`; scanning the whole repository leaves the same folder out.
-Measured with opengrep 1.32.0 in a scratch git repository whose `.gitignore` lists
-`gen/`: a scan of `gen/` read `failed:examined 0 files`, and a scan of the repository
-read `src/a.py` and not `gen/a.py`; 2.0.0 reads the same.
+When the scanned directory lies inside a git work tree, opengrep reads the files git
+lists, so it honours that repository's `.gitignore` and reads every file git tracks,
+including one a `.gitignore` pattern matches. A target that is itself gitignored and
+untracked, such as a `dist/` or `vendor/` folder scanned on its own, examines 0 files,
+and its row reads `failed:examined 0 files`; scanning the whole repository leaves the
+same folder out. Measured with opengrep 1.32.0 in a scratch git repository whose
+`.gitignore` lists `gen/`: a scan of `gen/` read `failed:examined 0 files`, and a scan
+of the repository read `src/a.py` and not `gen/a.py`; 2.0.0 and 2.1.0 read the same.
 
-opengrep 2.0.0 also skips a file that a `.gitignore` pattern matches even though git
-tracks it: one re-included by a later `!` line, or one added with `git add -f`
-([opengrep issue 922](https://github.com/opengrep/opengrep/issues/922)). On juice-shop,
-whose `.gitignore` re-includes `frontend/src/app` that way, it read 643 of 1,040 files
-and reported 185 findings where 1.32.0 reported 212. Measured on 2026-11-17.
-
-opengrep 2.0.0 asks git for that list, and when git cannot give it (git is not
-installed, or refuses a repository another user owns) the run fails outright. JMo tries
-`git ls-files` in the target first and, when it fails, passes `--no-git-ignore`, so
-opengrep reads the files on disk as 1.32.0 did, gitignored ones included.
+When git cannot list the files (git is not installed, or refuses a repository another
+user owns), opengrep walks the folder instead and prints a warning, so gitignored files
+are read as well. Measured with 2.1.0 on 2026-11-27: with git off PATH, a repository
+whose `.gitignore` lists `gen/` read `gen/a.py` beside `src/a.py`.
 
 **What to do:** to have opengrep read the directories above, either put an empty
 `.semgrepignore` at the root of the scanned repository, or add
 `--x-ignore-semgrepignore-files` to `per_tool.opengrep.flags` in `jmo.yml`, which
-changes nothing in the repository. The flag also lifts the exception for a folder
-inside a repository. Measured on 2.0.0 with the fixture above: with either, every file
-but `app.min.js` was scanned (1.32.0 read that one too), and the folder under `build/`
-was read. JMo still keeps the vendored trees and its results directory out through its
-own flags.
+changes nothing in the repository. Measured on 2.0.0 and 2.1.0 with the fixture above:
+with either, every file but `app.min.js` was scanned (1.32.0 read that one too). JMo
+still keeps the vendored trees and its results directory out through its own flags. For
+a folder under one of those trees inside a repository, scan a copy of it from outside
+the repository.
 
-For a gitignored target, or the files issue 922 skips, add `--no-git-ignore` to
-`per_tool.opengrep.flags`. Measured on 1.32.0 through JMo's scan loop, which runs
-opengrep from inside the target: the `gen/` scan above went from 0 files to 1, and the
-row from `failed` to `ran`; on 2.0.0 it brings juice-shop back to 1,040 files and 212
-findings. The flag reads gitignored files for every repository that config scans
+For a gitignored target, add `--no-git-ignore` to `per_tool.opengrep.flags`. Measured
+on 1.32.0 through JMo's scan loop, which runs opengrep from inside the target: the
+`gen/` scan above went from 0 files to 1, and the row from `failed` to `ran`; 2.1.0 does
+the same. The flag reads gitignored files for every repository that config scans
 (nested checkouts, caches and build output among them), so set it for the one scan that
-needs it. JMo then adds none of its own.
+needs it.
 
 ### The yara-x scanner runs only where YARA-X has a wheel
 

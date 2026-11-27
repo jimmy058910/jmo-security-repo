@@ -97,7 +97,7 @@ class ToolDefinition:
     # directory, Phase 4).
     env: Mapping[str, str] | None = None
     # One run of this tool at a time in the process, whatever runner holds it
-    # (`ToolDescriptor.exclusive`: zap, #1422).
+    # (`ToolDescriptor.exclusive`: zap, #1422; trivy, #1717).
     exclusive: bool = False
     # What the run costs the scan's memory budget, in MB
     # (`ToolDescriptor.memory_mb`; `scan_limits`).
@@ -205,7 +205,8 @@ def stop_requested() -> bool:
 
 # One lock per `exclusive` tool, held for the whole of a run, retries included:
 # two zap runs on JMo's one ZAP home, and the second exits 1 with no report
-# (#1422).
+# (#1422); two trivy runs on one cache, and the one that waits on its lock
+# exits 1 with no output (#1717).
 _EXCLUSIVE: dict[str, threading.Lock] = {}
 _EXCLUSIVE_LOCK = threading.Lock()
 

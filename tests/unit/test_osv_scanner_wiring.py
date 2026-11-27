@@ -653,7 +653,10 @@ def test_one_broken_lockfile_costs_only_its_own_findings(tmp_path, monkeypatch) 
     # Failed, naming only the lockfile that could not be read.
     assert row.state is State.FAILED
     assert row.reason is Reason.EXIT_CODE
-    assert row.detail == "sub/package-lock.json: Return code 127 not in (0, 1)"
+    assert row.detail == (
+        "sub/package-lock.json: Return code 127 not in (0, 1); "
+        f"stderr: {EXTRACTION_ERROR.strip()}"
+    )
     # The combined run's time is part of what the row cost.
     assert (row.invocations, row.seconds) == (3, 12.0)
 
@@ -770,7 +773,10 @@ def test_a_single_broken_lockfile_has_nothing_to_split_and_is_named(
 
     assert len(runner.rounds) == 1
     assert row.state is State.FAILED
-    assert row.detail == "app/package-lock.json: Return code 127 not in (0, 1)"
+    assert row.detail == (
+        "app/package-lock.json: Return code 127 not in (0, 1); "
+        f"stderr: {EXTRACTION_ERROR.strip()}"
+    )
 
 
 # --- what a failed row still kept (#1369) ---------------------------------------
@@ -850,7 +856,10 @@ def test_a_broken_lockfile_leaves_the_others_findings_on_the_row(
         row = _split(tmp_path / "repo", out, _writing(_sarif(2)))
 
     assert row.label == "failed:unaccepted exit code"
-    assert row.detail == "sub/package-lock.json: Return code 127 not in (0, 1)"
+    assert row.detail == (
+        "sub/package-lock.json: Return code 127 not in (0, 1); "
+        f"stderr: {EXTRACTION_ERROR.strip()}"
+    )
     assert row.kept_findings == 2
     # The failed run's line speaks for that run: the tool's other run's
     # findings are in this scan.
@@ -1102,9 +1111,12 @@ def test_a_failed_run_keeps_its_own_detail_beside_the_partly_read_note(
     ]
 
     assert row.state is State.FAILED
-    # The run's own failure first, named by its lockfile; then what it left out.
+    # The run's own failure first, named by its lockfile, with what the tool
+    # said; then what it left out.
     failure, partial = row.detail.split("; partly audited: ")
-    assert failure == "package-lock.json: Return code 127 not in (0, 1)"
+    assert (
+        failure == "package-lock.json: Return code 127 not in (0, 1); stderr: it broke"
+    )
     assert partial == "package-lock.json (left this out)"
 
 

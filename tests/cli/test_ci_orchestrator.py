@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.cli.ci_orchestrator import cmd_ci
+from scripts.cli.ci_orchestrator import SCAN_WROTE_RESULTS, cmd_ci
 from scripts.core.tool_registry import TOOL_MATRIX
 
 
@@ -734,8 +734,14 @@ def test_a_scan_usage_error_stops_ci_before_the_report(minimal_args, report_rc):
 def test_a_scan_stopped_by_ctrl_c_writes_no_report(minimal_args):
     """Decided 2026-11-05: after Ctrl-C a scan exits 130 with no report. `jmo
     ci` ran its report anyway, over the killed runs' partial output, and stored
-    it in history as a scan."""
-    mock_scan = MagicMock(return_value=130)
+    it in history as a scan. The real `cmd_scan` returns 130 before it marks
+    this run's results written, so the stub does the same: the code passes
+    through and is not turned into the 2 of a scan that wrote nothing."""
+
+    def mock_scan(scan_args):
+        setattr(scan_args, SCAN_WROTE_RESULTS, False)
+        return 130
+
     mock_report = MagicMock(return_value=0)
 
     with patch("scripts.cli.jmo._log"):
@@ -745,17 +751,28 @@ def test_a_scan_stopped_by_ctrl_c_writes_no_report(minimal_args):
     assert not mock_report.called, "the report ran over a scan Ctrl-C stopped"
 
 
-class TestNoReportOverAnEarlierScan:
-    """`jmo ci` over a results directory an earlier run filled, through the real
-    `cmd_scan`. Every exit below returns 1 before this run writes its
-    `.scan_metadata.json`, and the report would read the earlier run's results
-    and store them in history as a new scan. Measured before the fix: a
-    rejected `--repo` exited 1, stored a second history row and rewrote
-    `summaries/`. A fake `cmd_scan` cannot test this: it would only say what
-    the fake was told to say."""
+class TestAScanThatWroteNothing:
+    """`jmo ci` through the real `cmd_scan`, whose every exit below returns 1
+    before this run writes its `.scan_metadata.json`.
 
-    @pytest.fixture
-    def ci(self, tmp_path, monkeypatch):
+    Over a results directory an earlier run filled, the report would read that
+    run's results and store them in history as a new scan. Measured before
+    #1699's fix: a rejected `--repo` exited 1, stored a second history row and
+    rewrote `summaries/`. So the report is skipped.
+
+    Each exits 2: nothing was checked, and to a `--fail-on` gate 1 means a
+    finding reached the threshold. Skipping the report first returned the
+    scan's 1, and the tests here ran only over an earlier scan, where the old
+    code gave 1 too. On an empty results directory the report had refused with
+    2, which is what `jmo ci --repo <missing>` exited before. So each case runs
+    over both. The exception is a scan that raised: a runtime error, which
+    exits 1 with `--allow-missing-tools` as it does without it.
+
+    A fake `cmd_scan` cannot test this: it would only say what the fake was
+    told to say."""
+
+    @pytest.fixture(params=["over an earlier scan", "into an empty directory"])
+    def ci(self, request, tmp_path, monkeypatch):
         import sys
         import types
 
@@ -766,10 +783,12 @@ class TestNoReportOverAnEarlierScan:
         project.mkdir()
         (project / "README.md").write_bytes(b"# proj\n")
         results = tmp_path / "results"
-        (results / "individual-repos" / "earlier").mkdir(parents=True)
-        (results / "individual-repos" / "earlier" / "trivy.json").write_bytes(b"{}")
-        earlier = b'{"tools": ["trivy"], "timestamp": "2026-01-01T00:00:00+00:00"}'
-        (results / ".scan_metadata.json").write_bytes(earlier)
+        earlier: bytes | None = None
+        if request.param == "over an earlier scan":
+            (results / "individual-repos" / "earlier").mkdir(parents=True)
+            (results / "individual-repos" / "earlier" / "trivy.json").write_bytes(b"{}")
+            earlier = b'{"tools": ["trivy"], "timestamp": "2026-01-01T00:00:00+00:00"}'
+            (results / ".scan_metadata.json").write_bytes(earlier)
 
         monkeypatch.setattr(
             ToolManager,
@@ -801,39 +820,55 @@ class TestNoReportOverAnEarlierScan:
             with patch.object(sys, "argv", full):
                 return jmo.cmd_ci(jmo.parse_args())
 
-        def metadata() -> bytes:
-            return (results / ".scan_metadata.json").read_bytes()
+        def metadata() -> bytes | None:
+            path = results / ".scan_metadata.json"
+            return path.read_bytes() if path.exists() else None
 
         return types.SimpleNamespace(
             run=run, report=report, project=project, earlier=earlier, metadata=metadata
         )
 
     def test_every_target_rejected(self, ci, tmp_path):
-        assert ci.run("--repo", str(tmp_path / "does-not-exist")) == 1
-        assert not ci.report.called, "the report ran over an earlier scan's results"
+        assert ci.run("--repo", str(tmp_path / "does-not-exist")) == 2
+        assert not ci.report.called, "the report ran over results no scan wrote"
         assert ci.metadata() == ci.earlier
 
     def test_no_target_at_all(self, ci):
-        assert ci.run() == 1
+        assert ci.run() == 2
         assert not ci.report.called
 
     def test_the_install_prompt_cancelled(self, ci):
         with patch("scripts.cli.jmo._check_scan_tools", return_value=([], ["trivy"])):
-            assert ci.run("--repo", str(ci.project)) == 1
+            assert ci.run("--repo", str(ci.project)) == 2
         assert not ci.report.called
 
     def test_nothing_to_scan_with(self, ci):
         with patch(
             "scripts.cli.jmo._check_scan_tools", return_value=(["trivy"], ["trivy"])
         ):
-            assert ci.run("--repo", str(ci.project), "--allow-missing-tools") == 1
+            assert ci.run("--repo", str(ci.project), "--allow-missing-tools") == 2
         assert not ci.report.called
 
     def test_the_scan_raised(self, ci):
+        """A runtime error, which the exit-code table puts under 1. `cmd_scan`
+        catches it only under `--allow-missing-tools`; the test below is the
+        same error without that flag, where it propagates and the process
+        exits 1. Both give 1, and neither reports an earlier run's results."""
         from scripts.cli.scan_orchestrator import ScanOrchestrator
 
         with patch.object(ScanOrchestrator, "scan_all", side_effect=RuntimeError("x")):
             assert ci.run("--repo", str(ci.project), "--allow-missing-tools") == 1
+        assert not ci.report.called
+        assert ci.metadata() == ci.earlier
+
+    def test_the_scan_raised_without_allow_missing_tools(self, ci):
+        from scripts.cli.scan_orchestrator import ScanOrchestrator
+
+        with (
+            patch.object(ScanOrchestrator, "scan_all", side_effect=RuntimeError("x")),
+            pytest.raises(RuntimeError),
+        ):
+            ci.run("--repo", str(ci.project))
         assert not ci.report.called
         assert ci.metadata() == ci.earlier
 

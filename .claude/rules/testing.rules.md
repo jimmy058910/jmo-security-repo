@@ -101,6 +101,23 @@ not contain, and passes or fails for the wrong reason (measured, #1548's E2E
 work). In a worktree, run `uv sync --frozen --group dev` once and use its own
 `.venv/bin/python -m pytest`.
 
+## Disk Space: What a Run Keeps, and Where It Stops
+
+- A passing test's `tmp_path` is removed when it ends
+  (`tmp_path_retention_policy = "failed"` in `pyproject.toml`). To look inside
+  one, run it again with `-o tmp_path_retention_policy=all`.
+- A `--basetemp` you name is **not** removed, nor is what `tmp_path_factory`
+  made in it. Delete a named basetemp once you have read the run.
+- `tests/conftest.py` stops a run before it fills a disk. Before each test it
+  measures the filesystems holding your home and the test temp directory, and
+  ends the session below 10 GiB free, or below a tenth of a smaller filesystem.
+  `JMO_TEST_MIN_FREE_GIB` sets the floor, and `0` turns it off. Unless that
+  variable is set, the floor is off when `CI` is.
+- A tmpfs `/tmp` is such a smaller filesystem. When other files crowd it, name
+  a `--basetemp` on a larger disk (and delete it afterwards).
+- The floor is checked between tests, so one test that writes more than the
+  room left still fills the disk.
+
 ## Test Markers
 
 Use pytest markers to categorize and filter tests:
@@ -493,10 +510,18 @@ bare fake HOME costs two things (#1517):
   `~/.jmo/bin` on PATH, `test_linux_specific.py` fetched trivy's 1.6 GB (and
   grype's 3.2 GB, while grype was in the matrix) into each of five scan tests:
   **24 GB in 6 min 57 s**, against 5.0 MB in 11 s when no scanner was found.
-  The fixture sets `TRIVY_CACHE_DIR` to the developer's own cache for the
-  whole run. Two scans
-  on one cache do not fail (4 in parallel on a warm cache, 2 on an empty one,
-  measured), so there is no xdist group.
+  So the fixture never lets trivy use the test's home. A test marked
+  `requires_tools` gets its xdist worker's own cache (`trivy_cache`): a
+  `fanal/` of its own, with the developer's databases linked in read-only. Any
+  other test points `TRIVY_CACHE_DIR` at the developer's cache, which is safe
+  only while one trivy at a time uses it. Two trivy processes on one cache lose
+  runs: an image run holds a lock on `fanal/`, and another that waits ~5 s for
+  it exits 1 with no output; a run on a cache with no checks bundle reads one
+  that another run is still unpacking. Measured: 3 of 65 runs under `-n 4` on
+  the developer's cache (#1716), and 5 of 6 images inside one `jmo scan
+  --threads 6` before #1717 ran trivy one at a time per process. #1517's
+  measurement, 4 parallel scans on a warm cache with none failing, had not met
+  this.
 
 Rules that follow:
 

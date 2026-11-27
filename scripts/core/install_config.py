@@ -243,7 +243,8 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "macos": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-apple-darwin.tar.gz",
         "default": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-unknown-linux-gnu.tar.gz",
     },
-    # opengrep: no version in the name (v2.0.0's assets, listed 2026-11-17).
+    # opengrep: no version in the name (v2.0.0's assets, listed 2026-11-17;
+    # v2.1.0 has the same 15 names, 2026-11-27).
     # Linux and macOS are a bare binary; Windows is a zip holding opengrep.exe
     # and the six DLLs it loads, which the installer keeps beside it. ARM is
     # "aarch64" on Linux but "arm64" on macOS, so {arch_x86} reads the
