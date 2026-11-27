@@ -232,6 +232,16 @@ def check_version_drift_before_scan(
 STDERR_TAIL_CHARS = 500
 
 
+def stderr_tail(stderr: str | None) -> str:
+    """The end of a failed run's stderr, where the tool says why, at most
+    `STDERR_TAIL_CHARS` of it; "" when it printed nothing there. The failure's
+    log line and its row's detail carry the same text."""
+    tail = (stderr or "").strip()
+    if len(tail) > STDERR_TAIL_CHARS:
+        tail = "..." + tail[-STDERR_TAIL_CHARS:]
+    return tail
+
+
 def report_tool_failure(
     result: ToolResult, reason: str, others_ran: bool = False
 ) -> None:
@@ -268,10 +278,8 @@ def report_tool_failure(
     # collected and then dropped one line short of the log. yara exiting 2
     # writes "0 of 310 rule file(s) compiled - nothing was scanned" there;
     # without this the operator sees the code and never the cause.
-    tail = (result.stderr or "").strip()
+    tail = stderr_tail(result.stderr)
     if tail:
-        if len(tail) > STDERR_TAIL_CHARS:
-            tail = "..." + tail[-STDERR_TAIL_CHARS:]
         detail = f"{detail}; stderr: {tail}"
 
     logger.error(
