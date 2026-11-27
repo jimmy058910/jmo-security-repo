@@ -8,6 +8,7 @@ Updated to mock scan_repository() and subprocess.run() instead of ToolRunner.
 import json
 import logging
 import sys
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -679,8 +680,13 @@ spec:
             assert "env" in call_kwargs
             assert call_kwargs["env"].get("GIT_ASKPASS_TOKEN") == "glpat-test"
 
-    def test_scan_gitlab_cleanup_exception(self, tmp_path):
+    def test_scan_gitlab_cleanup_exception(self, tmp_path, monkeypatch):
         """Test temp directory cleanup handles exceptions gracefully"""
+        # The removal this test makes fail would leave the clone directory in
+        # the system temp directory on every run; keep it under tmp_path.
+        clone_parent = tmp_path / "tmp"
+        clone_parent.mkdir()
+        monkeypatch.setattr(tempfile, "tempdir", str(clone_parent))
         with (
             patch("scripts.cli.scan_jobs.gitlab_scanner._git_clone") as mock_subprocess,
             patch(
@@ -718,6 +724,8 @@ spec:
 
                 assert full_path == "mygroup/myrepo"
                 assert statuses["trufflehog"].state is State.RAN
+        # The directory the failed removal left is here, not in /tmp.
+        assert [p.name[:11] for p in clone_parent.iterdir()] == ["jmo-gitlab-"]
 
     def test_scan_gitlab_custom_find_tool_func(self, tmp_path):
         """The resolver reaches the repository scan, as it reaches each image's"""

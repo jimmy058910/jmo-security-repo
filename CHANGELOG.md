@@ -670,6 +670,34 @@ All notable changes to JMo Security will be documented in this file.
   against 7 s, and four small repositories 7 s against 5 s. A failed row's `detail` in
   `scan-timings.json` now ends with the tail of the tool's stderr, the text its log line
   already printed. It read only "no output" before, so the row never said why.
+- **The Docker tests leave no containers or volumes behind, share one scanner cache, and
+  run one at a time.** Every container a test starts is named and labelled with its run.
+  One whose `docker run` client was killed between create and start, by a subprocess
+  timeout or Ctrl-C, stayed "created" for good with its anonymous volumes; it is now
+  removed on the spot, and the run removes its containers and volumes when it finishes. A
+  run ended by SIGTERM or by pytest-timeout leaves them to the next run's first Docker
+  test, which removes those of runs whose process is gone. The containers share one cache
+  volume per run on the image user's cache directory, so trivy's database is downloaded
+  once per run, where each scan container downloaded it into its own layer.
+  `docker`-marked tests take a lock, so they run one at a time on a machine under
+  any `-n` and across concurrent runs. Each Docker class's timeout now exceeds its tests'
+  own subprocess budgets: pyproject's 120 s default sat below most of them and ended the
+  process before any cleanup could run. Measured in one serial run each against the
+  published image: 216 s where it took 439 s, and a pytest killed mid-scan left a running
+  container and its cache volume that the next run's first Docker test removed. The GitLab
+  cleanup test's clone directory moved under `tmp_path`: the test makes its removal fail
+  on purpose, and it left one in the system temp directory on every run.
+- **The history tests that seed hundreds of scans no longer fsync on every one.**
+  `store_scan` opens and closes two connections per call, and in WAL mode the last one to
+  close checkpoints and fsyncs: 4 fsync calls per scan. A test now holds a connection open
+  while it seeds (`seeding` in `tests/unit/test_history_db_performance.py`), so WAL
+  checkpoints every 1000 pages instead. fsync calls per run, counted in the process:
+  `test_history_list_performance_10k_scans` 40 008 -> 498, and 305 s in
+  `.test_durations` -> 11 s; `test_vacuum_on_large_database` 4 018 -> 68;
+  `test_export_pagination_for_large_datasets` 4 008 -> 53.
+  `test_load_5_query_1000_scans_trend_analysis` already held a connection through its
+  fixture; its 565 are WAL checkpoints of the findings it stores. `make platform-check`
+  keeps its scratch in the system temp directory.
 - **A report on a scan with no findings opens to an empty dashboard, not "Loading
   Failed" (#1710).** Up to 1,000 findings `dashboard.html` carries them inline. The
   dashboard took an empty list there to mean the findings were in a separate

@@ -772,7 +772,8 @@ make platform-check                    # the branch's changed tests, against ori
 make platform-check BASE=origin/main   # against another base
 ```
 
-It clones the commit twice (LF and CRLF) under `~/.cache/jmo-platform-check/`, runs
+It clones the commit twice (LF and CRLF) under `jmo-platform-check/` in the system temp
+directory (`--workdir` changes it), runs
 the changed test files five times (normal, CRLF, `LC_ALL=C PYTHONUTF8=0`, listing
 order forced ascending, then descending), and lists every test that passes normally
 and fails, errors or skips under a condition. Exit 2 means a condition did not take

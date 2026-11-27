@@ -207,7 +207,15 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 
 # Verify volume mounts work
 docker run --rm -v $(pwd):/test alpine:3.19 ls /test
+
+# List what test runs left in Docker. The next Docker test removes what a
+# run whose process is gone left, and each run removes its own when it ends.
+docker ps -a --filter label=jmo-security.test.run
+docker volume ls --filter label=jmo-security.test.run
 ```
+
+`docker`-marked tests run one at a time on a machine, whatever `-n` says: each
+waits for a lock in the system temp directory, outside its timeout.
 
 **Fixture issues:**
 

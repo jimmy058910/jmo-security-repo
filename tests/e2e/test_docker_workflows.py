@@ -26,7 +26,12 @@ from pathlib import Path
 import pytest
 
 from scripts.dev import image_size
-from tests.conftest import assert_no_jmo_traceback, skip_on_windows
+from tests.conftest import (
+    assert_no_jmo_traceback,
+    docker_test_labels,
+    run_container,
+    skip_on_windows,
+)
 
 # Registry this suite audits. Overridable so the same tests can be pointed at an
 # image built from the CURRENT source tree rather than the published release:
@@ -48,6 +53,19 @@ DOCKER_REGISTRY = os.environ.get(
 # Budget for a single `docker pull`. Exceeding it is reported as a FAILURE, not
 # a skip -- see ensure_image().
 PULL_TIMEOUT = 600
+
+# `run_container`'s own docker calls inside a test's limit: the run's cache
+# volume, created on first use, and after a timeout the container's removal
+# (120 s each).
+CONTAINER_HOUSEKEEPING = 240
+
+# What a Docker test spends outside its own subprocesses: `ensure_image`'s
+# inspect and pull, and that housekeeping. Each class's timeout marker is this
+# plus the subprocess budgets of its longest test, so a stuck container ends in
+# that subprocess's TimeoutExpired, where `run_container` removes it. Under
+# pyproject's 120 s default, pytest-timeout's thread method ended the whole
+# process first and left the container behind.
+SETUP_BUDGET = 30 + PULL_TIMEOUT + CONTAINER_HOUSEKEEPING
 
 # Scanners the image carries but cannot run yet, each with the issue that fixes
 # it. test_docker_image_tools fails on any OTHER not-ready tool, and fails on a
@@ -205,7 +223,7 @@ V2_RELEASE = "2.0.0"
 
 def image_version(image: str) -> str:
     """The version the image reports (`jmo --version`), e.g. `1.1.1`."""
-    result = _docker("run", "--rm", image, "--version", timeout=60)
+    result = run_container([image, "--version"], timeout=60)
     found = re.search(r"\d+\.\d+\.\d+", result.stdout)
     if result.returncode != 0 or found is None:
         pytest.fail(
@@ -228,15 +246,8 @@ def v2_tool_registry(image: str, behaviour: str) -> tuple[list[str], str]:
     matrix is ahead of that tag, which is exactly how #1039 went red on a
     correctly built image.
     """
-    result = _docker(
-        "run",
-        "--rm",
-        "--entrypoint",
-        "python3",
-        image,
-        "-c",
-        _MATRIX_PROBE,
-        timeout=120,
+    result = run_container(
+        ["--entrypoint", "python3", image, "-c", _MATRIX_PROBE], timeout=120
     )
     if result.returncode != 0:
         pytest.fail(
@@ -282,15 +293,8 @@ _NO_COMMAND_PROBE = (
 def image_tools_without_a_command(image: str) -> set[str]:
     """The BUILTIN_TOOLS and DEPENDENCY_TOOLS the IMAGE was built with (see
     image_tool_matrix)."""
-    result = _docker(
-        "run",
-        "--rm",
-        "--entrypoint",
-        "python3",
-        image,
-        "-c",
-        _NO_COMMAND_PROBE,
-        timeout=120,
+    result = run_container(
+        ["--entrypoint", "python3", image, "-c", _NO_COMMAND_PROBE], timeout=120
     )
     if result.returncode != 0:
         pytest.fail(
@@ -322,11 +326,8 @@ def container_find(
     Returns the matching paths (absolute, as seen inside the container) and
     the container's stderr.
     """
-    result = subprocess.run(
+    result = run_container(
         [
-            "docker",
-            "run",
-            "--rm",
             "-v",
             f"{mount_dir}:/scan",
             "--entrypoint",
@@ -335,7 +336,6 @@ def container_find(
             "-c",
             f"find /scan -name {shlex.quote(name_pattern)} | sort",
         ],
-        capture_output=True,
         encoding="utf-8",
         errors="replace",
         timeout=timeout,
@@ -359,11 +359,8 @@ def read_file_via_container(
     if not paths:
         return paths, None, find_stderr
 
-    result = subprocess.run(
+    result = run_container(
         [
-            "docker",
-            "run",
-            "--rm",
             "-v",
             f"{mount_dir}:/scan",
             "--entrypoint",
@@ -371,7 +368,6 @@ def read_file_via_container(
             image,
             paths[0],
         ],
-        capture_output=True,
         encoding="utf-8",
         errors="replace",
         timeout=timeout,
@@ -385,17 +381,18 @@ def read_file_via_container(
 @pytest.mark.docker
 @pytest.mark.e2e
 @pytest.mark.slow
-@pytest.mark.timeout(1200)
+# ensure_image, the matrix probe (120 s) and `tools check` (1150 s).
+@pytest.mark.timeout(SETUP_BUDGET + 1300)
 class TestDockerImage:
     """End-to-end tests for the Docker image.
 
-    Per-class ``@pytest.mark.timeout(1200)`` overrides the 120s default from
-    pyproject.toml. A cold start of the image's `tools check` (every
-    TOOL_MATRIX tool, each doing a --version subprocess inside the container)
-    has exceeded 10 minutes on unseeded CI runners. Without this override,
-    pytest-timeout's thread method kills the test before any per-subprocess
-    timeout can fire — prior fixes that raised ``subprocess.run(timeout=...)``
-    were ineffective because pytest pulled the plug first.
+    The per-class timeout overrides the 120s default from pyproject.toml. A
+    cold start of the image's `tools check` (every TOOL_MATRIX tool, each
+    doing a --version subprocess inside the container) has exceeded 10
+    minutes on unseeded CI runners. Without this override, pytest-timeout's
+    thread method kills the test before any per-subprocess timeout can fire —
+    prior fixes that raised ``subprocess.run(timeout=...)`` were ineffective
+    because pytest pulled the plug first.
     """
 
     @pytest.fixture(autouse=True)
@@ -418,19 +415,14 @@ class TestDockerImage:
         # From the image, never the checkout: see image_tool_matrix for why.
         expected, policy_engine = image_tool_matrix(image)
 
-        # Subprocess timeout is 1150s — slightly less than the class-level
-        # ``@pytest.mark.timeout(1200)`` so ``subprocess.TimeoutExpired`` fires
-        # with a real traceback before pytest-timeout's thread method kills the
-        # test with only a stack dump. Prior bumps to 180s (PR #320) and 600s
-        # (PR #327) were ineffective: pyproject.toml pins a 120s default, so
-        # pytest killed the test long before subprocess.run's timeout could
-        # fire. See release.rules.md troubleshooting entry.
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "tools", "check", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=1150,
-        )
+        # Subprocess timeout is 1150s, inside the class-level timeout, so
+        # ``subprocess.TimeoutExpired`` fires with a real traceback before
+        # pytest-timeout's thread method kills the test with only a stack
+        # dump. Prior bumps to 180s (PR #320) and 600s (PR #327) were
+        # ineffective: pyproject.toml pins a 120s default, so pytest killed the
+        # test long before subprocess.run's timeout could fire. See
+        # release.rules.md troubleshooting entry.
+        result = run_container([image, "tools", "check", "--json"], timeout=1150)
 
         # Unparseable output is catastrophic regardless of rc, and says nothing
         # about which tool is at fault, so fail with both streams.
@@ -499,6 +491,7 @@ class TestDockerImage:
             f"not-ready scanners {not_ready}: {result.stderr[:500]}"
         )
 
+    @pytest.mark.timeout(SETUP_BUDGET + 1850)  # the scan's 1800 s
     def test_docker_image_scan(self, tmp_path: Path):
         """The image completes a scan successfully."""
         image = f"{DOCKER_REGISTRY}:latest"
@@ -530,11 +523,8 @@ const query = "SELECT * FROM users WHERE id = " + userId;
         os.chmod(str(src_dir), 0o777)
 
         # Run scan in Docker
-        result = subprocess.run(
+        result = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "-v",
                 f"{tmp_path}:/scan",
                 "-w",
@@ -546,8 +536,6 @@ const query = "SELECT * FROM users WHERE id = " + userId;
                 "--results-dir",
                 "/scan/results",
             ],
-            capture_output=True,
-            text=True,
             timeout=1800,  # 30 minutes max
         )
 
@@ -595,11 +583,8 @@ const query = "SELECT * FROM users WHERE id = " + userId;
         # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(str(src_dir), 0o777)
 
-        result = subprocess.run(
+        result = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "-v",
                 f"{tmp_path}:/scan",
                 "-w",
@@ -613,8 +598,6 @@ const query = "SELECT * FROM users WHERE id = " + userId;
                 "--tools",
                 "osv-scanner",
             ],
-            capture_output=True,
-            text=True,
             timeout=300,
         )
 
@@ -639,12 +622,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
 
         ensure_image(image)
 
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "--help"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        result = run_container([image, "--help"], timeout=60)
 
         assert result.returncode == 0, f"Help failed: {result.stderr}"
         assert "jmo" in result.stdout.lower() or "security" in result.stdout.lower()
@@ -655,12 +633,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
 
         ensure_image(image)
 
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "--version"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        result = run_container([image, "--version"], timeout=60)
 
         assert result.returncode == 0, f"Version failed: {result.stderr}"
         # Should contain version number pattern
@@ -669,6 +642,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
 
 @pytest.mark.docker
 @pytest.mark.e2e
+@pytest.mark.timeout(SETUP_BUDGET + 690)  # a 600 s scan, a 60 s find
 class TestDockerVolumeMount:
     """Test Docker volume mounting scenarios."""
 
@@ -706,11 +680,8 @@ class TestDockerVolumeMount:
         os.chmod(str(tmp_path), 0o777)
 
         # Run scan
-        proc = subprocess.run(
+        proc = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "-v",
                 f"{tmp_path}:/scan",
                 "-w",
@@ -722,8 +693,6 @@ class TestDockerVolumeMount:
                 "--results-dir",
                 "/scan/results",
             ],
-            capture_output=True,
-            text=True,
             timeout=600,
         )
 
@@ -761,11 +730,8 @@ class TestDockerVolumeMount:
         (tmp_path / "test.py").write_text("x = 1")
 
         # Run scan with history mount
-        subprocess.run(
+        run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "-v",
                 f"{tmp_path}:/scan",
                 "-v",
@@ -777,8 +743,6 @@ class TestDockerVolumeMount:
                 "--repo",
                 ".",
             ],
-            capture_output=True,
-            text=True,
             timeout=600,
         )
 
@@ -789,6 +753,7 @@ class TestDockerVolumeMount:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+@pytest.mark.timeout(SETUP_BUDGET + 150)  # a 120 s `tools debug`
 class TestDockerToolVerification:
     """Verify tools are actually functional in Docker containers."""
 
@@ -817,12 +782,7 @@ class TestDockerToolVerification:
         ensure_image(image)
 
         # Run tool version check
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "tools", "debug", tool],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        result = run_container([image, "tools", "debug", tool], timeout=120)
 
         combined = result.stdout.lower() + result.stderr.lower()
         # Should show version info or "not found" - but not crash
@@ -836,6 +796,7 @@ class TestDockerToolVerification:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+@pytest.mark.timeout(SETUP_BUDGET + 450)  # the matrix probe, a 300 s run
 class TestDockerNonRootExecution:
     """Test Docker image works with non-root users."""
 
@@ -868,11 +829,8 @@ class TestDockerNonRootExecution:
         os.chmod(str(src_dir), 0o777)
 
         # Run as user 1000:1000
-        result = subprocess.run(
+        result = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "--user",
                 "1000:1000",
                 "-v",
@@ -885,8 +843,6 @@ class TestDockerNonRootExecution:
                 ".",
                 "--allow-missing-tools",
             ],
-            capture_output=True,
-            text=True,
             timeout=300,
         )
 
@@ -907,19 +863,19 @@ class TestDockerNonRootExecution:
         v2_tool_registry(image, "a /home/jmo/.jmo the container user owns")
 
         volume = f"jmo-home-e2e-{uuid.uuid4().hex[:12]}"
-        created = _docker("volume", "create", volume, timeout=60)
+        created = _docker("volume", "create", *docker_test_labels(), volume, timeout=60)
         assert created.returncode == 0, created.stderr
         try:
-            result = _docker(
-                "run",
-                "--rm",
-                "-v",
-                f"{volume}:/home/jmo/.jmo",
-                "--entrypoint",
-                "sh",
-                image,
-                "-c",
-                "mkdir -p /home/jmo/.jmo/osv-db && stat -c %U /home/jmo/.jmo",
+            result = run_container(
+                [
+                    "-v",
+                    f"{volume}:/home/jmo/.jmo",
+                    "--entrypoint",
+                    "sh",
+                    image,
+                    "-c",
+                    "mkdir -p /home/jmo/.jmo/osv-db && stat -c %U /home/jmo/.jmo",
+                ],
                 timeout=120,
             )
         finally:
@@ -951,16 +907,16 @@ class TestDockerNonRootExecution:
         # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(str(jmo_home), 0o777)
 
-        result = _docker(
-            "run",
-            "--rm",
-            "-v",
-            f"{jmo_home}:/home/jmo/.jmo",
-            image,
-            "tools",
-            "check",
-            "--json",
-            "yara-x",
+        result = run_container(
+            [
+                "-v",
+                f"{jmo_home}:/home/jmo/.jmo",
+                image,
+                "tools",
+                "check",
+                "--json",
+                "yara-x",
+            ],
             timeout=300,
         )
 
@@ -998,11 +954,8 @@ class TestDockerNonRootExecution:
         # cache) tries "/.opengrep" and fails with PermissionError. Pointing
         # HOME at the world-writable /tmp gives it (and any other tool with a
         # cache) a writable home.
-        result = subprocess.run(
+        result = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "--user",
                 f"{uid}:{gid}",
                 "-e",
@@ -1015,8 +968,6 @@ class TestDockerNonRootExecution:
                 "tools",
                 "check",
             ],
-            capture_output=True,
-            text=True,
             timeout=120,
         )
 
@@ -1027,6 +978,7 @@ class TestDockerNonRootExecution:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+@pytest.mark.timeout(SETUP_BUDGET + 210)  # a 180 s `tools check`
 class TestDockerResourceLimits:
     """Test Docker container behavior with resource limits."""
 
@@ -1045,11 +997,8 @@ class TestDockerResourceLimits:
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
         # Run with 512MB memory limit
-        result = subprocess.run(
+        result = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "--memory",
                 "512m",
                 "-v",
@@ -1060,8 +1009,6 @@ class TestDockerResourceLimits:
                 "tools",
                 "check",
             ],
-            capture_output=True,
-            text=True,
             timeout=120,
         )
 
@@ -1077,11 +1024,8 @@ class TestDockerResourceLimits:
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
         # Run with 1 CPU limit
-        result = subprocess.run(
+        result = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "--cpus",
                 "1",
                 "-v",
@@ -1092,8 +1036,6 @@ class TestDockerResourceLimits:
                 "tools",
                 "check",
             ],
-            capture_output=True,
-            text=True,
             timeout=180,
         )
 
@@ -1103,6 +1045,8 @@ class TestDockerResourceLimits:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+# The matrix probe, two 300 s scans and a 120 s listing.
+@pytest.mark.timeout(SETUP_BUDGET + 870)
 class TestDockerHistoryPersistence:
     """Test scan history persistence across container runs."""
 
@@ -1136,23 +1080,23 @@ class TestDockerHistoryPersistence:
             # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
             os.chmod(directory, 0o777)
 
-        scan = (
-            "run", "--rm",
+        scan = [
             "-v", f"{project}:/scan",
             "-v", f"{jmo_dir}:/scan/.jmo",
             image,
             "scan", "--repo", "/scan", "--results-dir", "/scan/results",
             "--tools", "gitleaks", "--allow-missing-tools", "--fail-on-store-error",
-        )  # fmt: skip
+        ]  # fmt: skip
         for _ in range(2):
-            ran = _docker(*scan, timeout=300)
+            ran = run_container(scan, timeout=300)
             assert ran.returncode in (0, 1), ran.stderr[-2000:]
 
-        listed = _docker(
-            "run", "--rm",
-            "-v", f"{jmo_dir}:/scan/.jmo",
-            image,
-            "history", "list", "--json",
+        listed = run_container(
+            [
+                "-v", f"{jmo_dir}:/scan/.jmo",
+                image,
+                "history", "list", "--json",
+            ],
             timeout=120,
         )  # fmt: skip
 
@@ -1163,6 +1107,8 @@ class TestDockerHistoryPersistence:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+# The matrix probe, volume create and remove, a 300 s scan, a 120 s listing.
+@pytest.mark.timeout(SETUP_BUDGET + 690)
 class TestDockerDocumentedMounts:
     """The mounts DOCKER_README and docker-compose.trends.yml document for the
     non-root image, each run as written (#1375). Two more live with their
@@ -1187,17 +1133,20 @@ class TestDockerDocumentedMounts:
         v2_tool_registry(image, "a /home/jmo/.cache/trivy the container user owns")
 
         volume = f"jmo-trivy-e2e-{uuid.uuid4().hex[:12]}"
-        created = _docker("volume", "create", volume, timeout=60)
+        created = _docker("volume", "create", *docker_test_labels(), volume, timeout=60)
         assert created.returncode == 0, created.stderr
         try:
-            result = _docker(
-                "run", "--rm",
-                "-v", f"{volume}:/home/jmo/.cache/trivy",
-                "--entrypoint", "sh",
-                image,
-                "-c",
-                "mkdir -p /home/jmo/.cache/trivy/db && stat -c %U /home/jmo/.cache/trivy",
+            # No run cache: it would sit under this volume and decide its owner.
+            result = run_container(
+                [
+                    "-v", f"{volume}:/home/jmo/.cache/trivy",
+                    "--entrypoint", "sh",
+                    image,
+                    "-c",
+                    "mkdir -p /home/jmo/.cache/trivy/db && stat -c %U /home/jmo/.cache/trivy",
+                ],
                 timeout=120,
+                cache=False,
             )  # fmt: skip
         finally:
             _docker("volume", "rm", "-f", volume, timeout=60)
@@ -1231,25 +1180,27 @@ class TestDockerDocumentedMounts:
         db = "/home/jmo/.jmo/history.db"
 
         volume = f"jmo-history-e2e-{uuid.uuid4().hex[:12]}"
-        created = _docker("volume", "create", volume, timeout=60)
+        created = _docker("volume", "create", *docker_test_labels(), volume, timeout=60)
         assert created.returncode == 0, created.stderr
         try:
-            scanned = _docker(
-                "run", "--rm",
-                "-v", f"{project}:/scan:ro",
-                "-v", f"{volume}:/home/jmo/.jmo",
-                "-v", f"{results}:/results",
-                image,
-                "scan", "--repo", "/scan", "--history-db", db,
-                "--results-dir", "/results/baseline",
-                "--tools", "gitleaks", "--allow-missing-tools", "--fail-on-store-error",
+            scanned = run_container(
+                [
+                    "-v", f"{project}:/scan:ro",
+                    "-v", f"{volume}:/home/jmo/.jmo",
+                    "-v", f"{results}:/results",
+                    image,
+                    "scan", "--repo", "/scan", "--history-db", db,
+                    "--results-dir", "/results/baseline",
+                    "--tools", "gitleaks", "--allow-missing-tools", "--fail-on-store-error",
+                ],
                 timeout=300,
             )  # fmt: skip
-            listed = _docker(
-                "run", "--rm",
-                "-v", f"{volume}:/home/jmo/.jmo",
-                image,
-                "history", "list", "--history-db", db, "--json",
+            listed = run_container(
+                [
+                    "-v", f"{volume}:/home/jmo/.jmo",
+                    image,
+                    "history", "list", "--history-db", db, "--json",
+                ],
                 timeout=120,
             )  # fmt: skip
         finally:
@@ -1262,6 +1213,7 @@ class TestDockerDocumentedMounts:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+@pytest.mark.timeout(SETUP_BUDGET + 150)  # a 120 s `tools check`
 class TestDockerOutputFormats:
     """Test different output formats work in Docker."""
 
@@ -1277,12 +1229,7 @@ class TestDockerOutputFormats:
 
         ensure_image(image)
 
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "tools", "list", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        result = run_container([image, "tools", "list", "--json"], timeout=60)
 
         if result.stdout.strip():
             try:
@@ -1297,12 +1244,7 @@ class TestDockerOutputFormats:
 
         ensure_image(image)
 
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "tools", "check", "--human-logs"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        result = run_container([image, "tools", "check", "--human-logs"], timeout=120)
 
         # Output should exist and be readable
         assert result.stdout or result.stderr
@@ -1394,6 +1336,7 @@ class TestDockerImageSize:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+@pytest.mark.timeout(SETUP_BUDGET + 60)  # a 30 s `scan --help`
 class TestDockerCLIConsistency:
     """Test the image exposes the expected CLI interface."""
 
@@ -1409,12 +1352,7 @@ class TestDockerCLIConsistency:
 
         ensure_image(image)
 
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "scan", "--help"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = run_container([image, "scan", "--help"], timeout=30)
 
         assert result.returncode == 0, (
             f"scan --help failed for {image}: {result.stderr}"
@@ -1428,12 +1366,7 @@ class TestDockerCLIConsistency:
 
         ensure_image(image)
 
-        result = subprocess.run(
-            ["docker", "run", "--rm", image, "scan", "--help"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = run_container([image, "scan", "--help"], timeout=30)
 
         assert result.returncode == 0
         assert "--repo" in result.stdout
@@ -1445,6 +1378,8 @@ class TestDockerCLIConsistency:
 
 @pytest.mark.docker
 @pytest.mark.e2e
+# Two 120 s probes, then a 10 s `which` per tool: room for 30 tools.
+@pytest.mark.timeout(SETUP_BUDGET + 540)
 class TestDockerNamedToolPresence:
     """Verify every scanner and the policy engine are on the image's PATH.
 
@@ -1476,20 +1411,8 @@ class TestDockerNamedToolPresence:
 
         missing = []
         for tool in (*(t for t in matrix if t not in no_command), policy_engine):
-            result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--entrypoint",
-                    "bash",
-                    image,
-                    "-c",
-                    f"which {tool}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
+            result = run_container(
+                ["--entrypoint", "bash", image, "-c", f"which {tool}"], timeout=10
             )
             if result.returncode != 0:
                 missing.append(tool)
@@ -1499,7 +1422,7 @@ class TestDockerNamedToolPresence:
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(960)
+@pytest.mark.timeout(SETUP_BUDGET + 330)  # a 300 s scan
 class TestDockerBasicScan:
     """Basic scan functionality test using the /repo mount pattern.
 
@@ -1512,8 +1435,9 @@ class TestDockerBasicScan:
     2026-11-22 nightly (run 45007345970) and exceeded 120s on 2026-11-21 (run
     44888633119). With both limits at 120s, pytest-timeout's thread method
     fired first and ended the whole Nightly Extended session, not just this
-    test. 960s covers a cold ``ensure_image`` pull (``PULL_TIMEOUT``, 600s)
-    plus the scan's 300s, so the scan's own ``TimeoutExpired`` fires first.
+    test. The limit covers a cold ``ensure_image`` pull (``PULL_TIMEOUT``,
+    600s), ``run_container``'s housekeeping and the scan's 300s, so the scan's
+    own ``TimeoutExpired`` fires first.
     """
 
     @pytest.fixture(autouse=True)
@@ -1532,11 +1456,8 @@ class TestDockerBasicScan:
         (test_repo / "README.md").write_text("# Test Repository")
         (test_repo / "requirements.txt").write_text("requests==2.25.0")
 
-        result = subprocess.run(
+        result = run_container(
             [
-                "docker",
-                "run",
-                "--rm",
                 "-v",
                 f"{test_repo}:/repo",
                 image,
@@ -1545,8 +1466,6 @@ class TestDockerBasicScan:
                 "/repo",
                 "--allow-missing-tools",
             ],
-            capture_output=True,
-            text=True,
             timeout=300,
         )
 
@@ -1559,6 +1478,8 @@ class TestDockerBasicScan:
 @pytest.mark.e2e
 @pytest.mark.slow
 @pytest.mark.docker
+# A 900 s run, which pulls the image itself if absent, then a 60 s find.
+@pytest.mark.timeout(CONTAINER_HOUSEKEEPING + 990)
 class TestDockerCLIWorkflows:
     """Docker CLI workflow tests replacing bash U9-U10, M5, W3.
 
@@ -1614,25 +1535,18 @@ class TestDockerCLIWorkflows:
         # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(str(results_dir), 0o777)
 
-        docker_cmd = [
-            "docker",
-            "run",
-            "--rm",
-            "-v",
-            f"{tmp_path}:/scan",
-            "-v",
-            f"{results_dir}:/scan/results",
-            f"{DOCKER_REGISTRY}:latest",
-            *cli_args,
-            "--results-dir",
-            "/scan/results",
-            "--allow-missing-tools",
-        ]
-
-        result = subprocess.run(
-            docker_cmd,
-            capture_output=True,
-            text=True,
+        result = run_container(
+            [
+                "-v",
+                f"{tmp_path}:/scan",
+                "-v",
+                f"{results_dir}:/scan/results",
+                f"{DOCKER_REGISTRY}:latest",
+                *cli_args,
+                "--results-dir",
+                "/scan/results",
+                "--allow-missing-tools",
+            ],
             timeout=900,
         )
 
@@ -1723,14 +1637,14 @@ def test_the_matrix_probe_fails_on_an_image_with_neither(tmp_path):
 
 
 def _image_answering(monkeypatch, answer) -> None:
-    """`_docker` as an image answering `_MATRIX_PROBE` with ``answer`` and
+    """`run_container` as an image answering `_MATRIX_PROBE` with ``answer`` and
     `--version` as v1.1.1 does, so `v2_tool_registry` is checked without Docker."""
 
-    def docker(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    def run(args, *, timeout, cache=True, **kwargs) -> subprocess.CompletedProcess:
         out = json.dumps(answer) if "--entrypoint" in args else "JMo Security v1.1.1\n"
-        return subprocess.CompletedProcess(["docker", *args], 0, out, "")
+        return subprocess.CompletedProcess(["docker", "run", *args], 0, out, "")
 
-    monkeypatch.setitem(globals(), "_docker", docker)
+    monkeypatch.setitem(globals(), "run_container", run)
 
 
 def test_a_v1_image_skips_naming_its_version_and_the_release_it_predates(
