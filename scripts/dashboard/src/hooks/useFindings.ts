@@ -35,11 +35,12 @@ export function useFindings(scanId: string | null = null) {
           return
         }
 
-        // Current scan: Check if data is embedded (inline mode)
+        // Current scan, inline mode: write_html marks the page when it embeds
+        // the findings. Trust the mark, not the array: a scan with no findings
+        // embeds [], the same value external mode leaves in place (#1710).
         const embedded = (window as any).__FINDINGS__
 
-        if (embedded && Array.isArray(embedded) && embedded.length > 0) {
-          // Inline mode: data already loaded
+        if ((window as any).__FINDINGS_INLINE__ === true && Array.isArray(embedded)) {
           setFindings(embedded)
           setLoading(false)
           return

@@ -644,6 +644,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A report on a scan with no findings opens to an empty dashboard, not "Loading
+  Failed" (#1710).** Up to 1,000 findings `dashboard.html` carries them inline. The
+  dashboard took an empty list there to mean the findings were in a separate
+  `dashboard-data.json`, which is written only above 1,000. So it fetched a file that did
+  not exist and showed "Failed to fetch" from disk or "HTTP 404" over HTTP. An inline page
+  is now marked as one, and the dashboard reads the mark instead of counting findings.
 - **`jmo tools check` says what a tool's version probe saw when it got no version
   (#1667).** A timeout, a failure to start, no output and an answer with no version in it
   all read "is installed but did not report a version". The warning now names which, as
@@ -718,8 +724,8 @@ All notable changes to JMo Security will be documented in this file.
   each such test, not each file. Nightly Extended Tests reruns a flaky test and names
   it, as Cross-Platform Tests does (#1663). Tests that scan with trivy read one shared
   database from a cache per test process, where each used to fetch 1.8 GB or wait on
-  another's lock. The browser test marks two dashboard defects it found, #1710 and
-  #1711, as expected failures until they are fixed.
+  another's lock. The browser test marked two dashboard defects it found, #1710 and
+  #1711, as expected failures until they are fixed; #1710 is fixed (see Fixed).
 - **Keeping the wizard's default timeout keeps opengrep's and zap's 900 s minimum
   (#1627).** Since #1486 a `--timeout` on the command line wins over that minimum. A user
   who opened "Customize advanced settings?" and pressed Enter at `Timeout [600]` got

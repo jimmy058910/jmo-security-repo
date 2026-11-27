@@ -560,14 +560,6 @@ class TestTheLargeDashboard:
 
 @pytest.mark.e2e
 class TestTheCleanDashboard:
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "#1710, a scan with no findings writes a dashboard that says "
-            "Loading Failed: useFindings reads an empty window.__FINDINGS__ as "
-            "external mode and fetches a dashboard-data.json no report writes"
-        ),
-    )
     @pytest.mark.parametrize("how", ["file", "http"])
     def test_a_report_with_no_findings_says_there_are_none(
         self, page: Page, clean: Path, served: str, how: str
