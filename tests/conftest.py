@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -82,6 +83,82 @@ def scrub_git_environment() -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     scrub_git_environment()
+    # Read now, before any test redirects HOME or the temp directory.
+    config.stash[_DISK_FLOOR] = (
+        disk_floor_setting(),
+        (
+            Path.home(),
+            Path(config.option.basetemp or tempfile.gettempdir()).absolute(),
+        ),
+    )
+
+
+# ============================================================================
+# Free-space floor
+# ============================================================================
+# A run that fills the disk takes everything else on the machine with it: on
+# 2026-11-25 tests that gave trivy a home of its own each fetched its 1.7 GiB
+# database, and the workstation's disk filled three times. So a run stops while
+# there is still room. The default is room for six xdist workers each part-way
+# through such a download; a small filesystem, a tmpfs /tmp for one, is asked
+# for a tenth of itself instead.
+MIN_FREE_ENV = "JMO_TEST_MIN_FREE_GIB"
+DEFAULT_MIN_FREE_GIB = 10.0
+_GIB = 1024**3
+_DISK_FLOOR = pytest.StashKey[tuple[float | None, tuple[Path, ...]]]()
+
+
+def disk_floor_setting() -> float | None:
+    """The floor asked for in GiB (0 turns it off), or None for the default.
+
+    Unasked, it is off on a CI runner: the runner is thrown away after the job,
+    so a full disk there costs only that job.
+    """
+    asked = os.environ.get(MIN_FREE_ENV)
+    if asked:
+        return float(asked)
+    return 0.0 if os.environ.get("CI") else None
+
+
+def disk_floor_shortfall(
+    floor_gib: float | None, paths: tuple[Path, ...], usage=shutil.disk_usage
+) -> str | None:
+    """Why the run must stop, or None while each path's filesystem has room.
+
+    A filesystem that cannot be measured counts as having room: the floor is
+    never the reason a test errors.
+    """
+    if floor_gib == 0:
+        return None
+    for path in paths:
+        try:
+            # A basetemp is made on first use, so measure what exists above it.
+            measured = next(p for p in (path, *path.parents) if p.exists())
+            total, _used, free = usage(measured)
+        except (OSError, StopIteration):
+            continue
+        if floor_gib is None:
+            floor = min(DEFAULT_MIN_FREE_GIB * _GIB, total / 10)
+        else:
+            floor = floor_gib * _GIB
+        if free < floor:
+            return (
+                f"free-space floor: {free / _GIB:.1f} GiB free on the filesystem "
+                f"of {path}, below the floor of {floor / _GIB:.1f} GiB. Free some "
+                f"space, or set {MIN_FREE_ENV} (GiB; 0 turns the floor off)."
+            )
+    return None
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Checked before every test, since a run fills a disk as it goes."""
+    short = disk_floor_shortfall(*item.config.stash[_DISK_FLOOR])
+    if short:
+        # shouldfail ends the session after this test; under xdist the worker
+        # reports it and the controller stops the other workers.
+        item.session.shouldfail = short
+        pytest.fail(short, pytrace=False)
 
 
 @pytest.fixture(scope="session", autouse=True)
