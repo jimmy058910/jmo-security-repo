@@ -13,7 +13,6 @@ import subprocess
 
 import pytest
 
-# The fixtures, copied out of the work tree (conftest says why).
 from tests.e2e.conftest import (
     E2E_FIXTURES,
     tool_runs,

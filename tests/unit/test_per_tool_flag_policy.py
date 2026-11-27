@@ -480,10 +480,6 @@ class TestEachToolsOwnGrammar:
 # Measured beside JMo's own (opengrep 1.32.0, rc 0): a second `--config` adds
 # rules, a second `--exclude` adds exclusions.
 REPEATABLE = {("opengrep", "--config"), ("opengrep", "--exclude")}
-# Passed only when the user's flags name neither `--no-git-ignore` nor
-# `--use-git-ignore`, so a user's own is never repeated: the row defers to it
-# (test_opengrep_wiring's test_a_user_s_own_git_ignore_flag_decides).
-DEFERS_TO_THE_USER = {("opengrep", "--no-git-ignore")}
 
 
 def _passed_flags(name: str, tmp_path: Path) -> set[str]:
@@ -537,7 +533,7 @@ class TestAFlagJmoPassesIsNotGivenTwice:
             for name, passed in checked.items()
             for flag in passed
             if DESCRIPTORS[name].reserved_spelling(flag) is None
-            and (name, flag) not in REPEATABLE | DEFERS_TO_THE_USER
+            and (name, flag) not in REPEATABLE
         )
         assert not unreserved, unreserved
 

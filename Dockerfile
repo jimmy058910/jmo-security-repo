@@ -115,7 +115,7 @@ RUN ZIZMOR_VERSION="1.32.0" && \
 # Download opengrep (SAST); a static binary named by arch, no archive, no
 # version in the name. No checksum file is published: each asset
 # has a cosign .sig and .cert beside it, which this build does not check.
-RUN OPENGREP_VERSION="2.0.0" && \
+RUN OPENGREP_VERSION="2.1.0" && \
     OPENGREP_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_linux_${OPENGREP_ARCH}" \
     -o /usr/local/bin/opengrep && \

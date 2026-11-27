@@ -83,7 +83,7 @@
       "opengrep_windows_x86.zip.cert",
       "opengrep_windows_x86.zip.sig"
     ],
-    "captured_at": "2.0.0",
+    "captured_at": "2.1.0",
     "repo": "opengrep/opengrep"
   },
   "osv-scanner": {

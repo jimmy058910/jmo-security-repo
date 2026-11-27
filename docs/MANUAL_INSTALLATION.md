@@ -128,7 +128,7 @@ scoop install trufflehog
 jmo tools install opengrep
 
 # By hand on Linux or macOS: take the asset for your platform from
-# https://github.com/opengrep/opengrep/releases/tag/v2.0.0
+# https://github.com/opengrep/opengrep/releases/tag/v2.1.0
 # (opengrep_linux_x86, opengrep_linux_aarch64, opengrep_osx_x86 or
 # opengrep_osx_arm64), name it `opengrep`, make it executable and put it on
 # your PATH.

@@ -284,8 +284,6 @@ def test_the_command_line(tmp_path) -> None:
         "--json",
         "--output",
         str((out / "opengrep.json").resolve()),
-        # `repo` is no git work tree, so git cannot list it: opengrep walks it.
-        "--no-git-ignore",
         "-j",
         "2",
         # Per file and rule. opengrep's own 5 s cut a large minified file's
@@ -717,45 +715,40 @@ def test_the_other_flags_jmo_passes_are_refused(tmp_path, flag) -> None:
     )
 
 
-def test_a_repository_git_can_list_keeps_its_gitignore(tmp_path) -> None:
+GIT_IGNORE_FLAGS = ("--no-git-ignore", "--use-git-ignore")
+
+
+@pytest.mark.parametrize("git", ["a work tree", "no git on PATH"])
+def test_jmo_passes_no_git_ignore_flag_whatever_git_can_do(
+    tmp_path, monkeypatch, git
+) -> None:
     """Passed always, `--no-git-ignore` read 3,859 files of a developer's
     checkout instead of 494: nested worktrees, caches and private notes a
-    `.gitignore` keeps out. Where git can list the files, it is not passed."""
-    if shutil.which("git") is None:
-        pytest.skip("git is not installed")
-    repo = tmp_path / "repo"
-    _plant(repo, ["app.py"])
-    subprocess.run(["git", "init", "-q", str(repo)], check=True, timeout=60)
-    out = tmp_path / "out"
-    out.mkdir()
-
-    _, (definition,) = _recorded(repo, out)
-
-    assert "--no-git-ignore" not in definition.command
-
-
-def test_where_git_cannot_run_opengrep_walks_the_files(tmp_path, monkeypatch) -> None:
-    """opengrep 2.0.0 fails the whole run (rc 2, no results) when `git
-    ls-files` fails in a work tree: git missing here, as on a machine with no
-    git, or refusing a repository another user owns."""
+    `.gitignore` keeps out. Where git cannot list the files, opengrep 2.1.0
+    walks them itself (opengrep#931), so the row never passes it, and a
+    `.gitignore` keeps out what it ignores wherever git can read it."""
     repo = tmp_path / "repo"
     _plant(repo, ["app.py"])
     out = tmp_path / "out"
     out.mkdir()
-
-    # No git on PATH. Not a stub of subprocess.run: that attribute is the one
-    # module every caller shares (testing.rules.md, the time.sleep case).
-    monkeypatch.setenv("PATH", str(tmp_path / "no-git-here"))
+    if git == "a work tree":
+        if shutil.which("git") is None:
+            pytest.skip("git is not installed")
+        subprocess.run(["git", "init", "-q", str(repo)], check=True, timeout=60)
+    else:
+        # Not a stub of subprocess.run: that attribute is the one module every
+        # caller shares (testing.rules.md, the time.sleep case).
+        monkeypatch.setenv("PATH", str(tmp_path / "no-git-here"))
 
     _, (definition,) = _recorded(repo, out)
 
-    assert definition.command.count("--no-git-ignore") == 1
+    assert not set(GIT_IGNORE_FLAGS) & set(definition.command)
 
 
-@pytest.mark.parametrize("flag", ["--no-git-ignore", "--use-git-ignore"])
-def test_a_user_s_own_git_ignore_flag_decides(tmp_path, flag) -> None:
+@pytest.mark.parametrize("flag", GIT_IGNORE_FLAGS)
+def test_a_user_s_own_git_ignore_flag_is_passed_once(tmp_path, flag) -> None:
     """opengrep refuses `--no-git-ignore` twice, or beside `--use-git-ignore`
-    (rc 2), so a user who names either gets theirs, once, and JMo adds none."""
+    (rc 2), so a user who names either gets theirs, once, and nothing else."""
     repo = tmp_path / "repo"
     _plant(repo, ["app.py"])
     out = tmp_path / "out"
@@ -765,7 +758,7 @@ def test_a_user_s_own_git_ignore_flag_decides(tmp_path, flag) -> None:
 
     command = definition.command
     assert command.count(flag) == 1
-    assert sum(command.count(f) for f in ("--no-git-ignore", "--use-git-ignore")) == 1
+    assert sum(command.count(f) for f in GIT_IGNORE_FLAGS) == 1
 
 
 # --- what a run with errors still gives ------------------------------------------
@@ -1008,6 +1001,126 @@ def test_a_target_under_a_directory_the_default_ignore_list_names_is_scanned(
     assert _scanned(out) == ["src/a.py"]
     assert {path for _, path, _ in _hits(out)} == {"src/a.py"}
     assert len(_hits(out)) >= 2
+
+
+# The three opengrep 2.0.0 regressions 2.1.0 fixed, each through the row as a scan
+# runs it. Each failed on 2.0.0 with this row and passes on 2.1.0 (2026-11-27):
+# with JMo's `git ls-files` probe gone, the first was rc 2 with no results, the
+# second examined 0 files, and the third skipped the re-included and force-added
+# files.
+
+
+@pytest.mark.requires_tools
+def test_a_repository_git_cannot_read_is_walked_by_opengrep_itself(tmp_path) -> None:
+    """opengrep#931: in a folder holding a `.git` that `git ls-files` cannot read
+    (here an empty one; git not installed and git refusing a repository another
+    user owns fail the same way), 2.0.0 stopped with rc 2 and no results. 2.1.0
+    walks the folder, with a warning, and the row passes no flag of its own."""
+    repo = tmp_path / "app"
+    (repo / ".git").mkdir(parents=True)
+    (repo / "src").mkdir()
+    (repo / "src" / "a.py").write_bytes(TWO_FINDINGS)
+    out = tmp_path / "out"
+
+    row = _real_scan(repo, out)
+
+    assert row.state is State.RAN, row
+    assert _scanned(out) == ["src/a.py"]
+    assert len(_hits(out)) >= 2
+
+
+@pytest.mark.requires_tools
+@pytest.mark.parametrize("ancestor", ["tests", "test", "build", "dist"])
+def test_a_folder_under_an_ignored_name_inside_a_repository_is_scanned(
+    tmp_path, ancestor
+) -> None:
+    """opengrep#932: 2.0.0 matched its built-in ignore list against a target's
+    path from the root of the repository holding it, so `<repo>/tests/app`
+    examined 0 files however the row named it. 2.1.0 no longer skips a folder
+    given as the target; the list still applies to the folders under it."""
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH")
+    repo = tmp_path / "repo"
+    app = repo / ancestor / "app"
+    app.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _commit(
+        repo,
+        {
+            f"{ancestor}/app/src/a.py": TWO_FINDINGS,
+            f"{ancestor}/app/tests/b.py": TWO_FINDINGS,
+        },
+        "base",
+    )
+    out = tmp_path / "out"
+
+    row = _real_scan(app, out)
+
+    assert row.state is State.RAN, row
+    assert _scanned(out) == ["src/a.py"]
+    assert {path for _, path, _ in _hits(out)} == {"src/a.py"}
+
+
+@pytest.mark.requires_tools
+def test_a_tracked_file_a_gitignore_pattern_matches_is_scanned(tmp_path) -> None:
+    """opengrep#922: 2.0.0 skipped a file git tracks when a `.gitignore` pattern
+    matched it, whether a later `!` line re-included it or it was added with
+    `git add -f`. juice-shop's `.gitignore` re-includes `frontend/src/app` that
+    way, and 2.0.0 read 708 of its files where 2.1.0 reads 1,142, and 197
+    findings where 2.1.0 reports 223 (2026-11-27). An ignored file git does not
+    track stays out."""
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _commit(
+        repo,
+        {
+            ".gitignore": b"app/\n!frontend/src/app\nforced/\n",
+            "frontend/src/app/a.py": TWO_FINDINGS,
+            "app/ignored.py": TWO_FINDINGS,
+        },
+        "base",
+    )
+    forced = repo / "forced" / "b.py"
+    forced.parent.mkdir()
+    forced.write_bytes(TWO_FINDINGS)
+    _git(repo, "add", "-f", "forced/b.py")
+    _git(repo, "commit", "-q", "-m", "forced")
+    out = tmp_path / "out"
+
+    row = _real_scan(repo, out)
+
+    assert row.state is State.RAN, row
+    # generic.yaml reads `.gitignore` too, so the Python files are what is asked.
+    scanned = set(_scanned(out))
+    assert {"forced/b.py", "frontend/src/app/a.py"} <= scanned
+    assert "app/ignored.py" not in scanned
+    assert {path for _, path, _ in _hits(out)} == {
+        "forced/b.py",
+        "frontend/src/app/a.py",
+    }
+
+
+@pytest.mark.requires_tools
+def test_outside_any_repository_a_gitignore_keeps_nothing_out(tmp_path) -> None:
+    """Outside a git work tree, `git ls-files` fails, and on 2.0.0 the row passed
+    `--no-git-ignore` there; it now passes nothing. opengrep reads no `.gitignore`
+    of its own, so every file is still read, the one it lists included: 2.0.0
+    and 2.1.0 both read `gen/a.py` beside `src/a.py` (2026-11-27)."""
+    repo = tmp_path / "app"
+    for rel in ("src/a.py", "gen/a.py"):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(TWO_FINDINGS)
+    (repo / ".gitignore").write_bytes(b"gen/\n")
+    out = tmp_path / "out"
+
+    row = _real_scan(repo, out)
+
+    assert row.state is State.RAN, row
+    assert {"gen/a.py", "src/a.py"} <= set(_scanned(out))
+    assert {path for _, path, _ in _hits(out)} == {"gen/a.py", "src/a.py"}
 
 
 @pytest.mark.requires_tools

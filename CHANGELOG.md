@@ -292,21 +292,27 @@ All notable changes to JMo Security will be documented in this file.
   (a bundled dependency, or every registry package under npm's
   `omit-lockfile-registry-resolved`), which 2.7.0 took for local packages and never
   matched, so the scan no longer needs to name such lockfiles as partly audited.
-- **opengrep 2.0.0 (#1622).** Its release renamed the Linux binary
+- **opengrep 2.1.0 (#1622).** Its 2.0.0 release renamed the Linux binary
   (`opengrep_linux_<arch>`, now static), dropped the musl builds, and ships Windows as a
   zip of `opengrep.exe` and the six DLLs it loads, which `jmo tools install` now keeps
-  beside the exe; the image, CI and the devcontainer fetch the new names. 2.0.0 lists a
-  git repository's files with `git ls-files` and fails the whole run when git cannot (git
-  not installed, or refusing a repository another user owns), where 1.32.0 walked the
-  files: JMo now tries `git ls-files` first and passes `--no-git-ignore` when it fails.
-  With the same files, 2.0.0 found what 1.32.0 found on juice-shop, and one more on this
-  repository; it writes no match text to its log, unpacks nothing on first run, and
-  scanned juice-shop about a third faster. It skips tracked files a `.gitignore` pattern
-  matches (re-included with `!`, or added with `git add -f`: 27 of juice-shop's 212
-  findings), its Dockerfile rules no longer read `*-Dockerfile` or `*_Dockerfile`, and a
-  folder scanned inside a git repository under `tests/` or `build/` examines 0 files
+  beside the exe; the image, CI and the devcontainer fetch the new names. In a git
+  repository it reads the files `git ls-files` lists: the repository's `.gitignore` keeps
+  out what it ignores, and every file git tracks is read, one a `.gitignore` pattern
+  matches included. Where git cannot list the files (git not installed, or refusing a
+  repository another user owns) it walks the folder, with a warning. It writes no match
+  text to its log and unpacks nothing on first run; its Dockerfile rules no longer read
+  `*-Dockerfile` or `*_Dockerfile`; and `--disable-version-check` is no longer passed,
+  since it is ignored. Inside a repository it matches JMo's exclusions and a rule's
+  `paths:` against a file's path from the repository's root, so a folder scanned under
+  `vendor/`, `node_modules/`, `venv/` or `.venv/` examines 0 files, and a bundle rule that
+  leaves out test paths stays silent under `tests/`
   ([KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md#opengrep-also-skips-tests-build-output-and-vendored-code)).
-  `--disable-version-check` is no longer passed: 2.0.0 ignores it.
+  2.0.0 failed the whole run where git could not list the files, skipped tracked files a
+  `.gitignore` pattern matched, and read nothing in a folder under `tests/` or `build/`
+  inside a repository; JMo worked around the first with its own `git ls-files` check,
+  which 2.1.0 made unnecessary. On juice-shop, 2.1.0 reads 1,142 files and reports 223
+  findings where 2.0.0 read 708 and reported 197. A machine with opengrep 2.0.0 installed
+  needs `jmo tools update opengrep`.
 - **Breaking. A finding's NIST CSF 2.0 mappings name CSF 2.0 subcategories, in CSF 2.0's
   words (#1572).** They carried CSF 1.1: `PR.AC-1`, `PR.IP-1`, `PR.PT-3` and `DE.CM-8` do
   not exist in CSF 2.0, and `GV.SC-3` quoted 1.1's ID.SC-1. Checked against NIST CSWP 29
