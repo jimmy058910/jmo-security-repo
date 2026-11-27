@@ -2139,15 +2139,15 @@ jobs:
 
           # A skip is not a pass: the guard skips when opengrep is not on PATH or
           # the fixture is missing, and pytest exits 0 for a run of skips. The
-          # floor is the count measured on Linux (29: 5 + 23 + 1); lower it in
+          # floor is the count measured on Linux (37: 5 + 31 + 1); lower it in
           # the PR that removes a test, and say why.
           [xml]$report = Get-Content -Raw -LiteralPath $junit
           $suite = @($report.SelectNodes('//testsuite'))[0]
           $tests = [int]$suite.tests
           $skipped = [int]$suite.skipped
-          Write-Host "pytest: $tests tests, $skipped skipped, $([int]$suite.failures) failed, $([int]$suite.errors) errors (floor 29)"
+          Write-Host "pytest: $tests tests, $skipped skipped, $([int]$suite.failures) failed, $([int]$suite.errors) errors (floor 37)"
           if ($skipped -ne 0) { throw "$skipped test(s) skipped: a skipped test proves nothing here" }
-          if ($tests -lt 29) { throw "only $tests tests ran, expected at least 29" }
+          if ($tests -lt 37) { throw "only $tests tests ran, expected at least 37" }
 
       - name: Scan with a drive-letter config through jmo
         if: ${{ !cancelled() && steps.fixture.outcome == 'success' }}
