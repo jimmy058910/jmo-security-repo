@@ -211,7 +211,8 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 | `scheduled.yml` Nightly Extended | `-m "not requires_tools and not smoke"` | Includes slow tests intentionally (omit `not slow`) since nightly has the time budget. Excludes real-tool + smoke tests because runner doesn't install tools or install released package. |
 | `scheduled.yml` Tool Output Contract Tests | `-m "requires_tools"`, then the answer-key files with no filter | The contract selection, then `generate_golden.py --check` (all 14 tools), then the six answer-key files after their keys and the OSV databases are fetched. `require_passed.py` fails the step on 0 passed, and the answer-key step on any skip. Replaced the juice-shop smoke job, which read green on 0 passed (#1349). |
 | `scheduled.yml` Integration matrix | `-m "integration and not slow"` | Per-component integration tests; `not slow` keeps matrix runtime bounded. |
-| `scheduled.yml` E2E (×2 jobs) | `-m "not docker"` | E2E tests that don't require local Docker daemon (Released Package + general E2E). |
+| `scheduled.yml` E2E (×2 jobs) | `-m "not docker"` | E2E tests that don't require local Docker daemon (Released Package + general E2E). Each job then fails unless the skipped node ids are exactly its list in `tests/e2e/expected-skips.yml` (`scripts/dev/check_skip_set.py`). |
+| `scheduled.yml` e2e-ubuntu real-tool integration | `-m "requires_tools"`, ten named `tests/integration/` files and `test_linux_specific.py` | The scanners `make tools` installed; no xdist (zap's proxy port, trivy's cache lock). `require_passed.py --max-skipped 0`. Selected by no job until 2026-11; `test_requires_tools_reachable.py` now checks every `requires_tools` test per test, not per file. |
 | `scheduled.yml` E2E real-tool scans | `-m "requires_tools"` | Real-tool tests after installing the tool matrix. |
 | `scheduled.yml` Tool Integration matrix | `-m "requires_tools"` | Same as E2E real-tool scans, sharded. |
 

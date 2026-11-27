@@ -106,7 +106,13 @@ jobs:
           chmod +x /usr/local/bin/trufflehog
           pip install bandit
 
+      # Reruns as nightly-cross-platform has them (#1663): two, and a test that
+      # passed only on a rerun is listed as a warning by the step after the
+      # next, so a flake shows on a green run instead of turning it red. This
+      # job ran without them after #1663 (found 2026-11-18). `shell: bash` is
+      # what fails the step on pytest's exit code through the pipe into tee.
       - name: Run full test suite (including slow tests)
+        shell: bash
         run: |
           # Exclude `requires_tools` (need real scanners installed on the runner;
           # exercised by `e2e-tool-integration` job) and `smoke` tests (need
@@ -122,9 +128,11 @@ jobs:
             --json-report \
             --json-report-file=pytest-report.json \
             -v \
+            -rfER \
+            --reruns 2 --reruns-delay 2 -p no:xdist \
             --durations=20 \
             --maxfail=20 \
-            -m "not requires_tools and not smoke"
+            -m "not requires_tools and not smoke" 2>&1 | tee -a nightly-pytest.log
 
       - name: Summarize pytest failures
         if: always()
@@ -193,6 +201,30 @@ jobs:
               hidden = len(combined) - MAX_LISTED
               print(f"_… {hidden} more failure(s) truncated. See pytest-report.json artifact for the full list._")
           PY
+
+      - name: List the tests that passed only on a rerun
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f nightly-pytest.log ]; then
+            echo "No pytest log: the test steps did not run."
+            exit 0
+          fi
+          # grep exits 1 on no match, which `bash -e` would turn into a failure.
+          reruns=$(grep -E '^RERUN ' nightly-pytest.log | sed 's/^RERUN //' | sort -u || true)
+          if [ -z "$reruns" ]; then
+            echo "No test needed a rerun."
+            exit 0
+          fi
+          count=$(printf '%s\n' "$reruns" | wc -l | tr -d ' ')
+          {
+            echo "### ${count} test(s) needed a rerun"
+            echo ""
+            printf '%s\n' "$reruns" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r test_id; do
+            echo "::warning title=Flaky test (needed a rerun)::${test_id}"
+          done <<< "$reruns"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -849,7 +881,10 @@ jobs:
           echo "Running full Ubuntu + Advanced test suite"
           RESULTS_DIR="/tmp/jmo-e2e-results-${{ github.run_id }}"
           mkdir -p "$RESULTS_DIR"
-          python -m pytest tests/e2e/ -v --timeout=300 \
+          # test_dashboard_visual.py is e2e-visual's: without playwright here it
+          # skipped at import, one skip no test id names.
+          python -m pytest tests/e2e/ -v --timeout=300 -o tmp_path_retention_policy=failed \
+            --ignore=tests/e2e/test_dashboard_visual.py \
             --ignore=tests/e2e/test_linux_specific.py \
             --ignore=tests/e2e/test_macos_specific.py \
             --ignore=tests/e2e/test_windows_specific.py \
@@ -862,6 +897,33 @@ jobs:
           TEST_IMAGE: alpine:3.19
         continue-on-error: true
 
+      # The requires_tools integration tests need the scanners `make tools`
+      # put on PATH above, and until 2026-11 no job selected 48 of these 52
+      # (six had rotted unseen); the other 4, test_scan_pipeline's, the nightly
+      # integration job runs too. No xdist: two zap scans at once fail to bind
+      # zap's proxy port, and two trivy image scans contend for the shared
+      # cache (both measured). Measured at 3 min (-n 4, zap excluded) plus
+      # 6.5 min for zap serially; the limit allows for a slow runner.
+      - name: Run the real-tool integration tests
+        if: always()
+        timeout-minutes: 45
+        run: |
+          python -m pytest \
+            tests/integration/test_cli_per_tool_config.py \
+            tests/integration/test_full_v1_workflow.py \
+            tests/integration/test_multi_target_history.py \
+            tests/integration/test_multi_target_scanning.py \
+            tests/integration/test_performance_profiling.py \
+            tests/integration/test_sast_secret_redaction.py \
+            tests/integration/test_scan_filters_and_retries.py \
+            tests/integration/test_scan_pipeline.py \
+            tests/integration/test_wheel_install.py \
+            tests/integration/test_zap_scans.py \
+            tests/e2e/test_linux_specific.py \
+            -m "requires_tools" \
+            -v -rs -p no:xdist --timeout=1200 -o tmp_path_retention_policy=failed \
+            --junitxml="/tmp/jmo-e2e-results-${{ github.run_id }}/integration-junit.xml"
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -870,7 +932,17 @@ jobs:
           path: |
             /tmp/jmo-e2e-results-${{ github.run_id }}/pytest-report.json
             /tmp/jmo-e2e-results-${{ github.run_id }}/test.log
+            /tmp/jmo-e2e-results-${{ github.run_id }}/integration-junit.xml
           retention-days: 30
+
+      - name: Fail if a real-tool integration test skipped
+        # Each tool these need is installed above, so a skip is a test that
+        # checked nothing.
+        if: always()
+        run: |
+          python3 scripts/dev/require_passed.py \
+            "/tmp/jmo-e2e-results-${{ github.run_id }}/integration-junit.xml" \
+            --min 52 --max-skipped 0
 
       - name: Check test success
         if: always()
@@ -892,6 +964,17 @@ jobs:
             echo "No test results found"
             exit 1
           fi
+
+      - name: Fail if the skipped tests are not the expected ones
+        # A count hid skips: on 2026-11-25 this suite skipped 9 tests and a
+        # module and nothing read which. The expected set, with why each skips, is in
+        # tests/e2e/expected-skips.yml; a skip it lacks and an entry that did
+        # not skip both fail.
+        if: always()
+        run: |
+          python3 scripts/dev/check_skip_set.py \
+            "/tmp/jmo-e2e-results-${{ github.run_id }}/pytest-report.json" \
+            --expected tests/e2e/expected-skips.yml --suite ubuntu
 
   e2e-macos:
     name: E2E macOS Tests
@@ -959,8 +1042,9 @@ jobs:
 
           # Binary tools have no per-version Homebrew formulae, so they stay
           # unpinned -- but the install may no longer fail quietly. Pinning
-          # these too is a real remaining gap, tracked separately.
-          brew install trivy syft hadolint
+          # these too is a real remaining gap, tracked separately. gitleaks and
+          # trufflehog: without them two tests skipped here (run 45625803839).
+          brew install trivy syft hadolint gitleaks trufflehog
 
           # opengrep: a static binary, no archive, pinned from versions.yaml
           # like checkov above. macos-latest is arm64, whose assets say "arm64";
@@ -974,7 +1058,7 @@ jobs:
           chmod +x "$(brew --prefix)/bin/opengrep"
 
           missing=0
-          for t in checkov opengrep trivy syft hadolint; do
+          for t in checkov opengrep trivy syft hadolint gitleaks trufflehog; do
             if command -v "$t" >/dev/null 2>&1; then
               echo "  $t -> $(command -v "$t")"
             else
@@ -990,7 +1074,8 @@ jobs:
         run: |
           RESULTS_DIR="/tmp/jmo-e2e-results-${{ github.run_id }}"
           mkdir -p "$RESULTS_DIR"
-          python -m pytest tests/e2e/ -v --timeout=300 \
+          python -m pytest tests/e2e/ -v --timeout=300 -o tmp_path_retention_policy=failed \
+            --ignore=tests/e2e/test_dashboard_visual.py \
             --ignore=tests/e2e/test_linux_specific.py \
             --ignore=tests/e2e/test_windows_specific.py \
             -m "not docker" \
@@ -1012,6 +1097,15 @@ jobs:
             /tmp/jmo-e2e-results-${{ github.run_id }}/pytest-report.json
             /tmp/jmo-e2e-results-${{ github.run_id }}/test.log
           retention-days: 30
+
+      - name: Fail if the skipped tests are not the expected ones
+        # As in e2e-ubuntu: 16 skipped tests and a skipped module passed here
+        # unread on 2026-11-25.
+        if: always()
+        run: |
+          python3 scripts/dev/check_skip_set.py \
+            "/tmp/jmo-e2e-results-${{ github.run_id }}/pytest-report.json" \
+            --expected tests/e2e/expected-skips.yml --suite macos
 
   e2e-tool-integration:
     name: E2E Tool Integration Tests (requires_tools)
@@ -1102,6 +1196,7 @@ jobs:
           # These tests validate real tool detection (SQL injection, CVEs, secrets)
           pytest tests/e2e/test_real_tool_scans.py \
             -v \
+            -o tmp_path_retention_policy=failed \
             -m "requires_tools" \
             --tb=short \
             --maxfail=3 \
@@ -1110,10 +1205,11 @@ jobs:
         env:
           CI: "true"
 
-      - name: Fail if the real-tool scans passed nothing
+      - name: Fail if a real-tool scan skipped
         # Each test skips without its scanner, and pytest exits 0 for a run of
-        # skips (#1349's class).
-        run: python3 scripts/dev/require_passed.py tool-integration-junit.xml
+        # skips (#1349's class). The step above installs all four scanners, so
+        # all four tests run: 4 passed, 0 skipped on 2026-11-25.
+        run: python3 scripts/dev/require_passed.py tool-integration-junit.xml --min 4 --max-skipped 0
 
       - name: Upload test results on failure
         if: failure()
@@ -1447,8 +1543,20 @@ jobs:
           uv sync --locked --group dev --extra visual
           uv run --no-sync playwright install chromium --with-deps
 
+      # The tests run `jmo report` and `jmo diff` on seeded results and read the
+      # pages in Chromium. Without playwright the module skips on import and
+      # pytest exits 5, and a skipped test checked nothing, so every skip fails
+      # the job: 21 passed and 3 strict xfails (#1710, #1711, awaiting a fix) on
+      # 2026-11-25.
       - name: Run visual tests
-        run: make test-e2e-visual
+        run: |
+          python -m pytest tests/e2e/test_dashboard_visual.py -v -rsxX --timeout=120 -o tmp_path_retention_policy=failed \
+            --screenshot=only-on-failure --output=test-results \
+            --junitxml=visual-junit.xml
+
+      - name: Fail if a visual test skipped
+        if: always()
+        run: python3 scripts/dev/require_passed.py visual-junit.xml --min 21 --max-skipped 0
 
       - name: Upload screenshots on failure
         if: failure()
