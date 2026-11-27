@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.cli.build_commands import add_build_args, cmd_build
+from scripts.cli.ci_orchestrator import SCAN_WROTE_RESULTS
 from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
 from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
 from scripts.cli.diff_commands import cmd_diff
@@ -3128,6 +3129,11 @@ def cmd_scan(args) -> int:
     from scripts.cli.scan_utils import clear_tool_warnings
     from scripts.core.tool_descriptors import UnknownToolError
 
+    # True only once this run's .scan_metadata.json is written, so `jmo ci`
+    # can tell a scan that wrote nothing from one whose targets failed: both
+    # return 1, and only the second has results of its own to report.
+    setattr(args, SCAN_WROTE_RESULTS, False)
+
     # Usage errors first, exit 2, before anything prompts or writes.
     if getattr(args, "dest", None) and not getattr(args, "tsv", None):
         _log(
@@ -3329,6 +3335,7 @@ def cmd_scan(args) -> int:
     # --- Session checkpointing ---
     from scripts.cli.scan_jobs.iac_scanner import iac_target_name
     from scripts.cli.scan_session import (
+        SESSION_FILE,
         ScanSession,
         compute_config_hash,
         delete_session,
@@ -3338,7 +3345,7 @@ def cmd_scan(args) -> int:
         validate_session_results,
     )
 
-    session_path = Path(args.results_dir).parent / ".jmo" / "scan-session.json"
+    session_path = results_dir / SESSION_FILE
     config_path = Path(getattr(args, "config", "jmo.yml"))
     config_hash = compute_config_hash(config_path)
     scan_session: ScanSession | None = None
@@ -3727,6 +3734,7 @@ def cmd_scan(args) -> int:
         "repo_paths": [str(Path(r).resolve()) for r in targets.repos],
     }
     scan_metadata_path.write_text(json.dumps(scan_metadata), encoding="utf-8")
+    setattr(args, SCAN_WROTE_RESULTS, True)
 
     # BUG #2 FIX: Automatically run report phase to aggregate findings and store history
     # This ensures --no-store-history flag (default: enabled) actually works

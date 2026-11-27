@@ -743,3 +743,103 @@ def test_a_scan_stopped_by_ctrl_c_writes_no_report(minimal_args):
 
     assert rc == 130
     assert not mock_report.called, "the report ran over a scan Ctrl-C stopped"
+
+
+class TestNoReportOverAnEarlierScan:
+    """`jmo ci` over a results directory an earlier run filled, through the real
+    `cmd_scan`. Every exit below returns 1 before this run writes its
+    `.scan_metadata.json`, and the report would read the earlier run's results
+    and store them in history as a new scan. Measured before the fix: a
+    rejected `--repo` exited 1, stored a second history row and rewrote
+    `summaries/`. A fake `cmd_scan` cannot test this: it would only say what
+    the fake was told to say."""
+
+    @pytest.fixture
+    def ci(self, tmp_path, monkeypatch):
+        import sys
+        import types
+
+        from scripts.cli import jmo
+        from scripts.cli.tool_manager import ToolManager, ToolStatus
+
+        project = tmp_path / "proj"
+        project.mkdir()
+        (project / "README.md").write_bytes(b"# proj\n")
+        results = tmp_path / "results"
+        (results / "individual-repos" / "earlier").mkdir(parents=True)
+        (results / "individual-repos" / "earlier" / "trivy.json").write_bytes(b"{}")
+        earlier = b'{"tools": ["trivy"], "timestamp": "2026-01-01T00:00:00+00:00"}'
+        (results / ".scan_metadata.json").write_bytes(earlier)
+
+        monkeypatch.setattr(
+            ToolManager,
+            "check_tool",
+            lambda _self, name, *_a, **_k: ToolStatus(name=name, installed=True),
+        )
+        # Nothing ever runs: a tool the scan reaches reads as not found.
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.tool_loop.find_tool", lambda *_a, **_k: None
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CI", "true")
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        report = MagicMock(return_value=0)
+        monkeypatch.setattr(jmo, "_cmd_report_impl", report)
+
+        def run(*argv: str) -> int:
+            full = [
+                "jmo",
+                "ci",
+                *argv,
+                "--tools",
+                "trivy",
+                "--results-dir",
+                str(results),
+                "--history-db",
+                str(tmp_path / "history.db"),
+            ]
+            with patch.object(sys, "argv", full):
+                return jmo.cmd_ci(jmo.parse_args())
+
+        def metadata() -> bytes:
+            return (results / ".scan_metadata.json").read_bytes()
+
+        return types.SimpleNamespace(
+            run=run, report=report, project=project, earlier=earlier, metadata=metadata
+        )
+
+    def test_every_target_rejected(self, ci, tmp_path):
+        assert ci.run("--repo", str(tmp_path / "does-not-exist")) == 1
+        assert not ci.report.called, "the report ran over an earlier scan's results"
+        assert ci.metadata() == ci.earlier
+
+    def test_no_target_at_all(self, ci):
+        assert ci.run() == 1
+        assert not ci.report.called
+
+    def test_the_install_prompt_cancelled(self, ci):
+        with patch("scripts.cli.jmo._check_scan_tools", return_value=([], ["trivy"])):
+            assert ci.run("--repo", str(ci.project)) == 1
+        assert not ci.report.called
+
+    def test_nothing_to_scan_with(self, ci):
+        with patch(
+            "scripts.cli.jmo._check_scan_tools", return_value=(["trivy"], ["trivy"])
+        ):
+            assert ci.run("--repo", str(ci.project), "--allow-missing-tools") == 1
+        assert not ci.report.called
+
+    def test_the_scan_raised(self, ci):
+        from scripts.cli.scan_orchestrator import ScanOrchestrator
+
+        with patch.object(ScanOrchestrator, "scan_all", side_effect=RuntimeError("x")):
+            assert ci.run("--repo", str(ci.project), "--allow-missing-tools") == 1
+        assert not ci.report.called
+        assert ci.metadata() == ci.earlier
+
+    def test_a_scan_whose_target_failed_is_still_reported(self, ci):
+        """The control: the same exit code, from a scan that wrote this run's
+        results. Its failed target is part of the answer, so it is reported."""
+        assert ci.run("--repo", str(ci.project)) == 1
+        assert ci.report.call_count == 1
+        assert ci.metadata() != ci.earlier

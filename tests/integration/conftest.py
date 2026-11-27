@@ -16,6 +16,32 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import use_trivy_cache
+
+
+@pytest.fixture(autouse=True)
+def _one_trivy_database(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    real_home: Path,
+) -> None:
+    """Every requires_tools test reads the developer's trivy databases.
+
+    trivy keeps its database (1.8 GB) under the home, and many of these tests
+    give a scan a home of its own (HOME=tmp_path for a subprocess, or a patched
+    Path.home) without `jmo_runner`, which arranges this for its own callers.
+    Each trivy scan in such a test then fetched the whole database into its tmp
+    directory: one run of the requires_tools tests here wrote 25 GB and filled
+    the workstation's disk (2026-11-25), the #1517 class outside jmo_runner.
+    Sharing the whole cache instead failed scans under -n 4 on its lock, so
+    each test process gets a cache of its own that links the databases
+    (`trivy_cache`).
+    """
+    if request.node.get_closest_marker("requires_tools") is None:
+        return
+    use_trivy_cache(monkeypatch, request.getfixturevalue("trivy_cache"), real_home)
+
+
 # Path to fixtures
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 BASELINES_DIR = PROJECT_ROOT / "tests" / "integration" / "baselines"

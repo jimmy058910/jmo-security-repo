@@ -357,12 +357,15 @@ needs it. JMo then adds none of its own.
 
 ### The yara-x scanner runs only where YARA-X has a wheel
 
-YARA-X, the engine behind the yara-x scanner, is published only as prebuilt wheels:
+YARA-X, the engine behind the yara-x scanner, publishes prebuilt wheels only for
 Linux with glibc 2.28 or newer on x86_64 and arm64, macOS 14 or newer, and Windows
-x64. There is no source package, so it is the optional extra `jmo-security[yara]`,
-which the documented install includes. On any other platform that install fails:
-Alpine and other musl-based Linux, Python running natively on Windows ARM64, Linux
-with glibc older than 2.28 (Ubuntu 18.04, RHEL 7) and macOS 13 or older. Python's
+x64, so it is the optional extra `jmo-security[yara]`, which the documented install
+includes. On any other platform that install fails: Alpine and other musl-based
+Linux, Python running natively on Windows ARM64, Linux with glibc older than 2.28
+(Ubuntu 18.04, RHEL 7) and macOS 13 or older. Since 1.23.0 YARA-X also publishes a
+source package, so pip and uv try to build it there instead. The build fetches Rust
+by itself but needs a C toolchain, and on a stock Alpine 3.22 it failed for want of
+one (`libgcc_s.so.1`), with uv and with pip alike (measured 2026-11-25). Python's
 platform markers cannot tell musl from glibc, nor one glibc or macOS version from
 another, so the extra cannot be skipped there automatically. Installed without it,
 `jmo-security` works on those platforms: `jmo tools check`, `jmo tools install
@@ -478,31 +481,6 @@ dependency locking), or run OSV-Scanner yourself without `--no-resolve`.
 database, so JMo does not hand OSV-Scanner a `conan.lock` (the lockfiles it does read
 are listed in [TOOLS.md](TOOLS.md#when-each-tool-runs)); a repository whose only
 lockfile is a Conan one reads `skipped:no lockfile`.
-
-### OSV-Scanner does not check an npm package whose lockfile entry has no `resolved` URL
-
-From OSV-Scanner 2.7.0, a `package-lock.json` or `npm-shrinkwrap.json` entry is
-classified by its `resolved` field: a registry or git URL is checked, and anything else
-is taken for a local package, which is never matched against the database. An entry
-with no `resolved` at all falls in the second group. npm writes no `resolved` for a
-bundled dependency (`inBundle`), and none for any registry package when its
-`omit-lockfile-registry-resolved` setting is on. Such a package is not checked, with no
-error and exit code 0 (measured: a lockfile npm 12.2.1 wrote with that setting for
-`lodash@4.17.20` gave 5 findings on OSV-Scanner 2.6.0 and none on 2.7.0). A package
-whose same version also appears with a `resolved` URL elsewhere in the lockfile is still
-checked.
-
-JMo reads each npm lockfile before OSV-Scanner runs and names one that holds such
-packages, with how many, at WARNING. The row stays `ran`, and its detail in
-`scan-timings.json` reads `partly audited: <lockfile> (...)`.
-
-**What to do:** for `omit-lockfile-registry-resolved`, turn the setting off and write the
-lockfile again. Turning it off is not enough: `npm install --package-lock-only` does not
-add `resolved` to an entry that already exists. Delete `package-lock.json` and run it
-again; that can move each package to the newest version its range in `package.json`
-allows (measured: `lodash` `^4.17.20` went from 4.17.20 to 4.18.1), so review the diff.
-A bundled dependency has no such fix: check the package that bundles it, or scan its
-source with another tool.
 
 ### Checkov's repository run misses several CI/CD and IaC dialects
 

@@ -20,6 +20,11 @@ from pathlib import Path
 
 import pytest
 
+try:  # POSIX: the trivy warm-up's lock between xdist workers
+    import fcntl
+except ImportError:  # pragma: no cover - Windows, which runs no trivy test
+    fcntl = None  # type: ignore[assignment]
+
 # ============================================================================
 # Platform Detection Constants
 # ============================================================================
@@ -292,16 +297,12 @@ def _link_installed_scanners(
                 )
 
 
-def _share_scanner_caches(real_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Point trivy at the developer's own database.
-
-    It looks under the home for it, so a home of the test's own made each scan
-    fetch trivy's 1.6 GB afresh (24 GB over the five Linux scan tests with
-    grype's 3.2 GB, while grype was in the matrix, #1517). Two scans on one
-    cache do not fail: 4 in parallel on a warm cache, and 2 on an empty one, all
-    returned 0 with the same findings (measured, trivy 0.74.0 and grype
-    0.118.0). A variable the developer set themselves is left alone.
-    """
+def _trivy_cache_dir(real_home: Path) -> Path:
+    """The trivy cache the developer's own scans use: TRIVY_CACHE_DIR when they
+    set it, else the platform's cache directory."""
+    configured = os.environ.get("TRIVY_CACHE_DIR")
+    if configured:
+        return Path(configured)
     if IS_WINDOWS:
         local = os.environ.get("LOCALAPPDATA")
         base = Path(local) if local else real_home / "AppData" / "Local"
@@ -310,12 +311,109 @@ def _share_scanner_caches(real_home: Path, monkeypatch: pytest.MonkeyPatch) -> N
     else:
         xdg = os.environ.get("XDG_CACHE_HOME")
         base = Path(xdg) if xdg else real_home / ".cache"
+    return base / "trivy"
+
+
+def _share_scanner_caches(real_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point trivy at the developer's own database.
+
+    It looks under the home for it, so a home of the test's own made each scan
+    fetch trivy's 1.6 GB afresh (24 GB over the five Linux scan tests with
+    grype's 3.2 GB, while grype was in the matrix, #1517). A variable the
+    developer set themselves is left alone. Sharing the whole cache is safe one
+    scan at a time only: a test that scans with trivy gets `trivy_cache`
+    instead.
+    """
     if "TRIVY_CACHE_DIR" not in os.environ:
-        monkeypatch.setenv("TRIVY_CACHE_DIR", str(base / "trivy"))
+        monkeypatch.setenv("TRIVY_CACHE_DIR", str(_trivy_cache_dir(real_home)))
+
+
+# The parts of a trivy cache a scan only reads, each with the variable that stops
+# trivy updating it. fanal/, its cache of analysed artifacts, is not one: a scan
+# holds it locked while it runs, and one that waits more than a few seconds for
+# it fails with "unable to initialize fs cache: cache may be in use by another
+# process: timeout". Measured 2026-11-25 with the developer's cache shared by
+# every test: 3 of 65 trivy runs under -n 4 failed so, which #1517's
+# measurement (4 parallel scans on a warm cache, all fine) had not met. A
+# fanal/ for each test removed that (0 of 157 runs on a shared directory) but
+# made every scan cold, hence slower, so it is one per test process.
+_TRIVY_READ_ONLY = {
+    "db": "TRIVY_SKIP_DB_UPDATE",
+    "java-db": "TRIVY_SKIP_JAVA_DB_UPDATE",
+    "policy": "TRIVY_SKIP_CHECK_UPDATE",
+}
+
+
+def _warm_trivy_databases(real_home: Path) -> Path | None:
+    """The developer's trivy cache with its vulnerability database brought up to
+    date; None without trivy or a database.
+
+    xdist workers take turns through a lock file, so one fetches a database
+    that moved on and the rest find it fresh.
+    """
+    search = os.pathsep.join(
+        [str(real_home / ".jmo" / "bin"), os.environ.get("PATH", "")]
+    )
+    trivy = shutil.which("trivy", path=search)
+    if trivy is None:
+        return None
+    shared = _trivy_cache_dir(real_home)
+    shared.mkdir(parents=True, exist_ok=True)
+    with open(shared / ".jmo-tests.lock", "ab") as lock:
+        if fcntl is not None:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            subprocess.run(
+                [trivy, "image", "--download-db-only", "--cache-dir", str(shared)],
+                capture_output=True,
+                timeout=900,
+                check=False,
+            )
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+    return shared if (shared / "db" / "trivy.db").is_file() else None
+
+
+@pytest.fixture(scope="session")
+def trivy_cache(real_home: Path, tmp_path_factory) -> Path | None:
+    """A trivy cache for this test process: the developer's databases, updated
+    once and linked in read-only, and a fanal/ of its own.
+
+    Session-scoped, so each xdist worker has one, warm for its later tests, and
+    no two workers share a fanal/. Requested only for tests marked
+    requires_tools, so a run with no trivy scan never fetches a database. None
+    without a database to link, or where a link is refused.
+    """
+    shared = _warm_trivy_databases(real_home)
+    if shared is None:
+        return None
+    own = tmp_path_factory.mktemp("trivy-cache")
+    for name in _TRIVY_READ_ONLY:
+        if (shared / name).is_dir():
+            try:
+                (own / name).symlink_to(shared / name, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                return None
+    return own
+
+
+def use_trivy_cache(
+    monkeypatch: pytest.MonkeyPatch, cache: Path | None, real_home: Path
+) -> None:
+    """Point this test's trivy at `cache`, with updates of its linked databases
+    off; without one, at the developer's cache as `_share_scanner_caches` does."""
+    if cache is None:
+        _share_scanner_caches(real_home, monkeypatch)
+        return
+    for name, variable in _TRIVY_READ_ONLY.items():
+        if (cache / name).exists():
+            monkeypatch.setenv(variable, "true")
+    monkeypatch.setenv("TRIVY_CACHE_DIR", str(cache))
 
 
 @pytest.fixture
-def jmo_runner(monkeypatch, tmp_path, real_home):
+def jmo_runner(monkeypatch, tmp_path, real_home, request):
     """
     Pytest fixture providing a helper to run JMo commands.
 
@@ -357,7 +455,9 @@ def jmo_runner(monkeypatch, tmp_path, real_home):
       updates or uninstalls tools through this fixture would change the
       developer's install. None of the current callers do.
     - trivy reads the developer's own cache (`TRIVY_CACHE_DIR`), the same for
-      every test in the run.
+      every test in the run. A test marked requires_tools gets this process's
+      own cache, which links the developer's databases (`trivy_cache`), since
+      two trivy scans on one cache can fail on its lock.
 
     A scan that only checks a path or an argument should still name its tools
     (`CHEAP_SCAN_TOOLS`); every eligible scanner is minutes, not seconds.
@@ -376,7 +476,10 @@ def jmo_runner(monkeypatch, tmp_path, real_home):
     fake_home = tmp_path / "home"
     fake_home.mkdir(exist_ok=True)
     _link_installed_scanners(real_home, fake_home, monkeypatch)
-    _share_scanner_caches(real_home, monkeypatch)
+    if request.node.get_closest_marker("requires_tools") is not None:
+        use_trivy_cache(monkeypatch, request.getfixturevalue("trivy_cache"), real_home)
+    else:
+        _share_scanner_caches(real_home, monkeypatch)
     monkeypatch.setenv("USERPROFILE", str(fake_home))
     monkeypatch.setenv("HOME", str(fake_home))
 

@@ -29,7 +29,9 @@ from tests.e2e.conftest import (
     E2E_FIXTURES,
     current_platform,
     validate_basic_scan,
+    validate_every_target_found_something,
     validate_multi_target,
+    validate_scanners_found,
 )
 from tests.fixtures.samples.zap import fixture_server as fx
 from tests.integration.targets import (
@@ -77,6 +79,28 @@ requires_docker = pytest.mark.skipif(
 )
 
 
+def _scanned_with(*tools: str):
+    """A validator: the scan wrote its outputs, each of `tools` ran on every
+    target and found something, and every target has a finding.
+
+    The image and IaC cases run under --allow-missing-tools, which exits 0 with
+    every tool missing, and validate_basic_scan alone asks such a target only
+    for a target count, so they passed having run nothing.
+    """
+
+    def validate(results_dir) -> None:
+        validate_basic_scan(results_dir)
+        validate_scanners_found(results_dir, tools)
+        validate_every_target_found_something(results_dir)
+
+    return validate
+
+
+def _multi_target_found_everywhere(results_dir) -> None:
+    validate_multi_target(results_dir)
+    validate_every_target_found_something(results_dir)
+
+
 SCAN_WORKFLOWS = [
     # Ubuntu tests
     pytest.param(
@@ -103,7 +127,7 @@ SCAN_WORKFLOWS = [
             "trivy,syft",
             "--allow-missing-tools",
         ],
-        validate_basic_scan,
+        _scanned_with("trivy", "syft"),
         "linux",
         marks=[requires_docker],
         id="U2-image-native",
@@ -119,7 +143,7 @@ SCAN_WORKFLOWS = [
             "checkov,trivy",
             "--allow-missing-tools",
         ],
-        validate_basic_scan,
+        _scanned_with("checkov", "trivy"),
         "linux",
         id="U3-iac-native",
     ),
@@ -138,7 +162,7 @@ SCAN_WORKFLOWS = [
             str(IAC_FIXTURE),
             "--allow-missing-tools",
         ],
-        validate_multi_target,
+        _multi_target_found_everywhere,
         "linux",
         marks=[requires_docker],
         id="U5-multi-target",
@@ -168,7 +192,7 @@ SCAN_WORKFLOWS = [
             "trivy,syft",
             "--allow-missing-tools",
         ],
-        validate_basic_scan,
+        _scanned_with("trivy", "syft"),
         "darwin",
         marks=[requires_docker],
         id="M2-image-native-macos",
@@ -184,7 +208,7 @@ SCAN_WORKFLOWS = [
             "checkov,trivy",
             "--allow-missing-tools",
         ],
-        validate_basic_scan,
+        _scanned_with("checkov", "trivy"),
         "darwin",
         id="M3-iac-native-macos",
     ),
@@ -314,4 +338,5 @@ def test_batch_images_file(jmo_scan_runner, tmp_path):
     assert rc in (0, 1), (
         f"U6 batch images failed with exit code {rc}.\nstderr: {stderr[:500]}"
     )
-    validate_basic_scan(results_dir)
+    print(stderr[-4000:])
+    _scanned_with("trivy", "syft")(results_dir)

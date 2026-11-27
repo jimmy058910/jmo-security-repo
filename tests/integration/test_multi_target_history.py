@@ -22,6 +22,7 @@ import pytest
 
 from scripts.cli.jmo import cmd_report, cmd_scan
 from scripts.core.history_db import get_connection, list_scans
+from tests.conftest import scanner_states
 
 
 class TestMultiTargetHistoryIntegration:
@@ -292,16 +293,16 @@ class TestMultiTargetHistoryIntegration:
 
         cmd_report(ReportArgs())
 
-        # Verify history
-        if db_path.exists():
-            conn = get_connection(db_path)
-            scans = list_scans(conn, limit=1)
-            conn.close()
-
-            if len(scans) > 0:
-                scan = scans[0]
-                assert "profile" not in scan, "v2.0.0 stores no scan profile"
-                assert "trufflehog" in scan["tools"]
+        # Verify history. Each check here sat behind an `if` (the database
+        # exists, it holds a scan), so the test passed with trufflehog missing.
+        assert scanner_states(results_dir) == {"trufflehog": "ran"}
+        conn = get_connection(db_path)
+        scans = list_scans(conn, limit=1)
+        conn.close()
+        assert len(scans) == 1, scans
+        scan = scans[0]
+        assert "profile" not in scan, "v2.0.0 stores no scan profile"
+        assert "trufflehog" in scan["tools"]
 
     @pytest.mark.requires_tools
     def test_iac_scanning_with_history(self, tmp_path, monkeypatch):

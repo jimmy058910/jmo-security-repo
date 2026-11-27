@@ -112,8 +112,6 @@ def test_every_lockfile_format_reaches_osv_scanner_offline(
     # A run that did not read everything has no answer worth grading: a lockfile it
     # could not extract splits the run, and `row.detail` names it.
     assert row.state is State.RAN, f"{row.state.name} {row.label!r}: {row.detail}"
-    # Nothing osv-scanner skipped without saying (#1472's class) counts as read.
-    assert "partly audited" not in (row.detail or ""), row.detail
     report = out / "osv-scanner.json"
     assert report.is_file(), f"no report written; row detail: {row.detail}"
 

@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MIN_RETRY_WINDOW_S = 120
 
 RELEASE_ASSET = re.compile(r"https://github\.com/[^\s\"']+/releases/download/")
+URL = re.compile(r"https?://")
 
 
 def _curl_commands() -> list[tuple[str, str]]:
@@ -32,7 +33,9 @@ def _curl_commands() -> list[tuple[str, str]]:
     found = []
     files = sorted((ROOT / ".github").rglob("*.yml"))
     for path in files:
-        text = path.read_bytes().decode("utf-8")
+        # A windows-2022 checkout is CRLF, and `\\\n` never matches `\\\r\n`:
+        # unjoined, a URL on a continuation line is not in its command.
+        text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
         joined = re.sub(r"\\\n\s*", " ", text)
         for line in joined.splitlines():
             if re.search(r"(^|\s)curl\s", line) and not line.lstrip().startswith("#"):
@@ -41,12 +44,14 @@ def _curl_commands() -> list[tuple[str, str]]:
 
 
 def _release_downloads() -> list[tuple[str, str]]:
-    """A release asset named in the command, or a download that retries: several
-    name their URL through a variable (`"${base}/osv-scanner_SHA256SUMS"`)."""
+    """Every download: a command naming a URL, or one that retries, since
+    several name their URL through a variable (`"${base}/osv-scanner_SHA256SUMS"`).
+    Release assets alone left out the GitHub CLI keyring in release.yml, the
+    one download with no retry at all (#1629)."""
     return [
         (f, cmd)
         for f, cmd in _curl_commands()
-        if RELEASE_ASSET.search(cmd) or "--retry" in cmd
+        if RELEASE_ASSET.search(cmd) or URL.search(cmd) or "--retry" in cmd
     ]
 
 
@@ -60,6 +65,8 @@ def test_the_scan_finds_the_workflows_release_downloads() -> None:
         ".github/workflows/scheduled.yml",
         ".github/workflows/release.yml",
     }
+    # Not a release asset: in scope because it names a URL.
+    assert any("githubcli-archive-keyring" in cmd for _, cmd in downloads)
 
 
 def test_every_release_download_retries_for_two_minutes() -> None:

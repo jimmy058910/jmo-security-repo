@@ -4,7 +4,7 @@ Scan session checkpointing for crash recovery and resume.
 Provides crash-resilient scan sessions that checkpoint after each target
 completes, enabling resume without re-scanning completed targets.
 
-Session file: .jmo/scan-session.json
+Session file: <results dir>/.scan_session.json (SESSION_FILE)
 
 Architecture:
 1. Before scanning, check for existing session file
@@ -35,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 # Session file format version for forward compatibility
 SESSION_VERSION = 1
+
+#: The checkpoint's name inside the results directory it describes, beside
+#: `.scan_metadata.json`. It was `<results dir's parent>/.jmo/scan-session.json`:
+#: with the default `--results-dir results` that is the working directory, and
+#: since only the file is removed when a scan ends, every scan left an empty
+#: `.jmo/` there, whatever `--history-db` said. Two results directories with one
+#: parent also shared one checkpoint.
+SESSION_FILE = ".scan_session.json"
 
 
 def found_image_id(reference: str) -> str:

@@ -224,8 +224,9 @@ All notable changes to JMo Security will be documented in this file.
   on GHCR stay there, frozen at v1.x, so pulling `:balanced` keeps working and keeps
   giving you v1: switch to `:latest`. `jmo validate` was caught by exactly that. It ran
   `:balanced --help`, which validated the frozen image, and it now checks `:latest`.
-  Built locally the image is 1,220.6 MiB, against 2,033 MiB for v1.0.8's published
-  `:latest`.
+  Built from `dev` and measured the way a registry reports it (the compressed layers of
+  its linux/amd64 manifest), the image is 1,127.4 MiB, against 2,033 MiB for v1.0.8's
+  published `:latest` (#48).
 - **Breaking. gosec leaves the matrix; a scan runs 15 scanners.** It loads Go packages
   through the go command, which neither the Docker image nor `jmo tools install` provides,
   so it examined 0 files on every run and no scan ever got a finding from it. Naming it in
@@ -288,7 +289,14 @@ All notable changes to JMo Security will be documented in this file.
   one (`JMO_TEST_MIN_FREE_GIB` sets the floor, `0` turns it off; unset, it is off on CI).
   A passing test's `tmp_path` is now removed when it ends; pass
   `-o tmp_path_retention_policy=all` to keep them. A `--basetemp` you name still stays.
-
+- **zizmor 1.32.0, osv-scanner 2.7.1, checkov 3.4.6, trufflehog 3.100.0, syft 1.57.2,
+  opa 1.22.4 and ruff 0.17.6** (#1683, #1684, #1685). zizmor is handed only
+  `.pre-commit-config.yaml`, the one name pre-commit reads: given a
+  `.pre-commit-config.yml`, 1.32.0 validates it as a workflow and audits nothing in it.
+  osv-scanner 2.7.1 checks npm packages whose lockfile entry has no `resolved` URL again
+  (a bundled dependency, or every registry package under npm's
+  `omit-lockfile-registry-resolved`), which 2.7.0 took for local packages and never
+  matched, so the scan no longer needs to name such lockfiles as partly audited.
 - **opengrep 2.0.0 (#1622).** Its release renamed the Linux binary
   (`opengrep_linux_<arch>`, now static), dropped the musl builds, and ships Windows as a
   zip of `opengrep.exe` and the six DLLs it loads, which `jmo tools install` now keeps
@@ -327,9 +335,9 @@ All notable changes to JMo Security will be documented in this file.
   Debian-packaged dependency, which pip cannot uninstall, so an Ubuntu 26.04 base failed
   the build on `packaging`. `checkov` on the image's `PATH` is a link to the venv's.
 - **Breaking. yara-x's engine is the optional extra `jmo-security[yara]` (#1577).** It
-  publishes wheels only (Linux with glibc 2.28+, macOS 14+, Windows x64), so as a
-  dependency it failed the whole install on Alpine, Windows ARM64, older glibc and
-  macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
+  publishes wheels only for Linux with glibc 2.28+, macOS 14+ and Windows x64 (since
+  1.23.0 also a source package, whose build needs a C toolchain), so as a dependency it
+  failed the whole install on Alpine, Windows ARM64, older glibc and macOS 13. Install with `uv tool install "jmo-security[yara]"` (or pip); the Docker
   image includes it, and the dev environment pulls it in through its group. Without it,
   JMo installs and runs everywhere, and `jmo tools check`, `jmo tools install yara-x` and a
   scan's yara-x row say the engine is missing and name the extra, where they said "See JMo
@@ -641,6 +649,43 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`jmo tools check` says what a tool's version probe saw when it got no version
+  (#1667).** A timeout, a failure to start, no output and an answer with no version in it
+  all read "is installed but did not report a version". The warning now names which, as
+  "its probe timed out after 30 s" or "its probe exited 1 printing ...", and
+  `tools check --json` carries it in each tool's new `execution_warning` field. A
+  docker-smoke run had read zap as not ready with only its name to go on.
+- **The release workflow's GitHub CLI keyring download retries for two minutes**, as every
+  other workflow download does (#1629). It was the one with no retry at all, where a
+  transient failure costs a tag. It also no longer pipes into `dd`, where a retried
+  transfer would have appended to a partial file.
+- **The markdownlint pre-commit hook installs again.** nodejs.org now lists a v27 alpha
+  first, and nodeenv 1.10.0 took it for the latest node and crashed parsing it, so on a
+  machine where pre-commit finds no system node outside the home directory (nvm's does not
+  count), every hook install failed. `uv.lock` moves nodeenv to 1.12.0, which skips it.
+- **The tool contract test no longer lets trufflehog replace itself.** It ran
+  `trufflehog filesystem` with no `--no-update`, so trufflehog installed its newest
+  release over the binary under test: a developer's `~/.jmo/bin` moved off the pin, and
+  in CI every later test in the job ran upstream-latest instead of the pinned version.
+- **`jmo ci` no longer reports and stores an earlier scan when its own scan wrote nothing
+  (#1699).** When the scan stopped before writing this run's results (no target,
+  every target rejected, every tool missing under `--allow-missing-tools`, the install
+  prompt cancelled, the scan raising), `jmo ci` still ran its report over the results
+  directory. If an earlier run had filled it, that run's findings went into the summaries
+  and into history as a new scan. Measured: a `--repo` that does not exist exited 1,
+  stored a second history row and rewrote `summaries/`. The exit codes are unchanged.
+- **A scan no longer leaves an empty `.jmo/` in the working directory (#1700).**
+  The checkpoint `jmo scan --resume` reads was kept at `<results dir's parent>/.jmo/`,
+  the working directory with the default `--results-dir results`, and only the file was
+  removed when the scan ended. It is now `.scan_session.json` inside the results
+  directory. A checkpoint an interrupted earlier version left at the old path is not
+  read, so that scan starts fresh.
+- **EPSS keeps the scores it fetched when its cache cannot be written, and checks the
+  cache on one connection (#1701, #1702).** With a read-only cache, a
+  bulk lookup that fetched 99 scores returned none, and a single lookup returned none
+  for a CVE it had just fetched. Both now keep the scores and name the cache at WARNING.
+  A bulk lookup opened one SQLite connection per CVE to check the cache, 100 for 100
+  CVEs; it now opens one, at any count.
 - **A bulk EPSS fetch writes its scores to the cache in one transaction (#1673).** Each
   score a bulk call returned was cached with its own commit, and each commit is a disk
   flush: a 100-CVE fetch made 100 of them, so report enrichment ran at the speed of the
@@ -662,6 +707,24 @@ All notable changes to JMo Security will be documented in this file.
   as `ci.yml`'s shards do, and list every test that needed a rerun as a warning (#1663).
   `tests/unit/test_fetch_rule_fixture.py` stubs `urlopen` and `os.replace` on the
   script's own names, not on the modules every thread shares (#1664).
+- **The end-to-end tests check what a user sees, and can fail.** The browser test runs
+  `jmo report` and `jmo diff` on results seeded with 18 findings of known severity and
+  reads the pages in Chromium: the counts, the rows, what each filter leaves, the
+  compliance and analytics tabs, 1001 findings served over HTTP, and the diff summary.
+  It used to pass 18 synthetic findings to the HTML writer and check for words the
+  filter chips print with no data at all. `jmo ci --fail-on` runs through the real CLI
+  on every PR: 1 at the threshold and 0 below it, while the 2 a scan of nothing should
+  give is an expected failure, since it reads 1 after #1708 (#1718). The image,
+  IaC, CI-gating and Kubernetes cases assert that their scanners ran and found
+  something, where an `if` or `--allow-missing-tools` let them pass having run nothing.
+  The scheduled E2E suites fail unless the tests they skip are exactly the listed ones
+  (`tests/e2e/expected-skips.yml`), and 48 `requires_tools` tests no job selected now
+  run in E2E Ubuntu, six of them repaired; `test_requires_tools_reachable.py` checks
+  each such test, not each file. Nightly Extended Tests reruns a flaky test and names
+  it, as Cross-Platform Tests does (#1663). Tests that scan with trivy read one shared
+  database from a cache per test process, where each used to fetch 1.8 GB or wait on
+  another's lock. The browser test marks two dashboard defects it found, #1710 and
+  #1711, as expected failures until they are fixed.
 - **Keeping the wizard's default timeout keeps opengrep's and zap's 900 s minimum
   (#1627).** Since #1486 a `--timeout` on the command line wins over that minimum. A user
   who opened "Customize advanced settings?" and pressed Enter at `Timeout [600]` got
@@ -1357,15 +1420,6 @@ All notable changes to JMo Security will be documented in this file.
   without saying it suppresses findings). zizmor's announcement of its own `zizmor.yml` moves from
   INFO to WARNING for the same reason, so there is one level for all three. Neither file is overridden:
   honouring a repository's own settings is each tool's documented behaviour (#1414).
-- **A scan names the npm packages osv-scanner does not check.** From osv-scanner 2.7.0, a
-  `package-lock.json` or `npm-shrinkwrap.json` entry with no `resolved` URL is taken for a
-  local package and never matched, with rc 0 and nothing said: a bundled dependency, or
-  every registry package of a lockfile npm wrote under `omit-lockfile-registry-resolved`
-  (a real one for `lodash@4.17.20`: 5 findings on 2.6.0, none on 2.7.0). JMo now reads each
-  npm lockfile first and names one holding such packages, with how many, at WARNING; the
-  row stays `ran` and its detail says `partly audited` ([Known
-  limitations](docs/KNOWN_LIMITATIONS.md#osv-scanner-does-not-check-an-npm-package-whose-lockfile-entry-has-no-resolved-url),
-  #1472).
 - **yara_runner's crash exits 2, and never leaves an earlier run's output behind.** It
   exited 1, which is also "matches found", so a crash read as findings over the previous
   scan's file. It now removes that file first and exits 2 (#1382).
@@ -1497,6 +1551,15 @@ All notable changes to JMo Security will be documented in this file.
   none. The report rewrites `opengrep.json` the same way and replaces the secrets in
   `.opengrep/semgrep.log`, and a later report reads the same findings. A secret no listed
   rule matched can still appear in a nearby finding's snippet.
+- **A secret trivy finds in an image reaches no report, raw output or history through the
+  image's build metadata (#1624).** trivy masks the secret it matched, but copies the
+  command that built each secret's layer (`Layer.CreatedBy`) and the image's whole
+  configuration (`Metadata.ImageConfig`: its history, `Env`, `Cmd`, labels). Measured
+  with a token set by a `RUN` line: three copies in `trivy.json`, and through the
+  findings' raw records copies in `findings.json`, `findings.yaml`, the dashboard and two
+  history rows. One set by `ENV` left two in `trivy.json`. An image output with a secret
+  finding now loses both fields, in its findings and when the report rewrites
+  `trivy.json`. An image output with no secret finding keeps them.
 - **A report takes the secrets out of the secret scanners' raw outputs once it has read
   them (#1329).** `trufflehog.json`, `gitleaks.json` and their `.git.json` history files
   held every secret found, deleted ones included. The report `jmo scan`, `jmo ci` and

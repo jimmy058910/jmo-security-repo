@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import requests
 
@@ -73,6 +75,11 @@ class EPSSClient:
     # unbounded URL is the request storm above, at full scale.
     BULK_CHUNK_SIZE = 100
 
+    # The most CVEs one cache query names. SQLite limits a statement's host
+    # parameters to 999 before 3.32.0 and to 32766 since, so this stays under
+    # both.
+    LOOKUP_CHUNK_SIZE = 500
+
     def __init__(self, cache_dir: Path | None = None):
         """Initialize EPSS client.
 
@@ -114,27 +121,45 @@ class EPSSClient:
         conn.close()
 
     def _lookup(self, cve: str) -> tuple[bool, EPSSScore | None]:
-        """One query, one connection: `(cache_answered, score)`.
+        """`(cache_answered, score)` for one CVE: one query, one connection."""
+        return self._lookup_many([cve])[cve]
 
-        Replaces the `_get_cached_score` + `_is_cache_valid` pair, which each
-        opened their own `sqlite3.connect` and each re-read the same row -- two
-        connections per lookup, measured at 100 for 50 CVEs (#849).
+    def _lookup_many(self, cves: list[str]) -> dict[str, tuple[bool, EPSSScore | None]]:
+        """`(cache_answered, score)` for each CVE, from one connection.
+
+        The bulk path called `_lookup` once per CVE, a connection each: 100 for
+        100 CVEs on a warm cache, measured. `_lookup` had replaced the
+        `_get_cached_score` + `_is_cache_valid` pair, which opened two per CVE
+        (#849).
+        """
+        if not cves:
+            return {}
+        rows: dict[str, tuple[Any, ...]] = {}
+        conn = sqlite3.connect(self.cache_path)
+        try:
+            for start in range(0, len(cves), self.LOOKUP_CHUNK_SIZE):
+                chunk = cves[start : start + self.LOOKUP_CHUNK_SIZE]
+                marks = ",".join("?" * len(chunk))
+                query = (
+                    "SELECT cve, epss, percentile, date, cached_at, found "
+                    f"FROM epss_scores WHERE cve IN ({marks})"  # nosec B608 - only "?"
+                )
+                for cve, *row in conn.execute(query, chunk):
+                    rows[cve] = tuple(row)
+        finally:
+            conn.close()
+        return {cve: self._answer(cve, rows.get(cve)) for cve in cves}
+
+    def _answer(
+        self, cve: str, row: tuple[Any, ...] | None
+    ) -> tuple[bool, EPSSScore | None]:
+        """What one cache row says about a CVE.
 
         `cache_answered` is True for a valid **negative** entry too, where
         `score` is None. That distinction is the whole point: "we asked and EPSS
         does not know" and "we have not asked" are different states, and
         collapsing them is what produced one HTTP request per finding per run.
         """
-        conn = sqlite3.connect(self.cache_path)
-        try:
-            row = conn.execute(
-                "SELECT epss, percentile, date, cached_at, found "
-                "FROM epss_scores WHERE cve = ?",
-                (cve,),
-            ).fetchone()
-        finally:
-            conn.close()
-
         if not row:
             return (False, None)
 
@@ -168,12 +193,6 @@ class EPSSClient:
         # Fetch from API
         try:
             score = self._fetch_from_api(cve)
-            if score:
-                self._cache_score(score)
-                return score
-            # Remember the miss, so an unknown CVE is asked about once per TTL
-            # rather than once per finding per run (#849).
-            self._cache_miss(cve)
         except (
             Exception
         ) as e:  # Acceptable: EPSS API is optional enrichment — graceful degradation
@@ -181,8 +200,15 @@ class EPSSClient:
             # EPSS lacks a score, and remembering it as one would suppress the
             # real answer for a whole TTL.
             logger.warning("Failed to fetch EPSS score for %s: %s", cve, e)
+            return None
 
-        return None
+        if score:
+            self._try_cache(self._cache_scores, [score])
+        else:
+            # Remember the miss, so an unknown CVE is asked about once per TTL
+            # rather than once per finding per run (#849).
+            self._try_cache(self._cache_misses, [cve])
+        return score
 
     def get_scores_bulk(self, cves: list[str]) -> dict[str, EPSSScore]:
         """Get EPSS scores for multiple CVEs (bulk API call).
@@ -200,8 +226,9 @@ class EPSSClient:
 
         # Check cache first
         uncached_cves = []
+        cache = self._lookup_many(cves)
         for cve in cves:
-            answered, cached = self._lookup(cve)
+            answered, cached = cache[cve]
             if answered:
                 if cached:
                     scores[cve] = cached
@@ -214,26 +241,46 @@ class EPSSClient:
         if uncached_cves:
             try:
                 bulk_scores = self._fetch_bulk_from_api(uncached_cves)
-                # One transaction for every score found (#1673). Committing
-                # each one separately cost a disk flush per CVE: 100 commits
-                # for a 100-CVE fetch, which made the wall time a measure of
-                # the disk's sync latency. Written before `scores` is filled,
-                # so a cache that cannot be written loses the bulk result as
-                # it did when each score was written first.
-                self._cache_scores(list(bulk_scores.values()))
-                scores.update(bulk_scores)
-                # Every CVE we asked about and did not get back is one EPSS
-                # does not score. Recording that is what stops the per-finding
-                # request storm on the next pass (#849). Written in one
-                # transaction rather than one connection each -- at 2000
-                # unknown CVEs that is 1 connection instead of 2000.
-                self._cache_misses(
-                    [cve for cve in uncached_cves if cve not in bulk_scores]
-                )
             except Exception as e:  # Acceptable: bulk EPSS fetch is optional enrichment — graceful degradation
                 logger.warning("Failed to fetch bulk EPSS scores: %s", e)
+                return scores
+            scores.update(bulk_scores)
+            # One transaction for every score found (#1673). Committing each
+            # one separately cost a disk flush per CVE: 100 commits for a
+            # 100-CVE fetch, which made the wall time a measure of the disk's
+            # sync latency.
+            self._try_cache(self._cache_scores, list(bulk_scores.values()))
+            # Every CVE we asked about and did not get back is one EPSS does
+            # not score. Recording that is what stops the per-finding request
+            # storm on the next pass (#849). Written in one transaction rather
+            # than one connection each -- at 2000 unknown CVEs that is 1
+            # connection instead of 2000.
+            self._try_cache(
+                self._cache_misses,
+                [cve for cve in uncached_cves if cve not in bulk_scores],
+            )
 
         return scores
+
+    def _try_cache(self, write: Callable[[list[Any]], None], rows: list[Any]) -> None:
+        """Write `rows` to the cache, or name why it could not be written.
+
+        After the scores are kept: a cache that cannot be written (read-only,
+        full, locked) costs the next run a request, never this run's answer.
+        The write sat inside the fetch's `try`, before the scores were used, so
+        a read-only cache lost every score just fetched (measured: 0 of 99 in
+        bulk, None from `get_score`).
+        """
+        try:
+            write(rows)
+        except (sqlite3.Error, OSError) as e:
+            logger.warning(
+                "EPSS cache %s could not be written, so a later run fetches "
+                "these %d CVE(s) again: %s",
+                self.cache_path,
+                len(rows),
+                e,
+            )
 
     def _fetch_from_api(self, cve: str) -> EPSSScore | None:
         """Fetch EPSS score from API.
@@ -292,16 +339,13 @@ class EPSSClient:
 
         return scores
 
-    def _cache_miss(self, cve: str) -> None:
-        """Remember that EPSS has no score for this CVE (#849).
+    def _cache_misses(self, cves: list[str]) -> None:
+        """Remember that EPSS has no score for these CVEs (#849), in one
+        connection and one transaction.
 
-        Stored as a row with `found = 0`, so `_lookup` can tell "asked, no
+        Stored as rows with `found = 0`, so `_lookup` can tell "asked, no
         score" from "never asked" and only re-ask once its shorter TTL expires.
         """
-        self._cache_misses([cve])
-
-    def _cache_misses(self, cves: list[str]) -> None:
-        """Record several misses in one connection and one transaction."""
         if not cves:
             return
         now = datetime.now().isoformat()
