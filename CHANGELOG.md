@@ -668,7 +668,10 @@ All notable changes to JMo Security will be documented in this file.
   prompt cancelled, the scan raising), `jmo ci` still ran its report over the results
   directory. If an earlier run had filled it, that run's findings went into the summaries
   and into history as a new scan. Measured: a `--repo` that does not exist exited 1,
-  stored a second history row and rewrote `summaries/`. The exit codes are unchanged.
+  stored a second history row and rewrote `summaries/`. Each case now exits 2, the code
+  for a run that checked nothing, except the scan raising: a runtime error, which exits 1
+  as it does without `--allow-missing-tools`. `jmo scan`'s own exit codes are unchanged
+  (#1718).
 - **A scan no longer leaves an empty `.jmo/` in the working directory (#1700).**
   The checkpoint `jmo scan --resume` reads was kept at `<results dir's parent>/.jmo/`,
   the working directory with the default `--results-dir results`, and only the file was
@@ -708,8 +711,8 @@ All notable changes to JMo Security will be documented in this file.
   compliance and analytics tabs, 1001 findings served over HTTP, and the diff summary.
   It used to pass 18 synthetic findings to the HTML writer and check for words the
   filter chips print with no data at all. `jmo ci --fail-on` runs through the real CLI
-  on every PR: 1 at the threshold and 0 below it, while the 2 a scan of nothing should
-  give is an expected failure, since it reads 1 after #1708 (#1718). The image,
+  on every PR: 1 at the threshold, 0 below it, and 2 for a repository that does not
+  exist (#1718). The image,
   IaC, CI-gating and Kubernetes cases assert that their scanners ran and found
   something, where an `if` or `--allow-missing-tools` let them pass having run nothing.
   The scheduled E2E suites fail unless the tests they skip are exactly the listed ones
