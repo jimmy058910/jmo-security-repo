@@ -207,10 +207,12 @@ Start every JMo container with `run_container` (`tests/conftest.py`), from a
   in "created" for good, holding its anonymous volumes. A run's own sweep, and the
   next run's removal of runs whose process is gone, find containers by label only.
   Label a volume a test creates with `docker_test_labels()`.
-- **It mounts the run's cache volume on `/home/jmo/.cache`,** where the image's
-  user keeps trivy's and grype's databases. Without it every scan downloaded both
-  into its own container layer. A test that mounts something of its own under
-  that directory passes `cache=False`.
+- **It mounts the run's cache volume on `/home/jmo/.cache`,** the image user's
+  cache directory, where trivy keeps its database. Without it every scan
+  container downloaded trivy's database into its own layer: one download per
+  scan container, against one per run with the volume (measured serially
+  against the published image, 2026-11-27). A test that mounts something of its
+  own under that directory passes `cache=False`.
 - **The `docker` marker takes a machine-wide lock**, outside pytest-timeout's
   timer, so Docker tests run one at a time under any `-n` and across concurrent
   runs. `xdist_group` would do nothing without `--dist loadgroup`, which no job or

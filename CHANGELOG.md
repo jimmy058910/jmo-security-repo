@@ -677,15 +677,14 @@ All notable changes to JMo Security will be documented in this file.
   removed on the spot, and the run removes its containers and volumes when it finishes. A
   run ended by SIGTERM or by pytest-timeout leaves them to the next run's first Docker
   test, which removes those of runs whose process is gone. The containers share one cache
-  volume per run on the image user's cache directory, so trivy's and grype's databases
-  are downloaded once per run, where each scan downloaded both into its own container
-  layer. `docker`-marked tests take a lock, so they run one at a time on a machine under
+  volume per run on the image user's cache directory, so trivy's database is downloaded
+  once per run, where each scan container downloaded it into its own layer.
+  `docker`-marked tests take a lock, so they run one at a time on a machine under
   any `-n` and across concurrent runs. Each Docker class's timeout now exceeds its tests'
   own subprocess budgets: pyproject's 120 s default sat below most of them and ended the
-  process before any cleanup could run. Measured serially against the published image:
-  the suite took 216 s where it took 439 s, trivy's database was downloaded once per run
-  where it was downloaded by each scan container, and a pytest killed mid-scan left a
-  running container and its cache volume that the next run's first Docker test removed.
+  process before any cleanup could run. Measured in one serial run each against the
+  published image: 216 s where it took 439 s, and a pytest killed mid-scan left a running
+  container and its cache volume that the next run's first Docker test removed.
   The e2e fixtures copy and the GitLab cleanup
   test's clone directory moved under pytest's basetemp: an interrupted run left one
   fixtures directory per xdist worker in the system temp directory, and the cleanup test

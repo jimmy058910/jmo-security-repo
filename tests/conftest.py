@@ -635,9 +635,11 @@ def docker_available() -> bool:
 #   session finishes, and the first Docker test of any later run removes those
 #   of runs whose process is gone.
 #
-# Containers share one cache volume per run, on the directory where the image's
-# user keeps trivy's and grype's databases. Without it each scan downloaded both
-# into its own container layer and threw them away. One Docker test runs at a
+# Containers share one cache volume per run, on the image user's cache
+# directory, where trivy (and grype, in an image that carries it) keeps its
+# database. Without it each scan container downloaded trivy's database into its
+# own layer and threw it away (measured: one download per scan container, one
+# per run with the volume). One Docker test runs at a
 # time on the machine (`pytest_runtest_protocol` below), so no two scans write
 # the cache, or the disk, at once.
 
