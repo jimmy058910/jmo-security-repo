@@ -101,6 +101,23 @@ not contain, and passes or fails for the wrong reason (measured, #1548's E2E
 work). In a worktree, run `uv sync --frozen --group dev` once and use its own
 `.venv/bin/python -m pytest`.
 
+## Disk Space: What a Run Keeps, and Where It Stops
+
+- A passing test's `tmp_path` is removed when it ends
+  (`tmp_path_retention_policy = "failed"` in `pyproject.toml`). To look inside
+  one, run it again with `-o tmp_path_retention_policy=all`.
+- A `--basetemp` you name is **not** removed, nor is what `tmp_path_factory`
+  made in it. Delete a named basetemp once you have read the run.
+- `tests/conftest.py` stops a run before it fills a disk. Before each test it
+  measures the filesystems holding your home and the test temp directory, and
+  ends the session below 10 GiB free, or below a tenth of a smaller filesystem.
+  `JMO_TEST_MIN_FREE_GIB` sets the floor, and `0` turns it off. Unless that
+  variable is set, the floor is off when `CI` is.
+- A tmpfs `/tmp` is such a smaller filesystem. When other files crowd it, name
+  a `--basetemp` on a larger disk (and delete it afterwards).
+- The floor is checked between tests, so one test that writes more than the
+  room left still fills the disk.
+
 ## Test Markers
 
 Use pytest markers to categorize and filter tests:

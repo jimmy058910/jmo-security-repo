@@ -284,6 +284,11 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **A test run stops before it fills the disk.** The test suite ends the session when a
+  filesystem it writes to has less than 10 GiB free, or less than a tenth of a smaller
+  one (`JMO_TEST_MIN_FREE_GIB` sets the floor, `0` turns it off; unset, it is off on CI).
+  A passing test's `tmp_path` is now removed when it ends; pass
+  `-o tmp_path_retention_policy=all` to keep them. A `--basetemp` you name still stays.
 - **zizmor 1.32.0, osv-scanner 2.7.1, checkov 3.4.6, trufflehog 3.100.0, syft 1.57.2,
   opa 1.22.4 and ruff 0.17.6** (#1683, #1684, #1685). zizmor is handed only
   `.pre-commit-config.yaml`, the one name pre-commit reads: given a

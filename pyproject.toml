@@ -242,6 +242,12 @@ addopts = "-m 'not smoke'"
 # tests/unit/test_empty_parameter_set_fails.py.
 empty_parameter_set_mark = "fail_at_collect"
 
+# A passing test's tmp_path is removed when it ends, so a run keeps what failed:
+# kept scan results and clones filled the workstation's disk on 2026-11-25.
+# `-o tmp_path_retention_policy=all` keeps everything while debugging. A
+# --basetemp you name stays, with whatever tmp_path_factory made in it.
+tmp_path_retention_policy = "failed"
+
 # Test durations file for pytest-split sharding
 # Generate with: pytest --store-durations --durations-path=.test_durations
 # This enables duration-based splitting for more even shard distribution
