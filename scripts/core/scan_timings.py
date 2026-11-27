@@ -163,7 +163,10 @@ class ToolRun:
     ends with the tail of its stderr (`scan_utils.stderr_tail`), the text its
     log line already printed: that is where a tool says why it failed (#1717).
     Nothing it printed on stdout is kept: on a secret scanner, stdout *is* the
-    secrets.
+    secrets. Their stderr held none, measured 2026-11-27 with a planted token:
+    gitleaks 8.30.1 (as JMo runs it, with `-v`, with `--log-level=trace`) and
+    trufflehog 3.100.1 (with `--debug`, with `--trace`) printed it on stdout
+    only. Measure again before trusting this for a new version or flag.
 
     `kept_findings` is what a failed row's runs that worked still found, and
     so reached the report: osv-scanner's readable lockfiles beside one it
