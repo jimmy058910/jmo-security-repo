@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 # Above this: load JSON via async fetch() (prevents 50-100 MB HTML files)
 INLINE_THRESHOLD = 1000
 
+# Written only in inline mode, and read by useFindings
+# (scripts/dashboard/src/hooks/useFindings.ts). Its absence means external mode.
+INLINE_MARK = "window.__FINDINGS_INLINE__ = true"
+
 # --- Template provenance -----------------------------------------------------
 #
 # write_html renders one of two documents, and the artifact says which:
@@ -254,9 +258,14 @@ def write_html(
         # sufficient on its own.
         data_json = escape_json_for_script(json.dumps(findings))
 
-        # Replace placeholder with inline data
+        # The mark tells useFindings the data is in the page. Without it, a
+        # scan with no findings embeds [] -- the value external mode leaves --
+        # and the dashboard fetched a dashboard-data.json that was never
+        # written (#1710). It goes before the data, so the payload still ends
+        # at the script's end tag.
         doc = template.replace(
-            "window.__FINDINGS__ = []", f"window.__FINDINGS__ = {data_json}"
+            "window.__FINDINGS__ = []",
+            f"{INLINE_MARK}; window.__FINDINGS__ = {data_json}",
         )
     else:
         # Mode 2: External - Load JSON via fetch() (prevents 50-100 MB HTML files)
