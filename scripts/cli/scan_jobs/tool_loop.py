@@ -73,6 +73,7 @@ from ..scan_utils import (
     find_tool,
     gitleaks_config_warning,
     report_tool_failure,
+    stderr_tail,
     tool_exclusion_flags,
     tool_flags,
     tool_timeout,
@@ -513,10 +514,17 @@ def _row_from_results(
         parts: list[str] = []
         for r, (_reason, words) in zip(failed, causes, strict=True):
             label = labels.get(r.output_file, "") if r.output_file else ""
+            said = r.error_message or (words if label else "")
+            # What the tool said is why, as the log line already shows: trivy's
+            # "cache may be in use by another process" read as "no output" here
+            # (#1717).
+            tail = stderr_tail(r.stderr)
+            if tail:
+                said = f"{said}; stderr: {tail}" if said else f"stderr: {tail}"
             if label:
-                parts.append(f"{label}: {r.error_message or words}")
-            elif r.error_message:
-                parts.append(r.error_message)
+                parts.append(f"{label}: {said}")
+            elif said:
+                parts.append(said)
         return ToolRun(
             tool,
             State.FAILED,
