@@ -686,13 +686,17 @@ All notable changes to JMo Security will be documented in this file.
   test's clone directory moved under pytest's basetemp: an interrupted run left one
   fixtures directory per xdist worker in the system temp directory, and the cleanup test
   left a clone directory there on every run.
-- **`test_history_list_performance_10k_scans` no longer flushes the disk 60 000 times.**
+- **The history tests that seed hundreds of scans no longer fsync on every one.**
   `store_scan` opens and closes two connections per call, and in WAL mode the last one to
-  close checkpoints and fsyncs, 6 device flushes per scan. The test's 10 000-scan setup
-  now holds a connection open, so WAL checkpoints every 1000 pages instead: on a virtual
-  disk, 300 scans went from 1800 flushes to 29, and the test from the 305 s
-  `.test_durations` recorded to 11 s. `make platform-check` keeps its scratch in the
-  system temp directory.
+  close checkpoints and fsyncs: 4 fsync calls per scan. A test now holds a connection open
+  while it seeds (`seeding` in `tests/unit/test_history_db_performance.py`), so WAL
+  checkpoints every 1000 pages instead. fsync calls per run, counted in the process:
+  `test_history_list_performance_10k_scans` 40 008 -> 498, and 305 s in
+  `.test_durations` -> 11 s; `test_vacuum_on_large_database` 4 018 -> 68;
+  `test_export_pagination_for_large_datasets` 4 008 -> 53.
+  `test_load_5_query_1000_scans_trend_analysis` already held a connection through its
+  fixture; its 565 are WAL checkpoints of the findings it stores. `make platform-check`
+  keeps its scratch in the system temp directory.
 - **`jmo tools check` says what a tool's version probe saw when it got no version
   (#1667).** A timeout, a failure to start, no output and an answer with no version in it
   all read "is installed but did not report a version". The warning now names which, as

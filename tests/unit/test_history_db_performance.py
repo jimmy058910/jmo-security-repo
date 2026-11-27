@@ -40,6 +40,8 @@ import json
 import sqlite3
 import sys
 import time
+from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -67,6 +69,27 @@ def perf_db(tmp_path):
     db_path = tmp_path / "perf.db"
     init_database(db_path)
     return db_path
+
+
+@contextmanager
+def seeding(db_path: Path):
+    """Hold a connection on ``db_path`` open while a test seeds it.
+
+    `store_scan` opens and closes two connections per call (`init_database`'s,
+    then its own), and in WAL mode the last connection to close checkpoints and
+    fsyncs: 6 device flushes per scan on a real disk, which stalled every
+    process on a disk shared with other work. With this one open, no close is
+    the last, and WAL checkpoints every 1000 pages instead. Measured on a
+    virtual disk, 300 scans: 1800 flushes -> 29, 3.4 -> 1.0 ms per scan.
+    Leaving the block is the last close, so the database file holds every row
+    afterwards, as it did with a checkpoint per scan.
+    """
+    keeper = sqlite3.connect(db_path)
+    keeper.execute("SELECT count(*) FROM scans").fetchone()  # joins the WAL
+    try:
+        yield
+    finally:
+        keeper.close()
 
 
 @pytest.fixture
@@ -260,14 +283,10 @@ def test_single_scan_insert_performance(tmp_path):
 # "always". 20 minutes restores headroom while the job's own `timeout-minutes:
 # 30` stays the backstop for a genuinely hung test.
 #
-# Most of that cost was device flushes, not the 10 000 transactions. Each
-# `store_scan` opens and closes two connections (`init_database`'s, then its
-# own), and in WAL mode the last connection to close checkpoints and fsyncs: 6
-# flushes per scan, 60 000 for the loop, which on a disk shared with other work
-# stalled every process on it. Holding one connection open for the loop means no
-# close is the last, and WAL checkpoints every 1000 pages instead. Measured on a
-# virtual disk, 300 scans: 1800 flushes -> 29, 3.4 -> 1.0 ms per scan. Reusing
-# one results directory saves only 7%, and WAL was already on.
+# Most of that cost was device flushes, not the 10 000 transactions: 6 per scan,
+# 60 000 for the loop (see `seeding`, which removes them). The whole test now
+# takes 11 s, 13 s under coverage. Reusing one results directory saves only 7%,
+# and WAL was already on.
 @pytest.mark.timeout(1200)
 @pytest.mark.skipif(
     sys.platform == "win32",
@@ -284,11 +303,8 @@ def test_history_list_performance_10k_scans(perf_db, tmp_path):
     Note: This test inserts 10k scans first, which is the bulk of the time.
     The query itself is fast, but platform I/O variance affects total time.
     """
-    # Insert 10,000 minimal scans, with a connection held open so that none of
-    # store_scan's own closes checkpoints (see the comment above the test).
-    keeper = sqlite3.connect(perf_db)
-    keeper.execute("SELECT count(*) FROM scans").fetchone()  # joins the WAL
-    try:
+    # Insert 10,000 minimal scans
+    with seeding(perf_db):
         for i in range(10000):
             results_dir = tmp_path / f"results_{i}"
             summaries = results_dir / "summaries"
@@ -304,8 +320,6 @@ def test_history_list_performance_10k_scans(perf_db, tmp_path):
                 commit_hash=f"commit_{i}",
                 branch="main" if i % 2 == 0 else "dev",
             )
-    finally:
-        keeper.close()
 
     # Measure query time
     conn = sqlite3.connect(perf_db)
@@ -415,24 +429,26 @@ def test_vacuum_on_large_database(perf_db, tmp_path):
     """
     # Insert 1000 scans
     scan_ids = []
-    for i in range(1000):
-        results_dir = tmp_path / f"results_{i}"
-        summaries = results_dir / "summaries"
-        summaries.mkdir(parents=True)
+    with seeding(perf_db):
+        for i in range(1000):
+            results_dir = tmp_path / f"results_{i}"
+            summaries = results_dir / "summaries"
+            summaries.mkdir(parents=True)
 
-        findings_file = summaries / "findings.json"
-        findings_file.write_text('{"findings": []}')
+            findings_file = summaries / "findings.json"
+            findings_file.write_text('{"findings": []}')
 
-        scan_id = store_scan(
-            results_dir=results_dir,
-            tools=["trivy"],
-            db_path=perf_db,
-            commit_hash=f"commit_{i}",
-            branch="main",
-        )
-        scan_ids.append(scan_id)
+            scan_id = store_scan(
+                results_dir=results_dir,
+                tools=["trivy"],
+                db_path=perf_db,
+                commit_hash=f"commit_{i}",
+                branch="main",
+            )
+            scan_ids.append(scan_id)
 
-    # Get initial file size
+    # Get initial file size: after `seeding`, so every row is in the file, not
+    # in the write-ahead log
     initial_size = perf_db.stat().st_size
 
     # Delete 500 scans
@@ -484,21 +500,22 @@ def test_export_pagination_for_large_datasets(perf_db, tmp_path):
     Real-world usage: 10k scans = ~30 days of hourly scans.
     """
     # Insert 1000 scans with minimal data
-    for i in range(1000):
-        results_dir = tmp_path / f"results_{i}"
-        summaries = results_dir / "summaries"
-        summaries.mkdir(parents=True)
+    with seeding(perf_db):
+        for i in range(1000):
+            results_dir = tmp_path / f"results_{i}"
+            summaries = results_dir / "summaries"
+            summaries.mkdir(parents=True)
 
-        findings_file = summaries / "findings.json"
-        findings_file.write_text('{"findings": []}')
+            findings_file = summaries / "findings.json"
+            findings_file.write_text('{"findings": []}')
 
-        store_scan(
-            results_dir=results_dir,
-            tools=["trivy"],
-            db_path=perf_db,
-            commit_hash=f"commit_{i}",
-            branch="main",
-        )
+            store_scan(
+                results_dir=results_dir,
+                tools=["trivy"],
+                db_path=perf_db,
+                commit_hash=f"commit_{i}",
+                branch="main",
+            )
 
     # Measure export time (manual JSON export)
     output_file = tmp_path / "export.json"
