@@ -44,6 +44,11 @@ _REPORT_REQUIRED: dict[str, object] = {
 #: scan raising), where the results directory still holds an earlier run.
 SCAN_WROTE_RESULTS = "_scan_wrote_results"
 
+#: Set True by `cmd_scan` when it catches the scan raising, which it does only
+#: under `--allow-missing-tools`, and returns 1. Without that flag the same
+#: error propagates and the process exits 1, so `jmo ci` keeps the 1.
+SCAN_RAISED = "_scan_raised"
+
 
 def _phase_args(a, required: dict[str, object], **overrides):
     """Return the caller's namespace, adapted for one phase.
@@ -141,16 +146,27 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
     # `jmo scan` produced 1 / 17).
     scan_args = _phase_args(args, _SCAN_REQUIRED, skip_auto_report=True)
     scan_rc = int(cmd_scan_fn(scan_args))
-    if scan_rc in (2, 130) or not getattr(scan_args, SCAN_WROTE_RESULTS, True):
+    # In each case below the report would read an earlier run's results/ and
+    # store them in history as a new scan (measured: a rejected --repo exited
+    # 1, stored a second row and rewrote summaries/), so it is not run.
+    if scan_rc in (2, 130):
         # 2: a usage error, raised before anything was scanned (an unknown
         # name in jmo.yml's `tools:`, `--dest` without `--tsv`).
         # 130: Ctrl-C stopped the scan, and its runs' output is partial.
         # Decided 2026-11-05: no report after Ctrl-C.
-        # No results written: the scan stopped before this run's metadata.
-        # In each case the report would read an earlier run's results/ and
-        # store them in history as a new scan (measured: a rejected --repo
-        # exited 1, stored a second row and rewrote summaries/).
         return scan_rc
+    if getattr(scan_args, SCAN_RAISED, False):
+        # A runtime error, which exits 1: the same 1 the uncaught error gives
+        # without --allow-missing-tools.
+        return scan_rc
+    if not getattr(scan_args, SCAN_WROTE_RESULTS, True):
+        # The scan stopped before writing this run's metadata: no target,
+        # every target rejected, the install prompt cancelled, or nothing
+        # installed to scan with. `cmd_scan` returns 1 for these, which a
+        # `--fail-on` gate reads as a finding at the threshold. Nothing was
+        # checked, so exit 2, as the report's refusal of an empty results
+        # directory did (decided 2026-11-18).
+        return 2
 
     # Import _log here to avoid circular dependency
     from scripts.cli.jmo import _log
