@@ -97,6 +97,8 @@ The remaining repository tools (TruffleHog, Gitleaks, Syft, Trivy, YARA-X) run o
 
 Trivy's repository scan reads vulnerabilities (dev dependencies included, and offline: it never calls out to a package registry) and misconfigurations; its secret pass runs only on an image scan. A repository's secrets come from TruffleHog and Gitleaks, not Trivy.
 
+A scan with several targets runs Trivy on them one at a time, whatever `--threads` says; the other tools still run side by side. Every Trivy run uses one cache directory (`TRIVY_CACHE_DIR`, `~/.cache/trivy` by default), and two at once lost rows: an image scan holds a lock on that cache, and a run that waited on it for more than a few seconds exited with no output. One at a time, a scan of six images on a warm cache took 10 to 17 seconds instead of 7. Two `jmo` processes sharing that directory are not coordinated.
+
 ## jmo-native
 
 jmo-native is JMo's own check pack for Next.js, Supabase and Firebase applications (`scripts/core/native_checks.py`). It is plain Python with no rule engine, so it needs nothing installed, runs offline, and its version is JMo's own. It writes SARIF, and each finding carries its rule's CWE, which is what the compliance mappings read.

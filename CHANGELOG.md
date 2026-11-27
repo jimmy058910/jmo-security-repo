@@ -655,6 +655,21 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **A scan with several targets no longer loses Trivy rows to Trivy's own cache (#1717).**
+  Every Trivy run uses one cache directory. An image or Kubernetes run holds a lock on its
+  `fanal/`, and a run that waited on that lock for about 5 s exited 1 with no output
+  ("cache may be in use by another process: timeout"). A run on a cache with no checks
+  bundle could also read one another run was still unpacking. `jmo scan --images-file`
+  with six images, `--tools trivy --threads 6` and a cold cache lost 5 of the 6 rows and
+  exited 1. A scan now runs Trivy on one target at a time, as it does zap; the other tools
+  still run side by side. The same scan then gave six rows and exit 0 in five cold runs of
+  six, three in a row; the other lost one row to Trivy's own five-minute `--timeout`
+  while another process kept the Docker daemon busy (an 11 MB export took 119 s a few
+  minutes later). The cost is the overlap given up: on a cold cache the six images took
+  35 to 46 s, as long as the old scan that lost five rows; on a warm cache 10 to 17 s
+  against 7 s, and four small repositories 7 s against 5 s. A failed row's `detail` in
+  `scan-timings.json` now ends with the tail of the tool's stderr, the text its log line
+  already printed. It read only "no output" before, so the row never said why.
 - **`jmo tools check` says what a tool's version probe saw when it got no version
   (#1667).** A timeout, a failure to start, no output and an answer with no version in it
   all read "is installed but did not report a version". The warning now names which, as

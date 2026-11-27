@@ -541,7 +541,8 @@ class ToolDescriptor:
     # history) holds it twice when both run at once.
     memory_mb: int = 0
     # One run of it at a time in a scan, whatever its targets: zap allows one
-    # process per home directory, and every zap run uses JMo's (#1422).
+    # process per home directory, and every zap run uses JMo's (#1422); trivy
+    # runs share one cache directory (#1717).
     exclusive: bool = False
     binary: str | None = None  # executable name, where it differs from `name`
     # Ships inside JMo and runs on its interpreter: nothing to install, pin or
@@ -2340,6 +2341,17 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="trivy",
             memory_mb=250,  # 201 MB
+            # Every run shares one cache directory, and two at once lose rows
+            # (#1717, measured 0.74.0). An image or k8s run holds a lock on the
+            # cache's `fanal/`, and another that waits ~5 s for it exits 1 with
+            # no output, "cache may be in use by another process": 5 of 6 image
+            # rows at `--threads 6` on a cold cache. Any run downloads the
+            # checks bundle into the cache when it has none, and another reads
+            # it half-written: 1 to 3 of 4 parallel `fs` runs, in each of 3
+            # tries. The cost is the overlap given up: six warm images 10-17 s
+            # against 7 s, four small repositories 7 s against 5 s; six cold
+            # images took as long as before (35-46 s) and lost none.
+            exclusive=True,
             own_config=("trivy.yaml", ".trivyignore"),
             invocations={
                 # No `secret`: gitleaks and trufflehog already read a repository's
