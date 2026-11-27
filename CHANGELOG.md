@@ -655,6 +655,18 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **BenchProctor's answer keys can be fetched again (#1722).** Upstream rewrote its
+  history on 2026-11-22, so the commit `scripts/dev/fetch_answer_keys.py` pinned,
+  `ad70ff85`, no longer exists and both quicktest zips answered 404. The scheduled
+  contract job failed at "Fetch the answer keys" on every `dev` run, and `main` stayed
+  green only because its Actions cache still held the zips. The two zips, unmodified, are
+  now assets of this repository's release `answer-keys-benchproctor-2026.07.22`, with
+  upstream's Apache-2.0 LICENSE beside them. They are fetched by file name and checked
+  against the same sha256 pins, so the answer key and its recorded scores are unchanged.
+  The cache step gets no `restore-keys` fallback: a hit on the unchanged key is what hid
+  the lost commit, and a fallback would go on hiding a vanished upstream after the key
+  changes. `scripts/dev/generate_release_notes.py` now takes the previous release
+  from `v*` tags only, so that tag cannot cut short the next release's contributor list.
 - **A scan with several targets no longer loses Trivy rows to Trivy's own cache (#1717).**
   Every Trivy run uses one cache directory. An image or Kubernetes run holds a lock on its
   `fanal/`, and a run that waited on that lock for about 5 s exited 1 with no output

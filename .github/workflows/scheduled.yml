@@ -1461,6 +1461,10 @@ jobs:
           CI: "true"
 
       - name: Cache the answer keys
+        # No restore-keys, on purpose: when fetch_answer_keys.py changes, every
+        # key is fetched again, so an upstream that vanished fails the next step.
+        # A hit on an unchanged key already hid BenchProctor's lost commit until
+        # #1714 changed the file (#1722); a fallback would hide it past a change.
         uses: actions/cache@v6
         with:
           path: ~/.cache/jmo-answer-keys
