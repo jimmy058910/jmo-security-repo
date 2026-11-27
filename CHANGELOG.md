@@ -670,6 +670,29 @@ All notable changes to JMo Security will be documented in this file.
   against 7 s, and four small repositories 7 s against 5 s. A failed row's `detail` in
   `scan-timings.json` now ends with the tail of the tool's stderr, the text its log line
   already printed. It read only "no output" before, so the row never said why.
+- **The Docker tests leave no containers or volumes behind, share one scanner cache, and
+  run one at a time.** Every container a test starts is named and labelled with its run.
+  One whose `docker run` client was killed between create and start, by a subprocess
+  timeout or Ctrl-C, stayed "created" for good with its anonymous volumes; it is now
+  removed on the spot, and the run removes its containers and volumes when it finishes. A
+  run ended by SIGTERM or by pytest-timeout leaves them to the next run's first Docker
+  test, which removes those of runs whose process is gone. The containers share one cache
+  volume per run on the image user's cache directory, so trivy's and grype's databases
+  are downloaded once per run, where each scan downloaded both into its own container
+  layer. `docker`-marked tests take a lock, so they run one at a time on a machine under
+  any `-n` and across concurrent runs. Each Docker class's timeout now exceeds its tests'
+  own subprocess budgets: pyproject's 120 s default sat below most of them and ended the
+  process before any cleanup could run. The e2e fixtures copy and the GitLab cleanup
+  test's clone directory moved under pytest's basetemp: an interrupted run left one
+  fixtures directory per xdist worker in the system temp directory, and the cleanup test
+  left a clone directory there on every run.
+- **`test_history_list_performance_10k_scans` no longer flushes the disk 60 000 times.**
+  `store_scan` opens and closes two connections per call, and in WAL mode the last one to
+  close checkpoints and fsyncs, 6 device flushes per scan. The test's 10 000-scan setup
+  now holds a connection open, so WAL checkpoints every 1000 pages instead: on a virtual
+  disk, 300 scans went from 1800 flushes to 29, and the test from the 305 s
+  `.test_durations` recorded to 11 s. `make platform-check` keeps its scratch in the
+  system temp directory.
 - **`jmo tools check` says what a tool's version probe saw when it got no version
   (#1667).** A timeout, a failure to start, no output and an answer with no version in it
   all read "is installed but did not report a version". The warning now names which, as
