@@ -54,12 +54,18 @@ DOCKER_REGISTRY = os.environ.get(
 # a skip -- see ensure_image().
 PULL_TIMEOUT = 600
 
-# What `ensure_image` can take: an inspect, then a pull. Each class's timeout
-# marker is this plus the subprocess budgets of its longest test, so a stuck
-# container ends in that subprocess's TimeoutExpired, where `run_container`
-# removes it. Under pyproject's 120 s default, pytest-timeout's thread method
-# ended the whole process first and left the container behind.
-ENSURE_IMAGE_BUDGET = 30 + PULL_TIMEOUT
+# `run_container`'s own docker calls inside a test's limit: the run's cache
+# volume, created on first use, and after a timeout the container's removal
+# (120 s each).
+CONTAINER_HOUSEKEEPING = 240
+
+# What a Docker test spends outside its own subprocesses: `ensure_image`'s
+# inspect and pull, and that housekeeping. Each class's timeout marker is this
+# plus the subprocess budgets of its longest test, so a stuck container ends in
+# that subprocess's TimeoutExpired, where `run_container` removes it. Under
+# pyproject's 120 s default, pytest-timeout's thread method ended the whole
+# process first and left the container behind.
+SETUP_BUDGET = 30 + PULL_TIMEOUT + CONTAINER_HOUSEKEEPING
 
 # Scanners the image carries but cannot run yet, each with the issue that fixes
 # it. test_docker_image_tools fails on any OTHER not-ready tool, and fails on a
@@ -376,7 +382,7 @@ def read_file_via_container(
 @pytest.mark.e2e
 @pytest.mark.slow
 # ensure_image, the matrix probe (120 s) and `tools check` (1150 s).
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 1300)
+@pytest.mark.timeout(SETUP_BUDGET + 1300)
 class TestDockerImage:
     """End-to-end tests for the Docker image.
 
@@ -485,7 +491,7 @@ class TestDockerImage:
             f"not-ready scanners {not_ready}: {result.stderr[:500]}"
         )
 
-    @pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 1850)  # the scan's 1800 s
+    @pytest.mark.timeout(SETUP_BUDGET + 1850)  # the scan's 1800 s
     def test_docker_image_scan(self, tmp_path: Path):
         """The image completes a scan successfully."""
         image = f"{DOCKER_REGISTRY}:latest"
@@ -636,7 +642,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 690)  # a 600 s scan, a 60 s find
+@pytest.mark.timeout(SETUP_BUDGET + 690)  # a 600 s scan, a 60 s find
 class TestDockerVolumeMount:
     """Test Docker volume mounting scenarios."""
 
@@ -747,7 +753,7 @@ class TestDockerVolumeMount:
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 150)  # a 120 s `tools debug`
+@pytest.mark.timeout(SETUP_BUDGET + 150)  # a 120 s `tools debug`
 class TestDockerToolVerification:
     """Verify tools are actually functional in Docker containers."""
 
@@ -790,7 +796,7 @@ class TestDockerToolVerification:
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 450)  # the matrix probe, a 300 s run
+@pytest.mark.timeout(SETUP_BUDGET + 450)  # the matrix probe, a 300 s run
 class TestDockerNonRootExecution:
     """Test Docker image works with non-root users."""
 
@@ -972,7 +978,7 @@ class TestDockerNonRootExecution:
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 210)  # a 180 s `tools check`
+@pytest.mark.timeout(SETUP_BUDGET + 210)  # a 180 s `tools check`
 class TestDockerResourceLimits:
     """Test Docker container behavior with resource limits."""
 
@@ -1040,7 +1046,7 @@ class TestDockerResourceLimits:
 @pytest.mark.docker
 @pytest.mark.e2e
 # The matrix probe, two 300 s scans and a 120 s listing.
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 870)
+@pytest.mark.timeout(SETUP_BUDGET + 870)
 class TestDockerHistoryPersistence:
     """Test scan history persistence across container runs."""
 
@@ -1102,7 +1108,7 @@ class TestDockerHistoryPersistence:
 @pytest.mark.docker
 @pytest.mark.e2e
 # The matrix probe, volume create and remove, a 300 s scan, a 120 s listing.
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 690)
+@pytest.mark.timeout(SETUP_BUDGET + 690)
 class TestDockerDocumentedMounts:
     """The mounts DOCKER_README and docker-compose.trends.yml document for the
     non-root image, each run as written (#1375). Two more live with their
@@ -1207,7 +1213,7 @@ class TestDockerDocumentedMounts:
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 150)  # a 120 s `tools check`
+@pytest.mark.timeout(SETUP_BUDGET + 150)  # a 120 s `tools check`
 class TestDockerOutputFormats:
     """Test different output formats work in Docker."""
 
@@ -1330,7 +1336,7 @@ class TestDockerImageSize:
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 60)  # a 30 s `scan --help`
+@pytest.mark.timeout(SETUP_BUDGET + 60)  # a 30 s `scan --help`
 class TestDockerCLIConsistency:
     """Test the image exposes the expected CLI interface."""
 
@@ -1373,7 +1379,7 @@ class TestDockerCLIConsistency:
 @pytest.mark.docker
 @pytest.mark.e2e
 # Two 120 s probes, then a 10 s `which` per tool: room for 30 tools.
-@pytest.mark.timeout(ENSURE_IMAGE_BUDGET + 540)
+@pytest.mark.timeout(SETUP_BUDGET + 540)
 class TestDockerNamedToolPresence:
     """Verify every scanner and the policy engine are on the image's PATH.
 
@@ -1416,7 +1422,7 @@ class TestDockerNamedToolPresence:
 
 @pytest.mark.docker
 @pytest.mark.e2e
-@pytest.mark.timeout(960)
+@pytest.mark.timeout(SETUP_BUDGET + 330)  # a 300 s scan
 class TestDockerBasicScan:
     """Basic scan functionality test using the /repo mount pattern.
 
@@ -1429,8 +1435,9 @@ class TestDockerBasicScan:
     2026-11-22 nightly (run 45007345970) and exceeded 120s on 2026-11-21 (run
     44888633119). With both limits at 120s, pytest-timeout's thread method
     fired first and ended the whole Nightly Extended session, not just this
-    test. 960s covers a cold ``ensure_image`` pull (``PULL_TIMEOUT``, 600s)
-    plus the scan's 300s, so the scan's own ``TimeoutExpired`` fires first.
+    test. The limit covers a cold ``ensure_image`` pull (``PULL_TIMEOUT``,
+    600s), ``run_container``'s housekeeping and the scan's 300s, so the scan's
+    own ``TimeoutExpired`` fires first.
     """
 
     @pytest.fixture(autouse=True)
@@ -1472,7 +1479,7 @@ class TestDockerBasicScan:
 @pytest.mark.slow
 @pytest.mark.docker
 # A 900 s run, which pulls the image itself if absent, then a 60 s find.
-@pytest.mark.timeout(990)
+@pytest.mark.timeout(CONTAINER_HOUSEKEEPING + 990)
 class TestDockerCLIWorkflows:
     """Docker CLI workflow tests replacing bash U9-U10, M5, W3.
 

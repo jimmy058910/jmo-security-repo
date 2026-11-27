@@ -650,7 +650,7 @@ _DOCKER_TEST_LOCK = Path(tempfile.gettempdir()) / (
     if hasattr(os, "getuid")
     else "jmo-docker-tests.lock"
 )
-_docker_cache_volume_ready = False
+_docker_cache_volumes_created: set[str] = set()
 _docker_dead_runs_reaped = False
 _docker_tests_reported = False
 
@@ -699,11 +699,10 @@ def _labelled_docker_objects(*filters: str) -> tuple[list[str], list[str]]:
 def docker_cache_volume() -> str:
     """This run's cache volume, created with its labels on first use: one a
     container creates by mounting it would carry none."""
-    global _docker_cache_volume_ready
     name = f"jmo-test-cache-{_docker_run_id()}"
-    if not _docker_cache_volume_ready:
+    if name not in _docker_cache_volumes_created:
         _docker_quiet("volume", "create", *docker_test_labels(), name)
-        _docker_cache_volume_ready = True
+        _docker_cache_volumes_created.add(name)
     return name
 
 
@@ -734,8 +733,10 @@ def run_container(
 
 
 def _pid_alive(pid: int) -> bool:
+    if IS_WINDOWS:
+        return True  # os.kill(pid, 0) there terminates the process: never reap
     try:
-        os.kill(pid, 0)  # POSIX only: on Windows this terminates the process
+        os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:

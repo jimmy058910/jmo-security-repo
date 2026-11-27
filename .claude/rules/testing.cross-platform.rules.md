@@ -216,7 +216,7 @@ Start every JMo container with `run_container` (`tests/conftest.py`), from a
   runs. `xdist_group` would do nothing without `--dist loadgroup`, which no job or
   Makefile target passes.
 - **Give a Docker class a timeout marker above its tests' subprocess budgets**
-  (`ENSURE_IMAGE_BUDGET` plus the longest test's). pyproject's 120 s default sat
+  (`SETUP_BUDGET` plus the longest test's). pyproject's 120 s default sat
   below most of them, and pytest-timeout's thread method ends the process with no
   `finally`, so the container outlived the run.
 
