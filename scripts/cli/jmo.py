@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.cli.build_commands import add_build_args, cmd_build
-from scripts.cli.ci_orchestrator import SCAN_WROTE_RESULTS
+from scripts.cli.ci_orchestrator import SCAN_RAISED, SCAN_WROTE_RESULTS
 from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
 from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
 from scripts.cli.diff_commands import cmd_diff
@@ -3133,6 +3133,7 @@ def cmd_scan(args) -> int:
     # can tell a scan that wrote nothing from one whose targets failed: both
     # return 1, and only the second has results of its own to report.
     setattr(args, SCAN_WROTE_RESULTS, False)
+    setattr(args, SCAN_RAISED, False)
 
     # Usage errors first, exit 2, before anything prompts or writes.
     if getattr(args, "dest", None) and not getattr(args, "tsv", None):
@@ -3543,6 +3544,7 @@ def cmd_scan(args) -> int:
             _log(args, "ERROR", f"Scan failed: {e}")
             if not scan_config.allow_missing_tools:
                 raise
+            setattr(args, SCAN_RAISED, True)
             return 1
         finally:
             _restore_signals()
@@ -3584,6 +3586,7 @@ def cmd_scan(args) -> int:
             _log(args, "ERROR", f"Scan failed: {e}")
             if not scan_config.allow_missing_tools:
                 raise
+            setattr(args, SCAN_RAISED, True)
             return 1
         finally:
             # Its refresh thread wakes 4 times a second until stopped: never

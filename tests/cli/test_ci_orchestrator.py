@@ -765,7 +765,8 @@ class TestAScanThatWroteNothing:
     scan's 1, and the tests here ran only over an earlier scan, where the old
     code gave 1 too. On an empty results directory the report had refused with
     2, which is what `jmo ci --repo <missing>` exited before. So each case runs
-    over both.
+    over both. The exception is a scan that raised: a runtime error, which
+    exits 1 with `--allow-missing-tools` as it does without it.
 
     A fake `cmd_scan` cannot test this: it would only say what the fake was
     told to say."""
@@ -849,12 +850,25 @@ class TestAScanThatWroteNothing:
         assert not ci.report.called
 
     def test_the_scan_raised(self, ci):
-        """A runtime error, which the exit-code table puts under 1. It exits 2
-        because this run checked nothing and wrote nothing to report."""
+        """A runtime error, which the exit-code table puts under 1. `cmd_scan`
+        catches it only under `--allow-missing-tools`; the test below is the
+        same error without that flag, where it propagates and the process
+        exits 1. Both give 1, and neither reports an earlier run's results."""
         from scripts.cli.scan_orchestrator import ScanOrchestrator
 
         with patch.object(ScanOrchestrator, "scan_all", side_effect=RuntimeError("x")):
-            assert ci.run("--repo", str(ci.project), "--allow-missing-tools") == 2
+            assert ci.run("--repo", str(ci.project), "--allow-missing-tools") == 1
+        assert not ci.report.called
+        assert ci.metadata() == ci.earlier
+
+    def test_the_scan_raised_without_allow_missing_tools(self, ci):
+        from scripts.cli.scan_orchestrator import ScanOrchestrator
+
+        with (
+            patch.object(ScanOrchestrator, "scan_all", side_effect=RuntimeError("x")),
+            pytest.raises(RuntimeError),
+        ):
+            ci.run("--repo", str(ci.project))
         assert not ci.report.called
         assert ci.metadata() == ci.earlier
 
