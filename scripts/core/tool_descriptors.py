@@ -25,7 +25,6 @@ import http.client
 import json
 import logging
 import re
-import shutil
 import ssl
 import subprocess
 import sys
@@ -60,7 +59,10 @@ logger = logging.getLogger(__name__)
 # on 1.32.0, a tree holding each beside `src/` and `docs/` scanned only those
 # two. Its `--x-ignore-semgrepignore-files` turns the list off. The list is
 # matched against the path opengrep is handed, so its row runs from inside the
-# target, which it names `.`: an ancestor of the target is then in no path.)
+# target, which it names `.`: an ancestor of the target is then in no path.
+# Inside a git repository 2.1.0 matches `--exclude` and rule `paths:` from the
+# repository's root instead, so there a target under one of these names reads
+# nothing (docs/KNOWN_LIMITATIONS.md).)
 VENDORED_DIRS: tuple[str, ...] = (
     ".git",
     "node_modules",
@@ -980,48 +982,18 @@ def _opengrep_skip_if_empty(flags: Sequence[str]) -> SkipIfEmpty | None:
     )
 
 
-#: The flags that say whether opengrep consults `.gitignore`. Either one in a
-#: user's flags is their choice, and JMo adds neither: opengrep refuses
-#: `--no-git-ignore` twice, or beside `--use-git-ignore` (rc 2, 2.0.0).
-OPENGREP_GIT_IGNORE_FLAGS = ("--no-git-ignore", "--use-git-ignore")
-
-
-def _git_lists_files(root: Path) -> bool:
-    """Whether `git ls-files` works in `root`.
-
-    opengrep 2.0.0 lists a target inside a git work tree with it, and when it
-    fails (git not installed, git refusing a repository another user owns, a
-    `.git` it cannot read) the whole run fails: rc 2, "Could not get files from
-    git ls-files", no results, where 1.32.0 walked the files (measured
-    2026-11-17). Outside a work tree it fails as well (rc 128), and there
-    `--no-git-ignore` changes nothing (measured)."""
-    git = shutil.which("git")
-    if git is None:
-        return False
-    try:
-        done = subprocess.run(
-            [git, "ls-files", "-z"],
-            cwd=root,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=60,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return done.returncode == 0
-
-
-def _opengrep_git_args(flags: Sequence[str], root: Path) -> tuple[str, ...]:
-    """`--no-git-ignore` when git cannot list the target's files, so opengrep
-    walks them as 1.32.0 did instead of failing; nothing when it can, so
-    `.gitignore` keeps out what a repository ignores. Passed always, it read
-    3,859 files of this repository's checkout instead of 494 (nested worktrees,
-    caches), in 120 s instead of 26 (2026-11-17). With git's list, 2.0.0 also
-    skips files a `.gitignore` `!` line re-includes (opengrep#922)."""
-    if any(flag in OPENGREP_GIT_IGNORE_FLAGS for flag in flags):
-        return ()
-    return () if _git_lists_files(root) else ("--no-git-ignore",)
-
+# Inside a git work tree opengrep reads the files `git ls-files` lists, so a
+# repository's `.gitignore` keeps out what it ignores and nothing else: since
+# 2.1.0 a tracked file a `.gitignore` pattern matches is read (opengrep#922),
+# and where git cannot list the files (git not installed, a repository another
+# user owns, a `.git` git cannot read) opengrep walks the folder itself, with a
+# warning, gitignored files included (opengrep#931). 2.0.0 failed that run (rc 2,
+# no results), and the row ran `git ls-files` first to pass `--no-git-ignore`
+# then. JMo passes no git flag: `--no-git-ignore` passed always read 3,859 files
+# of this repository's checkout instead of 494 (nested worktrees, caches), in
+# 120 s instead of 26 (2026-11-17). Measured on 2.1.0, 2026-11-27: a repository
+# with an empty `.git`, with git off PATH, and with a git that exits 128 each
+# read its file and reported its finding, as the flag did on 2.0.0.
 
 # opengrep's debug log, in the scan's scratch beside the outputs: dot-prefixed,
 # as `.zap-plan.yaml` is, so the report reads no `<tool>.json` out of it.
@@ -1036,9 +1008,12 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
     # (measured on 1.32.0), as did one under `vendor/`, `node_modules/` or
     # `venv/` through JMo's own `--exclude`: a repository cloned under
     # `~/build/` read `failed:examined 0 files`. Handed `.`, nothing above the
-    # target is in any path it matches, and its output names files relative to
-    # the target, whatever directory JMo was started in (a relative target used
-    # to put its own spelling in every path, and so in every finding id). Every
+    # target is in any path it matches, outside a git repository; inside one,
+    # 2.1.0 matches `--exclude` and rule `paths:` against the path from the
+    # repository's root (docs/KNOWN_LIMITATIONS.md). Its output names files
+    # relative to the target, whatever directory JMo was started in (a relative
+    # target used to put its own spelling in every path, and so in every
+    # finding id). Every
     # other path JMo builds is absolute, since the directory moves; a relative
     # path the user writes in `per_tool.opengrep.flags` is theirs, and is now
     # relative to the target (a relative `configs` entry is made absolute).
@@ -1055,7 +1030,6 @@ def _opengrep_repo(ctx: ScanContext) -> list[Invocation]:
                 "--json",
                 "--output",
                 str(ctx.output.resolve()),
-                *_opengrep_git_args(ctx.flags, root),
                 # Fixed: at 4 its tree peaked at 662 MB on app B, at 2 at 507 MB,
                 # the same findings, about 1 s slower (Phase 7, measured).
                 *("-j", "2"),

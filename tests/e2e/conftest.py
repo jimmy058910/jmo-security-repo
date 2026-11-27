@@ -16,32 +16,21 @@ Note: ``jmo_scan_runner`` is intentionally named differently from the root-level
 
 from __future__ import annotations
 
-import atexit
 import json
-import shutil
 import sys
-import tempfile
 from collections import Counter
 from pathlib import Path
 
 import pytest
 
-
-def _outside_any_work_tree(source: Path) -> Path:
-    """A copy of the fixtures in a temporary directory, made once per process.
-
-    opengrep 2.0.0 matches its built-in ignore list (`tests/`, `build/`, ...)
-    against a target's path from the root of the git work tree that holds it, so a
-    fixture under this repository's `tests/` scanned 0 files however it was named
-    (measured 2026-11-17, docs/KNOWN_LIMITATIONS.md). A user's repository is
-    under no such tree; neither is this copy."""
-    root = Path(tempfile.mkdtemp(prefix="jmo-e2e-fixtures-"))
-    atexit.register(shutil.rmtree, root, ignore_errors=True)
-    return Path(shutil.copytree(source, root / "fixtures"))
-
-
-# E2E fixture directory: the copy every E2E module scans.
-E2E_FIXTURES = _outside_any_work_tree(Path(__file__).parent / "fixtures")
+# E2E fixture directory, the one every E2E module scans, where it is. opengrep
+# 2.0.0 matched its built-in ignore list (`tests/`, `build/`, ...) against a
+# target's path from the root of the git work tree holding it, so under this
+# repository's `tests/` the fixtures scanned 0 files, and E2E scanned a copy
+# outside the work tree (opengrep#932). 2.1.0 reads them in place: the whole
+# tree and each of its four folders gave the same files and finding ids as the
+# copy (measured 2026-11-27).
+E2E_FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture

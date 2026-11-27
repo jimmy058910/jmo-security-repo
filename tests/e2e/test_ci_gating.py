@@ -20,8 +20,6 @@ from collections import Counter
 import pytest
 
 from tests.conftest import scanner_states
-
-# The fixtures, copied out of the work tree (conftest says why).
 from tests.e2e.conftest import E2E_FIXTURES
 
 

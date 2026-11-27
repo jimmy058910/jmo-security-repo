@@ -23,8 +23,6 @@ import pytest
 from scripts.core.tool_descriptors import DESCRIPTORS
 from scripts.core.tool_utils import find_tool
 from tests.conftest import scanner_states
-
-# E2E_FIXTURES is a copy out of the work tree (conftest says why).
 from tests.e2e.conftest import (
     E2E_FIXTURES,
     current_platform,
