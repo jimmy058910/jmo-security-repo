@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- **uv** (recommended), **Docker**, or **Python 3.12+** for pip
+- **uv** (recommended), **Docker**, or **Python 3.12 to 3.14** for pip
 - **Git** (for repository scanning)
 
 ---
@@ -20,12 +20,15 @@ your own: uv brings the one JMo runs on. [Install uv](https://docs.astral.sh/uv/
 if you do not have it.
 
 ```bash
-uv tool install "jmo-security[yara]"
+uv tool install --python 3.12 "jmo-security[yara]"
 jmo wizard
 ```
 
-With Python 3.12+ you can use pip or pipx instead: `pip install "jmo-security[yara]"`, or
-`pipx install "jmo-security[yara]"` for an isolated install.
+`--python 3.12` is the Python JMo is tested on. Without it, on a machine with no Python, uv
+picks its newest, 3.15 today, where Checkov cannot install yet ([Known Limitations](docs/KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315)).
+
+From Python 3.12 to 3.14 you can use pip or pipx instead: `pip install "jmo-security[yara]"`,
+or `pipx install "jmo-security[yara]"` for an isolated install.
 
 On Alpine and other musl Linux, Windows ARM64, glibc older than 2.28 or macOS 13, leave out `[yara]`: YARA-X has no wheel there, and JMo installs and runs without it ([Known Limitations](docs/KNOWN_LIMITATIONS.md#the-yara-x-scanner-runs-only-where-yara-x-has-a-wheel)).
 
@@ -61,8 +64,8 @@ There is one image: use `:latest`, or pin a version tag.
 ### Option 3: Install, then the scanners (5 minutes)
 
 ```bash
-# Install JMo Security (or: pip install "jmo-security[yara]")
-uv tool install "jmo-security[yara]"
+# Install JMo Security (or, from Python 3.12 to 3.14: pip install "jmo-security[yara]")
+uv tool install --python 3.12 "jmo-security[yara]"
 
 # Verify installation
 jmo --help

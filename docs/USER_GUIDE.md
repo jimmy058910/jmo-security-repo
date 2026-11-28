@@ -12,9 +12,12 @@ Note: The CLI is available as the console command `jmo` (via PyPI) and also as a
 [Install uv](https://docs.astral.sh/uv/getting-started/installation/) if you do not have it.
 
 ```bash
-uv tool install "jmo-security[yara]"
+uv tool install --python 3.12 "jmo-security[yara]"
 jmo --help
 ```
+
+`--python 3.12` is the Python JMo is tested on. Without it, on a machine with no Python, uv
+picks its newest, 3.15 today, where Checkov cannot install yet ([Known Limitations](KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315)).
 
 On Alpine and other musl Linux, Windows ARM64, glibc older than 2.28 or macOS 13, leave out `[yara]`: YARA-X has no wheel there, and JMo installs and runs without it ([Known Limitations](KNOWN_LIMITATIONS.md#the-yara-x-scanner-runs-only-where-yara-x-has-a-wheel)).
 
@@ -38,14 +41,14 @@ jmo --help
 
 ## Quick start (2 minutes)
 
-Prereqs: Linux, WSL, macOS or Windows. uv needs no Python of your own; pip and pipx need Python 3.12+.
+Prereqs: Linux, WSL, macOS or Windows. uv needs no Python of your own; pip and pipx need Python 3.12 to 3.14.
 
 1. Install the CLI
 
 ### Option 1: uv (Recommended)
 
 ```bash
-uv tool install "jmo-security[yara]"
+uv tool install --python 3.12 "jmo-security[yara]"
 ```
 
 ### Option 2: Python Package

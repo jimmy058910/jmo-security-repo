@@ -5,7 +5,7 @@
 This guide shows how to scan a set of repositories listed in a TSV file: `jmo scan --tsv`
 (or `jmo ci --tsv`) clones each one, then scans the clones with all tools.
 
-Works on Linux, macOS and Windows with Git and Python 3.12+.
+Works on Linux, macOS and Windows with Git and Python 3.12 to 3.14.
 
 ### What you'll get
 

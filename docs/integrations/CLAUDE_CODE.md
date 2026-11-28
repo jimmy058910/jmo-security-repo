@@ -71,7 +71,7 @@ JMo Security's MCP server enables Claude Code to:
    ```
 
 3. **One of these installation methods:**
-   - Python 3.12+ with pip/uv
+   - Python 3.12 to 3.14 with pip, or uv
    - Docker
    - WinGet (Windows) or Homebrew (macOS/Linux)
 

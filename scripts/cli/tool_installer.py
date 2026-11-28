@@ -253,6 +253,32 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
 PINNED_INSTALL_METHODS: frozenset[str] = frozenset({"pip", "isolated_venv", "binary"})
 
 
+def _venv_reusable(venv_dir: Path) -> bool:
+    """Whether an existing isolated venv can take another install: it has pip,
+    and its pyvenv.cfg records the major.minor Python JMo runs on.
+
+    CPython's venv writes `version = 3.13.5` to pyvenv.cfg and uv's writes
+    `version_info = 3.15`. A venv with neither, no readable pyvenv.cfg, or no
+    pip (an interrupted creation) cannot be shown to work, so it reads as not
+    reusable.
+    """
+    pip = venv_dir / ("Scripts/pip.exe" if sys.platform == "win32" else "bin/pip")
+    if not pip.exists():
+        return False
+    try:
+        text = (venv_dir / "pyvenv.cfg").read_text(encoding="utf-8")
+    except (OSError, ValueError):  # ValueError: a pyvenv.cfg that is not UTF-8
+        return False
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() in ("version", "version_info"):
+            return value.strip().split(".")[:2] == [
+                str(sys.version_info.major),
+                str(sys.version_info.minor),
+            ]
+    return False
+
+
 class ToolInstaller:
     """Cross-platform tool installation manager."""
 
@@ -906,6 +932,16 @@ class ToolInstaller:
 
         The isolated venv is created at ~/.jmo/tools/venvs/<tool_name>/
 
+        A venv runs on the Python that built it, so after JMo moves (say
+        `uv tool install --python 3.12` over a 3.15 install) a kept venv made
+        every later install, `--force` included, build the tool on the old
+        Python again (#1695, measured 2026-11-25). A venv that is not
+        reusable here is rebuilt, but kept aside until the rebuild works:
+        when the old Python is the one the tool installs on (a 3.12 venv after
+        JMo moved to 3.15), deleting it first would turn a working tool into
+        a missing one. If the rebuild fails, the old venv is put back and
+        installed into, as before.
+
         Args:
             tool_name: Name of the tool
             package_spec: Pip package specification (e.g., "checkov==3.3.30")
@@ -913,6 +949,41 @@ class ToolInstaller:
         Returns:
             InstallResult with success status and details
         """
+        venv_dir = get_isolated_venv_path(tool_name)
+        if not venv_dir.exists() or _venv_reusable(venv_dir):
+            return self._isolated_pip_install_into(tool_name, package_spec)
+
+        kept = venv_dir.with_name(f"{venv_dir.name}.not-reusable")
+        try:
+            if kept.exists():
+                remove_tree(kept)
+            venv_dir.rename(kept)
+        except OSError as e:  # a file held open on Windows, say
+            logger.warning(f"Could not move {venv_dir} aside to rebuild it: {e}")
+            return self._isolated_pip_install_into(tool_name, package_spec)
+
+        logger.info(f"Rebuilding {venv_dir} on {sys.executable}")
+        rebuilt = self._isolated_pip_install_into(tool_name, package_spec)
+        try:
+            if rebuilt.success:
+                remove_tree(kept)
+                return rebuilt
+            if venv_dir.exists():
+                remove_tree(venv_dir)
+            kept.rename(venv_dir)
+        except OSError as e:
+            logger.warning(f"Could not clean up after rebuilding {venv_dir}: {e}")
+            return rebuilt
+        logger.info(f"Rebuilding {venv_dir} failed; installing into the old venv")
+        return self._isolated_pip_install_into(tool_name, package_spec)
+
+    def _isolated_pip_install_into(
+        self,
+        tool_name: str,
+        package_spec: str,
+    ) -> InstallResult:
+        """`_isolated_pip_install`'s steps, into the venv as it is on disk:
+        created when absent, otherwise used as found."""
         venv_dir = get_isolated_venv_path(tool_name)
         start_time = time.time()
 

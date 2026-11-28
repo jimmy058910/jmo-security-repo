@@ -104,6 +104,13 @@ not contain, and passes or fails for the wrong reason (measured, #1548's E2E
 work). In a worktree, run `uv sync --frozen --group dev` once and use its own
 `.venv/bin/python -m pytest`.
 
+**Run pytest in the foreground of its shell.** A job a non-interactive shell starts
+in the background (`cmd &` in a script) begins with SIGINT ignored, so the two Ctrl-C
+tests in `tests/unit/test_peakmem.py` fail on any tree. Measured 2026-11-27 at
+59c3de14 and on a branch: both fail backgrounded and pass in the foreground. Run the
+suite in the script's foreground, or `set -m` first. A backgrounded run under GNU
+`timeout` passed, so `timeout` can hide it.
+
 ## Disk Space: What a Run Keeps, and Where It Stops
 
 - A passing test's `tmp_path` is removed when it ends

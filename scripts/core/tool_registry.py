@@ -66,7 +66,7 @@ DEPENDENCY_MISSING: dict[str, str] = {
     "yara-x": (
         "the yara-x engine is not installed, or cannot be imported. It is the "
         "optional extra jmo-security[yara]; add it with: "
-        'uv tool install "jmo-security[yara]" (or pip install '
+        'uv tool install --python 3.12 "jmo-security[yara]" (or pip install '
         '"jmo-security[yara]"). yara-x publishes wheels only for Linux with glibc '
         "2.28+, macOS 14+ and Windows x86_64; elsewhere, use the Docker image"
     ),

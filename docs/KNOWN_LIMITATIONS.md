@@ -489,6 +489,23 @@ database, so JMo does not hand OSV-Scanner a `conan.lock` (the lockfiles it does
 are listed in [TOOLS.md](TOOLS.md#when-each-tool-runs)); a repository whose only
 lockfile is a Conan one reads `skipped:no lockfile`.
 
+### Checkov cannot install on Python 3.15
+
+`jmo tools install` builds Checkov's own venv from the Python JMo runs on.
+Checkov 3.4.6 needs `aiodns<4`, which needs `pycares<5`, and pycares 4.11.0 has no
+wheel for Python 3.15 on any platform (nor has orjson 3.13.0 on Linux), so pip tries
+to build them from source and fails. The install reports `[FAIL] checkov` and a
+scan's checkov row reads `failed:not installed`. On Python 3.12, 3.13 and 3.14 every
+package Checkov needs has a wheel on Linux, macOS and Windows (resolved 2026-11-27).
+On a machine with no Python, `uv tool install` with no `--python` picks uv's newest,
+3.15 today, and a `requires-python` cap in JMo would not stop it: uv 0.13.10 installed
+a wheel that declares `<3.15` on 3.15.2 with no warning (measured 2026-11-27).
+
+**What to do:** install with `uv tool install --python 3.12 "jmo-security[yara]"`, as
+the install guides do, or with pip or pipx from Python 3.12 to 3.14. To move an
+existing install, run `uv tool install --force --python 3.12 "jmo-security[yara]"`;
+the next `jmo tools install checkov` rebuilds Checkov's venv on the new Python.
+
 ### Checkov's repository run misses several CI/CD and IaC dialects
 
 On a repository, Checkov reads only Terraform and CloudFormation

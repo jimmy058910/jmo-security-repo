@@ -11,7 +11,7 @@ Both are first-class; pick based on your environment:
 | Use pip when... | Use Docker when... |
 |-----------------|--------------------|
 | You want to integrate `jmo` into scripts, Makefiles, CI containers | You want every scanner pre-installed without managing each binary yourself |
-| You already have Python 3.12+ and can install extras as needed | You're scanning on a machine without Python or want isolation |
+| You already have Python 3.12 to 3.14 and can install extras as needed | You're scanning on a machine without Python or want isolation |
 | You want the smallest install footprint | You're running one-shot audits and don't want local state |
 | You're developing a custom adapter | You want consistent, reproducible results across team machines |
 
@@ -19,7 +19,7 @@ You can mix — use `pip` locally for development and Docker in CI. See [docs/DO
 
 ### What are the system requirements?
 
-- **Python:** 3.12 or newer (for pip install)
+- **Python:** 3.12 to 3.14 for pip install (on 3.15 Checkov cannot install yet: [Known Limitations](KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315))
 - **Docker:** 24.0+ recommended (for the Docker image)
 - **Disk:** ~200 MB for `pip install jmo-security`; a few GB for the Docker image
 - **OS:** Linux (primary), macOS, Windows 10/11 (tested)
