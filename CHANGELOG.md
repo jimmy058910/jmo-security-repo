@@ -655,6 +655,23 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **The documented install keeps Checkov installable (#1695).** On a machine with no
+  Python, `uv tool install "jmo-security[yara]"` picks uv's newest, 3.15 today, and
+  `jmo tools install` builds Checkov's venv on it, where Checkov 3.4.6's pycares 4.11.0
+  has no wheel (nor has orjson 3.13.0 on Linux), so the install failed and a scan's
+  checkov row read `failed:not installed`. The install guides now say
+  `uv tool install --python 3.12 "jmo-security[yara]"`, the Python CI tests, and pip and
+  pipx read "Python 3.12 to 3.14", where every package Checkov needs has a wheel on
+  Linux, macOS and Windows; [Known Limitations](docs/KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315)
+  says what happens on 3.15. Capping `requires-python` was measured and does not help:
+  uv put a wheel declaring `<3.15` on 3.15.2 without a warning. And moving an install
+  now repairs it: Checkov's venv is rebuilt when another Python made it, or it has no
+  pip, where before every later `jmo tools install`, `--force` included, reused the
+  3.15 venv and failed again, so the venv had to be deleted by hand. The old venv is
+  kept aside until the rebuild works, and put back if it fails, so a working Checkov
+  on 3.12 is not lost when JMo itself has moved to 3.15. Measured in a clean
+  `debian:13-slim` after the recovery steps: Checkov installs and a scan of a
+  Terraform file reports 53 findings, where `dev` read `failed:not installed`.
 - **BenchProctor's answer keys can be fetched again (#1722).** Upstream rewrote its
   history on 2026-11-22, so the commit `scripts/dev/fetch_answer_keys.py` pinned,
   `ad70ff85`, no longer exists and both quicktest zips answered 404. The scheduled
