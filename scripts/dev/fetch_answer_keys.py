@@ -1089,15 +1089,21 @@ ZIZMOR_FILES: dict[str, str] = {
 
 BENCHPROCTOR = "benchproctor"
 BENCHPROCTOR_COMMIT = "ad70ff85c2325626ccbda2a6565d354732d032ff"
+BENCHPROCTOR_RELEASE = "answer-keys-benchproctor-2026.07.22"
 BENCHPROCTOR_URL = (
-    "https://raw.githubusercontent.com/TheAuditorTool/BenchProctor/{commit}/{path}"
+    "https://github.com/jimmy058910/jmo-security-repo/releases/download/"
+    "{release}/{name}"
 )
 # TheAuditorTool/BenchProctor (Apache-2.0): the 2026.07.22 quicktest bundles for
-# TypeScript and JavaScript (its releases halted, so the pin cannot move). Each
-# zip holds two frameworks' generated test cases, their labels
-# (`expectedresults-2026.07.22.csv`) and the bundle's scorer (`score_sarif.py`);
-# graded by tests/integration/test_benchproctor.py (Phase 6, F7). The zips are
-# extracted into the cache once they verify.
+# TypeScript and JavaScript, as they were at the commit above. Each zip holds two
+# frameworks' generated test cases, their labels (`expectedresults-2026.07.22.csv`)
+# and the bundle's scorer (`score_sarif.py`); graded by
+# tests/integration/test_benchproctor.py (Phase 6, F7). Upstream rewrote its
+# history on 2026-11-22 and that commit is gone (#1722), so the zips, unmodified,
+# and upstream's LICENSE are assets of this repository's release named above,
+# fetched by file name. The sha256 is the pin: a release asset can be replaced,
+# and a replaced one fails here. The paths are where they sat upstream, and where
+# they land in the cache. The zips are extracted there once they verify.
 BENCHPROCTOR_FILES: dict[str, str] = {
     "Benchmarks/quicktest/typescript/benchproctor-typescript-quicktest-2026.07.22.zip": "80f417b0d7aa7dbaa5ab25898a9be559484a411c46c287a0c828f6df415859c4",
     "Benchmarks/quicktest/javascript/benchproctor-javascript-quicktest-2026.07.22.zip": "ce18f02c168f5bcf97674fa62428d70bebf67942ab5fcccd4f231cf37e9d3a3e",
@@ -1265,13 +1271,18 @@ def extract_zip(archive: Path, dest: Path) -> list[str]:
 
 
 def benchproctor(root: Path | None = None) -> list[str]:
-    """BenchProctor's two quicktest bundles at the pinned commit, extracted; the
+    """BenchProctor's two quicktest bundles from the release, extracted; the
     problems met, none when both are in place. A bundle is extracted again only
     when its marker does not name the pinned hash."""
     dest = benchproctor_dir(root)
-    problems = _fetch_pinned(
-        dest, BENCHPROCTOR_COMMIT, BENCHPROCTOR_URL, BENCHPROCTOR_FILES
-    )
+    problems = []
+    for path, expected in BENCHPROCTOR_FILES.items():
+        url = BENCHPROCTOR_URL.format(
+            release=BENCHPROCTOR_RELEASE, name=path.rsplit("/", 1)[-1]
+        )
+        problem = _fetch_file(dest, path, expected, url)
+        if problem:
+            problems.append(problem)
     if problems:
         return problems
     for path, expected in BENCHPROCTOR_FILES.items():

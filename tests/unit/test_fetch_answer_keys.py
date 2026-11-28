@@ -107,9 +107,12 @@ def served(monkeypatch) -> list[str]:
             **GOOD_VIBEPROOF,
             **GOOD_KICS,
             **GOOD_ZIZMOR,
-            **GOOD_BENCHPROCTOR,
         }.items():
             if url.endswith("/" + path):
+                return data
+        # A release asset is named by its file name alone.
+        for path, data in GOOD_BENCHPROCTOR.items():
+            if url.endswith("/" + path.rsplit("/", 1)[-1]):
                 return data
         raise OSError(f"no such file: {url}")
 
@@ -562,9 +565,12 @@ def test_a_bundle_lands_pinned_and_extracted_with_its_separators_read(
     bundle = fak.benchproctor_bundle("typescript")
     assert (bundle / "express_ts" / "testcode" / "benchmark_test_00001.ts").is_file()
     assert (bundle / "score_sarif.py").is_file()
+    # Upstream's commit is gone (#1722): the zip is an asset of this repository's
+    # release, named by its file name, and still lands under the upstream path.
     assert served == [
-        "https://raw.githubusercontent.com/TheAuditorTool/BenchProctor/"
-        f"{fak.BENCHPROCTOR_COMMIT}/{BUNDLE}"
+        "https://github.com/jimmy058910/jmo-security-repo/releases/download/"
+        "answer-keys-benchproctor-2026.07.22/"
+        "benchproctor-typescript-quicktest-2026.07.22.zip"
     ]
 
 
@@ -593,8 +599,9 @@ def test_a_bundle_with_an_entry_outside_its_directory_is_refused_whole(
 
 
 def test_the_benchproctor_pins_are_the_two_quicktest_bundles() -> None:
-    """TypeScript and JavaScript, 2026.07.22 (its releases halted, so the pin
-    cannot move): 6,571,432 and 5,726,494 bytes, measured 2026-10-29."""
+    """TypeScript and JavaScript, 2026.07.22: 6,571,432 and 5,726,494 bytes,
+    measured 2026-10-29. The sha256 is what holds them: upstream's commit is
+    gone, and a release asset can be replaced (#1722)."""
     assert re.fullmatch(r"[0-9a-f]{40}", fak.BENCHPROCTOR_COMMIT)
     assert sorted(fak.BENCHPROCTOR_FILES) == sorted(
         f"Benchmarks/quicktest/{lang}/benchproctor-{lang}-quicktest-2026.07.22.zip"
