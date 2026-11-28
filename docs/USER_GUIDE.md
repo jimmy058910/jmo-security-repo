@@ -16,8 +16,8 @@ uv tool install --python 3.12 "jmo-security[yara]"
 jmo --help
 ```
 
-`--python 3.12` is the Python JMo is tested on. Without it uv picks its newest, 3.15 today,
-where Checkov cannot install yet ([Known Limitations](KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315)).
+`--python 3.12` is the Python JMo is tested on. Without it, on a machine with no Python, uv
+picks its newest, 3.15 today, where Checkov cannot install yet ([Known Limitations](KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315)).
 
 On Alpine and other musl Linux, Windows ARM64, glibc older than 2.28 or macOS 13, leave out `[yara]`: YARA-X has no wheel there, and JMo installs and runs without it ([Known Limitations](KNOWN_LIMITATIONS.md#the-yara-x-scanner-runs-only-where-yara-x-has-a-wheel)).
 

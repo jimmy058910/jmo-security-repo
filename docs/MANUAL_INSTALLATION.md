@@ -289,7 +289,7 @@ java -version
 **Prerequisites:**
 
 - macOS 10.15+ (11.0 Big Sur recommended)
-- Python 3.12+
+- Python 3.12 to 3.14
 - Homebrew
 
 **Installation:**

@@ -108,7 +108,8 @@ work). In a worktree, run `uv sync --frozen --group dev` once and use its own
 in the background (`cmd &` in a script) begins with SIGINT ignored, so the two Ctrl-C
 tests in `tests/unit/test_peakmem.py` fail on any tree. Measured 2026-11-27 at
 59c3de14 and on a branch: both fail backgrounded and pass in the foreground. Run the
-suite in the script's foreground, or `set -m` first.
+suite in the script's foreground, or `set -m` first. A backgrounded run under GNU
+`timeout` passed, so `timeout` can hide it.
 
 ## Disk Space: What a Run Keeps, and Where It Stops
 

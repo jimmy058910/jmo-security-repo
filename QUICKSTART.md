@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- **uv** (recommended), **Docker**, or **Python 3.12+** for pip
+- **uv** (recommended), **Docker**, or **Python 3.12 to 3.14** for pip
 - **Git** (for repository scanning)
 
 ---
@@ -24,8 +24,8 @@ uv tool install --python 3.12 "jmo-security[yara]"
 jmo wizard
 ```
 
-`--python 3.12` is the Python JMo is tested on. Without it uv picks its newest, 3.15 today,
-where Checkov cannot install yet ([Known Limitations](docs/KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315)).
+`--python 3.12` is the Python JMo is tested on. Without it, on a machine with no Python, uv
+picks its newest, 3.15 today, where Checkov cannot install yet ([Known Limitations](docs/KNOWN_LIMITATIONS.md#checkov-cannot-install-on-python-315)).
 
 From Python 3.12 to 3.14 you can use pip or pipx instead: `pip install "jmo-security[yara]"`,
 or `pipx install "jmo-security[yara]"` for an isolated install.
