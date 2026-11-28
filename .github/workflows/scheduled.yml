@@ -1471,8 +1471,9 @@ jobs:
           key: answer-keys-${{ hashFiles('scripts/dev/fetch_answer_keys.py') }}
 
       - name: Fetch the answer keys
-        # Pinned by commit and sha256; a file that cannot be fetched or does
-        # not match fails here, never as a skip below.
+        # Pinned by sha256 (and by commit, or by release asset for BenchProctor);
+        # a file that cannot be fetched or does not match fails here, never as a
+        # skip below.
         run: python3 scripts/dev/fetch_answer_keys.py
 
       - name: Fetch osv-scanner's offline databases

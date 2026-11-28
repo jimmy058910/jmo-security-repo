@@ -3,8 +3,10 @@
 
     python scripts/dev/fetch_answer_keys.py [key ...]      (default: every key)
 
-An answer key is somebody else's file, pinned by commit and checked against a
-sha256 each, kept in `$JMO_ANSWER_KEYS_DIR` or `~/.cache/jmo-answer-keys`, as
+An answer key is somebody else's file, pinned by a sha256 each and fetched at a
+pinned commit, except BenchProctor's, whose commit upstream rewrote away and
+which comes from a release of this repository. It is kept in
+`$JMO_ANSWER_KEYS_DIR` or `~/.cache/jmo-answer-keys`, as
 `<root>/<key>/<commit>/<path>`. Never inside the repository: sca-kitchen-sink's
 lockfiles are vulnerable on purpose, so tracking them would raise Dependabot
 alerts on JMo's own repository, vibeproof's fixtures hold three Postgres URIs

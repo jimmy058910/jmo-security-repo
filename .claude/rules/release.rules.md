@@ -108,6 +108,7 @@ Pre-Release Validation → PyPI Publish → Docker Build (2 parallel: amd64 + ar
 | Issue | Solution |
 |-------|----------|
 | Tag push fails | Main has rulesets — must PR through CI, then tag |
+| A script that reads "the latest tag" finds `answer-keys-benchproctor-2026.07.22` | Since 2026-11-27 this repository has a release that is not a version: its assets are BenchProctor's answer keys (#1742). Anything that reads tags must match `v*`. `release.yml` triggers on `v*` only, and `generate_release_notes.py` asks `git describe --tags --match 'v*'`; a bare `git describe --tags` would end the next release's notes at that tag. |
 | Docker build cache stale | `gh cache delete --all --repo owner/repo` then re-tag |
 | Homebrew/WinGet fail on first release | Both have existence checks that skip gracefully. Submit initial manifests manually. |
 | `verify_badges.sh` fails on new branch types | Add the prefix to the allowlist regex in `scripts/dev/verify_badges.sh` (the `elif` that reads `current_branch`; currently dev, feature, refactor, hotfix, dependabot, chore, docs, release, release-prep). Bites whenever the repo version is ahead of PyPI: PR #1139 (a `docs/` branch) went red on `quick-checks` at "Verify PyPI badge version matches pyproject.toml" the day after the 1.1.0 bump |
