@@ -253,6 +253,27 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
 PINNED_INSTALL_METHODS: frozenset[str] = frozenset({"pip", "isolated_venv", "binary"})
 
 
+def _venv_built_on_this_python(venv_dir: Path) -> bool:
+    """Whether `venv_dir` records the major.minor Python JMo runs on.
+
+    CPython's venv writes `version = 3.13.5` to pyvenv.cfg and uv's writes
+    `version_info = 3.15`. A venv with neither, or no pyvenv.cfg, cannot be
+    shown to match, so it reads as not built here.
+    """
+    try:
+        text = (venv_dir / "pyvenv.cfg").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() in ("version", "version_info"):
+            return value.strip().split(".")[:2] == [
+                str(sys.version_info.major),
+                str(sys.version_info.minor),
+            ]
+    return False
+
+
 class ToolInstaller:
     """Cross-platform tool installation manager."""
 
@@ -917,7 +938,14 @@ class ToolInstaller:
         start_time = time.time()
 
         try:
-            # Step 1: Create venv if it doesn't exist
+            # Step 1: Create the venv, rebuilding one made by another Python.
+            # A venv runs on the interpreter that built it, so after JMo moves
+            # (say `uv tool install --python 3.12` over a 3.15 install) a kept
+            # venv makes every later install, `--force` included, build
+            # checkov on the old Python again (#1695, measured 2026-11-25).
+            if venv_dir.exists() and not _venv_built_on_this_python(venv_dir):
+                logger.info(f"Rebuilding {venv_dir}: made by another Python")
+                shutil.rmtree(venv_dir)
             if not venv_dir.exists():
                 logger.info(f"Creating isolated venv for {tool_name} at {venv_dir}")
                 venv_dir.parent.mkdir(parents=True, exist_ok=True)
